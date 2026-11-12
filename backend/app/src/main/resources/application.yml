@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: p2picks
+  flyway:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

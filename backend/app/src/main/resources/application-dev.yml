@@ -1,0 +1,23 @@
+server:
+  address: 127.0.0.1
+
+spring:
+  flyway:
+    enabled: true
+  datasource:
+    url: ${PVPICKS_DATASOURCE_URL}
+    username: ${PVPICKS_DB_USER}
+    password: ${PVPICKS_DB_PASSWORD}
+    hikari:
+      connection-timeout: 3000
+      validation-timeout: 2000
+      data-source-properties:
+        connectTimeout: 3
+        socketTimeout: 5
+  data:
+    redis:
+      host: ${PVPICKS_REDIS_HOST}
+      connect-timeout: 2s
+      timeout: 2s
+  kafka:
+    bootstrap-servers: ${PVPICKS_KAFKA_BOOTSTRAP_SERVERS}

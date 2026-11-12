@@ -1,0 +1,377 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * P2Picks design system — DraftKings-inspired.
+ * Charcoal surfaces, white type, signature green actions, orange accents,
+ * bet-slip tickets with perforated notches. All colors in oklch.
+ */
+
+@theme inline {
+  --font-display: "Big Shoulders Display", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Surfaces */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-ticket: var(--ticket);
+  --color-ticket-foreground: var(--ticket-foreground);
+  --color-ticket-muted: var(--ticket-muted);
+
+  /* Bet lifecycle */
+  --color-status-active: var(--status-active);
+  --color-status-pending: var(--status-pending);
+  --color-status-washed: var(--status-washed);
+  --color-status-resolved: var(--status-resolved);
+  /* Table invites waiting on you */
+  --color-invite: var(--invite);
+  --color-invite-foreground: var(--invite-foreground);
+  --color-win: var(--win);
+  --color-loss: var(--loss);
+
+  --color-felt: var(--felt);
+  --color-felt-deep: var(--felt-deep);
+  --color-felt-rim: var(--felt-rim);
+
+  --shadow-glow: var(--shadow-glow-value);
+  --shadow-ticket: var(--shadow-ticket-value);
+
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-rise: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* DraftKings-inspired: near-black charcoal, signature green, orange accent */
+  --background: oklch(0.17 0 0);
+  --foreground: oklch(0.98 0 0);
+  --surface: oklch(0.215 0 0);
+  --surface-raised: oklch(0.26 0 0);
+  --card: oklch(0.215 0 0);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.24 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+
+  --primary: oklch(0.77 0.21 140);
+  --primary-foreground: oklch(0.14 0 0);
+  --secondary: oklch(0.28 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.27 0 0);
+  --muted-foreground: oklch(0.7 0 0);
+  --accent: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.63 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.3 0 0);
+  --input: oklch(0.33 0 0);
+  --ring: oklch(0.77 0.21 140);
+
+  /* Bet slip — clean white */
+  --ticket: oklch(0.98 0 0);
+  --ticket-foreground: oklch(0.16 0 0);
+  --ticket-muted: oklch(0.5 0 0);
+
+  --status-active: oklch(0.77 0.21 140);
+  --status-pending: oklch(0.69 0.19 45);
+  --status-washed: oklch(0.62 0 0);
+  --status-resolved: oklch(0.82 0.15 85);
+  --invite: oklch(0.88 0.18 98);
+  --invite-foreground: oklch(0.18 0.02 95);
+  --win: oklch(0.77 0.21 140);
+  --loss: oklch(0.65 0.22 27);
+
+  --chart-1: oklch(0.69 0.19 45);
+  --chart-2: oklch(0.7 0.13 230);
+  --chart-3: oklch(0.72 0.16 340);
+  --chart-4: oklch(0.82 0.15 85);
+  --chart-5: oklch(0.68 0.15 280);
+
+  /* Card-room felt */
+  --felt: oklch(0.36 0.08 152);
+  --felt-deep: oklch(0.25 0.06 152);
+  --felt-rim: oklch(0.22 0 0);
+
+  --sidebar: oklch(0.13 0 0);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.77 0.21 140);
+  --sidebar-primary-foreground: oklch(0.14 0 0);
+  --sidebar-accent: oklch(0.23 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.26 0 0);
+  --sidebar-ring: oklch(0.77 0.21 140);
+
+  --shadow-glow-value:
+    0 0 0 1px color-mix(in oklab, var(--primary) 40%, transparent),
+    0 10px 40px -10px color-mix(in oklab, var(--primary) 45%, transparent);
+  --shadow-ticket-value:
+    0 1px 0 color-mix(in oklab, var(--ticket) 30%, transparent) inset,
+    0 18px 40px -18px oklch(0 0 0 / 70%);
+
+  --field-lines: repeating-linear-gradient(
+    90deg,
+    transparent 0 79px,
+    color-mix(in oklab, var(--foreground) 5%, transparent) 79px 80px
+  );
+}
+
+/* Light mode: same green/orange brand on bright surfaces */
+:root.light {
+  --background: oklch(0.97 0 0);
+  --foreground: oklch(0.18 0 0);
+  --surface: oklch(1 0 0);
+  --surface-raised: oklch(0.95 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0 0);
+  --primary: oklch(0.62 0.19 142);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.92 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.93 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.92 0 0);
+  --accent-foreground: oklch(0.18 0 0);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.86 0 0);
+  --ring: oklch(0.62 0.19 142);
+  --ticket: oklch(1 0 0);
+  --status-active: oklch(0.6 0.19 142);
+  --status-resolved: oklch(0.65 0.15 80);
+  --win: oklch(0.58 0.19 142);
+  --loss: oklch(0.55 0.22 27);
+  --felt: oklch(0.5 0.1 152);
+  --felt-deep: oklch(0.38 0.08 152);
+  --felt-rim: oklch(0.3 0.02 60);
+  --sidebar: oklch(0.94 0 0);
+  --sidebar-foreground: oklch(0.18 0 0);
+  --sidebar-primary: oklch(0.62 0.19 142);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.9 0 0);
+  --sidebar-accent-foreground: oklch(0.18 0 0);
+  --sidebar-border: oklch(0.86 0 0);
+  --sidebar-ring: oklch(0.62 0.19 142);
+  --shadow-ticket-value: 0 0 0 1px oklch(0.88 0 0), 0 14px 30px -18px oklch(0 0 0 / 35%);
+}
+:root.light {
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
+  }
+}
+
+/* Turf background with yard lines */
+@utility bg-field {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      color-mix(in oklab, var(--primary) 10%, transparent),
+      transparent 70%
+    ),
+    var(--field-lines);
+}
+
+/* Bet slip with side notches aligned to the perforation */
+@utility ticket {
+  --notch-y: 76px;
+  --notch-r: 11px;
+  background-color: var(--ticket);
+  color: var(--ticket-foreground);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-ticket-value);
+  -webkit-mask:
+    radial-gradient(circle var(--notch-r) at 0 var(--notch-y), transparent 98%, #000) left / 51%
+      100% no-repeat,
+    radial-gradient(circle var(--notch-r) at 100% var(--notch-y), transparent 98%, #000) right / 51%
+      100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch-r) at 0 var(--notch-y), transparent 98%, #000) left / 51%
+      100% no-repeat,
+    radial-gradient(circle var(--notch-r) at 100% var(--notch-y), transparent 98%, #000) right / 51%
+      100% no-repeat;
+}
+
+/* Oval card-room table: felt, dark rail, green glow line */
+@utility felt-table {
+  border-radius: 9999px;
+  background: radial-gradient(ellipse 70% 60% at 50% 45%, var(--felt), var(--felt-deep) 100%);
+  box-shadow:
+    0 0 0 10px var(--felt-rim),
+    0 0 0 12px color-mix(in oklab, var(--primary) 70%, transparent),
+    0 0 40px 10px color-mix(in oklab, var(--primary) 18%, transparent),
+    inset 0 0 60px oklch(0 0 0 / 45%);
+}
+
+@utility felt-line {
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+@utility perforation {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--ticket-foreground) 30%, transparent) 50%,
+    transparent 50%
+  );
+  background-size: 10px 1.5px;
+  background-repeat: repeat-x;
+  height: 1.5px;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+@utility scoreboard {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility glass-bar {
+  background-color: color-mix(in oklab, var(--background) 82%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Display > Animations: Reduced (or device-reduced) turns off CSS toggle slides too. */
+.reduce-motion .switch-thumb {
+  transition: none;
+}
+
+/* Compositor-only ticker: equal, viewport-filling halves; 32px/second. */
+@keyframes ticker-slide {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+.ticker {
+  overflow: hidden;
+}
+.ticker-track {
+  animation: ticker-slide linear infinite;
+  will-change: transform;
+}
+.ticker:hover .ticker-track,
+.ticker:active .ticker-track,
+.ticker:focus-within .ticker-track {
+  animation-play-state: paused;
+}
+.reduce-motion .ticker-track {
+  animation: none;
+  will-change: auto;
+}
+.reduce-motion .ticker {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.reduce-motion .ticker::-webkit-scrollbar {
+  display: none;
+}
+.reduce-motion .ticker-dup,
+.reduce-motion [data-ticker-repeat="true"] {
+  display: none;
+}

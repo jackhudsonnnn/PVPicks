@@ -1,0 +1,3215 @@
+openapi: 3.1.0
+info:
+  title: P2Picks backend API
+  version: 0.1.0-draft
+  description: >-
+    Phase 0 draft. Dev implements authentication, admin health, table and
+    settings and debt reads, relationship and invitation reads, invitation and
+    notification preference replacement, debt-cap updates, inbox mark-read and clear, feedback submission,
+    follow/block mutations, table creation, member requests, profile and betting settings,
+    invitation responses, reaction mutations and chat
+    unread-state reads and updates, chat window reads and text/GIF sending. Other
+    operations remain unimplemented.
+    This contract is not ready for client generation until the complete
+    Phase 0 review.
+    In dev, browser requests are same-origin. All POST, PUT, PATCH and DELETE
+    requests, including login and logout, require the X-CSRF-TOKEN header
+    obtained from GET /auth/csrf, and an allowed Origin. Invalid or missing
+    CSRF protection returns 403 before performing the operation. The CSRF
+    requirement is not yet enumerated on every draft operation below.
+    Admin audit views must not expose another user's ACTIVE participation,
+    pick or user-specific participation-derived counts. An admin using a
+    member endpoint has only the same own-pick and aggregate-count visibility
+    as any other table member. Picks are revealed when the bet locks.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+paths:
+  /auth/csrf:
+    get:
+      operationId: getCsrfToken
+      security: []
+      summary: Obtain a CSRF token before a browser mutation
+      description: >-
+        Returns a token associated with a host-only HttpOnly CSRF cookie.
+        The client sends the returned token in X-CSRF-TOKEN on mutations.
+        This response must not be cached. Fetch a new token after login or
+        logout; a token from before rotation will not match the new cookie.
+      responses:
+        '200':
+          description: CSRF token and its accompanying cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      summary: Start a session for a provisioned account
+      description: >-
+        Dev and LAN accounts are provisioned; production registration policy
+        will be decided after the LAN rehearsal. Dev login throttling (429) is
+        not implemented. In dev, normalize the username
+        by trimming and lowercasing; verify the password exactly. Unknown,
+        frozen and deleted accounts and wrong passwords receive the same 401.
+        Login rotates the CSRF token. An existing session, if any, is revoked
+        before the new one is issued.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        '204':
+          description: Authenticated; the server sets the session cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session
+      description: >-
+        Revoke the current session server-side, expire its cookie and rotate
+        the CSRF token. Other sessions are unaffected.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: Session ended.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /me:
+    get:
+      operationId: getMe
+      summary: Get the authenticated user
+      responses:
+        '200':
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: deleteMe
+      summary: Delete the current account
+      description: >-
+        Erases personal data, retains ledger history as Deleted user, and
+        transfers hosted tables according to the deletion rules.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Account deleted and session ended.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/profile:
+    patch:
+      operationId: updateMyProfile
+      summary: Change the current user's display profile
+      description: >-
+        Dev implementation. Normalize the username before validation and
+        comparison; a taken name returns 409 with code username_taken. A rename
+        releases the old username and changes future login, but does not revoke
+        existing sessions or rewrite historical free-text chat. A matching retry
+        rechecks authentication and returns the current profile without
+        reapplying. Changes write an internal event, not a delivered notification.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/debt:
+    get:
+      operationId: getMyDebt
+      summary: Get current debt in integer cents
+      description: >-
+        Sum negative table True balances and negative open person settle-up
+        nets; positive balances do not offset debt elsewhere. Current
+        non-archived memberships contribute unsettled non-4fun results minus
+        pending picked wagers. Open receipts include archived tables; sent,
+        disputed and forgiveness-requested receipts remain open. The response
+        uses one database snapshot and does not enforce the cap.
+      responses:
+        '200':
+          description: Current debt.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [debtCents]
+                properties:
+                  debtCents:
+                    type: integer
+                    format: int64
+                    minimum: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/debt-cap:
+    get:
+      operationId: getMyDebtCap
+      summary: Get the current debt cap
+      description: An absent cap row or a null stored cap means disabled.
+      responses:
+        '200':
+          description: The current cap, or null when disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtCap'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      operationId: updateMyDebtCap
+      summary: Set or disable the debt cap
+      description: >-
+        A null cap disables the limit. A change is allowed only when current
+        debt is zero, including when setting the same value again with a new
+        key. New caps must be whole points in cents (a multiple of 100), at
+        most 2147483600 cents. Matching retries do not reapply the update even
+        if debt has since changed. Existing fractional-point cap values
+        remain readable. Betting and lock-time cap enforcement are not yet
+        implemented.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/DebtCap'
+                - type: object
+                  properties:
+                    capCents:
+                      type: [integer, 'null']
+                      multipleOf: 100
+      responses:
+        '204':
+          description: Cap updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/bets:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: listTableBets
+      summary: List bets visible to the requesting table member
+      responses:
+        '200':
+          description: Each bet contains only the caller's own pick while Active.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: proposeBet
+      summary: Propose a bet at a table
+      description: >-
+        The server checks table permissions, wager rules and debt cap, captures
+        any game baseline, and assigns the bet identity and lock time. The
+        proposer is the visible author but does not join the bet automatically.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetProposal'
+      responses:
+        '201':
+          description: Bet created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    get:
+      operationId: getBet
+      summary: Get a bet visible to the current table member
+      responses:
+        '200':
+          description: >-
+            Bet view. Other players' participation and picks are omitted while
+            ACTIVE; the caller can see their own pick and aggregate counts.
+            Picks are revealed after lock.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bet'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bets/{betId}/pick:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    put:
+      operationId: putMyPick
+      summary: Add or change the current user's pick
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [choice]
+              properties:
+                choice:
+                  type: string
+                  minLength: 1
+      responses:
+        '204':
+          description: Pick accepted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: clearMyPick
+      summary: Clear the current user's guess
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Pick cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/settle:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    post:
+      operationId: settleCustomBet
+      summary: Call the result of a U2Pick bet
+      description: >-
+        Only a settler authorized by the proposal may call a pending original
+        U2Pick. Game bets are settled exclusively by the sports feed.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [winningChoice]
+              properties:
+                winningChoice:
+                  type: [string, 'null']
+                  description: Null indicates an outcome outside the choices.
+      responses:
+        '204':
+          description: Result accepted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/wash:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    post:
+      operationId: washQuickPick
+      summary: Wash an eligible Quick Pick copy
+      description: >-
+        A subscriber-table host may wash their copy before table points
+        settlement, including after resolution. Reversal of posted deltas must
+        use atomic zero-sum compensating ledger entries.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Copy washed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables:
+    get:
+      operationId: listMyTables
+      summary: List the current user's tables
+      description: >-
+        Returns current, non-archived memberships. Quick Pick codes are visible
+        only to current hosts; disabled permissions are visible to hosts for
+        all members and otherwise only for the caller.
+      responses:
+        '200':
+          description: Tables the user belongs to.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createTable
+      summary: Create a table hosted by the current user
+      description: >-
+        Creates the table and applies eligible initial member requests atomically.
+        On retry the table view reflects current authorized state, while outcomes
+        remain those of the original request. Returns 404 if access is lost.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, emoji]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  description: Trimmed before validation and storage; at most 40 Unicode code points after trimming.
+                emoji:
+                  type: string
+                  description: One ICU-supported RGI emoji sequence.
+                memberIds:
+                  type: array
+                  uniqueItems: true
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+                  description: Optional requested members; eligibility is evaluated individually.
+      responses:
+        '201':
+          description: Table created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableCreationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/archives:
+    get:
+      operationId: listMyTableArchives
+      summary: List the caller's available table chat archives
+      description: >-
+        Dev implementation. An active user sees archives for tables where they
+        were a member at deletion, for 90 days (2160 hours) after deletion.
+        Expiry removes access and listing, but does not delete retained data.
+      responses:
+        '200':
+          description: Available archives, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableArchive'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tables/{tableId}:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: getTable
+      summary: Get a table visible to the current user
+      description: >-
+        Requires current membership. Missing, archived and non-member tables
+        return 404. Quick Pick codes are visible only to current hosts; disabled
+        permissions are visible to hosts for all members and otherwise only
+        for the caller.
+      responses:
+        '200':
+          description: Table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateTable
+      summary: Update table name and emoji
+      description: >-
+        Only a current host may update the table. An actual change adds a
+        neutral system chat notice without storing the table name in chat.
+        No changes are made for unchanged values. A matching retry rechecks
+        host access and returns the current table without reapplying the update.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  description: Trimmed before validation and storage; at most 40 Unicode code points after trimming.
+                emoji:
+                  type: string
+                  description: One ICU-supported RGI emoji sequence.
+      responses:
+        '200':
+          description: Updated table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteTable
+      summary: Delete an eligible table
+      description: >-
+        Dev implementation. Only a host may delete a table. Active or Pending bets and resolved
+        non-4fun bets whose points have not been settled prevent deletion.
+        The table is removed from normal active-table views; its chat remains
+        read-only for members at deletion, subject to block filtering and
+        account-deletion rules, for 90 days after deletion. Open receipts remain
+        part of debt; personal settlement-history actions are not implemented.
+        Existing Quick Pick copies survive. Pending invitations are cancelled
+        and subscriptions disconnected. An authorized matching retry succeeds
+        without reapplying; a fresh key for an archived table returns 404.
+        Concurrent membership changes can return a retryable 409.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Table deleted from normal active-table views.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: Unsettled bets, a membership race, or an idempotency conflict.
+  /tables/{tableId}/settings:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    patch:
+      operationId: updateTableSettings
+      summary: Change table-wide betting settings
+      description: >-
+        Only a current host may change these switches. Changes affect future
+        proposals and Quick Pick fan-out, not existing bets. Actual changes
+        create neutral system chat notices and internal outbox events. An
+        unchanged value is a no-op. A matching retry rechecks host access and
+        returns the current table without reapplying earlier values. Proposal
+        and Quick Pick services are not implemented yet.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                hostsOnlyBets:
+                  type: boolean
+                u2pickEnabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated table.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/remainder:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    patch:
+      operationId: updateRemainderRule
+      summary: Change the remainder rule when no bet is Active
+      description: |
+        Only a current host may change the rule. A fresh request that would
+        change it returns 409 while any bet is Active; Pending bets retain
+        their lock-time snapshots. An unchanged rule is a successful no-op,
+        including while a bet is Active. A matching retry rechecks current host
+        access and never reapplies the old value. An actual change adds a
+        system chat message. Bet proposal and locking are not yet implemented.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [rule]
+              properties:
+                rule:
+                  $ref: '#/components/schemas/RemainderRule'
+      responses:
+        '204':
+          description: Rule updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: An Active bet prevents a change, or the idempotency key conflicts.
+  /tables/{tableId}/members:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: addTableMembers
+      summary: Add or invite eligible users
+      description: >-
+        The host requests additions. Each user's relationship, invite
+        preferences, pending invitations and blocks determine the outcome.
+        Eligible open preferences add immediately; request creates a pending
+        invitation. Frozen, deleted, unavailable, blocked, already-present and
+        otherwise ineligible accounts all return not_added. Matching retries
+        require current host access and return original outcomes without
+        repeating actions. Pending invitations are not announced in table chat.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [userIds]
+              properties:
+                userIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Per-user outcomes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberRequestOutcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      operationId: removeTableMember
+      summary: Remove another member
+      description: >-
+        Dev implementation. A current host may remove another current member,
+        including a frozen member, but must first demote another host. Removal
+        is blocked while any table bet is Active or Pending, or any resolved
+        non-4fun bet awaits points settlement. A 409 with code
+        member_removal_unsettled allows a client to offer permission controls;
+        member_removal_host means the target must first be demoted.
+        Records and receipts remain, pending invitations involving the target
+        are cancelled, and their chat read position is retained. Matching
+        retries recheck actor access and do not remove a subsequently readded
+        member. The outbox event is internal and delivery is not implemented.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Member removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/hosts/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: promoteTableHost
+      summary: Promote a member to host
+      description: |
+        A current host may promote a current member, including a frozen member.
+        Promotion clears all member permission restrictions. A current host
+        target is a successful no-op. Actual changes create a system chat line
+        using the subject's current display name; deleted subjects display as
+        Deleted user. Matching retries recheck current host access and target
+        membership without reapplying.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Host added.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: demoteTableHost
+      summary: Demote a host, retaining at least one host
+      description: |
+        A current host may demote a current member, including themselves,
+        provided at least one other active host remains. A non-host target is
+        a successful no-op. Demotion permanently cancels that host's pending
+        invitations for this table and does not restore prior member limits.
+        A matching retry rechecks current host access; a host who has stepped
+        down therefore receives 403 on a retry until promoted again. A later
+        account freeze can still leave a table without an active host.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Host demoted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: No other active host would remain, or the idempotency key conflicts.
+  /tables/{tableId}/members/{userId}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: updateMemberPermission
+      summary: Enable or disable a permission for a non-host member
+      description: |
+        A current host may change another current non-host member's permission,
+        including a frozen member. Hosts always retain every permission.
+        Changes do not create a chat message. A matching retry rechecks current
+        access and target role without reapplying the original change. A
+        non-host caller receives 403; a missing, archived or inaccessible table,
+        unavailable user or non-member target receives 404; a host target or
+        conflicting idempotency key receives 409. Bet authorization is not yet
+        implemented; storing the bets permission does not enforce it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [permission, enabled]
+              properties:
+                permission:
+                  type: string
+                  enum: [bets, text, react, gifs]
+                enabled:
+                  type: boolean
+      responses:
+        '204':
+          description: Permission updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/quick-picks/share:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: enableQuickPickSharing
+      summary: Enable sharing using the table's existing code
+      description: >-
+        Dev implementation; requires a current host and Quick Picks enabled.
+        Matching retries recheck access and do not reapply. Changes write
+        neutral chat and internal outbox events; no event delivery exists.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Sharing enabled.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: disableQuickPickSharing
+      summary: Disable sharing without deleting the table's code
+      description: >-
+        Dev implementation; current hosts can disable sharing. Existing
+        subscribers are disconnected; existing copies and the code remain.
+        Authorized matching retries do not reapply.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Sharing disabled.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/quick-picks/rotate:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: rotateQuickPickCode
+      summary: Rotate a table's code and disconnect old subscribers
+      description: >-
+        Dev implementation; current hosts can rotate whether or not sharing
+        is enabled. Incoming subscriptions are disconnected and copies remain.
+        A matching retry rechecks host access and returns the current code,
+        without rotating again. Historical codes are not permanently reserved;
+        subscription authorization and safe code reuse require further design.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: New code.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [code]
+                properties:
+                  code:
+                    $ref: '#/components/schemas/QuickPickCode'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/quick-picks/subscribe:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: subscribeQuickPicks
+      summary: Subscribe the table to a sharing source by code
+      description: >-
+        Only a host of a table with Quick Picks enabled may subscribe it to a
+        different table that is currently sharing. Reject duplicate
+        subscriptions. Backfill eligible Active original bets already open at
+        the source, then copy new originals. Copies never fan out. A target
+        with U2Pick disabled does not receive U2Pick copies.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: Spaces and hyphens are ignored; matching ignores case.
+      responses:
+        '204':
+          description: Subscribed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: unsubscribeQuickPicks
+      summary: Unsubscribe from one source without deleting existing copies
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: sourceTableId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Unsubscribed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /chat/{tableId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: listChatMessages
+      summary: Read a window of table chat
+      description: >-
+        Dev supports current members of non-archived tables and archive members
+        within 90 days after deletion. Archived chat is read-only. With no parameter,
+        returns up to the latest 30 visible messages. Use around with a visible
+        message ID (such as firstUnreadMessageId) for up to five preceding
+        messages and 25 from that message onward. Use before or after with
+        returned opaque cursors for up to 25 older or newer messages. Supply
+        at most one parameter. Items are ordered oldest first. Visible text
+        and GIF messages exclude deleted authors and authors blocked by the
+        caller; bet, system and settlement messages remain visible. Reactions
+        from deleted users are omitted, but reactions on visible messages are
+        not otherwise filtered by blocks. Bet messages contain no picks;
+        settlement summaries contain original amounts and parties only.
+        Previous cursors are null when no older visible messages exist. Every
+        nonempty window has a next cursor, including at the current end, so
+        clients can retain it and fetch later arrivals without gaps. An empty
+        window has null cursors; retain the prior next cursor to poll again.
+        Cursors are bound to the user and table and survive boundary-message
+        deletion. An unavailable or hidden around anchor returns 404.
+      parameters:
+        - name: before
+          in: query
+          description: The previousCursor from an earlier response.
+          schema:
+            type: string
+        - name: after
+          in: query
+          description: The nextCursor from an earlier response.
+          schema:
+            type: string
+        - name: around
+          in: query
+          description: A currently visible message ID, including firstUnreadMessageId.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A chat window.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, previousCursor, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+                  previousCursor:
+                    type: [string, 'null']
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /tables/{tableId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: sendChatMessage
+      summary: Send a text or GIF to a table
+      description: >-
+        Dev requires current membership in a non-archived table and the
+        relevant text or GIF permission. Text is trimmed as in the prototype,
+        must be valid PostgreSQL text and contain 1–2000 Unicode code points
+        after trimming. GIF IDs are restricted to the current prototype
+        catalog. A matching retry rechecks authentication, membership,
+        permission and unchanged message content, then returns the original
+        201 representation without creating another message. It does not
+        include later reactions. A removed or changed message, missing table
+        or lost membership returns 404; a disabled permission returns 403. Reusing the
+        key for a different request returns 409. This stores an internal outbox
+        event but does not deliver chat or notifications. Rate limiting is not
+        implemented in dev.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [kind, text]
+                  properties:
+                    kind:
+                      const: text
+                    text:
+                      type: string
+                      minLength: 1
+                      description: 1–2000 Unicode code points after trimming.
+                - type: object
+                  additionalProperties: false
+                  required: [kind, gifId]
+                  properties:
+                    kind:
+                      const: gif
+                    gifId:
+                      type: string
+                      minLength: 1
+                      enum: [g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20, g21, g22, g23, g24]
+      responses:
+        '201':
+          description: Message created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /messages/{messageId}/reaction:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    put:
+      operationId: putMyReaction
+      summary: Set or replace the current user's reaction
+      description: >-
+        Dev accepts exactly one Unicode RGI emoji sequence as defined by
+        ICU4J 76.1 (Emoji 16.0). The caller must be a current member of a
+        non-archived table with react permission. Only visible text, GIF and
+        bet messages can be reacted to. Text and GIF messages from authors
+        blocked by the caller are hidden; bet cards remain visible. Missing,
+        inaccessible and non-reactable messages return the same 404. A matching
+        retry returns 204 without reapplying, after rechecking current access;
+        reusing the key for a different request returns 409.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+                  minLength: 1
+                  description: Exactly one ICU4J 76.1 RGI emoji sequence.
+      responses:
+        '204':
+          description: Reaction set.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: removeMyReaction
+      summary: Remove the current user's reaction
+      description: >-
+        Dev removes only the caller's reaction, if present. The same access,
+        visibility and retry rules as PUT apply. No request body is accepted.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Reaction removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/settle-points:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: settleTablePoints
+      summary: Settle a table's resolved balances through the host
+      description: >-
+        Creates a separate settlement with immutable payer, payee and amount
+        identities. The server atomically settles eligible results, creates
+        receipt lines, and posts a static chat summary. When eligible resolved
+        non-4fun bets net to zero for everyone, a host can still settle them;
+        the settlement links and marks those bets without zero-amount receipts.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Settlement created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settlement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /settlement-lines/{lineId}/{action}:
+    parameters:
+      - name: lineId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: action
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [sent, confirm, dispute, forgive, ask-forgive, decline-forgive]
+    post:
+      operationId: transitionSettlementLine
+      summary: Apply an authorized transition to a settlement receipt
+      description: >-
+        The payer marks sent or asks for forgiveness. The payee confirms,
+        disputes, forgives or declines forgiveness. Sent remains outstanding
+        until confirmed; only paid and forgiven close a line. A dispute returns
+        the line to unpaid. A declined forgiveness request may be retried
+        after 24 hours. An outdated revision is rejected.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                revision:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Updated receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementLine'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /people/{userId}/settle:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: settleWithPerson
+      summary: Atomically apply a step to all open lines with one person
+      description: >-
+        The revision represents the current group, not an individual receipt.
+        Reject a stale revision with 409. Authorization is determined by the
+        current net payer and payee; offsets are included in the atomic update.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [step, expectedRevision]
+              properties:
+                step:
+                  type: string
+                  enum: [sent, paid, unpaid, forgiven, ask, decline]
+                expectedRevision:
+                  type: string
+                  minLength: 1
+      responses:
+        '204':
+          description: Group updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /people/settle-groups:
+    get:
+      operationId: listSettlementGroups
+      summary: Get the current user's settle-up groups
+      parameters:
+        - name: includeHistory
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Groups with their current open net and revision.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettlementGroup'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tables/{tableId}/quick-picks:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    put:
+      operationId: setQuickPicksEnabled
+      summary: Enable or disable Quick Picks at a table
+      description: >-
+        Dev implementation; a current host can enable or disable Quick Picks.
+        Enabling also enables sharing with the existing code. Disabling stops
+        sharing, disconnects subscribers to this table, and
+        removes this table's subscriptions to other sources. It does not
+        remove existing copies or the table's persistent code. A matching
+        retry rechecks host access without reapplying; actual changes write
+        neutral system chat and internal outbox events, not deliveries.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '204':
+          description: Quick Picks setting updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/relationships:
+    get:
+      operationId: getMyRelationships
+      summary: Get the current user's social relationships
+      description: >-
+        Excludes follows across blocks in either direction and relationships to
+        deleted users. blockedIds contains only the caller's own blocks, not
+        accounts that have blocked the caller. Frozen users' existing
+        relationships remain visible.
+      responses:
+        '200':
+          description: Following, followers, and the caller's private blocks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Relationships'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /follows/{userId}:
+    description: >-
+      Dev mutations accept no request body. Self-targets are invalid. Frozen
+      users remain followable. Following is unavailable if either user has
+      blocked the other, using the same 404 as an absent or deleted user.
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: followUser
+      summary: Follow a user
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Following.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: unfollowUser
+      summary: Stop following a user
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No longer following.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /blocks/{userId}:
+    description: >-
+      Dev mutations accept no request body. Self-targets are invalid; frozen
+      users can be blocked. Each user's block is independent, and unblocking
+      does not restore follows or cancelled invitations.
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: blockUser
+      summary: Block a user
+      description: >-
+        Blocking is private. It removes follows and cancels pending invitations
+        in both directions. Follow attempts are blocked; future invitation
+        services must also enforce the block. Chat filtering is not implemented.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Blocked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: unblockUser
+      summary: Remove the caller's block
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Block removed; previous follows are not restored.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/invite-preferences:
+    get:
+      operationId: getMyInvitePreferences
+      summary: Get the current user's table invitation preferences
+      description: >-
+        Defaults to friends open and following request when no preference row
+        exists.
+      responses:
+        '200':
+          description: Invitation preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitePreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      operationId: setMyInvitePreferences
+      summary: Replace the current user's invitation preferences
+      description: >-
+        Updates the caller's policy and permanently cancels pending invitations
+        that no longer qualify. A mutual follow uses friends; a one-way follow
+        uses following. Both open and request permit accepting an existing
+        request. Invitation creation is not implemented yet.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitePreferences'
+      responses:
+        '204':
+          description: Preferences updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/invites:
+    get:
+      operationId: listMyInvites
+      summary: List the current user's pending table invitations
+      description: >-
+        Excludes invitations for archived tables, deleted senders, existing
+        memberships, blocks, and invitations that no longer meet host, follow
+        or current preference requirements. A pending invite does not grant
+        access to the full table. Frozen senders' qualifying invites remain.
+      responses:
+        '200':
+          description: >-
+            Pending invitations include the table name and emoji needed for
+            the invite screen without granting access to the table.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableInvite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /invites/{inviteId}/respond:
+    parameters:
+      - name: inviteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: respondToInvite
+      summary: Accept or decline the current user's invitation
+      description: >-
+        The sender must still be a host, the recipient must follow the sender,
+        and the current friends or following preference must not be closed.
+        Ineligible requests are permanently cancelled; once cancelled they
+        cannot be declined. Acceptance adds a member and a system chat message
+        atomically. A matching retry returns 204 only while current visibility
+        and authorization still permit it. Invitation creation and realtime
+        delivery are not implemented.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accept]
+              properties:
+                accept:
+                  type: boolean
+      responses:
+        '204':
+          description: Response recorded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /reports:
+    post:
+      operationId: submitReport
+      summary: Submit a report for the moderation queue
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [targetId, reason, note]
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  enum: [harassment, settlement, spam, offensive, other]
+                note:
+                  type: string
+                  maxLength: 500
+                  description: Required and nonblank for reason other.
+                tableId:
+                  type: string
+                  format: uuid
+                messageId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Report submitted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /feedback:
+    post:
+      operationId: submitFeedback
+      summary: Submit guide feedback
+      description: >-
+        Stores feedback for the authenticated user. Text and an optional link
+        are trimmed using JavaScript whitespace rules. NUL and unpaired
+        surrogates are rejected because PostgreSQL cannot store them safely.
+        The dev endpoint does not implement rate limiting or moderation reads.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackSubmission'
+      responses:
+        '201':
+          description: Feedback submitted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /users/{userId}/history:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUserBetHistory
+      summary: Read a user's visible bet history
+      description: Only return bets that the caller is authorized to see.
+      parameters:
+        - $ref: '#/components/parameters/OptionalTableId'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of bet history.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bet'
+                  nextCursor:
+                    type: [string, 'null']
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{userId}/settlements:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUserSettlementHistory
+      summary: Read authorized settlement receipts for a user
+      description: >-
+        Return only receipts the caller is authorized to see, including
+        completed history. Optionally filter by table.
+      parameters:
+        - $ref: '#/components/parameters/OptionalTableId'
+      responses:
+        '200':
+          description: Settlement receipts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SettlementLine'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /tables/{tableId}/last-read:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: getChatUnreadState
+      summary: Read the current member's unread chat state
+      description: >-
+        Count only visible messages after the caller's read position, excluding
+        their own messages. A member who has never opened the chat starts with
+        all visible messages except their own unread, including system messages.
+        Dev supports current members of non-archived tables only. Text and GIF
+        messages from deleted authors or authors blocked by the caller are
+        excluded; bet, system and settlement messages remain visible.
+      responses:
+        '200':
+          description: The caller's filtered unread state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatUnreadState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: advanceChatReadPosition
+      summary: Advance the current member's last-read chat position
+      description: >-
+        The requested message must be visible to the caller in this table.
+        The position only moves forward, never backwards. It remains meaningful
+        if a previously read message is later deleted. Advancing also marks
+        that user's chat notifications through the current position as read,
+        including hidden ones. A fresh request for an older position also
+        synchronizes through the current position. Matching retries recheck
+        current access and target visibility, then return 204 without reapplying.
+        New chat notifications for already-read messages start read.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [messageId]
+              properties:
+                messageId:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: Position advanced or already beyond the requested message.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /notifications:
+    get:
+      operationId: listMyNotifications
+      summary: Read the current user's notification inbox
+      description: >-
+        Newest first with stable opaque cursor pagination, 15 items per page
+        and at most the newest 200 items retained per user. Recheck visibility
+        and block filtering when reading; do not reveal content that the caller
+        can no longer access. Hide table notifications without current normal
+        table access, except separately authorized settlement notifications.
+        Hide the caller's blocked users' chat notifications and invitations
+        blocked in either direction; a block alone does not hide bet or
+        settlement notifications. Hidden items may reappear if access returns.
+        This read remains unimplemented pending source attribution and
+        authorization for invitation and settlement notifications.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Inbox page.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor, unreadCount]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  nextCursor:
+                    type: [string, 'null']
+                  unreadCount:
+                    type: integer
+                    minimum: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      operationId: clearMyNotifications
+      summary: Clear the current user's notification inbox
+      description: >-
+        Deletes the caller's current inbox entries, without changing chat read
+        positions. A matching retry leaves newer entries intact. This dev
+        operation accepts no request body and sends no realtime event.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Inbox cleared.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /notifications/read-all:
+    post:
+      operationId: markNotificationsRead
+      summary: Mark the current inbox as read
+      description: >-
+        Marks the caller's current inbox entries read; it does not advance chat
+        read positions. A matching retry does not mark newer entries read.
+        The dev operation accepts no request body and sends no realtime event.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Notifications marked read.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/notification-preferences:
+    get:
+      operationId: getMyNotificationPreferences
+      summary: Get the current user's inbox preferences
+      description: >-
+        An absent preference row uses the default enabled settings and
+        ticketScope mine. Muted table IDs are read from the user's saved mutes;
+        membership and deletion cleanup are not yet implemented.
+      responses:
+        '200':
+          description: Notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      operationId: setMyNotificationPreferences
+      summary: Replace the current user's inbox preferences
+      description: >-
+        Existing muted table IDs may be retained or removed even after membership
+        ends or a table is archived. New muted table IDs require current
+        membership in a non-archived table. Matching idempotent retries do not
+        repeat the update; keys cannot be reused for a different request.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferences'
+      responses:
+        '204':
+          description: Preferences updated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: A newly muted table is unavailable.
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /ticker:
+    get:
+      operationId: getTicker
+      summary: Get the sports-only ticker snapshot
+      description: >-
+        Return games scheduled on the current America/New_York calendar date
+        plus any live games scheduled on an earlier date. Include each game
+        once, with live games first, then scheduled start and game ID ascending.
+        No bet, participant, table or financial data is included. Clients
+        perform presentation looping locally. An empty games array means no
+        games in scope, not a substitute for unavailable feed data. Ticker
+        freshness thresholds and partial-feed handling remain under review.
+      responses:
+        '200':
+          description: Sports ticker snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TickerSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /games:
+    get:
+      operationId: listGames
+      summary: Get the sports schedule and current snapshots
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: >-
+            Calendar date of the scheduled start in America/New_York,
+            including daylight-saving transitions.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Available games on the requested date.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Game'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users:
+    get:
+      operationId: searchUsers
+      summary: Find visible users by username
+      description: >-
+        Dev search trims ECMAScript whitespace, lowercases, and matches a literal
+        username substring. It excludes the caller, deleted users and blocks
+        in either direction; frozen users remain visible without their status.
+        Pages contain at most 50 users in username order. Cursors represent a
+        position rather than a snapshot, so renames or visibility changes may
+        alter subsequent pages. Rate limiting is not yet implemented.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            description: After trimming and lowercasing, 1–15 ASCII letters, digits or underscores.
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of visible users.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getVisibleUser
+      summary: Get a visible user or deleted-user placeholder
+      description: >-
+        Dev lookup includes the caller and frozen users without revealing status.
+        A caller can resolve someone they blocked, even if the block is mutual.
+        An incoming-only block hides the identity unless both users are current
+        members of the same active table or are parties to the same receipt.
+        Deleted identities return a placeholder only for shared current
+        membership, an unexpired shared archive, a direct receipt, or an identity
+        referenced by visible historical chat in an accessible table or archive.
+        Other deleted, blocked and nonexistent identities return the same 404.
+        Receipt history and account deletion are not yet implemented.
+      responses:
+        '200':
+          description: The authorized public identity.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/User'
+                  - $ref: '#/components/schemas/DeletedUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/users/{userId}/actions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: applyAdminUserAction
+      summary: Apply an admin action to a user
+      description: >-
+        Only an authenticated, active administrator may perform this operation.
+        Serialize actions per target, and record the actor and action atomically
+        with the change. Adding a third strike freezes the account; strikes cap
+        at three. Clearing strikes does not unfreeze it. An explicit unfreeze
+        remains possible at three strikes; a later strike freezes it again.
+        Freezing revokes all target sessions and terminates realtime access;
+        unfreezing does not restore those sessions. A flag is for review only.
+        Retrying the same action with the same idempotency key must not repeat
+        a strike or note; a different payload with that key is a conflict.
+        Rules for actions on admins and deleted users remain under review.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserAction'
+      responses:
+        '204':
+          description: Action recorded and applied.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/health:
+    get:
+      operationId: getAdminHealth
+      summary: Get the dev admin dependency health snapshot
+      description: >-
+        Active administrators only. Reports PostgreSQL and Redis indicator
+        statuses without connection details. Kafka is explicitly NOT_CHECKED;
+        this is not an overall application status or a latency/error metrics
+        feed. A failed dependency can be reported in a successful snapshot.
+        Authentication and admin authorization require PostgreSQL, so this
+        endpoint may be unavailable when PostgreSQL is down.
+      responses:
+        '200':
+          description: A non-cacheable dependency snapshot.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminHealthSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Health snapshot could not be collected.
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: >-
+        Dev JWT in the host-only HttpOnly session cookie, with Path=/ and
+        SameSite=Strict. Local HTTP cannot use Secure; LAN and production
+        require TLS and Secure cookies and remain unavailable. Dev sessions
+        expire after eight hours without refresh. Each authenticated request
+        checks the JWT and its server-side session and account status.
+        Logout revokes the current session immediately; frozen or deleted
+        accounts and revoked or expired sessions cannot authenticate. Session
+        state is authoritative in PostgreSQL, not Redis.
+  parameters:
+    CsrfHeader:
+      name: X-CSRF-TOKEN
+      in: header
+      required: true
+      description: Token returned by GET /auth/csrf for the current CSRF cookie.
+      schema:
+        type: string
+        minLength: 1
+    TableId:
+      name: tableId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BetId:
+      name: betId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OptionalTableId:
+      name: tableId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Opaque cursor from the preceding response.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        A client-generated key reused only to retry the same operation. The
+        draft guarantee is 24 hours after commit, scoped to the authenticated
+        user across operations. A different operation, target or payload with
+        the same key returns 409. Concurrent matching requests must not apply
+        the effect twice. Authentication, current authorization and visibility
+        are rechecked before a recorded outcome is returned; after the window,
+        reconcile state rather than retrying blindly. Only the dev notification
+        preferences PUT, invite preferences PUT, debt-cap PUT, inbox read-all POST and clear DELETE,
+        feedback POST, invitation response POST and follow/block POST/DELETE
+        implement this protection,
+        with bodyless 201 or 204 outcomes and no pruning. Other operations
+        remain drafts.
+        Retention, key rotation and replay of other response shapes need review.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+  schemas:
+    AdminHealthSnapshot:
+      type: object
+      additionalProperties: false
+      required: [checkedAt, postgres, redis, kafka]
+      properties:
+        checkedAt:
+          type: string
+          format: date-time
+        postgres:
+          $ref: '#/components/schemas/DependencyCheckStatus'
+        redis:
+          $ref: '#/components/schemas/DependencyCheckStatus'
+        kafka:
+          const: NOT_CHECKED
+    DependencyCheckStatus:
+      type: string
+      enum: [UP, DOWN, OUT_OF_SERVICE, UNKNOWN]
+    AdminUserAction:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [type, 'on']
+          properties:
+            type:
+              type: string
+              enum: [freeze, flag]
+            'on':
+              type: boolean
+        - type: object
+          additionalProperties: false
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [strike, clearStrikes]
+        - type: object
+          additionalProperties: false
+          required: [type, text]
+          properties:
+            type:
+              const: note
+            text:
+              type: string
+              pattern: '\S'
+              description: Trim surrounding whitespace; blank notes are rejected.
+    FeedbackSubmission:
+      type: object
+      additionalProperties: false
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [mode, perk, gif, bug, other]
+        text:
+          type: string
+          description: Trim surrounding whitespace, then require 10 to 1000 UTF-16 code units.
+        link:
+          type: string
+          pattern: '^(\s*|\s*[hH][tT][tT][pP][sS]?://\S+\s*)$'
+          description: >-
+            Trim surrounding whitespace; an empty result means no link.
+            Otherwise require an HTTP(S) link with no whitespace.
+    CsrfToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+    TickerSnapshot:
+      type: object
+      additionalProperties: false
+      required: [games]
+      properties:
+        games:
+          type: array
+          description: Unique games in ticker order.
+          items:
+            $ref: '#/components/schemas/TickerGame'
+    TickerGame:
+      type: object
+      additionalProperties: false
+      required: [id, league, status, startsAt, home, away, observedAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        league:
+          type: string
+          enum: [NBA, NFL]
+        status:
+          type: string
+          enum: [SCHEDULED, LIVE, FINAL, POSTPONED]
+        startsAt:
+          type: string
+          format: date-time
+        period:
+          type: [integer, 'null']
+          minimum: 1
+        clock:
+          type: [string, 'null']
+        home:
+          $ref: '#/components/schemas/TickerTeam'
+        away:
+          $ref: '#/components/schemas/TickerTeam'
+        observedAt:
+          type: string
+          format: date-time
+    TickerTeam:
+      type: object
+      additionalProperties: false
+      required: [abbreviation, score]
+      properties:
+        abbreviation:
+          type: string
+          minLength: 1
+        score:
+          type: [integer, 'null']
+          minimum: 0
+    Game:
+      type: object
+      additionalProperties: false
+      required: [id, league, status, startsAt, home, away, observedAt]
+      properties:
+        id:
+          type: string
+        league:
+          type: string
+          enum: [NBA, NFL]
+        status:
+          type: string
+          enum: [SCHEDULED, LIVE, FINAL, POSTPONED]
+        startsAt:
+          type: string
+          format: date-time
+        period:
+          type: [integer, 'null']
+        clock:
+          type: [string, 'null']
+        home:
+          $ref: '#/components/schemas/GameTeam'
+        away:
+          $ref: '#/components/schemas/GameTeam'
+        observedAt:
+          type: string
+          format: date-time
+    GameTeam:
+      type: object
+      additionalProperties: false
+      required: [abbreviation, name, city, score, players]
+      properties:
+        abbreviation:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        score:
+          type: [integer, 'null']
+        players:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, position]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              position:
+                type: string
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, tone, title, createdAt, read]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tone:
+          type: string
+          enum: [error, chat, new, locked, won, lost, resolved, washed, invite, settle]
+        title:
+          type: string
+        description:
+          type: string
+        tableId:
+          type: string
+          format: uuid
+        betId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    NotificationPreferences:
+      type: object
+      additionalProperties: false
+      required: [enabled, errors, ticketStatus, ticketScope, chats, invites, mutedTableIds]
+      properties:
+        enabled:
+          type: boolean
+        errors:
+          type: boolean
+        ticketStatus:
+          type: boolean
+        ticketScope:
+          type: string
+          enum: [mine, all]
+        chats:
+          type: boolean
+        invites:
+          type: boolean
+        mutedTableIds:
+          $ref: '#/components/schemas/UuidList'
+    UuidList:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        format: uuid
+    Relationships:
+      type: object
+      additionalProperties: false
+      required: [followingIds, followerIds, blockedIds]
+      properties:
+        followingIds:
+          $ref: '#/components/schemas/UuidList'
+        followerIds:
+          $ref: '#/components/schemas/UuidList'
+        blockedIds:
+          $ref: '#/components/schemas/UuidList'
+    InvitePreferences:
+      type: object
+      additionalProperties: false
+      required: [friends, following]
+      properties:
+        friends:
+          type: string
+          enum: [open, request, closed]
+        following:
+          type: string
+          enum: [open, request, closed]
+    TableInvite:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, tableName, tableEmoji, fromId, userId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tableId:
+          type: string
+          format: uuid
+        tableName:
+          type: string
+        tableEmoji:
+          type: string
+        fromId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    Settlement:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, hostId, createdAt, lines]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tableId:
+          type: string
+          format: uuid
+        hostId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementLine'
+    SettlementLine:
+      type: object
+      additionalProperties: false
+      required: [id, settlementId, tableId, payerId, payeeId, amountCents, status, revision, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        settlementId:
+          type: string
+          format: uuid
+        tableId:
+          type: string
+          format: uuid
+        payerId:
+          type: string
+          format: uuid
+        payeeId:
+          type: string
+          format: uuid
+        amountCents:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [unpaid, sent, paid, disputed, forgive_asked, forgiven]
+        revision:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SettlementGroup:
+      type: object
+      additionalProperties: false
+      required: [otherUserId, netCents, revision, lines]
+      properties:
+        otherUserId:
+          type: string
+          format: uuid
+        netCents:
+          type: integer
+          format: int64
+          description: Positive means the caller is owed points; negative means the caller owes.
+        revision:
+          type: string
+          description: Opaque group revision for optimistic concurrency.
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SettlementLine'
+    ChatUnreadState:
+      type: object
+      additionalProperties: false
+      required: [firstUnreadMessageId, unreadCount]
+      properties:
+        firstUnreadMessageId:
+          type: [string, 'null']
+          format: uuid
+        unreadCount:
+          type: integer
+          minimum: 0
+      allOf:
+        - if:
+            properties:
+              unreadCount:
+                const: 0
+            required: [unreadCount]
+          then:
+            properties:
+              firstUnreadMessageId:
+                type: 'null'
+          else:
+            properties:
+              firstUnreadMessageId:
+                type: string
+                format: uuid
+    ChatMessage:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, kind, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tableId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [text, gif, bet, system, settlement]
+        createdAt:
+          type: string
+          format: date-time
+        authorId:
+          type: string
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+        gifId:
+          type: string
+          minLength: 1
+        betId:
+          type: string
+          format: uuid
+        settlementId:
+          type: string
+          format: uuid
+        settlementSummary:
+          $ref: '#/components/schemas/ChatSettlementSummary'
+        reactions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [userId, emoji]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              emoji:
+                type: string
+      oneOf:
+        - required: [authorId, text]
+          properties:
+            kind: { const: text }
+            authorId: true
+            text: true
+            gifId: false
+            betId: false
+            settlementId: false
+            settlementSummary: false
+        - required: [authorId, gifId]
+          properties:
+            kind: { const: gif }
+            authorId: true
+            gifId: true
+            text: false
+            betId: false
+            settlementId: false
+            settlementSummary: false
+        - required: [authorId, betId]
+          properties:
+            kind: { const: bet }
+            authorId: true
+            betId: true
+            text: false
+            gifId: false
+            settlementId: false
+            settlementSummary: false
+        - required: [text]
+          properties:
+            kind: { const: system }
+            text: true
+            authorId: false
+            gifId: false
+            betId: false
+            settlementId: false
+            settlementSummary: false
+        - required: [settlementId, settlementSummary]
+          properties:
+            kind: { const: settlement }
+            settlementId: true
+            settlementSummary: true
+            authorId: false
+            text: false
+            gifId: false
+            betId: false
+    ChatSettlementSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        Static amounts and parties from the original settlement, not current
+        receipt statuses or live balances.
+      required: [hostId, lines]
+      properties:
+        hostId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [payerId, payeeId, amountCents]
+            properties:
+              payerId:
+                type: string
+                format: uuid
+              payeeId:
+                type: string
+                format: uuid
+              amountCents:
+                type: integer
+                format: int64
+                minimum: 1
+    RemainderRule:
+      type: string
+      enum: [host, proposer, earliest, random]
+    TableArchive:
+      type: object
+      additionalProperties: false
+      required: [id, name, emoji, archivedAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        emoji:
+          type: string
+        archivedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    QuickPickCode:
+      type: string
+      pattern: '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$'
+    MemberRequestOutcome:
+      type: object
+      additionalProperties: false
+      required: [userId, outcome]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [added, invited, not_added]
+    TableCreationResult:
+      type: object
+      additionalProperties: false
+      required: [table, outcomes]
+      properties:
+        table:
+          $ref: '#/components/schemas/Table'
+        outcomes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberRequestOutcome'
+    Table:
+      type: object
+      additionalProperties: false
+      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        emoji:
+          type: string
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        hostIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        remainderRule:
+          $ref: '#/components/schemas/RemainderRule'
+        hostsOnlyBets:
+          type: boolean
+        u2pickEnabled:
+          type: boolean
+        quickPickCode:
+          description: Present only for current table hosts.
+          $ref: '#/components/schemas/QuickPickCode'
+        quickPicksEnabled:
+          type: boolean
+        quickPickSharing:
+          type: boolean
+        subscribedTo:
+          type: array
+          items:
+            type: string
+            format: uuid
+        disabledPermissions:
+          type: object
+          description: Per-member permissions disabled by a host; non-hosts see only their own.
+          additionalProperties:
+            type: array
+            uniqueItems: true
+            items:
+              type: string
+              enum: [bets, text, react, gifs]
+    DebtCap:
+      type: object
+      additionalProperties: false
+      required: [capCents]
+      properties:
+        capCents:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 2147483647
+    BetProposal:
+      type: object
+      additionalProperties: false
+      required: [modeId, config, question, choices, wagerCents, durationSec, forFun]
+      properties:
+        modeId:
+          $ref: '#/components/schemas/BetMode'
+        gameId:
+          type: string
+          description: Required for game bets; absent for game-independent U2Pick.
+        settledBy:
+          type: string
+          enum: [anyone, non_participants, hosts, me]
+          description: U2Pick settler rule.
+        config:
+          $ref: '#/components/schemas/BetConfig'
+        question:
+          type: string
+          minLength: 1
+        choices:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        wagerCents:
+          type: integer
+          minimum: 0
+          description: Non-4fun wagers must be between 10 and 1000 cents.
+        durationSec:
+          type: integer
+          minimum: 1
+        forFun:
+          type: boolean
+        includesOvertime:
+          type: boolean
+          description: Only applicable to stat and score modes.
+      allOf:
+        - if:
+            properties:
+              forFun:
+                const: false
+            required: [forFun]
+          then:
+            properties:
+              wagerCents:
+                minimum: 10
+                maximum: 1000
+        - if:
+            properties:
+              modeId:
+                const: u2pick
+            required: [modeId]
+          then:
+            properties:
+              question:
+                maxLength: 120
+              choices:
+                maxItems: 6
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 40
+                  pattern: '^(?!\s*[Nn][Oo] [Gg][Uu][Ee][Ss][Ss]\s*$)(?!\s*__[Nn][Oo]_[Gg][Uu][Ee][Ss][Ss]__\s*$).+'
+                  description: >-
+                    Trimmed, case-insensitively unique, and not "No guess"
+                    or the prototype's reserved "__no_guess__" marker.
+                    "Pass" is allowed as a sports choice.
+          else:
+            required: [gameId]
+            properties:
+              gameId:
+                type: string
+              settledBy: false
+        - if:
+            properties:
+              modeId:
+                enum: [u2pick, choose_their_fate]
+            required: [modeId]
+          then:
+            properties:
+              includesOvertime: false
+    BetMode:
+      type: string
+      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick]
+    BetConfig:
+      type: object
+      additionalProperties:
+        oneOf:
+          - type: string
+          - type: number
+          - type: array
+            items:
+              type: string
+    BetBaseline:
+      type: object
+      additionalProperties: false
+      required: [at, awayScore, homeScore]
+      properties:
+        at:
+          type: string
+          format: date-time
+        awayScore:
+          type: number
+        homeScore:
+          type: number
+        possession:
+          type: string
+          enum: [home, away]
+        yardLine:
+          type: string
+        stats:
+          type: object
+          additionalProperties:
+            type: number
+    Bet:
+      type: object
+      additionalProperties: false
+      required: [id, tableId, proposerId, modeId, config, question, choices, wagerCents, forFun, status, locksAt, myPick, myParticipation, pickCount, pointsSettled]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tableId:
+          type: string
+          format: uuid
+        proposerId:
+          type: string
+          format: uuid
+        modeId:
+          $ref: '#/components/schemas/BetMode'
+        gameId:
+          type: string
+        config:
+          $ref: '#/components/schemas/BetConfig'
+        question:
+          type: string
+        choices:
+          type: array
+          items:
+            type: string
+        wagerCents:
+          type: integer
+          minimum: 0
+        forFun:
+          type: boolean
+        status:
+          type: string
+          enum: [ACTIVE, PENDING, SETTLED, WASHED]
+        locksAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        lockedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+        settledAt:
+          type: string
+          format: date-time
+          description: Time the table host settled this bet's points, not when its outcome resolved.
+        pointsSettled:
+          type: boolean
+          description: >-
+            Whether the host has settled this bet's points. Distinct from
+            status SETTLED, which means the bet outcome has resolved.
+        baseline:
+          $ref: '#/components/schemas/BetBaseline'
+        includesOvertime:
+          type: boolean
+        settledBy:
+          type: string
+          enum: [anyone, non_participants, hosts, me]
+        calledBy:
+          type: string
+          format: uuid
+        winningChoice:
+          type: string
+        washReason:
+          type: string
+        remainderRule:
+          $ref: '#/components/schemas/RemainderRule'
+        remainderHostId:
+          type: string
+          format: uuid
+          description: >-
+            For a locked bet with the host remainder rule, the host chosen
+            uniformly at random from the table's current hosts at lock.
+            The recipient remains fixed even if host membership later changes.
+        sourceBetId:
+          type: string
+          format: uuid
+        sourceTableId:
+          type: string
+          format: uuid
+        overridden:
+          type: boolean
+        deltasCents:
+          type: object
+          description: Resolved per-user deltas in cents.
+          additionalProperties:
+            type: integer
+            format: int64
+        pickCount:
+          type: integer
+          minimum: 0
+          description: Number of participants with a selection; excludes those with no guess.
+        myPick:
+          type: [string, 'null']
+          description: The authenticated user's own selection; null means no guess or no participation.
+        myParticipation:
+          type: string
+          enum: [not_joined, no_guess, picked]
+          description: The caller's own participation state, including while ACTIVE.
+        picks:
+          type: array
+          description: Omitted while ACTIVE.
+          items:
+            type: object
+            additionalProperties: false
+            required: [userId, choice]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              choice:
+                type: string
+        noGuessUserIds:
+          description: >-
+            Participants with no guess, omitted while ACTIVE. No guess does
+            not place the participant in the pot.
+          $ref: '#/components/schemas/UuidList'
+      allOf:
+        - if:
+            properties:
+              myParticipation:
+                const: picked
+            required: [myParticipation]
+          then:
+            properties:
+              myPick:
+                type: string
+                minLength: 1
+              pickCount:
+                minimum: 1
+          else:
+            properties:
+              myPick:
+                type: 'null'
+        - if:
+            properties:
+              status:
+                const: ACTIVE
+            required: [status]
+          then:
+            properties:
+              picks: false
+              noGuessUserIds: false
+              remainderRule: false
+              remainderHostId: false
+          else:
+            required: [picks, noGuessUserIds, remainderRule]
+            properties:
+              picks: true
+              noGuessUserIds: true
+              remainderRule: true
+            allOf:
+              - if:
+                  properties:
+                    remainderRule:
+                      const: host
+                  required: [remainderRule]
+                then:
+                  required: [remainderHostId]
+                  properties:
+                    remainderHostId: true
+                else:
+                  properties:
+                    remainderHostId: false
+        - if:
+            properties:
+              status:
+                enum: [ACTIVE, PENDING]
+            required: [status]
+          then:
+            properties:
+              calledBy: false
+              winningChoice: false
+              washReason: false
+              deltasCents: false
+              pointsSettled:
+                const: false
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, username, hue]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          minLength: 3
+          maxLength: 15
+          pattern: '^[a-z0-9_]+$'
+        hue:
+          type: integer
+          minimum: 1
+          maximum: 5
+    DeletedUser:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          const: Deleted user
+        deleted:
+          const: true
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        username:
+          type: string
+          description: >-
+            Trim ECMAScript whitespace and lowercase before validating 3–15
+            lowercase ASCII alphanumeric/underscore characters and
+            case-insensitive uniqueness.
+        hue:
+          type: integer
+          minimum: 1
+          maximum: 5
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or credentials invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The authenticated user cannot perform this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource does not exist or is not visible.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The request conflicts with current state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: The requested data is temporarily unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

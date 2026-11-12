@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://p2picks.invalid/schemas/realtime-invalidation-v1.json",
+  "title": "Realtime invalidation, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "type", "schemaVersion", "occurredAt"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": {
+      "enum": ["chat.changed", "bet.changed", "notifications.changed", "ticker.changed"]
+    },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tableId": { "type": "string", "format": "uuid" },
+    "resourceId": { "type": "string", "format": "uuid" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "bet.changed" } }, "required": ["type"] },
+      "then": { "required": ["tableId", "resourceId"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "chat.changed" } }, "required": ["type"] },
+      "then": { "required": ["tableId"], "properties": { "resourceId": false } }
+    },
+    {
+      "if": {
+        "properties": { "type": { "enum": ["notifications.changed", "ticker.changed"] } },
+        "required": ["type"]
+      },
+      "then": { "properties": { "tableId": false, "resourceId": false } }
+    }
+  ]
+}
