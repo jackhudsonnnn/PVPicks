@@ -31,6 +31,8 @@ backend/
                           rules, bet reads, lock worker
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
+      delivery/           outbox relay to Kafka, realtime consumer and the STOMP
+                          WebSocket gateway (/ws) with its authorization checks
       feedback/  admin/   feedback submission; admin health
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
@@ -153,6 +155,11 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   in the connected database. Sports bets are not auto-locked. Set
   `PVPICKS_BET_LOCK_WORKER_ENABLED=false` before starting against shared data
   unless locking it has been approved.
+- The outbox relay is also on by default in dev: it publishes unpublished
+  outbox rows to Kafka and sets their `published_at`. Set
+  `PVPICKS_OUTBOX_RELAY_ENABLED=false` before starting against shared data
+  unless that has been approved. Realtime delivery needs Kafka; without it the
+  app still runs and clients fall back to refreshing on demand.
 - Privileged database operators bypass application rules (including the V24
   role guard) and can read plaintext picks.
 
@@ -167,8 +174,11 @@ The schema does not enforce every invariant; transactional writers must:
 - normalize usernames or cast parameters to `citext`, because JDBC binds
   strings as `varchar`;
 - write ledger entries as append-only, zero-sum rows per bet;
-- write internal outbox rows in the same transaction. There is no relay,
-  consumer or delivery yet.
+- write outbox rows through `common.Outbox` in the same transaction. The relay
+  delivers at least once and not necessarily in commit order, so consumers
+  must tolerate duplicates and reordering. Never put picks, message content or
+  other private data in a payload that a realtime invalidation could expose;
+  invalidations are built in `delivery.RealtimeConsumer`.
 
 ## Tests
 

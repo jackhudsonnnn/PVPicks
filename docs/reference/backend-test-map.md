@@ -47,6 +47,14 @@ cover.
   dependencies and acyclicity, that shared modules and the kernel do not
   depend on features, and that calculators stay pure Java. Negative fixtures
   under `com.p2picks.archfixture` prove violations are detected.
+- `delivery`: `OutboxRelayIntegrationTest` (publish after broker
+  acknowledgement, retry after a broker failure), `RealtimeConsumerTest` (which
+  events reach which feeds, amount-free envelopes, stable event IDs) and
+  `RealtimeIntegrationTest` (a real STOMP client: CSRF on CONNECT, origin,
+  member-only and own-feed subscriptions, rejected SEND, delivery rechecks after
+  removal, session revocation, private settlement delivery). Integration tests
+  turn off the scheduled relay and call it directly, and read the topic from the
+  earliest offset so the consumer cannot miss an event while joining.
 - Contract tests validate draft OpenAPI and realtime shapes; they do not imply
   that every drafted operation is implemented.
 - Storage tests and `ProcessedEventStorageTest` cover database invariants and
@@ -62,5 +70,5 @@ invariants when integrating each workflow. In particular:
   propagation and host wash when those flows are implemented.
 - Cover account deletion, host handoff, tombstoned identities and cleanup when
   account deletion is implemented.
-- Test realtime subscription authorization, revocation, deduplication and
-  reconnect recovery before enabling delivery.
+- Extend the realtime tests whenever a new event gains a destination, including
+  its audience, privacy and revocation.

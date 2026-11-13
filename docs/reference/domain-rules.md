@@ -27,7 +27,8 @@ U2Pick, the first bet mode, is available end to end over HTTP and in the
 frontend: proposal, pick/clear, deadline locking by the dev lock worker,
 member-called resolution, host points settlement and individual/group receipt
 history and actions. Balance-change warnings are delivered privately through
-the pending-review list that clients read; realtime delivery is future work.
+the pending-review list, and the private settlement realtime feed tells both
+parties when to refetch it.
 Sports modes follow later and are not yet implemented.
 
 Both mode families use the same pick, privacy, cap, lock, payout and points
@@ -285,8 +286,9 @@ When a new settlement changes an open person net with sent or forgiveness-
 requested receipts, the internal transaction returns those open claims to
 unpaid, increments their revisions and records a private pair-net-change
 outbox event with before/after amounts. Closed receipts are unchanged. The
-outbox is not automatically delivered. Any future consumer must restrict
-settlement data to the two named parties. The frontend warning-opening
+realtime consumer sends only an amount-free `settlements.changed` invalidation
+to the two named parties; any other consumer must likewise restrict settlement
+data to them. The frontend warning-opening
 interaction remains a client concern, not a server concurrency guard, and is
 local to the browser. Internal receipt history is limited
 to direct parties, including archived-table and completed records. Individual
@@ -318,8 +320,8 @@ group ask/decline updates all requests while preserving sent offset claims.
 Reconciliation resets both types of in-flight claim on a changed net.
 Receipt mutation events remain private outbox records only. Pair-change events
 may also be materialized by the internal consumer described above. Future
-consumers must restrict them to the two parties. Realtime delivery of these
-events remains future work; clients discover warnings through the review list.
+consumers must restrict them to the two parties. The realtime settlement feed
+invalidates only those two parties' views; clients then read the review list.
 
 Table deletion is a host action blocked while any bet is ACTIVE or PENDING or
 any resolved non-4fun bet has not had its points settled. Washed and 4fun
@@ -377,8 +379,8 @@ the blocked author's text and GIF messages, but not bet cards. System and
 settlement messages are not reactable. PUT accepts exactly one RGI emoji
 sequence according to ICU4J 76.1 (Emoji 16.0), not arbitrary text or newer
 sequences. Matching retries recheck access without reapplying; changed rows
-write a table-only internal outbox invalidation. Realtime delivery does not
-exist yet.
+write a table-only outbox invalidation, delivered as `chat.changed` on the
+table's chat feed.
 
 Dev chat sending requires current table membership and the corresponding text
 or GIF permission. The user delegated the text limit; it is 1–2000 Unicode

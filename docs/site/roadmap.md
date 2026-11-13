@@ -31,10 +31,14 @@ current code, not an estimated delivery date.
 - Preserve lock-time remainder snapshots, including the randomly chosen host,
   and keep Active picks hidden from other players and admin views.
 
-## 4. Delivery & sports data — planned
+## 4. Delivery & sports data — in progress
 
-- Build and test the outbox relay, consumer deduplication and authenticated
-  realtime gateway. Outbox rows alone do not deliver events.
+- **Available:** the outbox relay to Kafka, a realtime consumer, and an
+  authenticated STOMP gateway delivering bet, chat and private settlement
+  invalidations; the frontend refreshes bets and receipts live.
+- **Later:** private and table-view invalidations for table, membership and
+  profile changes; outbox retention; ordering and gap detection beyond
+  refetch-on-reconnect; durable consumers that record processed events.
 - Implement the sports feed and sports-only ticker; verify provider coverage,
   freshness, chronology and failure behavior before automatic results.
 

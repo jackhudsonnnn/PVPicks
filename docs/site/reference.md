@@ -10,7 +10,7 @@ the repository, not necessarily in a browser.
 - <a href="/docs/source/reference/domain-rules.md" download>Domain rules and test inventory</a>
 - <a href="/docs/source/reference/backend-contract-inventory.md" download>Backend contract inventory</a>
 - <a href="/docs/source/reference/backend-test-map.md" download>Test guide</a>
-- <a href="/docs/source/reference/realtime-contract.md" download>Realtime contract draft</a>
+- <a href="/docs/source/reference/realtime-contract.md" download>Realtime contract</a>
 - <a href="/docs/source/openapi.yaml" download>OpenAPI draft</a> — reference only; interactive API documentation is planned.
 - <a href="/docs/source/backend-readme.md" download>Backend setup and implementation notes</a>
 

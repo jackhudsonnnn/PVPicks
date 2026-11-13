@@ -1,69 +1,75 @@
-# Realtime contract — Phase 0 draft
+# Realtime contract
 
-This specifies intended behavior, not an implemented gateway. The planned
-transport is WebSocket/STOMP. HTTP reads remain authoritative and provide recovery when
-realtime delivery is interrupted.
+Realtime delivery is implemented for table bet feeds, table chat feeds and a
+private settlement feed. The transport is STOMP over a WebSocket at `/ws`
+(`/api/ws` through the Vite dev proxy). Messages are invalidations only: HTTP
+reads remain authoritative and provide recovery when realtime delivery is
+interrupted. The ticker feed is planned and not implemented.
 
 ## Connection and authorization
 
-- Authenticate the WebSocket handshake with the same active HttpOnly-cookie
-  session as HTTP and reject an unapproved `Origin`. The STOMP `CONNECT`
-  frame must carry the CSRF token obtained from `/auth/csrf` in its
-  `X-CSRF-TOKEN` header; do not put credentials or tokens in a URL. An
+- The WebSocket handshake goes through the normal HTTP security chain: it
+  needs an active player's HttpOnly session cookie and must come from the
+  allowed `Origin` (`PVPICKS_DEV_ORIGIN`). It must also carry the CSRF cookie;
+  the STOMP `CONNECT` frame must carry the matching token from `/auth/csrf` in
+  its `X-CSRF-TOKEN` header. Credentials and tokens never go in a URL. An
   authenticated handshake alone does not authorize a subscription.
-- Expiry, logout, account freeze or deletion invalidates the connection and
-  subscriptions. Revalidate session and membership before delivery so a
-  missed revocation notification cannot continue leaking updates. Terminate
-  expired or revoked connections; do not depend on Redis for revocation.
-- Authorize every subscription and re-check access when membership, account
-  status or session validity changes. A table topic is restricted to current
-  members; a user queue is restricted to its authenticated owner.
-- Never rely on the client to hide data. In particular, a shared table message
-  cannot contain an Active bet's individual picks or a caller-specific
-  `myPick`. The authorized HTTP bet view supplies the requesting user's own
-  pick. Block filtering must be applied on the server for each recipient.
-- Reject unauthorized sends and subscriptions; browser clients cannot publish
-  sports results, settlement transitions or other authoritative domain events.
+- Expiry, logout, account freeze or deletion ends access: every delivery
+  rechecks the login session in PostgreSQL, and a sweep every 15 seconds closes
+  connections whose session is no longer valid. Revocation does not depend on
+  Redis.
+- Every subscription is authorized when it is made, and every delivery
+  rechecks it. A table feed is restricted to current members of the
+  non-archived table; the settlement feed is the caller's own. There are no
+  shared broadcast topics: each message is sent to one connection after the
+  checks, so a removed member stops receiving immediately.
+- Never rely on the client to hide data. A table message cannot contain an
+  Active bet's individual picks or a caller-specific `myPick`; the authorized
+  HTTP bet view supplies the requesting user's own pick. Block filtering is
+  applied by the HTTP chat window for each recipient.
+- Clients cannot send: any STOMP `SEND` frame is rejected, as is a
+  subscription to any other destination. A rejected frame closes the
+  connection with a STOMP `ERROR`.
 
 ## Destinations
 
-| Destination | Audience | Planned payload |
-|---|---|---|
-| `/topic/tables/{id}/chat` | Authorized table members | `chat.changed`, a table-level invalidation without a message identity; fetch the filtered HTTP window. |
-| `/topic/tables/{id}/bets` | Authorized table members | `bet.changed` with bet identity; fetch the caller's authorized bet view. |
-| `/topic/ticker` | Authenticated users | `ticker.changed`, a generic invalidation without private identities; refetch `GET /ticker`. |
+Clients subscribe to user destinations; the server routes each message to the
+subscribing connection only.
 
-These are invalidation messages, not complete chat or bet projections. That
-avoids broadcasting one recipient's private view to other subscribers.
-The internal `table.member.permission.changed.v1` outbox event is not a
-shared-table event: only current hosts and the affected member may learn the
-permission change. A future relay must reauthorize those recipients and design
-an appropriate private invalidation before delivering it; no such destination
-or delivery is implemented.
-The internal `table.remainder.changed.v1` and system
-`chat.message.created.v1` events likewise require a future relay. A table-view
-invalidation destination is not yet defined; do not treat either event as an
-implemented client delivery.
-Host changes also write internal table and system-chat events. They are not
-delivery; a future relay must reauthorize recipients and invalidate the
-relevant table and filtered chat views.
-Table-profile changes also affect pending invitation views. A future relay must
-invalidate those views privately for currently eligible recipients; invitees
-must not gain access to table topics. No such delivery is implemented.
-Quick Pick controls also write table invalidations for affected subscriber
-tables. These contain only the affected table ID; future delivery must recheck
-membership and must not expose the source's code or cross-table relationships
-to unauthorized recipients. No relay or table invalidation destination exists.
-Member removal writes an internal event containing the removed user ID.
-Future delivery must immediately revoke that user's access and privately
-invalidate their own table list while rechecking authorization; never broadcast
-the raw internal event without an explicit audience and privacy review.
-Table deletion writes an internal archive event; future delivery must stop
-active table subscriptions and privately invalidate eligible archive lists
-while rechecking access. No such delivery is implemented.
-Personal profile changes write an internal event containing only a user ID.
-Future profile invalidations need recipient-specific authorization and block
-filtering; the raw event must not be broadcast to all clients.
+| Subscribe to | Audience | Payload | Source outbox events |
+|---|---|---|---|
+| `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`; `settlement.created` (list) |
+| `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed` |
+| `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.line.changed`, `settlement.group.changed`, `settlement.net.changed` |
+| `/topic/ticker` (planned) | Authenticated users | `ticker.changed`; refetch `GET /ticker` | Sports feed, not implemented |
+
+Other outbox events have no realtime destination yet. They are not delivered
+to clients, and the notes below still apply to any future delivery.
+
+### Events without a destination yet
+
+These table, membership and profile events reach Kafka but are not delivered to
+clients. Each needs its own audience and privacy review first:
+
+- `table.member.permission.changed.v1` is not a shared-table event: only current
+  hosts and the affected member may learn the change, so it needs a private
+  invalidation.
+- `table.remainder.changed.v1`, `table.host.changed.v1`,
+  `table.settings.changed.v1` and `table.profile.changed.v1` need a table-view
+  invalidation destination. Their system chat messages already reach the chat
+  feed. Table-profile changes also affect pending invitation views, which must
+  be invalidated privately for currently eligible recipients; invitees must not
+  gain access to table feeds.
+- Quick Pick control events contain only the affected table ID; delivery must
+  recheck membership and must not expose the source's code or cross-table
+  relationships.
+- `table.member.removed.v1` contains the removed user ID. Delivery rechecks
+  already stop that user's table feeds; a private table-list invalidation is
+  still needed. Never broadcast the raw event.
+- `table.archived.v1` should end table subscriptions and privately invalidate
+  eligible archive lists.
+- `user.profile.changed.v1` contains only a user ID; profile invalidations need
+  recipient-specific authorization and block filtering.
 
 ## Invalidation envelope
 
@@ -87,17 +93,29 @@ lifecycle changes do not add bet activity to this shared topic.
 }
 ```
 
-`eventId` identifies the emitted event for deduplication; `resourceId` is the
-affected bet for `bet.changed` only. The envelope contains no pick, message
+`eventId` identifies the emitted invalidation for deduplication. It is
+derived from the outbox event ID and the invalidation type, so a redelivered
+event keeps its ID. `resourceId` is the affected bet for `bet.changed` only.
+`bets.changed` names only the table; `settlements.changed` carries no table or
+resource ID. The envelope contains no pick, message
 identity or text, username, credential or financial amount. The schema and its
-tests describe this draft contract, not an implemented gateway.
+tests define the contract the gateway sends.
 
 ## Delivery and recovery
 
+- The outbox relay polls unpublished rows every 500 ms, oldest first, publishes
+  them to the Kafka topic `p2picks.outbox.v1` keyed by aggregate, and marks them
+  published only after the broker acknowledges the batch. A failed batch rolls
+  back and is retried, so delivery is at least once. `FOR UPDATE SKIP LOCKED`
+  lets several relays share the outbox. Ordering follows `created_at`, not
+  commit order.
+- Each backend instance consumes every event with its own consumer group,
+  starting from the latest offset, and serves only its own connections.
+  Invalidations are idempotent, so this consumer records no processed-event
+  markers. Malformed or undeliverable events are logged and skipped.
 - Realtime invalidations are best effort and may be delayed, duplicated or
-  missed. Event IDs support deduplication; clients must tolerate reordered
-  invalidations and refetch current HTTP state rather than treating event order
-  as authoritative.
+  missed. Clients drop repeated event IDs, tolerate reordered invalidations and
+  refetch current HTTP state rather than treating event order as authoritative.
 - After connect, reconnect, session renewal, membership change or a failed
   refresh, clients subscribe and then refetch relevant authorized resources
   and reconcile them with local state. An invalidation received during a
@@ -107,13 +125,15 @@ tests describe this draft contract, not an implemented gateway.
   even after reaching the current end; an empty page has no replacement cursor.
   Refetch existing windows after block changes: a newly visible message can be
   older than the saved next cursor.
-- PostgreSQL remains authoritative; Kafka outbox consumers and Redis fan-out
-  must not be used as proof that a client received an event. Redis loss may
-  interrupt realtime updates; recovery must trigger resynchronization.
+- PostgreSQL remains authoritative; Kafka and the gateway are not proof that a
+  client received an event. Redis is not used for delivery.
 - Ordering, replay and gap detection beyond refetch-on-reconnect remain open
   design work. Do not promise exactly-once delivery.
 
 ## Verification targets
+
+`delivery.RealtimeIntegrationTest` covers targets 1–5 for the implemented
+feeds; the ticker targets (6–7) await the sports feed.
 
 1. A non-member and a removed member cannot subscribe to a table topic.
 2. No shared Active-bet message reveals individual picks or another user's

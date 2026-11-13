@@ -15,6 +15,14 @@ dev backend and connects tables, bets and settle-up receipts:
 Chat, registration and the other prototype workflows are not connected; the
 mock-backed app remains in the source but is not exposed.
 
+Bets and receipts update live. While signed in, the app keeps one STOMP
+connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on
+CONNECT, and refreshes a table's bets or your receipts when the server says
+they changed. It refetches everything after each (re)connect, reconnects with
+backoff, drops duplicate invalidations, and checks the session when the socket
+closes. The header shows "Live" or "Reconnecting…". Messages never carry
+picks or amounts; the views always reload from HTTP.
+
 Every mutation sends an `Idempotency-Key`. When an outcome is unknown (for
 example, a lost response), the action and its key are saved per user in
 local storage. Every tab sees it and blocks new bet or receipt actions until

@@ -9,7 +9,7 @@ table, Quick Picks, chat, social, feedback, game and settlement
 operations, an admin health snapshot and a draft admin user-action operation.
 Other admin reads and surfaces remain incomplete; it is not ready to generate
 a client.
-`realtime-contract.md` records the proposed realtime behavior.
+`realtime-contract.md` records the realtime gateway's destinations and rules.
 
 Source: `client/src/features/store/commands.ts`. These are retained prototype
 commands, not the current frontend entry point. The backend-backed app uses
@@ -88,17 +88,17 @@ results are consumed.
   amounts and parties. Deleted users' reactions are excluded; blocked users'
   reactions on visible messages remain.
   Archive members may read for 90 days after deletion.
-  Realtime delivery is not implemented.
+  Chat changes publish a `chat.changed` invalidation on the table's chat feed.
 - Dev reaction PUT and DELETE require current membership and react permission,
   filter blocked text and GIF authors, and permit bet cards. PUT accepts one
   ICU4J 76.1 RGI emoji sequence. A matching retry rechecks access without
-  reapplying. Chat delivery is not implemented.
+  reapplying. Reaction changes invalidate the table's chat feed.
 - Dev chat sending validates the current text/GIF permission, trims text to
   1–2000 Unicode code points and restricts GIF IDs to the prototype catalog.
   A retry rechecks access and returns the original 201 representation without
   resending; if the message was removed or its content changed, it returns 404.
-  The retry record stores a message reference, not a copy of the text. Rate limiting,
-  and realtime delivery remain unimplemented.
+  The retry record stores a message reference, not a copy of the text. Rate
+  limiting remains unimplemented.
 - Dev member-permission PUT lets hosts quietly change the four permissions of
   current non-host members, including frozen members. Retries recheck the
   current host and target role without reapplying. Chat and reactions enforce
@@ -122,7 +122,8 @@ results are consumed.
   resolved non-4fun bet awaits points settlement. It preserves records, open
   receipts and chat read position, cancels pending target invitations and
   writes a neutral notice. A matching retry rechecks actor access but never
-  removes a subsequently readded member. Realtime revocation is not implemented.
+  removes a subsequently readded member. Realtime deliveries recheck membership,
+  so the removed member's table feeds stop; no table-list invalidation exists yet.
 - Dev table-profile PATCH updates a name and/or emoji with the same validation
   as table creation. It returns the current table on an authorized retry and
   writes a neutral system message only for an actual change. Pending invitation
@@ -147,8 +148,8 @@ results are consumed.
 - Dev host PUT/DELETE clears restrictions on promotion, cancels the demoted
   host's pending invitations and requires another active host for demotion.
   Attributed host-change chat resolves current usernames at read time and
-  shows `Deleted user` for tombstones. Account deletion, freeze recovery and
-  realtime delivery remain unimplemented.
+  shows `Deleted user` for tombstones. Account deletion, freeze recovery and a
+  realtime table-view invalidation remain unimplemented.
 - Reports, feedback and admin operations are outside
   `AppCommands`. Dev `POST /feedback` submits feedback but does not implement
   rate limiting, moderation reads or personal-data cleanup; links stored before
@@ -161,8 +162,8 @@ results are consumed.
 - Dev `GET /me/debt-cap` reads the saved setting and default. Dev
   `GET /me/debt` reads current table exposure and open receipt nets in one
   database snapshot. Dev `PUT /me/debt-cap` requires zero debt and whole-point
-  limits; retry protection preserves a committed outcome. Internal proposal,
-  pick and lock enforce caps; realtime invalidation is not implemented.
+  limits; retry protection preserves a committed outcome. Proposal, pick and
+  lock enforce caps; debt reads have no realtime invalidation.
 - Dev `GET`/`PUT /me/invite-preferences` read or replace the caller's policy.
   Defaults are friends `open` and following `request`; updates cancel
   ineligible pending invitations. Dev invitation responses enforce current
@@ -208,10 +209,10 @@ results are consumed.
   preserves receipts and Quick Pick copies. It requires
   settlement of all resolved non-4fun bet points. Receipt actions and zero-net
   settlement exist internally; retained-data cleanup remains unimplemented.
-- Planned STOMP destinations: `/topic/tables/{id}/chat`,
-  `/topic/tables/{id}/bets`, `/topic/ticker`.
-  Specify subscription authorization, payloads, ordering and reconnection
-  semantics before calling the realtime contract complete.
+- Realtime: STOMP at `/ws` with per-user destinations
+  `/user/queue/tables/{id}/bets`, `/user/queue/tables/{id}/chat` and
+  `/user/queue/settlements`; `/topic/ticker` is planned. Ordering, replay and
+  gap detection beyond refetch-on-reconnect remain open.
 
 ## Phase 0 exit checklist
 

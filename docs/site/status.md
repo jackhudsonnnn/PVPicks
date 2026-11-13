@@ -27,12 +27,18 @@ planned operations; it is not an implementation inventory.
 - The U2Pick lock worker, on by default in the dev profile
   (`PVPICKS_BET_LOCK_WORKER_ENABLED=false` turns it off). It does not lock
   sports bets.
-- PostgreSQL schema, migrations, internal outbox storage and pure
+- PostgreSQL schema, migrations, the transactional outbox and pure
   payout/debt/settlement calculators.
+- Realtime delivery: an outbox relay to Kafka (on by default in dev;
+  `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns it off), a consumer, and an
+  authenticated STOMP/WebSocket gateway with per-member table bet and chat
+  feeds and a private settlement feed. Every delivery rechecks the session and
+  membership. The frontend refreshes bets and receipts live and refetches after
+  reconnecting.
 - The frontend entry point supports backend sign-in, session restoration,
   table and bet list/detail views, U2Pick creation, picking, result calling,
-  host points settlement, and settle-up receipts with balance-change reviews.
-  Active picks remain private; participant names are loaded from the backend
+  host points settlement, and settle-up receipts with balance-change reviews,
+  updating live. Active picks remain private; participant names are loaded from the backend
   after lock. The previous mock app is not exposed there; chat, social and
   other frontend workflows are not yet connected.
 - An action whose outcome is unknown (for example, a lost response) keeps its
@@ -44,7 +50,7 @@ planned operations; it is not an implementation inventory.
 ## Not yet available
 
 - Sports-bet modes and locking, Quick Pick copy propagation, and end-to-end cap enforcement.
-- Outbox relay, Kafka consumers, realtime gateway, and a production sports feed.
+- Realtime delivery of table, membership and profile changes, the ticker, and a production sports feed.
 - Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
 - LAN/production security and deployment.
 

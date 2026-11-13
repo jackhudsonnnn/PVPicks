@@ -6,18 +6,21 @@ financial truth.
 
 ```mermaid
 flowchart LR
-  Client["React frontend"] -- "sessions, tables, U2Pick betting, receipts" --> App["Spring Boot application"]
+  Client["React frontend"] -- "HTTP: sessions, tables, U2Pick betting, receipts" --> App["Spring Boot application"]
   Docs["Local developer docs"] --> App
   App --> PG[("PostgreSQL 16")]
   App --> Redis[("Redis 7")]
   PG --> Outbox["Transactional outbox rows"]
-  Outbox -. "relay planned" .-> Kafka["Kafka KRaft"]
-  Kafka -. "consumers planned" .-> Realtime["Realtime"]
+  Outbox -- "relay" --> Kafka["Kafka KRaft"]
+  Kafka -- "consumer" --> Gateway["STOMP gateway (/ws)"]
+  Gateway -- "invalidations" --> Client
 ```
 
-Solid lines describe existing infrastructure or direct reads/writes; dotted
-lines show planned integrations. The outbox is storage only: there is no relay,
-consumer, or delivery guarantee yet.
+The `delivery` module's relay publishes committed outbox rows to Kafka at
+least once; its consumer turns bet, chat and settlement events into
+invalidations that the WebSocket gateway sends to authorized subscribers. The
+<a href="/docs/source/reference/realtime-contract.md" download>realtime contract</a> describes
+destinations, authorization and recovery. Redis is not used for delivery yet.
 
 ## Modules and data ownership
 
@@ -34,7 +37,7 @@ flowchart LR
   social --> chat
   settlement --> chat
   bets --> settlement
-  users & social & tables & chat & bets & settlement & feedback --> shared["common + security (open)"]
+  users & social & tables & chat & bets & settlement & delivery & feedback --> shared["common + security (open)"]
 ```
 
 | Module | Owns (writes) these tables |
@@ -48,6 +51,7 @@ flowchart LR
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback`, `admin` | `feedback`; `admin_user_flags` (storage only) |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
+| `delivery` | `outbox.published_at` only; reads sessions, memberships and receipt parties to authorize realtime delivery |
 
 Every event type is listed in `common.OutboxEvent`; `common.Outbox` is the only
 writer of the outbox, and `chat.ChatMessageWriter` is the only way other modules

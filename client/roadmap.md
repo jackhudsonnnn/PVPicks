@@ -10,7 +10,8 @@ social and settlement UI remains in the source but is not exposed; the app
 does not use mock data as a substitute for unavailable server data.
 
 Uncertain actions keep their retry key per user in local storage, shared by
-the browser's tabs. Other devices reconcile from server reads.
+the browser's tabs. Other devices reconcile from server reads. Bets and
+receipts refresh live from the realtime gateway.
 
 ## Next steps
 
@@ -20,5 +21,4 @@ the browser's tabs. Other devices reconcile from server reads.
   preserving paging, unread state, reconciliation and accessible interactions.
 - Replace the minimal betting and receipt views with the prototype's ticket
   and table designs.
-- Refresh bets and reviews from realtime events once the outbox relay and
-  gateway exist; until then views refresh on demand.
+- Subscribe chat views to the realtime chat feed when chat is connected.
