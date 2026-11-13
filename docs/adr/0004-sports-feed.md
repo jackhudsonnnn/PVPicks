@@ -44,8 +44,10 @@ clock or quarter field, so the period is the latest quarter with a score
 checking against live NFL games. Games without a readable start time or teams
 are skipped. Scores are not yet used to resolve bets.
 
-When `PVPICKS_SPORTS_RECORDING_DIR` is set, every raw response is appended to
-`<league>-<New York date>.jsonl` there (Compose mounts the git-ignored
-`infra/compose/recordings/`). Recordings omit the API key. They are meant for
+When `PVPICKS_SPORTS_RECORDING_DIR` is set, every raw response is saved as its
+own pretty-printed file, `<league>/<New York date>/<UTC timestamp>_<endpoint>.json`,
+holding the receive time, endpoint, query, HTTP status and body (Compose mounts
+the git-ignored top-level `recordings/sports/`). File names sort in receive
+order. Recordings omit the API key. They are meant for
 debugging and for the dev replay feed proposed in ADR 0005, which would amend
 this decision.

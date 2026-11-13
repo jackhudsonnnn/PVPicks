@@ -147,8 +147,9 @@ class BallDontLieFeedTest {
             assertThat(authorization.get()).isEqualTo("test-key");
             assertThat(java.net.URLDecoder.decode(query.get(), StandardCharsets.UTF_8))
                     .contains("dates[]=2026-11-11", "dates[]=2026-11-12", "dates[]=2026-11-13");
-            String recorded = Files.readString(recordings.resolve("nba-2026-11-12.jsonl"));
-            assertThat(recorded).contains("\"league\":\"NBA\"", "\"id\":5").doesNotContain("test-key");
+            Path recorded = recordings.resolve("nba/2026-11-12/2026-11-13T02-00-00Z_games.json");
+            assertThat(Files.readString(recorded)).contains("\"league\" : \"NBA\"", "\"endpoint\" : \"games\"",
+                    "\"status\" : 200", "\"id\" : 5").doesNotContain("test-key");
             assertThatThrownBy(() -> feed.games(League.NFL, dates))
                     .isInstanceOfSatisfying(GameFeed.FeedUnavailable.class,
                             exception -> assertThat(exception.rateLimited()).isTrue());

@@ -54,10 +54,11 @@ next to the current snapshot. Resolution reads the history, so it can tell
 when a game went final, whether a correction followed and what the feed
 showed when a bet locked. The history also serves disputes and replay.
 
-Keep raw recordings exactly as received, one file per league per New York day
-(implemented: `PVPICKS_SPORTS_RECORDING_DIR`). A small tool slices them into
-one timeline per game for replay and fixtures, for example
-`fixtures/nba/NBA-18447.jsonl`. Commit only short, trimmed fixtures; keep full
+Keep raw recordings exactly as received, one timestamped file per response,
+grouped by league and New York day (implemented: `PVPICKS_SPORTS_RECORDING_DIR`,
+`recordings/sports/<league>/<date>/<UTC timestamp>_<endpoint>.json`). Names sort
+in receive order, so replay reads them in name order. A small tool slices them
+into one timeline per game for fixtures, for example `fixtures/nba/NBA-18447.jsonl`. Commit only short, trimmed fixtures; keep full
 recordings out of git for size and because the provider's terms on storing
 its data have not been checked.
 

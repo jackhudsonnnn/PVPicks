@@ -166,8 +166,10 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   set (keep it in the ignored `infra/compose/.env` or the shell, never in
   source). It polls every `PVPICKS_SPORTS_POLL_INTERVAL` (default `PT60S`, one
   request per league); keep that within your plan's rate limit. With
-  `PVPICKS_SPORTS_RECORDING_DIR` set (Compose sets it), raw responses are saved
-  to the git-ignored `infra/compose/recordings/`.
+  `PVPICKS_SPORTS_RECORDING_DIR` set (Compose sets it), every raw response is
+  saved as its own file in the git-ignored `recordings/sports/`, as
+  `<league>/<New York date>/<UTC timestamp>_<endpoint>.json`. Names sort in
+  receive order, so replay can read them in name order.
 - Privileged database operators bypass application rules (including the V24
   role guard) and can read plaintext picks.
 

@@ -85,8 +85,8 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      # Raw sports feed responses (git-ignored); see backend/README.md.
-      - ./recordings:/recordings
+      # Raw sports feed responses, one timestamped file each (git-ignored); see backend/README.md.
+      - ../../recordings/sports:/recordings
     ports:
       - "127.0.0.1:${PVPICKS_PORT:-8080}:8080"
     healthcheck:

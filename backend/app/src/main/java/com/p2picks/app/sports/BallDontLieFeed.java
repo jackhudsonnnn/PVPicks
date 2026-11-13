@@ -86,7 +86,7 @@ class BallDontLieFeed implements GameFeed {
         var target = uri.encode().build().toUri();
         try {
             String body = http.get().uri(target).header("Authorization", apiKey).retrieve().body(String.class);
-            recorder.record(league, target.getRawQuery(), body);
+            recorder.record(league, "games", target.getRawQuery(), 200, body);
             return json.readTree(body == null ? "{}" : body);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();

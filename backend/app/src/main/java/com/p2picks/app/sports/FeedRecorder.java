@@ -1,15 +1,19 @@
 package com.p2picks.app.sports;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,10 +21,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Optionally appends every raw provider response to {@code <dir>/<league>-<New York date>.jsonl}, one JSON object
- * per line with the receive time, request query and body. Off unless {@code PVPICKS_SPORTS_RECORDING_DIR} is set.
- * Recordings never contain the API key, which travels only in a header. They are raw on purpose, so a later
- * change to the mapping can be replayed against real responses.
+ * Optionally saves every raw provider response as its own pretty-printed JSON file:
+ * {@code <dir>/<league>/<New York date>/<UTC timestamp>_<endpoint>.json}, for example
+ * {@code nba/2026-11-13/2026-11-13T23-59-59.123Z_games.json}. File names sort in receive order, so a replay reads
+ * them in name order; each file also holds the receive time, endpoint, query and HTTP status. Off unless
+ * {@code PVPICKS_SPORTS_RECORDING_DIR} is set. Recordings never contain the API key, which travels only in a header.
  */
 @Component
 class FeedRecorder {
@@ -33,24 +38,36 @@ class FeedRecorder {
     FeedRecorder(@Value("${pvpicks.sports.recording-dir:}") String directory, Clock clock, ObjectMapper json) {
         this.directory = directory == null || directory.isBlank() ? null : Path.of(directory);
         this.clock = clock;
-        this.json = json;
+        this.json = json.copy().enable(SerializationFeature.INDENT_OUTPUT);
     }
 
-    void record(League league, String query, String body) {
+    void record(League league, String endpoint, String query, int status, String body) {
         if (directory == null) return;
         try {
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("receivedAt", clock.instant().toString());
-            line.put("league", league.name());
-            line.put("query", query);
-            line.put("body", json.readTree(body == null ? "null" : body));
-            Files.createDirectories(directory);
-            LocalDate date = LocalDate.ofInstant(clock.instant(), ZoneId.of(GameSync.NEW_YORK));
-            Files.writeString(directory.resolve(league.name().toLowerCase() + "-" + date + ".jsonl"),
-                    json.writeValueAsString(line) + "\n", StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            Instant receivedAt = clock.instant().truncatedTo(ChronoUnit.MILLIS);
+            Map<String, Object> recording = new LinkedHashMap<>();
+            recording.put("receivedAt", receivedAt.toString());
+            recording.put("league", league.name());
+            recording.put("endpoint", endpoint);
+            recording.put("query", query);
+            recording.put("status", status);
+            recording.put("body", json.readTree(body == null ? "null" : body));
+            Path day = directory.resolve(league.name().toLowerCase(Locale.ROOT))
+                    .resolve(LocalDate.ofInstant(receivedAt, ZoneId.of(GameSync.NEW_YORK)).toString());
+            Files.createDirectories(day);
+            String stem = receivedAt.toString().replace(':', '-') + "_" + endpoint.replaceAll("[^a-z0-9_]", "_");
+            byte[] content = json.writeValueAsBytes(recording);
+            for (int attempt = 0; ; attempt++) {
+                Path file = day.resolve(stem + (attempt == 0 ? "" : "-" + attempt) + ".json");
+                try {
+                    Files.write(file, content, StandardOpenOption.CREATE_NEW);
+                    return;
+                } catch (FileAlreadyExistsException exception) {
+                    if (attempt >= 9) throw exception;
+                }
+            }
         } catch (IOException | RuntimeException exception) {
-            // Recording is a debugging aid; it must never break polling.
+            // Recording is an audit and replay aid; it must never break polling.
             log.warn("Could not record a sports feed response: {}", exception.getMessage());
         }
     }
