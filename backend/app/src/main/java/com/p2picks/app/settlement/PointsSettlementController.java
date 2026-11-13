@@ -2,12 +2,10 @@ package com.p2picks.app.settlement;
 
 import static com.p2picks.app.common.ApiErrors.error;
 
-import com.p2picks.app.common.BettingLifecycleReady;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@ConditionalOnBean(BettingLifecycleReady.class)
 class PointsSettlementController {
     private final TablePointsSettlementService settlements;
 

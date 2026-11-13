@@ -71,6 +71,7 @@ services:
       PVPICKS_DB_PASSWORD: ${PVPICKS_DB_PASSWORD:?Set PVPICKS_DB_PASSWORD in infra/compose/.env}
       PVPICKS_REDIS_HOST: redis
       PVPICKS_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PVPICKS_BET_LOCK_WORKER_ENABLED: ${PVPICKS_BET_LOCK_WORKER_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy

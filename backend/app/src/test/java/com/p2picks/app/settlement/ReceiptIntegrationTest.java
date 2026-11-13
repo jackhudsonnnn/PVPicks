@@ -193,7 +193,7 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void gatedReceiptHttpPreservesPrivateHistoryAndActionSemantics() throws Exception {
+    void receiptHttpPreservesPrivateHistoryAndActionSemantics() throws Exception {
         UUID payer = UUID.randomUUID();
         UUID payee = UUID.randomUUID();
         UUID outsider = UUID.randomUUID();
@@ -438,7 +438,7 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void gatedGroupHttpAppliesActionsAndPreservesHistory() throws Exception {
+    void groupHttpAppliesActionsAndPreservesHistory() throws Exception {
         UUID host = UUID.randomUUID();
         UUID peer = UUID.randomUUID();
         UUID outsider = UUID.randomUUID();
@@ -525,7 +525,7 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void gatedGroupHttpHandlesZeroAndUnrepresentableNets() throws Exception {
+    void groupHttpHandlesZeroAndUnrepresentableNets() throws Exception {
         UUID host = UUID.randomUUID();
         UUID peer = UUID.randomUUID();
         UUID table = UUID.randomUUID();

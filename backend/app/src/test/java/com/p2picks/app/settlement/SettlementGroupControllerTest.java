@@ -10,22 +10,10 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-class SettlementLifecycleGateTest {
-    @Test
-    void settlementControllersAreNotRegisteredWithoutLifecycleReadiness() {
-        new ApplicationContextRunner().withUserConfiguration(
-                        PointsSettlementController.class, SettlementReceiptController.class, SettlementGroupController.class)
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(PointsSettlementController.class);
-                    assertThat(context).doesNotHaveBean(SettlementReceiptController.class);
-                    assertThat(context).doesNotHaveBean(SettlementGroupController.class);
-                });
-    }
-
+class SettlementGroupControllerTest {
     @Test
     void pendingReviewListEnforcesIdentityAndMatchesContract() throws IOException {
         SettlementReviewService reviews = mock(SettlementReviewService.class);

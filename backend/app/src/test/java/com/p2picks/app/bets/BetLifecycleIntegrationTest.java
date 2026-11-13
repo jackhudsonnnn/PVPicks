@@ -229,7 +229,7 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void gatedBetHttpAdaptersValidateAndRunTheU2PickLifecycle() throws Exception {
+    void betHttpAdaptersValidateAndRunTheU2PickLifecycle() throws Exception {
         UUID host = UUID.randomUUID();
         UUID player = UUID.randomUUID();
         UUID outsider = UUID.randomUUID();

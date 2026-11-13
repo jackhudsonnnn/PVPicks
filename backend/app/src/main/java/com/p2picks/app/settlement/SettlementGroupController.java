@@ -4,14 +4,12 @@ import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.p2picks.app.common.BettingLifecycleReady;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@ConditionalOnBean(BettingLifecycleReady.class)
 class SettlementGroupController {
     private record GroupView(UUID otherUserId, long netCents, String revision, List<SettlementReceiptService.Line> lines,
                              @JsonInclude(JsonInclude.Include.ALWAYS) UUID pendingReviewRevision) {}

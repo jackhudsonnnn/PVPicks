@@ -10,10 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2picks.app.bets.GatedBetAdapters;
 import com.p2picks.app.security.MutationAuthentication;
-import com.p2picks.app.settlement.GatedSettlementAdapters;
 import jakarta.servlet.http.Cookie;
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
@@ -55,7 +55,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
 @AutoConfigureMockMvc
-@Import({IntegrationTestSupport.AdminProbeConfiguration.class, GatedBetAdapters.class, GatedSettlementAdapters.class})
+@Import(IntegrationTestSupport.AdminProbeConfiguration.class)
 public abstract class IntegrationTestSupport {
     protected static final PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:16-alpine");
@@ -81,6 +81,8 @@ public abstract class IntegrationTestSupport {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        // Tests drive locking explicitly; a background worker would race their assertions.
+        registry.add("pvpicks.bet-lock-worker.enabled", () -> "false");
         registry.add("PVPICKS_DEV_JWT_SECRET", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         registry.add("PVPICKS_DEV_IDEMPOTENCY_SECRET", () -> "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=");
     }
@@ -256,6 +258,25 @@ public abstract class IntegrationTestSupport {
                         .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"revision\":" + revision + "}")).andReturn();
+    }
+
+    /**
+     * Runs one client test file through real HTTP against this test's server (see
+     * client/src/features/auth/backend-integration-utils.ts). Requires installed client dependencies.
+     */
+    protected void runFrontendTest(String file, Map<String, String> environment) throws Exception {
+        ProcessBuilder builder = new ProcessBuilder("npm", "test", "--", file)
+                .directory(Path.of("../../client").toFile())
+                .inheritIO();
+        builder.environment().put("PVPICKS_TEST_PORT", Integer.toString(serverPort));
+        builder.environment().putAll(environment);
+        Process process = builder.start();
+        try {
+            assertThat(process.waitFor(120, TimeUnit.SECONDS)).as("frontend integration timed out").isTrue();
+            assertThat(process.exitValue()).as("frontend integration exit code").isZero();
+        } finally {
+            if (process.isAlive()) process.destroyForcibly();
+        }
     }
 
     protected String reviewRevision(Cookie cookie, UUID other) throws Exception {

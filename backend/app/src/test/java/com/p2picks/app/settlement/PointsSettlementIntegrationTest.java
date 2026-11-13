@@ -32,7 +32,7 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
     private SettlementNetReconciliation settlementReconciliation;
 
     @Test
-    void gatedPointsSettlementHttpRequiresAHostAndReturnsCurrentReceipts() throws Exception {
+    void pointsSettlementHttpRequiresAHostAndReturnsCurrentReceipts() throws Exception {
         UUID host = UUID.randomUUID();
         UUID player = UUID.randomUUID();
         UUID outsider = UUID.randomUUID();
