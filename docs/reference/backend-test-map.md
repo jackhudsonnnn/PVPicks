@@ -22,10 +22,13 @@ cover.
   - `tables.TableMembershipIntegrationTest` and
     `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
     reads, profile, settings, permissions, remainder and Quick Pick controls.
-  - `bets.BetIntegrationTest` and `settlement.SettlementIntegrationTest`:
-    internal betting and settlement transactions, debt and debt caps, and the
-    gated HTTP adapters, which `GatedBetAdapters` and `GatedSettlementAdapters`
-    register only in tests.
+  - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
+    gated HTTP), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
+    `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
+  - `settlement`: `PointsSettlementIntegrationTest`, `ReceiptIntegrationTest`
+    (receipts, groups and balance-change reviews) and `DebtIntegrationTest`.
+    The gated HTTP adapters are registered only in tests, by
+    `GatedBetAdapters` and `GatedSettlementAdapters`.
   - `MigrationIntegrationTest`: schema constraints and populated V2–V25
     upgrades. `PlatformIntegrationTest`: health, developer docs and
     infrastructure connectivity.
@@ -36,10 +39,13 @@ cover.
 - `bets.BettingLifecycleGateTest`, `settlement.SettlementLifecycleGateTest`,
   `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the
   readiness gate and opt-in lock recovery.
-- The `bets` and `settlement` module tests cover pure payout, U2Pick settler,
-  debt and table-settlement calculations; `shared/kernel` tests cover `Money`.
-- `ModuleArchitectureTest` checks Modulith modules and ArchUnit boundaries,
-  including negative fixtures under `com.p2picks.archfixture`.
+- Plain unit tests cover the pure payout and U2Pick settler (`bets`) and debt
+  and table-settlement (`settlement`) calculators; `shared/kernel` tests cover
+  `Money`.
+- `ModuleArchitectureTest` verifies the Modulith modules, their declared
+  dependencies and acyclicity, that shared modules and the kernel do not
+  depend on features, and that calculators stay pure Java. Negative fixtures
+  under `com.p2picks.archfixture` prove violations are detected.
 - Contract tests validate draft OpenAPI and realtime shapes; they do not imply
   that every drafted operation is implemented.
 - Storage tests and `ProcessedEventStorageTest` cover database invariants and
