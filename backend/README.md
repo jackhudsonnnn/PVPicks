@@ -34,8 +34,9 @@ backend/
       feedback/  admin/   feedback submission; admin health
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
-                          ApiErrors, PostgresText, BettingLifecycleReady; sessions,
-                          filters, MutationAuthentication
+                          Outbox/OutboxEvent, ApiErrors, PostgresText,
+                          BettingLifecycleReady; sessions, filters,
+                          MutationAuthentication
     src/main/resources/   application config and Flyway migrations (db/migration)
     src/test/java/        tests mirror the main packages; IntegrationTestSupport
                           holds the shared containers, Spring context and helpers
@@ -54,6 +55,9 @@ for example `tables` may use `chat`, `settlement`, `common` and `security`.
   so a class becomes visible to other modules only by being made public.
 - Feature modules depend only on the modules they declare. The graph must stay
   acyclic, and `common` and `security` must not depend on feature modules.
+- Record events with `common.Outbox` and an `OutboxEvent` constant, and add chat
+  messages from other modules with `chat.ChatMessageWriter`. A test fails if any
+  other class writes the `outbox` or `chat_messages` tables directly.
 - The payout, U2Pick settler, debt and table-settlement calculators are pure
   Java: no Spring, JDBC or other modules.
 - `ModuleArchitectureTest` enforces all of this; `MODULES.verify()` names the

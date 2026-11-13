@@ -31,6 +31,8 @@ undeclared dependencies and calculators that use Spring or JDBC.
 flowchart LR
   tables --> chat
   tables --> settlement
+  social --> chat
+  settlement --> chat
   bets --> settlement
   users & social & tables & chat & bets & settlement & feedback --> shared["common + security (open)"]
 ```
@@ -41,18 +43,21 @@ flowchart LR
 | `users` | `users` (profile fields) |
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
-| `chat` | `chat_messages`, `reactions`, `chat_read_positions` |
+| `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions` |
 | `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback`, `admin` | `feedback`; `admin_user_flags` (storage only) |
-| `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`; every module inserts its own `outbox` rows |
+| `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
 
-Java dependencies follow the module graph. The database does not yet: many
-queries read or lock other modules' tables inside one transaction (for
-example, `users` joins settlements and chat, and several modules insert system
-chat messages and outbox rows directly). This keeps lock order and checks
-atomic. Before a module is extracted, replace those joins with calls to the
-owning module and revisit the transaction boundaries.
+Every event type is listed in `common.OutboxEvent`; `common.Outbox` is the only
+writer of the outbox, and `chat.ChatMessageWriter` is the only way other modules
+add chat messages. A source-scan test enforces both.
+
+Reads are not yet divided: many queries read or lock other modules' tables
+inside one transaction (for example, `users` joins settlements and chat, and
+`tables` and `social` both write `table_invites`). This keeps lock order and
+checks atomic. Before a module is extracted, replace those joins with calls to
+the owning module and revisit the transaction boundaries.
 
 The shared kernel is a plain Java library containing exact integer-cent money.
 

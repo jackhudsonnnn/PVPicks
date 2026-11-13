@@ -21,7 +21,9 @@ deduplication and failure handling require integration tests. Kafka is not the
 source of truth for balances or ledger state.
 
 Flyway V6 provides storage for a stable event ID, aggregate identity, event
-type and JSON payload, with an index for unpublished events. This table alone
+type and JSON payload, with an index for unpublished events. Application code
+writes it only through `common.Outbox`, inside the caller's transaction, and
+every event type and aggregate type is catalogued in `common.OutboxEvent`. This table alone
 does not publish events. A future relay must not mark an event published before
 broker acknowledgement, and consumers must tolerate duplicate delivery.
 Per-aggregate ordering, relay concurrency and retention remain to be designed
