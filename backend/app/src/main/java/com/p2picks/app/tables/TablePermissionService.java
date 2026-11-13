@@ -1,8 +1,11 @@
 package com.p2picks.app.tables;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -38,11 +41,14 @@ class TablePermissionService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
-    TablePermissionService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency) {
+    TablePermissionService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -92,11 +98,8 @@ class TablePermissionService {
                 WHERE table_id = ? AND user_id = ? AND %s IS DISTINCT FROM ?
                 """.formatted(permission.column, permission.column), enabled, tableId, targetId, enabled);
         if (changed != 0) {
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'table', ?, 'table.member.permission.changed.v1',
-                            jsonb_build_object('tableId', ?::text, 'userId', ?::text))
-                    """, UUID.randomUUID(), tableId.toString(), tableId.toString(), targetId.toString());
+            outbox.append(OutboxEvent.TABLE_MEMBER_PERMISSION_CHANGED, tableId,
+                    Map.of("tableId", tableId, "userId", targetId));
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

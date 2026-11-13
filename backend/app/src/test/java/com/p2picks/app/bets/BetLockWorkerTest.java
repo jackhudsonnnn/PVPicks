@@ -3,6 +3,8 @@ package com.p2picks.app.bets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2picks.app.common.Outbox;
 import com.p2picks.app.settlement.DebtQuery;
 import java.util.Set;
 import java.util.UUID;
@@ -37,7 +39,8 @@ class BetLockWorkerTest {
         jdbc = new JdbcTemplate(source);
         var manager = new DataSourceTransactionManager(source);
         transaction = new TransactionTemplate(manager);
-        worker = new BetLockWorker(jdbc, new BetLockService(jdbc, new DebtQuery(jdbc)), manager);
+        worker = new BetLockWorker(jdbc,
+                new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper())), manager);
     }
 
     @Test
@@ -66,7 +69,7 @@ class BetLockWorkerTest {
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, broken)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, sports)).isEqualTo("ACTIVE");
-        var locks = new BetLockService(jdbc, new DebtQuery(jdbc));
+        var locks = new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()));
         assertThatThrownBy(() -> transaction.executeWithoutResult(ignored -> locks.lock(sports, Set.of("u2pick"))))
                 .isInstanceOf(BetLockService.UnsupportedMode.class);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, future)).isEqualTo("ACTIVE");
@@ -194,7 +197,8 @@ class BetLockWorkerTest {
         var missing = new DriverManagerDataSource("jdbc:postgresql://127.0.0.1:1/unavailable",
                 "test", "test");
         var failingJdbc = new JdbcTemplate(missing);
-        var failing = new BetLockWorker(failingJdbc, new BetLockService(failingJdbc, new DebtQuery(failingJdbc)),
+        var failing = new BetLockWorker(failingJdbc,
+                new BetLockService(failingJdbc, new DebtQuery(failingJdbc), new Outbox(failingJdbc, new ObjectMapper())),
                 new DataSourceTransactionManager(missing));
         assertThatThrownBy(failing::poll).isInstanceOf(DataAccessException.class);
     }

@@ -1,8 +1,11 @@
 package com.p2picks.app.social;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,13 +21,15 @@ public class InvitationResponseService {
     private final MutationAuthentication authentication;
     private final SocialRelationshipQueries relationships;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
     InvitationResponseService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            SocialRelationshipQueries relationships, IdempotencyGuard idempotency) {
+            SocialRelationshipQueries relationships, IdempotencyGuard idempotency, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.relationships = relationships;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -96,14 +101,10 @@ public class InvitationResponseService {
                     INSERT INTO chat_messages (id, table_id, kind, text)
                     VALUES (?, ?, 'system', ?)
                     """, messageId, invitation.table(), username + " joined the table");
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'table', ?, 'table.member.joined.v1',
-                            jsonb_build_object('tableId', ?::text, 'userId', ?::text)),
-                           (?, 'chat', ?, 'chat.message.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'messageId', ?::text, 'kind', 'system'))
-                    """, UUID.randomUUID(), invitation.table().toString(), invitation.table().toString(), userId.toString(),
-                    UUID.randomUUID(), invitation.table().toString(), invitation.table().toString(), messageId.toString());
+            outbox.append(OutboxEvent.TABLE_MEMBER_JOINED, invitation.table(),
+                    Map.of("tableId", invitation.table(), "userId", userId));
+            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, invitation.table(),
+                    Map.of("tableId", invitation.table(), "messageId", messageId, "kind", "system"));
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

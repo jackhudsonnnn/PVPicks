@@ -1,10 +1,13 @@
 package com.p2picks.app.bets;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.DebtQuery;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,13 +26,15 @@ class BetPickService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final DebtQuery debt;
+    private final Outbox outbox;
 
     BetPickService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            DebtQuery debt) {
+            DebtQuery debt, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.debt = debt;
+        this.outbox = outbox;
     }
 
     // A null choice clears a pick; it never creates participation.
@@ -108,11 +113,8 @@ class BetPickService {
         if (changed != 0) {
             jdbc.update("UPDATE bets SET version = version + 1 WHERE id = ?", betId);
             if ((previous.isEmpty() && choice != null) || (!previous.isEmpty() && choice == null)) {
-                jdbc.update("""
-                        INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                        VALUES (?, 'bet', ?, 'bet.pick_count.changed.v1',
-                                jsonb_build_object('tableId', ?::text, 'betId', ?::text))
-                        """, UUID.randomUUID(), betId.toString(), tableId.toString(), betId.toString());
+                outbox.append(OutboxEvent.BET_PICK_COUNT_CHANGED, betId,
+                        Map.of("tableId", tableId, "betId", betId));
             }
         }
         authentication.requireUnexpired(jwt);

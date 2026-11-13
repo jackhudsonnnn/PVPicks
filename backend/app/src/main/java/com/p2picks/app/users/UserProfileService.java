@@ -1,10 +1,13 @@
 package com.p2picks.app.users;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,11 +26,14 @@ class UserProfileService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
-    UserProfileService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency) {
+    UserProfileService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -51,10 +57,7 @@ class UserProfileService {
         int hue = changes.hue() == null ? current.hue() : changes.hue();
         if (!username.equals(current.username()) || hue != current.hue()) {
             if (!writeProfile(userId, username, hue)) throw new UsernameTaken();
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'user', ?, 'user.profile.changed.v1', jsonb_build_object('userId', ?::text))
-                    """, UUID.randomUUID(), userId.toString(), userId.toString());
+            outbox.append(OutboxEvent.USER_PROFILE_CHANGED, userId, Map.of("userId", userId));
         }
         authentication.requireUnexpired(jwt);
         return new Result(Outcome.UPDATED, new Profile(userId, username, hue));

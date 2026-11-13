@@ -1,9 +1,12 @@
 package com.p2picks.app.chat;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -21,11 +24,14 @@ public class ChatSendService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
-    ChatSendService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency) {
+    ChatSendService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -83,12 +89,8 @@ public class ChatSendService {
                     submission.kind().equals("gif") ? submission.content() : null);
             if (createdAt == null) throw new IllegalStateException("Created chat message has no timestamp");
             idempotency.saveResponseReference(userId, key, OPERATION, messageId);
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'chat', ?, 'chat.message.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'messageId', ?::text, 'kind', ?::text))
-                    """, UUID.randomUUID(), tableId.toString(), tableId.toString(), messageId.toString(),
-                    submission.kind());
+            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
+                    Map.of("tableId", tableId, "messageId", messageId, "kind", submission.kind()));
             outcome = Outcome.CREATED;
         }
         authentication.requireUnexpired(jwt);

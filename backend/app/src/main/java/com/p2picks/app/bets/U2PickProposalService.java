@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.p2picks.app.bets.U2PickSettler;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.DebtQuery;
-import com.p2picks.app.bets.U2PickSettler;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,14 +53,16 @@ class U2PickProposalService {
     private final IdempotencyGuard idempotency;
     private final DebtQuery debt;
     private final ObjectMapper json;
+    private final Outbox outbox;
 
     U2PickProposalService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, DebtQuery debt, ObjectMapper json) {
+            IdempotencyGuard idempotency, DebtQuery debt, ObjectMapper json, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.debt = debt;
         this.json = json;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -130,10 +134,7 @@ class U2PickProposalService {
                 """, betId, tableId, actor, configJson, proposal.definition().question(), choicesJson,
                 proposal.wagerCents(), proposal.forFun(), proposal.durationSec(),
                 proposal.settlerRule().name().toLowerCase(java.util.Locale.ROOT));
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'bet', ?, 'bet.created.v1', jsonb_build_object('tableId', ?::text, 'betId', ?::text))
-                """, UUID.randomUUID(), betId.toString(), tableId.toString(), betId.toString());
+        outbox.append(OutboxEvent.BET_CREATED, betId, Map.of("tableId", tableId, "betId", betId));
         idempotency.saveResponseReference(actor, key, OPERATION, betId);
         authentication.requireUnexpired(jwt);
         return new Result(Outcome.CREATED, betId);

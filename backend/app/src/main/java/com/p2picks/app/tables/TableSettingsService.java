@@ -2,8 +2,11 @@ package com.p2picks.app.tables;
 
 import com.p2picks.app.chat.SystemChatWriter;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -20,13 +23,15 @@ class TableSettingsService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final SystemChatWriter systemChat;
+    private final Outbox outbox;
 
     TableSettingsService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            SystemChatWriter systemChat) {
+            SystemChatWriter systemChat, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.systemChat = systemChat;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -75,10 +80,7 @@ class TableSettingsService {
                 systemChat.write(tableId, changes.u2pickEnabled()
                         ? "U2Pick custom bets turned on" : "U2Pick custom bets turned off");
             }
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'table', ?, 'table.settings.changed.v1', jsonb_build_object('tableId', ?::text))
-                    """, UUID.randomUUID(), tableId.toString(), tableId.toString());
+            outbox.append(OutboxEvent.TABLE_SETTINGS_CHANGED, tableId, Map.of("tableId", tableId));
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

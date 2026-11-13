@@ -1,6 +1,8 @@
 package com.p2picks.app.settlement;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -46,13 +48,15 @@ class SettlementReceiptService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final SettlementReviewService reviews;
+    private final Outbox outbox;
 
     SettlementReceiptService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            SettlementReviewService reviews) {
+            SettlementReviewService reviews, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.reviews = reviews;
+        this.outbox = outbox;
     }
 
     Counterparties counterparties(Jwt jwt) {
@@ -190,12 +194,8 @@ class SettlementReceiptService {
             UUID other = current.payerId().equals(actor) ? current.payeeId() : current.payerId();
             reviews.refreshPendingIfOpen(actor, other);
         }
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'settlement_line', ?, 'settlement.line.changed.v1',
-                        jsonb_build_object('lineId', ?::text, 'payerId', ?::text, 'payeeId', ?::text))
-                """, UUID.randomUUID(), lineId.toString(), lineId.toString(),
-                current.payerId().toString(), current.payeeId().toString());
+        outbox.append(OutboxEvent.SETTLEMENT_LINE_CHANGED, lineId,
+                Map.of("lineId", lineId, "payerId", current.payerId(), "payeeId", current.payeeId()));
         Line result = jdbc.queryForObject("SELECT * FROM settlement_lines WHERE id = ?",
                 (rs, row) -> line(rs), lineId);
         if (result == null) throw new IllegalStateException("Updated receipt disappeared");

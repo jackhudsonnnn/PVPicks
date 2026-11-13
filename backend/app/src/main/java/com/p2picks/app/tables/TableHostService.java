@@ -1,8 +1,11 @@
 package com.p2picks.app.tables;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,11 +21,14 @@ class TableHostService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
-    TableHostService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency) {
+    TableHostService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -83,13 +89,9 @@ class TableHostService {
                     VALUES (?, ?, 'system', ?, ?, ?)
                     """, messageId, tableId, host ? "A member is now a host" : "A member is no longer a host",
                     host ? "host_promoted" : "host_demoted", targetId);
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'table', ?, 'table.host.changed.v1', jsonb_build_object('tableId', ?::text)),
-                           (?, 'chat', ?, 'chat.message.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'messageId', ?::text, 'kind', 'system'))
-                    """, UUID.randomUUID(), tableId.toString(), tableId.toString(),
-                    UUID.randomUUID(), tableId.toString(), tableId.toString(), messageId.toString());
+            outbox.append(OutboxEvent.TABLE_HOST_CHANGED, tableId, Map.of("tableId", tableId));
+            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
+                    Map.of("tableId", tableId, "messageId", messageId, "kind", "system"));
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

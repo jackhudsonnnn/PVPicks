@@ -1,6 +1,9 @@
 package com.p2picks.app.tables;
 
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -11,9 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 class QuickPickSubscriptions {
     private record Subscription(UUID subscriber, UUID source) {}
     private final JdbcTemplate jdbc;
+    private final Outbox outbox;
 
-    QuickPickSubscriptions(JdbcTemplate jdbc) {
+    QuickPickSubscriptions(JdbcTemplate jdbc, Outbox outbox) {
         this.jdbc = jdbc;
+        this.outbox = outbox;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -34,9 +39,6 @@ class QuickPickSubscriptions {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void changedEvent(UUID tableId) {
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'table', ?, 'table.quickpicks.changed.v1', jsonb_build_object('tableId', ?::text))
-                """, UUID.randomUUID(), tableId.toString(), tableId.toString());
+        outbox.append(OutboxEvent.TABLE_QUICKPICKS_CHANGED, tableId, Map.of("tableId", tableId));
     }
 }

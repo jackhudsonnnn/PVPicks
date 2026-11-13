@@ -1,5 +1,7 @@
 package com.p2picks.app.bets;
 
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.shared.kernel.Money;
 import java.util.List;
 import java.util.Map;
@@ -15,9 +17,11 @@ class BetResolutionWriter {
                      PayoutCalculator.Remainder remainder, List<PayoutCalculator.Participant> participants) {}
 
     private final JdbcTemplate jdbc;
+    private final Outbox outbox;
 
-    BetResolutionWriter(JdbcTemplate jdbc) {
+    BetResolutionWriter(JdbcTemplate jdbc, Outbox outbox) {
         this.jdbc = jdbc;
+        this.outbox = outbox;
     }
 
     // The caller must authorize the outcome and lock all affected users, the table and the bet.
@@ -54,10 +58,8 @@ class BetResolutionWriter {
                     VALUES (?, ?, ?, ?, ?)
                     """, UUID.randomUUID(), bet.tableId(), bet.id(), entry.getKey(), entry.getValue().cents());
         }
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'bet', ?, 'bet.resolved.v1', jsonb_build_object('tableId', ?::text, 'betId', ?::text))
-                """, UUID.randomUUID(), bet.id().toString(), bet.tableId().toString(), bet.id().toString());
+        outbox.append(OutboxEvent.BET_RESOLVED, bet.id(),
+                Map.of("tableId", bet.tableId(), "betId", bet.id()));
     }
 
     private static String washReason(PayoutCalculator.WashReason reason) {

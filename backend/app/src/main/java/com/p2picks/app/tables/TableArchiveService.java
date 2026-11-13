@@ -1,6 +1,8 @@
 package com.p2picks.app.tables;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.TableSettlementGuard;
 import java.time.OffsetDateTime;
@@ -27,14 +29,16 @@ class TableArchiveService {
     private final IdempotencyGuard idempotency;
     private final QuickPickSubscriptions subscriptions;
     private final TableSettlementGuard settlementGuard;
+    private final Outbox outbox;
 
     TableArchiveService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            QuickPickSubscriptions subscriptions, TableSettlementGuard settlementGuard) {
+            QuickPickSubscriptions subscriptions, TableSettlementGuard settlementGuard, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.subscriptions = subscriptions;
         this.settlementGuard = settlementGuard;
+        this.outbox = outbox;
     }
 
     ListResult list(Jwt jwt) {
@@ -114,10 +118,7 @@ class TableArchiveService {
                 UPDATE tables SET archived_at = clock_timestamp(), quickpicks_enabled = false, quickpick_sharing = false
                 WHERE id = ?
                 """, tableId);
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'table', ?, 'table.archived.v1', jsonb_build_object('tableId', ?::text))
-                """, UUID.randomUUID(), tableId.toString(), tableId.toString());
+        outbox.append(OutboxEvent.TABLE_ARCHIVED, tableId, Map.of("tableId", tableId));
         authentication.requireUnexpired(jwt);
         return Outcome.ARCHIVED;
     }

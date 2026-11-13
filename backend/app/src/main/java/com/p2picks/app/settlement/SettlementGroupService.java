@@ -1,8 +1,10 @@
 package com.p2picks.app.settlement;
 
-import com.p2picks.app.settlement.SettlementReceiptService.Line;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
+import com.p2picks.app.settlement.SettlementReceiptService.Line;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -36,13 +38,15 @@ class SettlementGroupService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final SettlementReviewService reviews;
+    private final Outbox outbox;
 
     SettlementGroupService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            SettlementReviewService reviews) {
+            SettlementReviewService reviews, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.reviews = reviews;
+        this.outbox = outbox;
     }
 
     Groups read(Jwt jwt, boolean includeHistory) {
@@ -167,11 +171,8 @@ class SettlementGroupService {
                     """, nextStatus, requested, declined, now, line.id());
             if (updated != 1) throw new IllegalStateException("Locked receipt disappeared");
         }
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'settlement_pair', ?, 'settlement.group.changed.v1',
-                        jsonb_build_object('userId', ?::text, 'otherUserId', ?::text))
-                """, UUID.randomUUID(), actor + ":" + other, actor.toString(), other.toString());
+        outbox.append(OutboxEvent.SETTLEMENT_GROUP_CHANGED, actor + ":" + other,
+                Map.of("userId", actor, "otherUserId", other));
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;
     }

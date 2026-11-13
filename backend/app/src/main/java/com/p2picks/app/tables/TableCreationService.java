@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.chat.SystemChatWriter;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,14 +31,16 @@ class TableCreationService {
     private final IdempotencyGuard idempotency;
     private final ObjectMapper json;
     private final SystemChatWriter systemChat;
+    private final Outbox outbox;
 
     TableCreationService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, ObjectMapper json, SystemChatWriter systemChat) {
+            IdempotencyGuard idempotency, ObjectMapper json, SystemChatWriter systemChat, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.json = json;
         this.systemChat = systemChat;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -63,10 +67,7 @@ class TableCreationService {
         UUID tableId = UUID.randomUUID();
         insertTable(tableId, name, emoji);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", tableId, actor);
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'table', ?, 'table.created.v1', jsonb_build_object('tableId', ?::text))
-                """, UUID.randomUUID(), tableId.toString(), tableId.toString());
+        outbox.append(OutboxEvent.TABLE_CREATED, tableId, Map.of("tableId", tableId));
         systemChat.write(tableId, "Table created");
         List<MemberOutcome> outcomes = addRequested(tableId, actor, requested, statuses);
         idempotency.saveResponseReference(actor, key, CREATE, tableId);
@@ -149,11 +150,8 @@ class TableCreationService {
                 if (mode.equals("open")) {
                     jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')",
                             tableId, target);
-                    jdbc.update("""
-                            INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                            VALUES (?, 'table', ?, 'table.member.joined.v1',
-                                    jsonb_build_object('tableId', ?::text, 'userId', ?::text))
-                            """, UUID.randomUUID(), tableId.toString(), tableId.toString(), target.toString());
+                    outbox.append(OutboxEvent.TABLE_MEMBER_JOINED, tableId,
+                            Map.of("tableId", tableId, "userId", target));
                     outcome = "added";
                     added = true;
                 } else if (mode.equals("request")) {
@@ -162,11 +160,8 @@ class TableCreationService {
                             INSERT INTO table_invites (id, table_id, from_id, user_id, status)
                             VALUES (?, ?, ?, ?, 'PENDING')
                             """, inviteId, tableId, actor, target);
-                    jdbc.update("""
-                            INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                            VALUES (?, 'user', ?, 'table.invitation.created.v1',
-                                    jsonb_build_object('invitationId', ?::text))
-                            """, UUID.randomUUID(), target.toString(), inviteId.toString());
+                    outbox.append(OutboxEvent.TABLE_INVITATION_CREATED, target,
+                            Map.of("invitationId", inviteId));
                     outcome = "invited";
                 }
             }

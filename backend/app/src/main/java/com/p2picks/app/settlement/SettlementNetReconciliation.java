@@ -1,7 +1,10 @@
 package com.p2picks.app.settlement;
 
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -15,10 +18,12 @@ class SettlementNetReconciliation {
 
     private final JdbcTemplate jdbc;
     private final SettlementReviewService reviews;
+    private final Outbox outbox;
 
-    SettlementNetReconciliation(JdbcTemplate jdbc, SettlementReviewService reviews) {
+    SettlementNetReconciliation(JdbcTemplate jdbc, SettlementReviewService reviews, Outbox outbox) {
         this.jdbc = jdbc;
         this.reviews = reviews;
+        this.outbox = outbox;
     }
 
     // Both users must already be locked in PostgreSQL UUID order.
@@ -59,13 +64,8 @@ class SettlementNetReconciliation {
                        OR (status NOT IN ('paid', 'forgiven') AND forgive_requested_at IS NOT NULL))
                 """, before.userId(), before.otherId(), before.otherId(), before.userId());
         reviews.recordReset(before.userId(), before.otherId());
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'settlement_pair', ?, 'settlement.net.changed.v1',
-                        jsonb_build_object('userId', ?::text, 'otherUserId', ?::text,
-                                           'beforeCents', ?::numeric, 'afterCents', ?::numeric))
-                """, UUID.randomUUID(), before.userId() + ":" + before.otherId(),
-                before.userId().toString(), before.otherId().toString(),
-                before.net().toString(), after.net().toString());
+        outbox.append(OutboxEvent.SETTLEMENT_NET_CHANGED, before.userId() + ":" + before.otherId(),
+                Map.of("userId", before.userId(), "otherUserId", before.otherId(),
+                "beforeCents", before.net(), "afterCents", after.net()));
     }
 }

@@ -2,9 +2,12 @@ package com.p2picks.app.tables;
 
 import com.p2picks.app.chat.SystemChatWriter;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.TableSettlementGuard;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,14 +27,17 @@ class TableMemberRemovalService {
     private final IdempotencyGuard idempotency;
     private final SystemChatWriter systemChat;
     private final TableSettlementGuard settlementGuard;
+    private final Outbox outbox;
 
     TableMemberRemovalService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, SystemChatWriter systemChat, TableSettlementGuard settlementGuard) {
+            IdempotencyGuard idempotency, SystemChatWriter systemChat, TableSettlementGuard settlementGuard,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.systemChat = systemChat;
         this.settlementGuard = settlementGuard;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -78,11 +84,8 @@ class TableMemberRemovalService {
         int deleted = jdbc.update("DELETE FROM table_members WHERE table_id = ? AND user_id = ?", tableId, targetId);
         if (deleted != 1) throw new IllegalStateException("Locked table member disappeared");
         systemChat.write(tableId, "A member was removed");
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'table', ?, 'table.member.removed.v1',
-                        jsonb_build_object('tableId', ?::text, 'removedUserId', ?::text))
-                """, UUID.randomUUID(), tableId.toString(), tableId.toString(), targetId.toString());
+        outbox.append(OutboxEvent.TABLE_MEMBER_REMOVED, tableId,
+                Map.of("tableId", tableId, "removedUserId", targetId));
         authentication.requireUnexpired(jwt);
         return Outcome.REMOVED;
     }

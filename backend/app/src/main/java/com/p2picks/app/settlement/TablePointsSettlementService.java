@@ -1,6 +1,8 @@
 package com.p2picks.app.settlement;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.TableSettlementCalculator.ExactBetDeltas;
 import com.p2picks.app.settlement.TableSettlementCalculator.Line;
@@ -38,13 +40,15 @@ public class TablePointsSettlementService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final SettlementNetReconciliation reconciliation;
+    private final Outbox outbox;
 
     TablePointsSettlementService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, SettlementNetReconciliation reconciliation) {
+            IdempotencyGuard idempotency, SettlementNetReconciliation reconciliation, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.reconciliation = reconciliation;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -131,14 +135,10 @@ public class TablePointsSettlementService {
         UUID messageId = UUID.randomUUID();
         jdbc.update("INSERT INTO chat_messages (id, table_id, kind, settlement_id) VALUES (?, ?, 'settlement', ?)",
                 messageId, tableId, settlementId);
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'settlement', ?, 'settlement.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'settlementId', ?::text)),
-                       (?, 'chat', ?, 'chat.message.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'messageId', ?::text, 'kind', 'settlement'))
-                """, UUID.randomUUID(), settlementId.toString(), tableId.toString(), settlementId.toString(),
-                UUID.randomUUID(), tableId.toString(), tableId.toString(), messageId.toString());
+        outbox.append(OutboxEvent.SETTLEMENT_CREATED, settlementId,
+                Map.of("tableId", tableId, "settlementId", settlementId));
+        outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
+                Map.of("tableId", tableId, "messageId", messageId, "kind", "settlement"));
         idempotency.saveResponseReference(actor, key, OPERATION, settlementId);
         authentication.requireUnexpired(jwt);
         return new Result(Outcome.CREATED, settlementId);

@@ -1,8 +1,11 @@
 package com.p2picks.app.tables;
 
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -39,11 +42,14 @@ class TableRemainderService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
+    private final Outbox outbox;
 
-    TableRemainderService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency) {
+    TableRemainderService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
+            Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -83,14 +89,9 @@ class TableRemainderService {
                     INSERT INTO chat_messages (id, table_id, kind, text)
                     VALUES (?, ?, 'system', ?)
                     """, messageId, tableId, "Leftover cents set to: " + rule.label);
-            jdbc.update("""
-                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                    VALUES (?, 'table', ?, 'table.remainder.changed.v1',
-                            jsonb_build_object('tableId', ?::text)),
-                           (?, 'chat', ?, 'chat.message.created.v1',
-                            jsonb_build_object('tableId', ?::text, 'messageId', ?::text, 'kind', 'system'))
-                    """, UUID.randomUUID(), tableId.toString(), tableId.toString(),
-                    UUID.randomUUID(), tableId.toString(), tableId.toString(), messageId.toString());
+            outbox.append(OutboxEvent.TABLE_REMAINDER_CHANGED, tableId, Map.of("tableId", tableId));
+            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
+                    Map.of("tableId", tableId, "messageId", messageId, "kind", "system"));
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

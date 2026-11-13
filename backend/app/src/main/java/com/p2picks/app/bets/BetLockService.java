@@ -1,9 +1,12 @@
 package com.p2picks.app.bets;
 
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.settlement.DebtQuery;
 import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,10 +32,12 @@ class BetLockService {
     private final JdbcTemplate jdbc;
     private final DebtQuery debt;
     private final SecureRandom random = new SecureRandom();
+    private final Outbox outbox;
 
-    BetLockService(JdbcTemplate jdbc, DebtQuery debt) {
+    BetLockService(JdbcTemplate jdbc, DebtQuery debt, Outbox outbox) {
         this.jdbc = jdbc;
         this.debt = debt;
+        this.outbox = outbox;
     }
 
     @Transactional
@@ -110,10 +115,7 @@ class BetLockService {
                 """, rule, host, betId) != 1) {
             throw new IllegalStateException("Locked bet changed");
         }
-        jdbc.update("""
-                INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
-                VALUES (?, 'bet', ?, 'bet.locked.v1', jsonb_build_object('tableId', ?::text, 'betId', ?::text))
-                """, UUID.randomUUID(), betId.toString(), tableId.toString(), betId.toString());
+        outbox.append(OutboxEvent.BET_LOCKED, betId, Map.of("tableId", tableId, "betId", betId));
         return Outcome.LOCKED;
     }
 
