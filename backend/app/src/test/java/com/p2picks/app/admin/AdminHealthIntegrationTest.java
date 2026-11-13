@@ -53,6 +53,8 @@ class AdminHealthIntegrationTest {
         registry.add("pvpicks.bet-lock-worker.enabled", () -> "false");
         registry.add("pvpicks.outbox-relay.enabled", () -> "false");
         registry.add("pvpicks.outbox-cleanup.enabled", () -> "false");
+        // Never call the real sports provider from tests, even if a key is exported in the shell.
+        registry.add("pvpicks.sports.balldontlie.api-key", () -> "");
         registry.add("PVPICKS_DEV_JWT_SECRET", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         registry.add("PVPICKS_DEV_IDEMPOTENCY_SECRET", () -> "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=");
     }
