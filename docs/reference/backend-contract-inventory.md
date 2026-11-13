@@ -74,8 +74,11 @@ results are consumed.
   relationship view, suppressing follows across blocks and to deleted users, and
   `GET /me/invites` returns visible pending invitations. `GET /tables/archives`
   lists available read-only chat archives. Other reads remain incomplete.
-- The sports-only home ticker uses the drafted `GET /ticker` snapshot;
-  `/topic/ticker` invalidates it. The ticker contains no bet activity.
+- Dev `GET /ticker` returns today's New York games plus earlier live games,
+  live first, and 503 `feed_unavailable` unless every league polled
+  successfully within the freshness window (default three minutes).
+  `ticker.changed` on `/user/queue/ticker` invalidates it. The ticker contains
+  no bet activity. `GET /games` remains unimplemented.
   Feed freshness and partial-feed handling still require review.
 - Dev `GET`/`PUT /tables/{id}/last-read` supplies filtered unread count and
   first unread message ID and advances only to a currently visible message.
@@ -210,9 +213,10 @@ results are consumed.
   settlement of all resolved non-4fun bet points. Receipt actions and zero-net
   settlement exist internally; retained-data cleanup remains unimplemented.
 - Realtime: STOMP at `/ws` with per-user destinations
-  `/user/queue/tables/{id}/bets`, `/user/queue/tables/{id}/chat` and
-  `/user/queue/settlements`; `/topic/ticker` is planned. Ordering, replay and
-  gap detection beyond refetch-on-reconnect remain open.
+  `/user/queue/tables/{id}`, `/user/queue/tables/{id}/bets`,
+  `/user/queue/tables/{id}/chat`, `/user/queue/settlements`, `/user/queue/me`
+  and `/user/queue/ticker`. Ordering, replay and gap detection beyond
+  refetch-on-reconnect remain open.
 
 ## Phase 0 exit checklist
 

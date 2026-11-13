@@ -47,7 +47,13 @@ cover.
   dependencies and acyclicity, that shared modules and the kernel do not
   depend on features, and that calculators stay pure Java. Negative fixtures
   under `com.p2picks.archfixture` prove violations are detected.
-- `delivery`: `OutboxRelayIntegrationTest` (publish after broker
+- `sports`: `BallDontLieFeedTest` (provider samples mapped to the canonical
+  schema; API key, date and rate-limit handling against a local HTTP server)
+  and `SportsIntegrationTest` (scripted-feed polling, one event per changing
+  poll, failure recording, ticker scope across a daylight-saving date, 503 when
+  stale, `GET /ticker` against the OpenAPI schema).
+- `delivery`: `OutboxCleanupIntegrationTest` (only old published rows are
+  deleted), `OutboxRelayIntegrationTest` (publish after broker
   acknowledgement, retry after a broker failure), `RealtimeConsumerTest` (which
   events reach which feeds, amount-free envelopes, stable event IDs) and
   `RealtimeIntegrationTest` (a real STOMP client: CSRF on CONNECT, origin,

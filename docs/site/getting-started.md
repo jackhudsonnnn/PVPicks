@@ -59,7 +59,9 @@ prototype features are not exposed yet. Accounts must already be provisioned
 in the dev backend. In dev, the lock worker locks U2Pick bets at their
 deadline and the outbox relay publishes events for live updates; set
 `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or `PVPICKS_OUTBOX_RELAY_ENABLED=false`
-to turn either off.
+to turn either off. The sports ticker needs a BallDontLie API key in
+`PVPICKS_BALLDONTLIE_API_KEY`; without one it says live scores are
+unavailable.
 
 For an approved isolated dev backend listening on `127.0.0.1:8080`, configure
 its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From

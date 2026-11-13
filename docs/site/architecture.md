@@ -37,7 +37,7 @@ flowchart LR
   social --> chat
   settlement --> chat
   bets --> settlement
-  users & social & tables & chat & bets & settlement & delivery & feedback --> shared["common + security (open)"]
+  users & social & tables & chat & bets & settlement & sports & delivery & feedback --> shared["common + security (open)"]
 ```
 
 | Module | Owns (writes) these tables |
@@ -51,7 +51,8 @@ flowchart LR
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback`, `admin` | `feedback`; `admin_user_flags` (storage only) |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
-| `delivery` | `outbox.published_at` only; reads sessions, memberships and receipt parties to authorize realtime delivery |
+| `sports` | `games`, `sports_feed_status` |
+| `delivery` | `outbox.published_at` and deletion of old published rows; reads sessions, memberships, invitations, blocks and receipt parties to choose realtime audiences |
 
 Every event type is listed in `common.OutboxEvent`; `common.Outbox` is the only
 writer of the outbox, and `chat.ChatMessageWriter` is the only way other modules
@@ -86,7 +87,8 @@ sports modes require validated game data and resolve only from the feed.
 Feed freshness, baselines, overtime and chronology must not be inferred from a
 U2Pick result, and a member-called result must never authorize a sports bet.
 U2Pick transactions and shared points settlement are exposed over HTTP. The
-sports feed remains planned.
+`sports` module polls the feed into game snapshots and serves the ticker;
+sports bets do not read it yet.
 
 ## Transaction pattern
 

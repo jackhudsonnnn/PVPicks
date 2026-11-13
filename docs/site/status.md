@@ -31,15 +31,20 @@ planned operations; it is not an implementation inventory.
   payout/debt/settlement calculators.
 - Realtime delivery: an outbox relay to Kafka (on by default in dev;
   `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns it off), a consumer, and an
-  authenticated STOMP/WebSocket gateway with per-member table bet and chat
-  feeds and a private settlement feed. Every delivery rechecks the session and
-  membership. The frontend refreshes bets and receipts live and refetches after
-  reconnecting.
+  authenticated STOMP/WebSocket gateway. Members get table view, bet and chat
+  feeds; each user gets a private settlement feed, a personal feed (table list,
+  invitations, profiles of people they share a table or receipt with, minus
+  blocks) and the ticker feed. Every delivery rechecks the session and
+  membership. Published outbox rows are deleted after seven days.
+- The sports feed: BallDontLie NBA and NFL snapshots, polled only when
+  `PVPICKS_BALLDONTLIE_API_KEY` is set, and `GET /ticker`, which reports the
+  feed as unavailable rather than empty when polling has failed.
 - The frontend entry point supports backend sign-in, session restoration,
   table and bet list/detail views, U2Pick creation, picking, result calling,
   host points settlement, settle-up receipts with balance-change reviews, and
   table chat (paged history, text and GIF messages, reactions, unread marker
-  and read position), all updating live. Active picks remain private;
+  and read position), and a live sports ticker, all updating live. Active
+  picks remain private;
   participant names are loaded from the backend after lock. The previous mock
   app is not exposed there; table management, social and other frontend
   workflows are not yet connected.
@@ -52,7 +57,7 @@ planned operations; it is not an implementation inventory.
 ## Not yet available
 
 - Sports-bet modes and locking, Quick Pick copy propagation, and end-to-end cap enforcement.
-- Realtime delivery of table, membership and profile changes, the ticker, and a production sports feed.
+- Sports-bet modes and feed-driven results; the feed's NFL mapping still needs checking against live data.
 - Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
 - LAN/production security and deployment.
 

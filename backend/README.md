@@ -31,8 +31,9 @@ backend/
                           rules, bet reads, lock worker
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
-      delivery/           outbox relay to Kafka, realtime consumer and the STOMP
-                          WebSocket gateway (/ws) with its authorization checks
+      sports/             sports feed (BallDontLie), game snapshots, GET /ticker
+      delivery/           outbox relay to Kafka and cleanup, realtime consumer and
+                          the STOMP WebSocket gateway (/ws) with its audience checks
       feedback/  admin/   feedback submission; admin health
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
@@ -159,7 +160,13 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   outbox rows to Kafka and sets their `published_at`. Set
   `PVPICKS_OUTBOX_RELAY_ENABLED=false` before starting against shared data
   unless that has been approved. Realtime delivery needs Kafka; without it the
-  app still runs and clients fall back to refreshing on demand.
+  app still runs and clients fall back to refreshing on demand. A daily job
+  also deletes published outbox rows older than `PVPICKS_OUTBOX_RETENTION`
+  (default `P7D`); `PVPICKS_OUTBOX_CLEANUP_ENABLED=false` turns it off.
+- The sports feed calls BallDontLie only when `PVPICKS_BALLDONTLIE_API_KEY` is
+  set (keep it in the ignored `infra/compose/.env` or the shell, never in
+  source). It polls every `PVPICKS_SPORTS_POLL_INTERVAL` (default `PT60S`);
+  keep that within your plan's rate limit.
 - Privileged database operators bypass application rules (including the V24
   role guard) and can read plaintext picks.
 

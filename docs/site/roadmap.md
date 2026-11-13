@@ -33,14 +33,14 @@ current code, not an estimated delivery date.
 
 ## 4. Delivery & sports data — in progress
 
-- **Available:** the outbox relay to Kafka, a realtime consumer, and an
-  authenticated STOMP gateway delivering bet, chat and private settlement
-  invalidations; the frontend refreshes bets and receipts live.
-- **Later:** private and table-view invalidations for table, membership and
-  profile changes; outbox retention; ordering and gap detection beyond
-  refetch-on-reconnect; durable consumers that record processed events.
-- Implement the sports feed and sports-only ticker; verify provider coverage,
-  freshness, chronology and failure behavior before automatic results.
+- **Available:** the outbox relay to Kafka with seven-day cleanup of published
+  rows, a realtime consumer, and an authenticated STOMP gateway delivering
+  every outbox event to its reviewed audience; the BallDontLie NBA/NFL feed and
+  the sports ticker, live in the frontend.
+- **Later:** ordering and gap detection beyond refetch-on-reconnect; durable
+  consumers that record processed events; verify the feed's NFL fields,
+  coverage, chronology and per-game statistics against live data before using
+  it to resolve sports bets.
 
 ## 5. Frontend integration — in progress
 

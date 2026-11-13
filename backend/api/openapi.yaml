@@ -1965,13 +1965,14 @@ paths:
       operationId: getTicker
       summary: Get the sports-only ticker snapshot
       description: >-
-        Return games scheduled on the current America/New_York calendar date
+        Dev implementation. Return games scheduled on the current America/New_York calendar date
         plus any live games scheduled on an earlier date. Include each game
         once, with live games first, then scheduled start and game ID ascending.
         No bet, participant, table or financial data is included. Clients
         perform presentation looping locally. An empty games array means no
-        games in scope, not a substitute for unavailable feed data. Ticker
-        freshness thresholds and partial-feed handling remain under review.
+        games in scope, not a substitute for unavailable feed data: unless every
+        league was polled successfully within the freshness window (dev
+        default three minutes) the response is 503 with code feed_unavailable.
       responses:
         '200':
           description: Sports ticker snapshot.

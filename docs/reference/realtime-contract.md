@@ -4,7 +4,7 @@ Realtime delivery is implemented for every outbox event: table view, bet and
 chat feeds, a private settlement feed and a personal feed. The transport is STOMP over a WebSocket at `/ws`
 (`/api/ws` through the Vite dev proxy). Messages are invalidations only: HTTP
 reads remain authoritative and provide recovery when realtime delivery is
-interrupted. The ticker feed is planned and not implemented.
+interrupted.
 
 ## Connection and authorization
 
@@ -43,7 +43,7 @@ subscribing connection only.
 | `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed` |
 | `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.line.changed`, `settlement.group.changed`, `settlement.net.changed` |
 | `/user/queue/me` | The user only | `tables.changed`, `invitations.changed` (no IDs) or `profile.changed` with the user ID | see below |
-| `/topic/ticker` (planned) | Authenticated users | `ticker.changed`; refetch `GET /ticker` | Sports feed, not implemented |
+| `/user/queue/ticker` | Every signed-in player | `ticker.changed`, no IDs; refetch `GET /ticker` | `sports.games.changed` (one per feed poll that changed a game) |
 
 Personal-feed audiences, looked up when each event is delivered:
 
@@ -126,7 +126,8 @@ tests define the contract the gateway sends.
 ## Verification targets
 
 `delivery.RealtimeIntegrationTest` covers targets 1–5 for the implemented
-feeds; the ticker targets (6–7) await the sports feed.
+feeds. `sports.SportsIntegrationTest` covers the ticker targets (6–7) on a
+daylight-saving date with a scripted feed.
 
 1. A non-member and a removed member cannot subscribe to a table topic.
 2. No shared Active-bet message reveals individual picks or another user's

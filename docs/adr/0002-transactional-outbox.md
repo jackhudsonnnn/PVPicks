@@ -29,8 +29,9 @@ keyed by aggregate, and marks them published only after the broker
 acknowledges the batch; a failed batch is retried. Relays share the table with
 `FOR UPDATE SKIP LOCKED`. Events are published in `created_at` order, which can
 differ from commit order, so consumers must not rely on ordering and must
-tolerate duplicates. Published rows are not pruned; retention remains to be
-designed.
+tolerate duplicates. A daily job deletes published rows older than seven days
+(`PVPICKS_OUTBOX_RETENTION`); unpublished rows are never deleted. Kafka, not
+the outbox, is the replayable stream.
 
 V14 stores processed-event markers by stable logical consumer and event ID.
 Consumers must insert the marker and all database effects for that unit of

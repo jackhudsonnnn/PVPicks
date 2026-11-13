@@ -18,6 +18,10 @@ dev backend and connects tables, bets and settle-up receipts:
   your read position forward as new messages reach the bottom. Your text, GIF
   and reaction permissions apply.
 
+- **Ticker:** a strip under the header shows today's NBA and NFL games from
+  `GET /ticker`, live first, and says when live scores are unavailable rather
+  than showing no games.
+
 Table management, registration and the other prototype workflows are not
 connected; the mock-backed app remains in the source but is not exposed.
 
