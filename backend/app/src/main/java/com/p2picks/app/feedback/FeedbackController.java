@@ -1,10 +1,11 @@
 package com.p2picks.app.feedback;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.http.CacheControl;
@@ -73,10 +74,5 @@ class FeedbackController {
             }
         }
         return new FeedbackService.Submission(input.path("kind").textValue(), text, link.isEmpty() ? null : link);
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

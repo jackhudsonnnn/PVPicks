@@ -1,10 +1,11 @@
 package com.p2picks.app.chat;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
@@ -63,10 +64,5 @@ class ChatSendController {
             return new ChatSendService.Submission(kind, input.path("gifId").textValue());
         }
         return null;
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

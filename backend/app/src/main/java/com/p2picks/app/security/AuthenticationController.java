@@ -1,5 +1,7 @@
 package com.p2picks.app.security;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -83,9 +85,5 @@ class AuthenticationController {
     private static String sessionCookie(String value, Duration maxAge) {
         return ResponseCookie.from("session", value).httpOnly(true).secure(false)
                 .sameSite("Strict").path("/").maxAge(maxAge).build().toString();
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(Map.of("code", code, "message", message));
     }
 }

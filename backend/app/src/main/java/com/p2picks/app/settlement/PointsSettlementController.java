@@ -1,5 +1,7 @@
 package com.p2picks.app.settlement;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.p2picks.app.bets.BettingLifecycleReady;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
@@ -60,10 +62,5 @@ class PointsSettlementController {
 
     private static ResponseEntity<Map<String, String>> notFound() {
         return error(404, "not_found", "Table or settlement not found.");
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

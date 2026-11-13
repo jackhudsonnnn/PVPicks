@@ -1,12 +1,13 @@
 package com.p2picks.app.social;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import java.sql.Array;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -62,8 +63,7 @@ class SocialReadController {
                         ids(rs.getArray("blocked_ids"))),
                 UUID.fromString(jwt.getId()), UUID.fromString(jwt.getSubject()));
         if (result.isEmpty()) {
-            return ResponseEntity.status(401).cacheControl(CacheControl.noStore())
-                    .body(Map.of("code", "unauthorized", "message", "Authentication required or credentials invalid."));
+            return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.getFirst());
     }
@@ -110,8 +110,7 @@ class SocialReadController {
                             rs.getObject("user_id", UUID.class), rs.getObject("created_at", OffsetDateTime.class)));
                 }, UUID.fromString(jwt.getId()), UUID.fromString(jwt.getSubject()));
         if (rows.isEmpty()) {
-            return ResponseEntity.status(401).cacheControl(CacheControl.noStore())
-                    .body(Map.of("code", "unauthorized", "message", "Authentication required or credentials invalid."));
+            return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
         List<TableInvite> invitations = new ArrayList<>();
         for (InvitationRow row : rows) {

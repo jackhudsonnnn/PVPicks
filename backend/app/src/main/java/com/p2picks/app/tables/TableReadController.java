@@ -1,5 +1,7 @@
 package com.p2picks.app.tables;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -42,8 +44,7 @@ class TableReadController {
             return unauthorized();
         }
         if (result.tables().isEmpty()) {
-            return ResponseEntity.status(404).cacheControl(CacheControl.noStore())
-                    .body(Map.of("code", "not_found", "message", "Table not found."));
+            return error(404, "not_found", "Table not found.");
         }
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.tables().getFirst());
     }
@@ -92,8 +93,7 @@ class TableReadController {
     }
 
     private static ResponseEntity<Map<String, String>> unauthorized() {
-        return ResponseEntity.status(401).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", "unauthorized", "message", "Authentication required or credentials invalid."));
+        return error(401, "unauthorized", "Authentication required or credentials invalid.");
     }
 
     private record ReadResult(boolean authenticated, List<TableView> tables) {}

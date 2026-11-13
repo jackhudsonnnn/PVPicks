@@ -1,7 +1,8 @@
 package com.p2picks.app.users;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -86,9 +87,6 @@ class UserLookupController {
                 .body(new User(result.id(), result.username(), result.hue()));
     }
 
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(Map.of("code", code, "message", message));
-    }
 
     private record Lookup(UUID id, String username, Integer hue, String status) {}
     private record User(UUID id, String username, int hue) {}

@@ -1,5 +1,7 @@
 package com.p2picks.app.settlement;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.bets.BettingLifecycleReady;
@@ -158,10 +160,5 @@ class SettlementGroupController {
 
     private static ResponseEntity<Map<String, String>> forbidden() {
         return error(403, "forbidden", "The operation is not permitted.");
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

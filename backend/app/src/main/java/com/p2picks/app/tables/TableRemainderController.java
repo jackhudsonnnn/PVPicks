@@ -1,9 +1,10 @@
 package com.p2picks.app.tables;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -46,10 +47,5 @@ class TableRemainderController {
         } catch (MutationAuthentication.ExpiredSession exception) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

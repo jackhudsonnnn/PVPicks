@@ -1,5 +1,7 @@
 package com.p2picks.app.bets;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.p2picks.app.common.IdempotencyGuard;
@@ -201,10 +203,5 @@ class BetMutationController {
 
     private static ResponseEntity<Map<String, String>> notFound() {
         return error(404, "not_found", "Bet or table not found.");
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

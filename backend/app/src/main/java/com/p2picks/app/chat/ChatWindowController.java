@@ -1,7 +1,8 @@
 package com.p2picks.app.chat;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -53,10 +54,5 @@ class ChatWindowController {
         if (!result.authenticated()) return error(401, "unauthorized", "Authentication required or credentials invalid.");
         if (!result.accessible() || !result.anchorFound()) return error(404, "not_found", "Table or message not found.");
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.window());
-    }
-
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", code, "message", message));
     }
 }

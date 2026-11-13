@@ -1,5 +1,7 @@
 package com.p2picks.app.bets;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -140,13 +142,11 @@ class BetReadController {
     }
 
     private static ResponseEntity<Map<String, String>> unauthorized() {
-        return ResponseEntity.status(401).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", "unauthorized", "message", "Authentication required or credentials invalid."));
+        return error(401, "unauthorized", "Authentication required or credentials invalid.");
     }
 
     private static ResponseEntity<Map<String, String>> notFound() {
-        return ResponseEntity.status(404).cacheControl(CacheControl.noStore())
-                .body(Map.of("code", "not_found", "message", "Bet or table not found."));
+        return error(404, "not_found", "Bet or table not found.");
     }
 
     private record ReadResult(boolean authenticated, boolean tableAccessible, List<JsonNode> bets) {}

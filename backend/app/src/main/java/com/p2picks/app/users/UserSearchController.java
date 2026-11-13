@@ -1,12 +1,13 @@
 package com.p2picks.app.users;
 
+import static com.p2picks.app.common.ApiErrors.error;
+
 import com.p2picks.app.common.PostgresText;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -86,9 +87,6 @@ class UserSearchController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new Page(List.copyOf(users), nextCursor));
     }
 
-    private static ResponseEntity<Map<String, String>> error(int status, String code, String message) {
-        return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(Map.of("code", code, "message", message));
-    }
 
     private record User(UUID id, String username, int hue) {}
     private record UserRow(User user) {}
