@@ -1,5 +1,5 @@
 // TODO(backend-middleware): this is THE integration seam. Each command should call the Spring API
-// (see p2picks-backend-kt_v3 §9) and dispatch the server response; keep validation here only as UX pre-checks.
+// and dispatch the server response; keep validation here only as UX pre-checks.
 import type { Dispatch } from "react";
 import { formatPts, pointsBalance } from "@/features/bets/ledger";
 import type { RemainderMode } from "@/features/bets/payout";
@@ -7,10 +7,11 @@ import { PASS, type Bet } from "@/features/bets/types";
 import { isValidWager } from "@/features/bets/wager";
 import { makeBaseline } from "@/features/bets/info";
 import { sampleSnapshot } from "@/features/bets/live-stats";
-import { emitError } from "@/features/notifications/error-bus";
+import { emitError } from "@/lib/error-bus";
 import type { Profile } from "@/features/settings/profile";
 import type { InvitePrefs } from "@/features/social/invites";
 import { settleGroups } from "@/features/social/settle-groups";
+import { requiresReceiptReview, requiresSettleReview, settlePairKey, type SettleChange } from "@/features/social/settle-changes";
 import { canProposeMode, hasPermission, type MemberPermission } from "@/features/table/hosts";
 import { makeCode, subscribeCheck } from "@/features/table/quick-picks";
 import { newId } from "@/lib/ids";
@@ -76,6 +77,7 @@ export interface AppCommands {
   subscribe: (tableId: string, code: string) => string | null;
   unsubscribe: (tableId: string, sourceId: string) => void;
   settlePoints: (tableId: string) => void;
+  reviewSettleChange: (otherUserId: string, change: SettleChange) => void;
   settlePerson: (otherUserId: string, step: "sent" | "paid" | "unpaid" | "forgiven" | "ask" | "decline", expectedRevision?: string) => void;
   markSent: (messageId: string, lineUserId: string) => void;
   confirmPaid: (messageId: string, lineUserId: string) => void;
@@ -253,8 +255,20 @@ export function createCommands(
     unsubscribe: (tableId, sourceId) =>
       dispatch({ type: "unsubscribe", tableId, sourceId, at: at() }),
     settlePoints: (tableId) => dispatch({ type: "settlePoints", tableId, at: dateTimeLabel(Date.now()) }),
+    reviewSettleChange: (otherUserId, change) => {
+      const s = getState();
+      if (s.settleChanges?.[settlePairKey(s.meId, otherUserId)] !== change) {
+        emitError("Settle-up changed", "Review the latest balance change before continuing.");
+        return;
+      }
+      dispatch({ type: "reviewSettleChange", actorId: s.meId, otherUserId, change });
+    },
     settlePerson: (otherUserId, step, expectedRevision) => {
       const s = getState();
+      if ((step === "sent" || step === "ask") && requiresSettleReview(s, s.meId, otherUserId)) {
+        emitError("Review balance change", "Review the balance-change warning before continuing.");
+        return;
+      }
       const group = settleGroups(s.messages, s.meId).find((g) => g.otherUserId === otherUserId);
       if (!group || (expectedRevision !== undefined && expectedRevision !== group.revision)) {
         emitError("Settle-up changed", "Review the new balance in Friends before continuing.");
@@ -263,6 +277,11 @@ export function createCommands(
       dispatch({ type: "settlePerson", otherUserId, step, actorId: s.meId, now: Date.now(), expectedRevision: group.revision });
     },
     markSent: (messageId, lineUserId) => {
+      const s = getState();
+      if (requiresReceiptReview(s, messageId, lineUserId, s.meId)) {
+        emitError("Review balance change", "Review the balance-change warning before continuing.");
+        return;
+      }
       dispatch({ type: "payment", messageId, lineUserId, status: "sent", actorId: me() });
       replies?.markedSent(messageId, lineUserId);
     },
@@ -273,6 +292,11 @@ export function createCommands(
     forgive: (messageId, lineUserId) =>
       dispatch({ type: "payment", messageId, lineUserId, status: "forgiven", actorId: me() }),
     askForgive: (messageId, lineUserId) => {
+      const s = getState();
+      if (requiresReceiptReview(s, messageId, lineUserId, s.meId)) {
+        emitError("Review balance change", "Review the balance-change warning before continuing.");
+        return;
+      }
       dispatch({
         type: "forgiveAsk",
         messageId,

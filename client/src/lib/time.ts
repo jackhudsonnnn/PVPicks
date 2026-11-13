@@ -17,7 +17,7 @@ export function timeLabel(date: Date | number = new Date()) {
 /** The current time as a label; see `timeLabel`. */
 export const nowLabel = () => timeLabel();
 
-/** Date + time for logs and inboxes ("Nov 4, 7:42 PM"). */
+/** Date + time for logs ("Nov 4, 7:42 PM"). */
 export function dateTimeLabel(date: Date | number) {
   return new Date(date).toLocaleString([], {
     month: "short",

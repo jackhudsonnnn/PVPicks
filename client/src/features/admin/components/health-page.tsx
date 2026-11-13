@@ -25,7 +25,7 @@ import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { cn } from "@/lib/utils";
 import { sampleWorlds } from "../admin-data";
 import { storageUsage } from "@/lib/storage";
-import { emitError, onError } from "@/features/notifications/error-bus";
+import { emitError, onError } from "@/lib/error-bus";
 import { zeroSumAudit } from "../analytics";
 import { healthStatus, healthTick, percentile, type HealthPoint } from "../health";
 import { Kpi, Panel } from "./admin-ui";
@@ -61,12 +61,9 @@ export function HealthPage() {
         [{ id: newId("err"), ...e, at: Date.now() }, ...prev].slice(0, 50),
       ),
     );
-    const onWin = (e: ErrorEvent) => emitError("Page error", e.message);
-    window.addEventListener("error", onWin);
     return () => {
       clearInterval(t);
       off();
-      window.removeEventListener("error", onWin);
     };
   }, []);
 

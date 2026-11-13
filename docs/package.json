@@ -7,6 +7,14 @@
     "dev": "vitepress dev site",
     "preview": "vitepress preview site"
   },
+  "overrides": {
+    "mermaid": {
+      "katex": "0.18.10"
+    },
+    "vitepress": {
+      "vite": "6.4.6"
+    }
+  },
   "devDependencies": {
     "mermaid": "11.17.2",
     "vitepress": "1.6.4",

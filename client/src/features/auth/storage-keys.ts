@@ -3,12 +3,10 @@
  * TODO(backend): everything except `display` moves to the server once accounts exist.
  */
 
-/** Saved per signed-in account, so one account's profile, inbox or blocks never show up in another. */
+/** Saved per signed-in account, so one account's data never shows up in another. */
 export const accountStorageKeys = (account: string) => ({
   profile: `p2picks.profile.${account}`,
   tableInvites: `p2picks.table-invites.${account}`,
-  notificationPrefs: `p2picks:notification-prefs.${account}`,
-  notificationHistory: `p2picks:notification-history.${account}`,
   lastRead: `p2picks.lastRead.${account}`,
   blocks: `p2picks.blocks.${account}`,
   debtCap: `p2picks.debt-cap.${account}`,

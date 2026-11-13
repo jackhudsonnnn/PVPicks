@@ -19,15 +19,12 @@
 !docs/
 !docs/package.json
 !docs/package-lock.json
-!docs/architecture-diary.md
 !docs/scripts/
 !docs/scripts/**
 !docs/site/
 !docs/site/**
 !docs/reference/
 !docs/reference/**
-!docs/archive/
-!docs/archive/**
 !docs/adr/
 !docs/adr/**
 !client/

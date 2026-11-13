@@ -1,22 +1,20 @@
 # Backend contract inventory — Phase 0 draft
 
-This is a mapping of the current frontend seam, not an OpenAPI specification
-and not a list of implemented endpoints. Paths follow v3 where specified;
-additional paths below are proposals that still need request/response schemas,
-authorization, validation, error semantics and review. Current guides,
-the roadmap and accepted decisions supersede the archived v3 plan.
+This maps the current frontend seam, not an OpenAPI specification or a list of
+implemented endpoints. Proposed paths still need request/response schemas,
+authorization, validation, error semantics and review.
 
 `../../backend/api/openapi.yaml` contains preliminary identity, debt-cap, betting,
-table, Quick Picks, chat, social, feedback, notification, game and settlement
+table, Quick Picks, chat, social, feedback, game and settlement
 operations, an admin health snapshot and a draft admin user-action operation.
 Other admin reads and surfaces remain incomplete; it is not ready to generate
 a client.
 `realtime-contract.md` records the proposed realtime behavior.
 
-Source: `client/src/features/store/commands.ts`. The client currently expects
-synchronous commands, including immediate return values for creation and
-subscription; an HTTP implementation will need an explicitly asynchronous
-adapter and screen changes where results are consumed.
+Source: `client/src/features/store/commands.ts`. These are retained prototype
+commands, not the current frontend entry point. The backend preview uses
+asynchronous sign-in, table reads and bet reads; integrating the remaining commands will
+require asynchronous adapters and screen changes where results are consumed.
 
 ## Commands
 
@@ -50,6 +48,7 @@ adapter and screen changes where results are consumed.
 | `unsubscribe` | `DELETE /tables/{id}/quick-picks/subscribe?sourceTableId=...` |
 | `settlePoints` | `POST /tables/{id}/settle-points` |
 | `settlePerson` | `POST /people/{id}/settle` with step and expected revision |
+| `reviewSettleChange` | Gated `GET /users/{id}/settlement-review` and idempotent `POST /users/{id}/settlement-review/acknowledge` |
 | `markSent`, `confirmPaid`, `disputePaid`, `forgive`, `askForgive` | `POST /settlement-lines/{id}/{action}` with revision |
 | `declineForgive` | Proposed `POST /settlement-lines/{id}/decline-forgive` with revision |
 
@@ -63,7 +62,7 @@ adapter and screen changes where results are consumed.
   contract remains a draft. LAN refresh-token and TLS policy remain to be
   designed.
 - Initial state and read APIs for tables, users, bets, games, follows, blocks,
-  invitations, notifications and permissions; paginated history and chat.
+  invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
   list supplies its name and emoji for the pending-invite screen. Dev
   `GET /tables` and `GET /tables/{id}` are implemented for active memberships;
@@ -75,8 +74,7 @@ adapter and screen changes where results are consumed.
   Feed freshness and partial-feed handling still require review.
 - Dev `GET`/`PUT /tables/{id}/last-read` supplies filtered unread count and
   first unread message ID and advances only to a currently visible message.
-  Advances and subsequent notification inserts synchronize chat-notification
-  read state. Last-read endpoints do not support archives.
+  Last-read endpoints do not support archives.
 - Dev `GET /chat/{id}/messages` returns filtered latest, around, before and
   after windows. Its opaque cursors are user/table-bound; every nonempty page
   has a next cursor for later arrivals. Around takes a visible message ID.
@@ -90,15 +88,15 @@ adapter and screen changes where results are consumed.
   1–2000 Unicode code points and restricts GIF IDs to the prototype catalog.
   A retry rechecks access and returns the original 201 representation without
   resending; if the message was removed or its content changed, it returns 404. Rate limiting,
-  notification generation and realtime delivery remain unimplemented.
+  and realtime delivery remain unimplemented.
 - Dev member-permission PUT lets hosts quietly change the four permissions of
   current non-host members, including frozen members. Retries recheck the
   current host and target role without reapplying. Chat and reactions enforce
-  their permissions; bet authorization does not yet exist.
+  their permissions; internal betting transactions also enforce relevant permissions.
 - Dev remainder PATCH rejects a change while an Active bet exists, leaves
   Pending snapshots intact and creates a system chat message when changed.
   An unchanged value and a matching authorized retry are no-ops, including
-  while a bet is Active. Bet proposal and locking remain unimplemented.
+  while a bet is Active. Internal bet proposal and locking enforce this setting.
 - Dev betting-settings PATCH lets a current host change either switch, adds
   neutral system messages for actual changes, and returns the current table.
   Retries recheck host access and do not reapply; existing bets are unchanged.
@@ -141,40 +139,32 @@ adapter and screen changes where results are consumed.
   Attributed host-change chat resolves current usernames at read time and
   shows `Deleted user` for tombstones. Account deletion, freeze recovery and
   realtime delivery remain unimplemented.
-- Reports, feedback, notification preferences and admin operations are outside
+- Reports, feedback and admin operations are outside
   `AppCommands`. Dev `POST /feedback` submits feedback but does not implement
   rate limiting or moderation reads. Report submission, moderation reads,
   report-status updates and most admin operations remain incomplete.
-- Dev `GET /me/debt-cap` and `GET /me/notification-preferences` read saved
-  settings and defaults. `PUT /me/notification-preferences` replaces the
-  caller's settings; new mutes require current membership in a non-archived
-  table, while stale existing mutes can be retained or removed. Dev
+- Dev `GET /me/debt-cap` reads the saved setting and default. Dev
   `GET /me/debt` reads current table exposure and open receipt nets in one
   database snapshot. Dev `PUT /me/debt-cap` requires zero debt and whole-point
-  limits; retry protection preserves a committed outcome. Cap enforcement on
-  wagers, notification delivery and
-  realtime invalidation are not implemented.
-- Dev `POST /notifications/read-all` marks current inbox entries read without
-  advancing chat read positions. A matching retry does not affect later
-  arrivals. Dev `DELETE /notifications` clears current entries; a matching
-  retry also leaves later arrivals intact. Inbox retrieval and delivery remain
-  unimplemented.
+  limits; retry protection preserves a committed outcome. Internal proposal,
+  pick and lock enforce caps; realtime invalidation is not implemented.
 - Dev `GET`/`PUT /me/invite-preferences` read or replace the caller's policy.
   Defaults are friends `open` and following `request`; updates cancel
   ineligible pending invitations. Dev invitation responses enforce current
-  host, follow, block and preference rules; creation is still unimplemented.
+  host, follow, block and preference rules; table member requests can create invitations.
 - Dev follow/unfollow and block/unblock mutations use pair locking and the
   retry guard. Blocks remove follows and cancel pending invitations in both
   directions. Blocked follow attempts return the same 404 as unavailable
   users, and frozen users remain followable. Unblocking does not restore
   relationships; chat window reads filter blocked text and GIF authors.
-- The plaintext pick request and storage do not satisfy the proposed stronger
-  operator-blind privacy target. A sealed-pick protocol, release trust model,
-  failure semantics and updated request/read contracts need review before
-  implementation; do not claim RLS alone provides this protection.
+- Dev bet list and detail reads require a current player session and membership
+  in the non-archived table. Active reads expose only the caller's participation
+  and selection plus the aggregate pick count; locked reads reveal picks. Pick
+  mutations exist internally and their HTTP adapters are gated. Current pick storage is
+  plaintext and accessible to an operator with infrastructure access.
 - HTTP idempotency has a draft minimum 24-hour per-user guarantee, independent
-  of event-consumer markers. The dev notification-preference PUT,
-  invite-preference PUT, debt-cap PUT, inbox read-all POST and clear DELETE, feedback POST, invitation response
+  of event-consumer markers. The dev invite-preference PUT, debt-cap PUT,
+  feedback POST, invitation response
   POST, follow/block POST/DELETE, reaction PUT/DELETE, chat POST, last-read PUT
   member-permission PUT, remainder PATCH and host PUT/DELETE implement it
   using a PostgreSQL transaction, keyed fingerprints and bodyless 201 or 204
@@ -193,10 +183,10 @@ adapter and screen changes where results are consumed.
   and Quick Pick wash eligibility.
 - Dev table deletion retains a read-only chat archive for members at deletion
   for 90 days and preserves receipts and Quick Pick copies. It requires
-  settlement of all resolved non-4fun bet points. Receipt actions, zero-net
-  settlement and retained-data cleanup remain unimplemented.
+  settlement of all resolved non-4fun bet points. Receipt actions and zero-net
+  settlement exist internally; retained-data cleanup remains unimplemented.
 - Planned STOMP destinations: `/topic/tables/{id}/chat`,
-  `/topic/tables/{id}/bets`, `/user/queue/notifications`, `/topic/ticker`.
+  `/topic/tables/{id}/bets`, `/topic/ticker`.
   Specify subscription authorization, payloads, ordering and reconnection
   semantics before calling the realtime contract complete.
 
@@ -205,7 +195,4 @@ adapter and screen changes where results are consumed.
 - [ ] Describe every command and read surface in OpenAPI 3.1, with schemas and
       errors; reconcile the table above with the client and current decisions.
 - [ ] Specify and review authenticated realtime destinations and event shapes.
-- [ ] Review `backend-test-map.md` case by case; distinguish applicable JUnit
-      targets from UI-only tests and prototype-only behavior.
-- [x] Review the four architecture decisions in `adr/` against v3; sports-feed
-      chronology and coverage still need verification before auto-settlement.
+- [ ] Verify sports-feed chronology and coverage before auto-settlement.

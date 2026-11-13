@@ -10,7 +10,6 @@ include(
     "modules:bets",
     "modules:settlement",
     "modules:quickpicks",
-    "modules:notifications",
     "modules:admin",
     "modules:sportsdata",
     "modules:audit"

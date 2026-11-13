@@ -87,14 +87,6 @@ class ChatReadService {
                 SET last_read_order = EXCLUDED.last_read_order, updated_at = clock_timestamp()
                 WHERE chat_read_positions.last_read_order < EXCLUDED.last_read_order
                 """, tableId, userId, position);
-        jdbc.update("""
-                UPDATE notifications n SET read_at = clock_timestamp()
-                FROM chat_messages m, chat_read_positions pos
-                WHERE n.recipient_id = ? AND n.table_id = ? AND n.tone = 'chat' AND n.read_at IS NULL
-                  AND m.id = n.source_message_id AND m.table_id = n.table_id
-                  AND pos.table_id = n.table_id AND pos.user_id = n.recipient_id
-                  AND m.message_order <= pos.last_read_order
-                """, userId, tableId);
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;
     }

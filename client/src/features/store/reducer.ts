@@ -3,7 +3,8 @@ import { paymentsReducer } from "./payments-reducer";
 import { socialReducer } from "./social-reducer";
 import { hostReducer, membershipReducer } from "./table-reducer";
 import type { Action, AppState } from "./state";
-import { reconcileSettleChanges } from "@/features/social/settle-changes";
+import { reconcileSettleChanges, settleReviewKey } from "@/features/social/settle-changes";
+import { settleGroups } from "@/features/social/settle-groups";
 import { canChangeDebtCap, isDebtCap } from "@/features/settings/debt-cap";
 
 /**
@@ -12,12 +13,29 @@ import { canChangeDebtCap, isDebtCap } from "@/features/settings/debt-cap";
  */
 export function reducer(state: AppState, action: Action): AppState {
   const next = reduceAction(state, action);
-  // Receipt actions close only their own line; never invalidate other in-flight receipts.
-  if (action.type === "payment" || action.type === "forgiveAsk") return next;
   if (next.messages === state.messages) return next;
-  const { messages, changes } = reconcileSettleChanges(state.messages, next.messages);
-  if (!Object.keys(changes).length) return next;
-  return { ...next, messages, settleChanges: { ...next.settleChanges, ...changes } };
+  // Receipt actions close only their own line; never invalidate other in-flight receipts.
+  const { messages, changes } = action.type === "payment" || action.type === "forgiveAsk"
+    ? { messages: next.messages, changes: {} }
+    : reconcileSettleChanges(state.messages, next.messages);
+  const settleChanges = { ...next.settleChanges, ...changes };
+  const settleReviews = { ...next.settleReviews };
+  let refreshed = false;
+  for (const [key, change] of Object.entries(state.settleChanges ?? {})) {
+    if (key in changes) continue;
+    const before = settleGroups(state.messages, change.fromId).find((group) => group.otherUserId === change.toId);
+    const after = settleGroups(messages, change.fromId).find((group) => group.otherUserId === change.toId);
+    if (!before || !after || before.net === after.net) continue;
+    const updated = { ...change, before: before.net, after: after.net, revision: after.revision };
+    for (const [actor, other] of [[change.fromId, change.toId], [change.toId, change.fromId]] as const) {
+      const reviewKey = settleReviewKey(actor, other);
+      if (settleReviews[reviewKey] === change) settleReviews[reviewKey] = updated;
+    }
+    settleChanges[key] = updated;
+    refreshed = true;
+  }
+  if (!Object.keys(changes).length && !refreshed) return next;
+  return { ...next, messages, settleChanges, settleReviews };
 }
 
 function reduceAction(state: AppState, action: Action): AppState {
@@ -66,6 +84,7 @@ function reduceAction(state: AppState, action: Action): AppState {
     case "setPermission":
       return hostReducer(state, action);
     case "settlePoints":
+    case "reviewSettleChange":
     case "settlePerson":
     case "payment":
     case "forgiveAsk":

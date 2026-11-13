@@ -1,10 +1,8 @@
 # Domain rules and test inventory — working reference
 
-Current guides, the roadmap, and accepted decisions take precedence over the
-archived v3 plan. The source paths below identify existing
-frontend tests to review; proposed JUnit names are targets, not implemented
-tests. `backend-test-map.md` enumerates individual frontend declarations with
-proposed names; the crosswalk still needs case-by-case applicability review.
+Current guides, the roadmap, and accepted decisions describe the design.
+The source paths below identify frontend tests; proposed JUnit names are
+examples rather than a list of implemented tests.
 
 | Area | Invariants to preserve | Existing frontend tests | Example JUnit targets |
 |---|---|---|---|
@@ -12,16 +10,115 @@ proposed names; the crosswalk still needs case-by-case applicability review.
 | Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come only from the feed; authorized people settle U2Pick. | `store/reducer.test.ts`, `bets/picks.test.ts`, `bets/u2pick.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
 | Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/modes.test.ts`, `bets/overtime.test.ts`, `bets/info.test.ts` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
 | Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `table/scenarios.test.ts`, `settings/debt-cap.test.ts` | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
-| Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset and notify; batch actions are atomic. | `table/settlements.test.ts`, `social/settle-receipts.test.ts`, `social/settle-groups.test.ts`, `social/settle-changes.test.ts` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
+| Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `table/settlements.test.ts`, `social/settle-receipts.test.ts`, `social/settle-groups.test.ts`, `social/settle-changes.test.ts` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash their copy; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `table/quick-picks.test.ts`, `store/reducer.test.ts` | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `auth/local-accounts.test.ts`, `settings/profile.test.ts`, `settings/deletion.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
 | Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `social/follows.test.ts`, `social/invites.test.ts`, `social/safety.test.ts`, `admin/admin-pages.test.ts` | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
-| Chat and notifications | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. Notifications are inbox-only, filtered by preferences and cursor-paged. | `table/chat-window.test.ts`, `table/reactions.test.ts`, `table/unread.test.ts`, `notifications/events.test.ts`, `notifications/history.test.ts` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable`, `blockedChatDoesNotNotify` |
+| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. | `table/chat-window.test.ts`, `table/reactions.test.ts`, `table/unread.test.ts` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
 
 Paths in the table are relative to `client/src/features/`. Review the
-individual case-by-case mapping before declaring the Phase 0 exit criteria met.
+backend test guidance before declaring the contract complete.
 Some frontend tests exercise presentation rather than backend rules and should
 remain frontend tests rather than being artificially ported.
+
+## Proposal, pick and lock — design draft
+
+The mutation lifecycle below is an implementation target, not an available
+workflow. Shared bet list and detail reads are available; an internal shared
+pick transaction, lock transition and U2Pick proposal and resolution
+transactions exist but their mutations are not exposed. An opt-in U2Pick lock
+worker is disabled by default. Gated HTTP adapters for U2Pick proposal,
+shared pick/clear, member-called resolution, shared host points settlement and
+individual/group receipt history and actions are exercised only in tests; no
+readiness bean is registered in the application. Do not enable the gate until
+the complete lifecycle, including private net-change delivery, is safe. U2Pick
+is the first bet mode; sports modes follow later.
+
+Both mode families use the same pick, privacy, cap, lock, payout and points
+settlement invariants. U2Pick validates custom questions and choices and uses
+an authorized member-called result. Sports modes validate game-specific data,
+baselines and applicable overtime rules, and only the feed can supply their
+outcomes. Neither mode may bypass the shared transactional lifecycle.
+The current proposal transaction handles U2Pick only. When sports proposal
+validation is added, reuse or extract its common authorization, retry, debt-cap
+and deadline mechanics; do not reuse U2Pick's custom definition or settler
+rules for game data or feed results.
+The user chose debt caps as the only spending limit: the prototype's separate
+100-point virtual-balance checks on proposal and joining will not be enforced.
+
+- **Propose:** authenticate a player, lock and recheck the account, session,
+  table, membership and applicable betting settings. Validate the mode, wager,
+  duration and debt cap, then atomically create an Active bet and its outbox
+  event. The server assigns the deadline using database time and the requested
+  whole-second window of 30–600 seconds. The proposer does not join automatically.
+  For U2Pick, top-level question and choices are authoritative: the server
+  normalizes `config.question` and `config.options` to those values, preserving
+  other valid config fields. A retry requires current membership and betting
+  permission, but changing host-only or U2Pick settings after creation does not
+  prevent replay of a previously accepted proposal.
+- **Pick or clear:** authorize the current member and betting permission;
+  accept valid choices only while Active and before the server-side deadline.
+  Serialize updates per bet, enforce the debt cap and preserve first
+  participation order. Clearing after joining keeps a No guess participant;
+  clearing before joining does not create one. Retry claims and changes must
+  commit together. The internal transaction emits an aggregate-count
+  invalidation only when the count changes; it does not emit another player's
+  identity or selection, or signal a selection-only change.
+- **Lock:** serialize with picks, membership and table-setting changes; recheck
+  caps and apply the documented over-cap behavior. If a participant is frozen
+  or lacks betting permission at lock, remove their pick and retain their
+  No guess participation. Snapshot the remainder rule and, for Host, persist
+  one randomly chosen current host. Commit the Pending transition, snapshots
+  and outbox event together. A delayed lock worker must not extend the pick
+  deadline; retries must not redraw the recipient. Settings, current hosts
+  and participant eligibility are evaluated at actual lock processing time,
+  not reconstructed at the deadline; outages can therefore affect the snapshot.
+  The opt-in dev worker scans overdue Active bets on startup and after each
+  five-second delay, ordered by deadline and ID in pages of 100 using a
+  database-clock scan horizon. It continues past individual failures and
+  retries overdue bets on later scans, including when a new picker appeared
+  while locks were acquired. Each attempt has its own transaction and a
+  two-second database lock timeout; competing workers use the same shared
+  lock transaction and cannot commit the transition twice. Item failures are
+  logged, while a scan-level failure is logged by the scheduler and retried.
+  The worker is disabled by default; enabling it changes existing overdue
+  bets in the connected database. Sports modes are logged and left Active
+  until their feed-specific lifecycle is implemented. A scan is not a
+  deadline guarantee; the pick transaction still rejects late changes.
+- **Reads and recovery:** Active views expose only the caller's own state and
+  aggregate counts, never other participants or picks. Admin audit views follow
+  the same pre-lock restrictions. After lock, authorized views may reveal
+  picks. Failed transactions leave no partial transition; an unavailable
+  database must not be interpreted as an empty set of picks.
+- **Resolve:** an eligible table member calls a Pending U2Pick according to
+  its stored settler rule. Validate the outcome and atomically write the
+  resulting Settled or Washed state, zero-sum ledger deltas and outbox event.
+  4fun bets produce no ledger entries. An authorized retry must not resolve
+  the bet twice. For the non-participants rule, only active player members
+  count when deciding whether everyone is in the pot and hosts may call it.
+  Frozen accounts do not prevent that fallback; No guess is outside the pot.
+  The internal resolver locks and rechecks eligible membership, picked users
+  and remainder recipients before calling `U2PickSettler`. A null winning
+  choice explicitly washes; a non-null choice must match an available option.
+  Until Quick Pick propagation is implemented, the resolver rejects originals
+  with copies and does not allow direct resolution of a copy.
+- **Settle points and receipts:** a current host settles the table's eligible
+  resolved non-4fun bets, including a zero-net group, atomically recording
+  settlement history, bet links and any payer/payee receipts. Resolution alone
+  does not clear table deletion or member-removal guards; applicable points
+  must also be settled. The shared internal settlement and receipt services
+  are exposed only by test-gated adapters. The gated settlement adapter rechecks current host
+  access and returns current line statuses on an authorized retry. Sent receipts
+  remain outstanding until confirmed.
+
+Affected user rows must be locked in PostgreSQL UUID order before table and bet
+rows, with fresh checks after locking. Integration tests need to cover deadline,
+permission and cap boundaries, concurrent pick/lock and setting changes,
+idempotent retries, privacy, permission revocation and frozen accounts, and
+lock-time snapshot persistence. Resolution and settlement tests must cover
+settler authorization, zero-sum ledger writes, duplicate requests, stale
+receipt revisions and concurrent net changes. The worker has log-based error
+visibility but no operational dashboard or alerting.
 
 For table reads, the user chose to expose the Quick Pick code only to current
 hosts. Hosts can see all disabled member permissions; other members can see
@@ -41,8 +138,8 @@ contains only table and target IDs; future delivery must not expose the target
 or permission change to other non-host members. Text, GIF and reaction writers
 serialize on the target user and table before checking permission. Future
 membership, host-role, archive and bet writers must use compatible user-before-
-table locking and recheck fresh state. The bets permission is stored but its
-enforcement remains unimplemented.
+table locking and recheck fresh state. Internal proposal and pick transactions
+enforce the bets permission.
 
 For host promotion/demotion, lock actor and target user rows in PostgreSQL UUID
 order, then the actor's session, active table and relevant memberships. The
@@ -75,7 +172,8 @@ creates a neutral system chat message and internal table/chat outbox events.
 Future bet creation and status writers must acquire their required user locks,
 then the same table lock before inspecting or writing bet state, using a fresh
 READ COMMITTED statement snapshot after that lock. The schema alone does not
-enforce this coordination; bet proposal and locking are not implemented.
+enforce this coordination; the internal U2Pick proposal and lock transactions
+take the table lock, but their public workflow is not implemented.
 
 For table betting-setting changes, lock the actor and session, active table,
 and membership in that order. Only hosts can set `hostsOnlyBets` and
@@ -83,9 +181,8 @@ and membership in that order. Only hosts can set `hostsOnlyBets` and
 table without reapplying old values. An unchanged value is a no-op; each actual
 switch change posts a neutral system chat notice, with table and chat outbox
 events in the same transaction. Existing bets are unchanged, including Active
-and Pending bets. Future proposal and Quick Pick fan-out/backfill transactions
-must lock the same table and recheck these switches after locking; those
-transactions do not yet exist.
+and Pending bets. Internal U2Pick proposal locks the table and rechecks these
+switches. Future Quick Pick fan-out/backfill transactions must do the same.
 
 For table profile changes, a current host may update name and/or emoji using
 the same validation as creation. Lock the actor and session, active table, and
@@ -102,7 +199,7 @@ ASCII letter, digit and underscore rule and database-backed uniqueness.
 A rename releases the old username, changes future login and keeps existing
 sessions active. An authenticated matching retry returns the current profile
 without reapplying; a username conflict does not reserve the retry key. Actual
-changes write an internal profile invalidation but no notification. Attributed
+changes write an internal profile invalidation but no client delivery. Attributed
 host-change messages use the current username; legacy free-text messages are
 not rewritten. Login uses the same whitespace normalization.
 
@@ -124,9 +221,9 @@ append compensating entries instead of changing or deleting old entries.
 V8 serializes ledger writers by bet and checks the sum at commit; transactions
 touching multiple bets must lock them in a consistent order and retry deadlocks.
 This storage check does not implement settlement authorization, idempotency
-or the required transactional outbox producer. The bets module has an
-independently tested pure payout calculator; no service invokes it or writes
-its results to the ledger.
+or the required transactional outbox producer. The internal shared resolution
+writer invokes the bets module's pure payout calculator and posts its results;
+it is not exposed as an end-to-end workflow.
 
 The calculator accepts participants in first-participation order, with no choice
 for No guess, and applies the lock-time remainder snapshot. Host and proposer
@@ -134,10 +231,10 @@ rules require their recipient rather than falling back; random uses the
 prototype-compatible deterministic shuffle seeded by the bet ID. This is
 pseudorandom, not an unpredictable draw. It returns nonzero ledger deltas in
 integer cents, or a wash reason; 4fun produces no ledger deltas. A future
-service must provide validated, authoritative picks and snapshots, protect the
-bet ID and inputs from manipulation, and atomically persist the outcome,
-ledger and outbox event. The calculator does not validate authorization or
-implement the sealed-pick protocol.
+caller must provide validated, authoritative picks and snapshots, protect the
+bet ID and inputs from manipulation, and authorize the result. The internal
+writer atomically persists the outcome, ledger and outbox event. The calculator
+does not validate authorization.
 
 Debt-cap storage permits a nonnegative integer-cent limit or NULL for off; an
 absent row also represents the default off state. The future service must
@@ -177,11 +274,56 @@ mutation should be deployed until it cooperates.
 The settlement module has a pure calculator that nets supplied bet deltas and
 produces positive-amount receipts routed through the settling host. It checks
 each supplied bet is zero-sum, rejects duplicate or absent bets, and rejects
-amounts outside the stored integer range. The caller must select only resolved,
-unsettled, non-4fun bets from the correct table, including their complete
-ledger deltas. It must authorize the host and coordinate selection, settlement
-links, bet state, receipts, chat and outbox writes atomically; none of those
-services exists yet.
+final amounts outside the stored integer range. Exact per-bet aggregates may
+exceed that range before later bets offset them. The internal shared host
+settlement transaction selects resolved, unsettled, non-4fun bets with all
+ledger corrections, checks current host authorization, and atomically writes
+the settlement, bet links and timestamps, receipts, static chat and outbox.
+It locks initially discovered ledger users and the actor before the table and
+bets, and fails retryably if a newly relevant user appears. Matching retries
+recheck current host authorization and return the original settlement ID.
+No eligible bets and unrepresentable totals fail without retaining the
+idempotency claim or partial writes.
+
+When a new settlement changes an open person net with sent or forgiveness-
+requested receipts, the internal transaction returns those open claims to
+unpaid, increments their revisions and records a private pair-net-change
+outbox event with before/after amounts. Closed receipts are unchanged. The
+outbox is not automatically delivered. Any future consumer must restrict
+settlement data to the two named parties. The frontend warning-opening
+interaction remains a client concern, not a server concurrency guard, and is
+local to the browser. Internal receipt history is limited
+to direct parties, including archived-table and completed records. Individual
+actions require the current line revision and payer/payee authority; they
+never invalidate other in-flight receipts. A matching retry rechecks party
+and action authority and returns the current receipt without reapplying. The
+gated history adapter returns an empty list for unrelated or unknown users,
+without disclosing whether they exist.
+
+Internal person-group reads net open lines with exact arithmetic, including
+opposing offsets and archived-table receipts. Their opaque revision includes
+every open line ID and revision. The gated group-list adapter returns an
+explicit 409 rather than truncating any net outside the signed 64-bit API range;
+individual receipt history remains accessible. The gated pending-review list
+independently discovers the caller's unreviewed warnings, including after
+closure and when a group net is out of range; it does not deliver events or
+expose the other party's review state. Group actions lock both parties in PostgreSQL
+UUID order, reject stale revisions and validate current net payer/payee
+authority once before updating all open lines atomically. Either party may
+confirm a zero-net group. Paid and forgiven history stays visible but does
+not affect the net. Matching group retries require a retained direct receipt
+relationship and do not reapply the action. Fresh declined forgiveness
+requests cannot be repeated for 24 hours, measured by the database clock.
+The prototype permits an individual sent claim to coexist with an open
+forgiveness request: `forgive_requested_at` tracks that request independently
+of `status`, and a dispute restores the open request. A group sent, paid,
+unpaid or forgiven action clears requests and cooldowns across its lines;
+group ask/decline updates all requests while preserving sent offset claims.
+Reconciliation resets both types of in-flight claim on a changed net.
+Receipt mutation events remain private outbox records only. Pair-change events
+may also be materialized by the internal consumer described above. Future
+consumers must restrict them to the two parties. Receipt HTTP adapters are
+gated, and user-visible event delivery remains future work.
 
 Table deletion is a host action blocked while any bet is ACTIVE or PENDING or
 any resolved non-4fun bet has not had its points settled. Washed and 4fun
@@ -208,7 +350,7 @@ and snapshots membership atomically. The service locks member users in UUID
 order before locking the table, and rejects a concurrent membership change.
 Future bet, settlement, subscription and event writers must use compatible
 locking and preserve committed source-result propagation. Outbox delivery,
-receipt actions and account deletion are not yet implemented.
+public receipt actions and account deletion are not yet implemented.
 
 Chat order is assigned after locking the table, so concurrent committed
 messages have stable per-table order even if creation timestamps coincide or
@@ -254,8 +396,7 @@ stores its UUID, not a duplicate message body, and reconstructs the original
 response from the matching request and immutable creation time. Future message
 editing, moderation and deletion must preserve authorization and replay
 semantics; a redacted or inaccessible message must not be exposed by replay.
-Sending does not yet create notifications, enforce request-size or rate limits,
-or deliver events.
+Sending does not yet enforce request-size or rate limits or deliver events.
 
 Reaction mutations lock the actor and session before the table, membership and
 message; blocking also locks the actor, serializing the visibility check.
@@ -264,63 +405,20 @@ must coordinate compatible user-before-table locking and recheck state after
 locking; deletion must also prevent a visible author from becoming deleted
 concurrently with the reaction. Storage does not enforce this protocol.
 
-The user chose chat-read-position synchronization for inbox notifications:
-advancing a table's read position marks that user's chat notifications for
-messages through it as read across sessions, even when presently hidden. A
-fresh request for an older position synchronizes through the current position;
-a matching retry does not reapply. V20 ensures a new notification for an
-already-read message starts read. Insertion and advancement serialize on the
-recipient user at READ COMMITTED isolation; future writers must preserve this
-order and isolation or independently ensure a fresh snapshot after locking.
-V20 does not change pre-existing inbox rows. Marking the inbox read does not
-advance chat read positions.
-The prototype's newest 200 items and 15-item pages are the draft retention and
-pagination limits. Storage alone does not enforce the cap, visibility, block
-filtering or durable event deduplication after an item is cleared or evicted.
-The user chose to hide table notifications after normal table access ends,
-while preserving separately authorized settlement notifications. Hidden
-notifications may reappear if access returns. For the delegated block policy,
-follow the prototype: hide the caller's blocked users' chat notifications and
-hide invitations blocked in either direction, without hiding bet or settlement
-notifications merely because of a block. Before inbox reads can implement
-this safely, invitation and settlement notifications need source references
-and authorization rules that distinguish pending invitations, direct joins,
-individual receipts and person-level net changes. Existing stored text alone
-cannot establish those permissions.
-The dev preference read returns the documented defaults when no preference row
-exists and includes the user's saved muted-table IDs. The dev preference update
-requires current membership in a non-archived table for each newly added mute;
-existing stale mutes may be retained or removed, but cannot be re-added without
-membership once removed. Deletion cleanup is not implemented, so reads may
-include old table IDs. The update stores preferences and mutes atomically; it
-does not deliver notifications or emit realtime invalidations.
+Chat read positions advance monotonically to visible messages. Matching
+retries recheck access and visibility without reapplying the update.
 
 The per-user idempotency guard protects table creation and membership requests,
-table profile/host/permission/remainder/betting-setting changes, settings updates, inbox mark-read and
-clear, feedback, invitation responses, reactions, chat sending and last-read,
+table profile/host/permission/remainder/betting-setting changes, settings updates,
+feedback, invitation responses, reactions, chat sending and last-read,
 and follow/block mutations. It rechecks active account and session, serializes
-the update and retry claim, and fingerprints canonical settings and sorted mute
-IDs using a separate keyed HMAC. Matching retries do not reapply the update;
-changed requests conflict, and invalid new mutes roll back the claim. It stores
+the update and retry claim, and fingerprints canonical requests using a separate
+keyed HMAC. Matching retries do not reapply the update;
+changed requests conflict. It stores
 neither raw keys nor request bodies. Records are not pruned; commit-relative
 pruning, account-deletion cleanup, key rotation and recovery require design.
 The guard also stores resource references and, for membership operations,
-the original per-person outcomes. Fingerprinting is not sealed-pick protection.
-
-The dev inbox mark-read operation marks the caller's existing unread
-notifications read without changing chat read positions. A matching retry
-returns the original outcome without marking notifications that arrived later;
-a fresh key marks the newer entries. Notification inserts and this update lock
-the recipient user first, so an insertion and mark-read are serialized.
-The dev inbox clear operation deletes only the caller's existing entries,
-without advancing chat read positions. Retrying the same key leaves later
-arrivals intact; a fresh key clears them. Clear and insertion also serialize
-on the recipient user. Future notification and chat-read writers must maintain
-a compatible lock order. Removing inbox rows also removes their row-level
-deduplication keys; future event consumers must atomically record durable
-processed-event markers with notification effects, including when an item is
-later cleared or evicted. Inbox retrieval, delivery, cap enforcement and
-realtime invalidations remain unimplemented.
+the original per-person outcomes.
 
 Feedback accepts the five prototype categories, text of 10–1000 UTF-16 code
 units after trimming and an optional HTTP(S) link without whitespace, matching
@@ -344,24 +442,17 @@ is allowed, and a later strike freezes again. Notes and flags are personal
 moderation data requiring restricted access and deletion/retention policies.
 
 Clearing an existing pick keeps that player as a No guess participant outside the
-pot; clearing before joining does not create a participant. Because v3 stores
+pot; clearing before joining does not create a participant. Because the backend stores
 No guess as no pick row, participation must be retained separately from picks.
 The draft bet view exposes No guess participant IDs only after lock.
 The caller can always distinguish their own `not_joined`, `no_guess` and
 `picked` states without seeing other Active participants.
-The user confirmed that admin audit views must also hide other users' Active
-participation and picks, including user-specific participation-derived
-counts, until the bet locks. An admin who is a table member has the same
-own-pick and table-wide aggregate visibility as any other member. This is an
-authorization rule, not yet cryptographic protection from the operator.
-The preferred stronger-privacy direction is an automatically revealed,
-client-sealed pick with an independently controlled release authority, so a
-device going offline after an accepted submission does not cancel the pick.
-This is a design target, not a guarantee or implemented protocol: trust in the
-client code and release authority, deadline verification, invalid ciphertext,
-recovery, same-user multi-device access and service outages still need design
-and independent security review. The draft plaintext pick API and V7 storage
-do not provide operator-blind privacy.
+Admin audit views must also hide Active participation and picks, including
+user-specific participation-derived counts, until the bet locks. Admin
+accounts cannot use player APIs or participate in bets. The existing schema
+stores picks in plaintext; an operator with infrastructure access can inspect
+or modify stored data. Pick authorization and lifecycle services do not yet
+exist.
 The proposer is visible as the bet's author but is not automatically a
 participant. This intentionally changes the prototype, which inserts the
 proposer on No guess when a bet is created.
@@ -396,8 +487,8 @@ confuse this recipient with the host who later settles table points. If a
 table has no host at lock, reject the transition and surface the invariant
 violation instead of falling back to a winner. Table creation, host changes,
 account deletion and locking must serialize as necessary to preserve host
-continuity and a consistent lock-time selection. These behaviors are not yet
-implemented.
+continuity and a consistent lock-time selection. The internal lock transition
+implements the snapshot; the optional worker currently schedules U2Pick only.
 
 The dev relationships read returns only the caller's outgoing blocks, never
 the list of people who blocked them. It filters follow rows across blocks in
@@ -418,7 +509,8 @@ shared current membership, shared unexpired archive membership, a direct
 receipt, or a reference in accessible bet, system-attribution or settlement
 chat. The same 404 covers other deleted users, hidden blocks and missing IDs.
 Deleted identities referenced only by future history APIs will need their own
-authorization design; account deletion and receipt history do not yet exist.
+authorization design; account deletion is not implemented and receipt history
+HTTP access remains gated.
 Social transactions lock both user rows in PostgreSQL UUID order before the
 session and relationship rows; future follow, block, invitation, deletion and
 moderation writers must use compatible ordering. Account-deletion cleanup,
@@ -440,7 +532,7 @@ pre-existing ineligible requests. Acceptance revalidates the policy and
 atomically creates a membership, system chat line and internal outbox records;
 decline only updates the invitation. Retries recheck visibility, and acceptance
 replay requires current membership. The system chat line is not a user chat
-notification. Member removal cancels pending invitations involving the target;
+client delivery. Member removal cancels pending invitations involving the target;
 table deletion cancels all pending invitations. Host demotion cancels its own
 pending invitations. Future account-deletion writers must enforce cancellation
 using compatible locks. Account deletion and event delivery are not implemented.
@@ -459,6 +551,6 @@ access and return original outcomes without repeating actions. Creation retries
 return the original outcomes and current authorized table view; lost table
 access returns 404. V23 stores the submitted IDs and outcomes in retry records;
 retention and account-deletion cleanup remain unresolved, as with other retry
-records. The outbox records events but does not deliver notifications; future
+records. The outbox records events but does not deliver them; future
 consumers must recheck invitation eligibility before exposing or delivering an
 event that may have been cancelled after it was written.

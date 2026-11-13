@@ -1,6 +1,10 @@
 server:
   address: 127.0.0.1
 
+pvpicks:
+  bet-lock-worker:
+    enabled: ${PVPICKS_BET_LOCK_WORKER_ENABLED:false}
+
 spring:
   flyway:
     enabled: true

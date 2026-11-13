@@ -1,6 +1,6 @@
 # ADR 0004: Abstract sports data behind a canonical feed
 
-- Status: accepted (v3 plan)
+- Status: accepted
 - Date: 2026-11-11
 
 ## Context

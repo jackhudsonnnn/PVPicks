@@ -67,7 +67,7 @@ export function useSampleActivity(
   const later = useTimers();
   const get = () => stateRef.current!;
 
-  // Tablemates chat every so often so new-chat notifications have something to show.
+  // Tablemates chat every so often to simulate activity.
   useEffect(() => {
     if (!activity.chatter) return;
     let t: ReturnType<typeof setTimeout>;

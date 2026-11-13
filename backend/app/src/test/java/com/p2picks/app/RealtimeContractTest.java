@@ -51,8 +51,8 @@ class RealtimeContractTest {
     }
 
     @Test
-    void userAndTickerInvalidationsCarryNoPrivateResourceIds() {
-        for (String type : new String[] {"notifications.changed", "ticker.changed"}) {
+    void tickerInvalidationsCarryNoPrivateResourceIds() {
+        for (String type : new String[] {"ticker.changed"}) {
             ObjectNode event = event(type);
             assertThat(schema.validate(event)).as(type).isEmpty();
             event.put("tableId", "1f006a5f-fd02-41ff-aee8-52b87d11d53e");

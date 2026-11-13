@@ -1,12 +1,12 @@
 # ADR 0002: Publish committed events through an outbox
 
-- Status: accepted (v3 plan)
+- Status: accepted
 - Date: 2026-11-11
 
 ## Context
 
 Bet settlement and its ledger entries must not diverge from events consumed by
-Quick Picks, notifications and other modules.
+Quick Picks and other modules.
 
 ## Decision
 

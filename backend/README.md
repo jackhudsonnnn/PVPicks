@@ -4,23 +4,64 @@ This is an early development-only Spring Boot skeleton, not a functional P2Picks
 backend. The Phase 0 API and realtime contracts are still drafts. The database
 schema contains users, authentication sessions, follow/block relationships,
 tables, memberships, invitations, Quick Pick subscriptions, bets, participation,
-picks, ledger entries, debt caps, settlement history, chat, notification,
+picks, ledger entries, debt caps, settlement history, chat,
 feedback and admin flag/strike storage, an outbox and processed-event markers.
+Migration V25 removes the obsolete notification tables and their data. Flyway
+applies pending migrations automatically at startup; do not start an updated
+backend against a shared database without explicit approval.
 Dev-only provisioning, login, logout, CSRF, `/me`, personal profile updates, table, settings, debt and
-relationship and invitation reads, invitation and notification preference
-updates, debt-cap updates, inbox mark-read and clear, feedback submission, follow/block mutations,
+relationship and invitation reads, invitation preference
+updates, debt-cap updates, feedback submission, follow/block mutations,
 invitation responses, table creation, member requests and removal, table deletion
 and 90-day read-only chat archives, table profile,
 host/permission/remainder and betting-setting changes, Quick Pick feature/sharing
-controls and code rotation, reaction mutations, chat windows,
+controls and code rotation, privacy-filtered bet reads, reaction mutations, chat windows,
 text/GIF sending and unread-state reads and updates, and an admin health snapshot exist.
-Many other mutations, bet-resolution services and LAN/production
+Many other mutations, public bet-resolution APIs and LAN/production
 deployment do not. Do not expose this service
 to a network or use it for real users; dev login does not yet have rate limiting.
 The dev security filter restricts `/admin` and `/admin/**` to active admins
-with valid sessions, checking the current database role on each request. No
-other admin API is implemented. The current picks schema stores plaintext and
-does not protect choices from the backend operator before lock.
+and player APIs to active players, checking the current database role on each
+request. Both roles can use login, logout and `GET /me`. Existing memberships
+are retained; no application API changes an account's role, and future APIs
+must not introduce role changes. Migration V24 rejects ordinary database role
+updates without changing existing accounts. Privileged database operators can
+bypass the guard and can inspect or modify plaintext picks. No other admin
+API is implemented.
+
+Internal U2Pick proposal and resolution and shared pick, bet-lock and host
+points-settlement transactions enforce authorization; proposal, pick and
+lock also enforce debt caps. They snapshot the remainder, post resolution
+deltas and create settlement receipts. Shared internal receipt history, line
+actions and atomic person-group actions also exist. These services are not
+exposed as APIs; event delivery remains unimplemented, so this is not an
+available betting workflow. Proposal, pick/clear, U2Pick resolution and shared
+host points-settlement and individual/group receipt HTTP adapters are behind
+a readiness marker with no application bean; integration tests explicitly
+register the adapters. Do not register the marker until the complete betting
+and receipt workflow is safe.
+
+The frontend's current read-only preview uses the backend session and table
+reads. In local Vite development, `/api` is proxied to `127.0.0.1:8080` and
+the backend must be configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`.
+This does not change the default backend origin or make the dev backend safe
+for network exposure. Do not restart it against a shared database without
+approval; startup applies pending migrations.
+
+The gated receipt workflow records a separate balance-change review per person.
+Sending or requesting forgiveness requires acknowledging the current revision;
+unreviewed warnings remain readable after receipts close. A later net change
+refreshes pending reviews without undoing the other person's acknowledgment.
+The gated pending-review list discovers those warnings independently of
+receipt-group net totals; it is not a notification or event-delivery service.
+
+An automatic U2Pick lock worker exists but is **disabled by default**. Setting
+`PVPICKS_BET_LOCK_WORKER_ENABLED=true` for a dev backend enables an immediate
+overdue scan and subsequent scans five seconds after each completed scan.
+Enabling it mutates existing overdue bets in the connected database; do not
+enable it against shared data without approval. It logs failures and retries
+on later scans. Sports modes are deliberately not auto-locked until their
+feed-specific lifecycle exists. No operator dashboard or alerting exists.
 
 `GET /users?query=...` searches visible usernames by literal substring, in
 50-item keyset pages. It hides the caller, deleted users and blocks in either
@@ -30,7 +71,7 @@ the caller's blocked users, current table peers and direct receipt parties.
 Deleted placeholders require an authorized shared membership, unexpired
 archive, direct receipt or historical chat reference. A blocked or unrelated
 deleted identity is indistinguishable from a missing user where not authorized.
-Account deletion and receipt-history APIs remain unimplemented.
+Account deletion remains unimplemented; receipt-history HTTP access is gated.
 
 `PATCH /me/profile` accepts username and/or hue with a valid idempotency key.
 Usernames are trimmed and lowercased before validation and checked uniquely in
@@ -64,8 +105,10 @@ arithmetic rejects overflow. Signed values support ledger deltas. Wager limits
 and other domain rules are not implemented by this value type.
 
 The eleven `modules/` Gradle projects are mostly empty domain skeletons. The
-bets and settlement modules contain pure payout, table-settlement and debt
-calculators, not transactional services. Their
+bets and settlement modules expose pure payout, U2Pick settler-rule,
+table-settlement and debt calculators, not transactional services. Payout and
+table settlement are shared by U2Pick and sports modes; proposal validation and
+outcome authorization remain mode-specific. Their
 `com.p2picks.modules.<module>.api` packages are named Spring Modulith
 interfaces; `internal` packages are private. Declare an explicit Gradle
 dependency when one module needs another module's API. Subpackages of `api`
@@ -96,8 +139,8 @@ Gradle builds the site into the backend resources; Node.js 22.12 or newer is
 required. The Compose image uses a separate Node build stage and a root build
 context restricted by `.dockerignore` to the required source files; it excludes
 environment files, credentials, dependencies and generated output.
-The [source map](../docs/README.md) explains the new authoritative guides and
-the preserved historical archive. Interactive API documentation is planned;
+The [source map](../docs/README.md) describes the current guides and references.
+Interactive API documentation is planned;
 the bundled OpenAPI file remains a draft.
 
 On this machine the approved project-local JDK can be selected with:
@@ -122,7 +165,7 @@ The same test task validates selected draft OpenAPI and realtime schema
 examples; those checks do not imply that the APIs or realtime gateway exist.
 
 The bootstrap Compose file starts PostgreSQL, Redis, Kafka and the skeleton.
-Kafka UI is opt-in. Frontend integration and some migrations are not implemented.
+Kafka UI is opt-in. Most frontend integrations and some migrations are not implemented.
 The table schema does not enforce host continuity or invitation authorization:
 host demotion checks continuity, but future transactional writers must also
 enforce the relevant invariants.
@@ -140,7 +183,8 @@ invitations, and blocks Active/Pending bets or resolved non-4fun bets awaiting
 points settlement. `GET /tables/archives` and the existing chat window allow
 snapshot members read-only access for 90 days (2160 hours), with block filtering.
 Thereafter the archive is hidden but data remains; cleanup and account-deletion
-policies remain unfinished. Receipt action and realtime delivery are not implemented.
+policies remain unfinished. Receipt action HTTP access is gated; realtime delivery
+is not implemented.
 `GET /tables` and `GET /tables/{id}` return only current, non-archived table
 memberships. Hosts see the Quick Pick code and all disabled permissions;
 other members see only their own disabled permissions and no code. Missing,
@@ -156,13 +200,15 @@ connected to this API. Realtime access revocation remains unimplemented.
 enable or disable a current non-host member's bets, text, react or GIF
 permission. Frozen members remain eligible targets. Host targets return 409;
 non-host callers receive 403 and missing or inaccessible tables and targets
-return 404. Chat and reaction mutations enforce their permissions; bet
-authorization and enforcement of the bets permission remain unimplemented.
+return 404. Chat and reaction mutations enforce their permissions; internal
+bet proposal, pick and lock transactions also check bets permission, but no
+bet mutation APIs exist.
 `PATCH /tables/{id}/remainder` lets a current host change the remainder rule
 only when no bet is Active; an unchanged rule is a no-op even if a bet is
 Active. Existing Pending bets keep their lock-time snapshots. A change writes
 a system chat message and internal outbox events; no realtime delivery exists.
-Bet proposal and lock services are not implemented.
+The internal bet proposal and lock transactions use the same table lock; no
+proposal API is implemented. The optional worker is described above.
 `PUT`/`DELETE /tables/{id}/hosts/{userId}` let current hosts promote or
 demote current members. Promotion clears their restrictions; demotion cancels
 their pending invitations from that table and requires another active host.
@@ -173,23 +219,16 @@ Older unattributed system messages are unchanged. Later account freezes may
 still leave no active host; recovery and account deletion are unimplemented.
 The bet schema does not implement transitions, pick authorization, privacy or
 debt-cap enforcement. The payout calculator is not connected to bet resolution.
-Ledger storage enforces append-only, zero-sum entries per bet, but no service
-writes settlements or compensations yet.
-Receipt transitions and debt-cap enforcement are not implemented.
-The table-settlement calculator is not connected to an API or database writes.
+Ledger storage enforces append-only, zero-sum entries per bet. Internal
+settlement and receipt transactions exist; their HTTP adapters remain gated.
 `GET /me/debt` computes the caller's debt from one database snapshot, including
 open receipts from archived tables. `PUT /me/debt-cap` requires zero current
 debt and stores a whole-point limit or NULL under the user lock. Future debt
 writers must acquire compatible user locks before reading or writing debt;
-this is not enforced by the schema. Cap enforcement on wagers is not implemented.
-`GET /me/debt-cap` and `GET /me/notification-preferences` read the current
-user's saved settings and documented defaults. `PUT /me/notification-preferences`
-replaces the caller's preferences; new mutes require current membership in a
-non-archived table, while existing stale mutes can be retained or removed.
-The update does not deliver notifications or send realtime invalidations.
-Debt-cap enforcement on bets and mute cleanup are not implemented.
-The notification-preference PUT, invitation-preference PUT, debt-cap PUT,
-`POST /notifications/read-all`, `DELETE /notifications`, `POST /feedback`, `POST /invites/{id}/respond`
+this is not enforced by the schema. Internal proposal, pick and lock enforce caps.
+`GET /me/debt-cap` reads the current user's saved setting and default.
+The invitation-preference PUT, debt-cap PUT,
+`POST /feedback`, `POST /invites/{id}/respond`
 and follow/block POST/DELETE, reaction PUT/DELETE, chat message POST, chat last-read PUT
 member-permission PUT, remainder PATCH and host PUT/DELETE
 have HTTP retry protection; other mutations do not. Each requires an
@@ -223,28 +262,19 @@ message after checking current access and permission. If the original message
 was deleted or its content changed, the retry returns 404 rather than exposing
 the old content or recreating it. V21 stores a
 message-ID reference, not a second copy of the message text, in the retry row.
-Sending writes an internal outbox event but does not deliver chat or
-notifications. Rate limiting and HTTP request-size enforcement are not
+Sending writes an internal outbox event but does not deliver chat.
+Rate limiting and HTTP request-size enforcement are not
 implemented.
 `GET /tables/{id}/last-read` returns the filtered unread count and first unread
 message for current members. `PUT /tables/{id}/last-read` advances monotonically
-to a visible message and marks the caller's chat notifications through the
-current position read. New notifications for already-read messages start read;
-insertion and advancement serialize on the recipient user at PostgreSQL's
-READ COMMITTED isolation level. V20 does not retroactively alter old inbox rows.
-Last-read endpoints do not support archives. Inbox mark-read affects only existing notifications
-for the caller and does not advance chat read positions. Retrying the same key
-does not mark newer arrivals read. Inbox clear deletes current entries without
-changing chat read positions; matching retries leave newer arrivals intact.
-Inbox reads, delivery, caps, filtering and durable deduplication are not
-implemented. Future notification consumers must use
-durable processed-event markers so replay cannot restore cleared entries.
+to a visible message. Last-read endpoints do not support archives.
 Invitation responses revalidate the sender's host status, the recipient's
 follow and current preference, and blocks. Losing eligibility cancels a
 pending invitation permanently; preference and follow changes enforce this
 immediately, and V19 cancels existing ineligible rows. Acceptance adds a member
-and a system chat message. Invitation creation is not implemented and must preserve these invariants
-and compatible locking; host demotion cancels its pending invitations.
+and a system chat message. Table member requests can create invitations and
+must preserve these invariants and compatible locking; host demotion cancels
+its pending invitations.
 The acceptance outbox records are internal drafts, not realtime messages;
 there is no relay or consumer.
 `POST /feedback` stores validated guide feedback; moderation access, rate
@@ -300,7 +330,7 @@ restore changed or deleted samples. Missing accounts or conflicting Quick
 Pick codes fail without partial seed data. The marker is stored in the dev
 database, so a new empty volume can be seeded again. Never run this command
 against LAN, production or a database containing real-user data.
-The existing frontend remains browser-local and cannot read these samples yet.
+The frontend's read-only preview can list these tables for a provisioned member.
 
 The browser must use the configured same origin (by default
 `http://127.0.0.1:8080`). First GET `/auth/csrf`, retaining its HttpOnly CSRF
@@ -311,7 +341,8 @@ token after login and logout. GET `/me` uses the session cookie; POST
 `/auth/logout` revokes that session. Dev sessions expire after eight hours
 without refresh. These cookies do not have `Secure` because dev uses local HTTP;
 TLS, secure cookies, rate limiting and refresh tokens are required before LAN.
-The existing frontend is still a separate browser-local prototype.
+The frontend uses these session endpoints via its local Vite proxy; its
+remaining prototype workflows are not exposed by the current entry point.
 
 To include Kafka UI, add `--profile tools` before `up`:
 
@@ -352,7 +383,7 @@ access. `GET /me/invite-preferences` returns saved preferences or the default
 friends `open` and following `request`. `PUT /me/invite-preferences` updates
 those settings and cancels ineligible pending invitations. Table creation and
 host member requests add or invite eligible recipients according to these
-preferences; their internal outbox events do not deliver notifications.
+preferences; their internal outbox events are not delivered.
 
 To run `:app:bootRun` outside Compose, supply `PVPICKS_DEV_JWT_SECRET` from
 the ignored `.env.auth` and `PVPICKS_DEV_IDEMPOTENCY_SECRET` from the ignored

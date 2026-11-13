@@ -32,6 +32,7 @@ export interface AppState {
   idBase: string;
   seq: number;
   settleChanges?: Record<string, SettleChange>;
+  settleReviews?: Record<string, SettleChange>;
   debtCaps?: Record<string, number | null>;
 }
 
@@ -84,6 +85,7 @@ export type Action =
     }
   | { type: "addMembers"; tableId: string; userIds: string[]; at: string }
   | { type: "settlePoints"; tableId: string; at: string }
+  | { type: "reviewSettleChange"; actorId: string; otherUserId: string; change: SettleChange }
   | {
       type: "settlePerson";
       otherUserId: string;

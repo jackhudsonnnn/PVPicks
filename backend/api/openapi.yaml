@@ -4,8 +4,8 @@ info:
   version: 0.1.0-draft
   description: >-
     Phase 0 draft. Dev implements authentication, admin health, table and
-    settings and debt reads, relationship and invitation reads, invitation and
-    notification preference replacement, debt-cap updates, inbox mark-read and clear, feedback submission,
+    settings and debt reads, relationship and invitation reads,
+    invite preference replacement, debt-cap updates, feedback submission,
     follow/block mutations, table creation, member requests, profile and betting settings,
     invitation responses, reaction mutations and chat
     unread-state reads and updates, chat window reads and text/GIF sending. Other
@@ -17,10 +17,10 @@ info:
     obtained from GET /auth/csrf, and an allowed Origin. Invalid or missing
     CSRF protection returns 403 before performing the operation. The CSRF
     requirement is not yet enumerated on every draft operation below.
-    Admin audit views must not expose another user's ACTIVE participation,
-    pick or user-specific participation-derived counts. An admin using a
-    member endpoint has only the same own-pick and aggregate-count visibility
-    as any other table member. Picks are revealed when the bet locks.
+    Admin audit views must not expose ACTIVE participation, picks or
+    user-specific participation-derived counts. Admin accounts cannot access
+    player APIs; login, logout and GET /me remain available. Picks are revealed
+    when the bet locks.
 servers:
   - url: /
 security:
@@ -149,7 +149,7 @@ paths:
         releases the old username and changes future login, but does not revoke
         existing sessions or rewrite historical free-text chat. A matching retry
         rechecks authentication and returns the current profile without
-        reapplying. Changes write an internal event, not a delivered notification.
+        reapplying. Changes write an internal event, not a delivered update.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -273,6 +273,8 @@ paths:
       operationId: proposeBet
       summary: Propose a bet at a table
       description: >-
+        Draft API; the U2Pick HTTP adapter is gated and not available in the
+        dev backend. Sports proposal validation is not implemented.
         The server checks table permissions, wager rules and debt cap, captures
         any game baseline, and assigns the bet identity and lock time. The
         proposer is the visible author but does not join the bet automatically.
@@ -329,6 +331,7 @@ paths:
     put:
       operationId: putMyPick
       summary: Add or change the current user's pick
+      description: Draft API; the shared pick adapter is gated and unavailable in the dev backend.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -359,6 +362,7 @@ paths:
     delete:
       operationId: clearMyPick
       summary: Clear the current user's guess
+      description: Draft API; the shared pick adapter is gated and unavailable in the dev backend.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -379,6 +383,8 @@ paths:
       operationId: settleCustomBet
       summary: Call the result of a U2Pick bet
       description: >-
+        Draft API; the U2Pick result adapter is gated and unavailable in the
+        dev backend.
         Only a settler authorized by the proposal may call a pending original
         U2Pick. Game bets are settled exclusively by the sports feed.
       parameters:
@@ -394,7 +400,7 @@ paths:
               properties:
                 winningChoice:
                   type: [string, 'null']
-                  description: Null indicates an outcome outside the choices.
+                  description: Null indicates an outcome outside the choices; a string must match a choice exactly.
       responses:
         '204':
           description: Result accepted.
@@ -1112,7 +1118,7 @@ paths:
         include later reactions. A removed or changed message, missing table
         or lost membership returns 404; a disabled permission returns 403. Reusing the
         key for a different request returns 409. This stores an internal outbox
-        event but does not deliver chat or notifications. Rate limiting is not
+        event but does not deliver chat. Rate limiting is not
         implemented in dev.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1232,6 +1238,9 @@ paths:
       operationId: settleTablePoints
       summary: Settle a table's resolved balances through the host
       description: >-
+        Draft API; the shared points-settlement HTTP adapter is gated and
+        unavailable in the dev backend. A matching retry requires current host
+        authorization and returns the settlement with current receipt statuses.
         Creates a separate settlement with immutable payer, payee and amount
         identities. The server atomically settles eligible results, creates
         receipt lines, and posts a static chat summary. When eligible resolved
@@ -1246,6 +1255,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Settlement'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1272,11 +1283,16 @@ paths:
       operationId: transitionSettlementLine
       summary: Apply an authorized transition to a settlement receipt
       description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
         The payer marks sent or asks for forgiveness. The payee confirms,
         disputes, forgives or declines forgiveness. Sent remains outstanding
         until confirmed; only paid and forgiven close a line. A dispute returns
-        the line to unpaid. A declined forgiveness request may be retried
-        after 24 hours. An outdated revision is rejected.
+        the payment to unpaid while preserving any open forgiveness request.
+        A declined forgiveness request may be retried after 24 hours. An
+        outdated revision is rejected. A matching retry returns the current
+        receipt without reapplying the action. A payer with an unreviewed
+        balance-change warning cannot mark sent or request forgiveness;
+        those actions return 409 with code settlement_review_required.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1315,9 +1331,14 @@ paths:
       operationId: settleWithPerson
       summary: Atomically apply a step to all open lines with one person
       description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
         The revision represents the current group, not an individual receipt.
         Reject a stale revision with 409. Authorization is determined by the
         current net payer and payee; offsets are included in the atomic update.
+        Either party may confirm a zero-net group. A matching retry does not
+        repeat the update. A payer with an unreviewed balance-change warning
+        cannot mark sent or request forgiveness; those actions return 409
+        with code settlement_review_required.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1352,6 +1373,13 @@ paths:
     get:
       operationId: listSettlementGroups
       summary: Get the current user's settle-up groups
+      description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        If any open group net exceeds the signed 64-bit range, the entire
+        response fails with 409 and code group_net_out_of_range. Individual
+        receipt history and settlement-review reads remain available.
+        With includeHistory=true, a closed group can still contain an
+        unreviewed warning.
       parameters:
         - name: includeHistory
           in: query
@@ -1360,15 +1388,125 @@ paths:
             default: false
       responses:
         '200':
-          description: Groups with their current open net and revision.
+          description: Groups with their current open net, revision and the caller's pending review.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/SettlementGroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /people/settlement-counterparties:
+    get:
+      operationId: listSettlementCounterparties
+      summary: List the caller's direct receipt counterparties
+      description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Returns only IDs of people with direct receipt history, including closed
+        and archived-table receipts. It does not calculate group nets and remains
+        available when a group total is out of range.
+      responses:
+        '200':
+          description: The caller's distinct receipt counterparty IDs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UuidList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /people/settlement-reviews:
+    get:
+      operationId: listPendingSettlementReviews
+      summary: List the caller's pending balance-change warnings
+      description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Returns only the caller's unreviewed warnings for direct receipt parties,
+        including after all receipts close. This read does not calculate group
+        nets and remains available when a group total is out of range.
+      responses:
+        '200':
+          description: The caller's pending warnings, most recently updated first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingSettlementReview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/{userId}/settlement-review:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getSettlementReview
+      summary: Read the caller's balance-change warning for one person
+      description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Accessible only to a direct receipt party, including after all receipts
+        close. A null revision means there is no unreviewed warning. This read
+        is independent of group net size.
+      responses:
+        '200':
+          description: The caller's current pending review, if any.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementReview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{userId}/settlement-review/acknowledge:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: acknowledgeSettlementReview
+      summary: Acknowledge the caller's current balance-change warning
+      description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Acknowledges only the caller's warning at the supplied revision.
+        A changed warning returns 409 with code stale_review; a matching retry
+        never acknowledges a newer warning.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                revision:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: Warning acknowledged or the original acknowledgment replayed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /tables/{tableId}/quick-picks:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -1738,8 +1876,10 @@ paths:
       operationId: getUserSettlementHistory
       summary: Read authorized settlement receipts for a user
       description: >-
+        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
         Return only receipts the caller is authorized to see, including
-        completed history. Optionally filter by table.
+        completed and archived-table history. Optionally filter by table.
+        An unrelated or unknown user yields an empty list.
       parameters:
         - $ref: '#/components/parameters/OptionalTableId'
       responses:
@@ -1751,6 +1891,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SettlementLine'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1789,12 +1931,8 @@ paths:
       description: >-
         The requested message must be visible to the caller in this table.
         The position only moves forward, never backwards. It remains meaningful
-        if a previously read message is later deleted. Advancing also marks
-        that user's chat notifications through the current position as read,
-        including hidden ones. A fresh request for an older position also
-        synchronizes through the current position. Matching retries recheck
+        if a previously read message is later deleted. Matching retries recheck
         current access and target visibility, then return 204 without reapplying.
-        New chat notifications for already-read messages start read.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1820,129 +1958,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-  /notifications:
-    get:
-      operationId: listMyNotifications
-      summary: Read the current user's notification inbox
-      description: >-
-        Newest first with stable opaque cursor pagination, 15 items per page
-        and at most the newest 200 items retained per user. Recheck visibility
-        and block filtering when reading; do not reveal content that the caller
-        can no longer access. Hide table notifications without current normal
-        table access, except separately authorized settlement notifications.
-        Hide the caller's blocked users' chat notifications and invitations
-        blocked in either direction; a block alone does not hide bet or
-        settlement notifications. Hidden items may reappear if access returns.
-        This read remains unimplemented pending source attribution and
-        authorization for invitation and settlement notifications.
-      parameters:
-        - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Inbox page.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [items, nextCursor, unreadCount]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Notification'
-                  nextCursor:
-                    type: [string, 'null']
-                  unreadCount:
-                    type: integer
-                    minimum: 0
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-    delete:
-      operationId: clearMyNotifications
-      summary: Clear the current user's notification inbox
-      description: >-
-        Deletes the caller's current inbox entries, without changing chat read
-        positions. A matching retry leaves newer entries intact. This dev
-        operation accepts no request body and sends no realtime event.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '204':
-          description: Inbox cleared.
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-  /notifications/read-all:
-    post:
-      operationId: markNotificationsRead
-      summary: Mark the current inbox as read
-      description: >-
-        Marks the caller's current inbox entries read; it does not advance chat
-        read positions. A matching retry does not mark newer entries read.
-        The dev operation accepts no request body and sends no realtime event.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '204':
-          description: Notifications marked read.
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-  /me/notification-preferences:
-    get:
-      operationId: getMyNotificationPreferences
-      summary: Get the current user's inbox preferences
-      description: >-
-        An absent preference row uses the default enabled settings and
-        ticketScope mine. Muted table IDs are read from the user's saved mutes;
-        membership and deletion cleanup are not yet implemented.
-      responses:
-        '200':
-          description: Notification preferences.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationPreferences'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-    put:
-      operationId: setMyNotificationPreferences
-      summary: Replace the current user's inbox preferences
-      description: >-
-        Existing muted table IDs may be retained or removed even after membership
-        ends or a table is archived. New muted table IDs require current
-        membership in a non-archived table. Matching idempotent retries do not
-        repeat the update; keys cannot be reused for a different request.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NotificationPreferences'
-      responses:
-        '204':
-          description: Preferences updated.
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          description: A newly muted table is unavailable.
         '409':
           $ref: '#/components/responses/Conflict'
   /ticker:
@@ -2211,8 +2226,7 @@ components:
         the same key returns 409. Concurrent matching requests must not apply
         the effect twice. Authentication, current authorization and visibility
         are rechecked before a recorded outcome is returned; after the window,
-        reconcile state rather than retrying blindly. Only the dev notification
-        preferences PUT, invite preferences PUT, debt-cap PUT, inbox read-all POST and clear DELETE,
+        reconcile state rather than retrying blindly. The dev invite preferences PUT, debt-cap PUT,
         feedback POST, invitation response POST and follow/block POST/DELETE
         implement this protection,
         with bodyless 201 or 204 outcomes and no pruning. Other operations
@@ -2396,52 +2410,6 @@ components:
                 type: string
               position:
                 type: string
-    Notification:
-      type: object
-      additionalProperties: false
-      required: [id, tone, title, createdAt, read]
-      properties:
-        id:
-          type: string
-          format: uuid
-        tone:
-          type: string
-          enum: [error, chat, new, locked, won, lost, resolved, washed, invite, settle]
-        title:
-          type: string
-        description:
-          type: string
-        tableId:
-          type: string
-          format: uuid
-        betId:
-          type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        read:
-          type: boolean
-    NotificationPreferences:
-      type: object
-      additionalProperties: false
-      required: [enabled, errors, ticketStatus, ticketScope, chats, invites, mutedTableIds]
-      properties:
-        enabled:
-          type: boolean
-        errors:
-          type: boolean
-        ticketStatus:
-          type: boolean
-        ticketScope:
-          type: string
-          enum: [mine, all]
-        chats:
-          type: boolean
-        invites:
-          type: boolean
-        mutedTableIds:
-          $ref: '#/components/schemas/UuidList'
     UuidList:
       type: array
       uniqueItems: true
@@ -2541,9 +2509,18 @@ components:
         status:
           type: string
           enum: [unpaid, sent, paid, disputed, forgive_asked, forgiven]
+          description: A sent payment may also have an open forgiveness request.
         revision:
           type: integer
           minimum: 0
+        forgiveRequestedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Open request time for an outstanding line, including a sent line.
+        forgiveDeclinedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Most recent decline, used for the 24-hour cooldown.
         createdAt:
           type: string
           format: date-time
@@ -2553,7 +2530,7 @@ components:
     SettlementGroup:
       type: object
       additionalProperties: false
-      required: [otherUserId, netCents, revision, lines]
+      required: [otherUserId, netCents, revision, lines, pendingReviewRevision]
       properties:
         otherUserId:
           type: string
@@ -2565,10 +2542,35 @@ components:
         revision:
           type: string
           description: Opaque group revision for optimistic concurrency.
+        pendingReviewRevision:
+          type: [string, 'null']
+          format: uuid
+          description: The caller's unreviewed balance-change warning, independent of the group revision.
         lines:
           type: array
           items:
             $ref: '#/components/schemas/SettlementLine'
+    PendingSettlementReview:
+      type: object
+      additionalProperties: false
+      required: [otherUserId, pendingReviewRevision]
+      properties:
+        otherUserId:
+          type: string
+          format: uuid
+        pendingReviewRevision:
+          type: string
+          format: uuid
+          description: The caller's current unreviewed warning for this person.
+    SettlementReview:
+      type: object
+      additionalProperties: false
+      required: [pendingReviewRevision]
+      properties:
+        pendingReviewRevision:
+          type: [string, 'null']
+          format: uuid
+          description: The caller's current unreviewed warning, or null.
     ChatUnreadState:
       type: object
       additionalProperties: false
@@ -2836,6 +2838,10 @@ components:
           description: U2Pick settler rule.
         config:
           $ref: '#/components/schemas/BetConfig'
+          description: >-
+            For U2Pick, the server normalizes config.question and
+            config.options to match the validated question and choices.
+            Other valid config fields are retained.
         question:
           type: string
           minLength: 1
@@ -2852,7 +2858,9 @@ components:
           description: Non-4fun wagers must be between 10 and 1000 cents.
         durationSec:
           type: integer
-          minimum: 1
+          minimum: 30
+          maximum: 600
+          description: Pick window in whole seconds; the server assigns the deadline.
         forFun:
           type: boolean
         includesOvertime:

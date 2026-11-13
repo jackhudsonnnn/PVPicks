@@ -8,8 +8,8 @@ Get oriented without changing shared data or exposing local credentials.
 - Node.js 22.12 or newer and npm for the documentation build.
 - Docker and Docker Compose for infrastructure integration tests.
 
-The codebase contains a Spring Boot backend in `backend/`, a separate TanStack
-prototype in `client/`, and documentation in `docs/`. Java classes in the
+The codebase contains a Spring Boot backend in `backend/`, a TanStack
+frontend in `client/`, and documentation in `docs/`. Java classes in the
 backend app's organizational folders still share the `com.p2picks.app` package.
 
 ## Build the documentation
@@ -42,17 +42,32 @@ provisioning, configuration, and the existing dev stack. They include
 operations that affect local services: inspect and obtain approval before
 running them against a shared environment.
 
-::: danger Preserve data
-Never run `docker compose down -v`, reset a database, or regenerate existing
-credentials as a routine setup step. Confirm the target and obtain explicit
-approval before any destructive operation.
+::: danger Shared environment
+Development data is disposable, but the environment may be shared. Confirm the
+target and obtain explicit approval before resetting or migrating a shared
+database, rebuilding shared infrastructure, or regenerating credentials.
+Pending Flyway migrations run automatically when the backend starts.
 :::
 
-## Frontend prototype
+## Frontend backend preview
 
-From `client/`, follow its README and package scripts. Its browser-local data
-and demo accounts are not connected to the backend. Do not copy demo credentials
-or local environment files into documentation, issue reports, or source code.
+The current frontend provides backend sign-in and read-only table and bet
+list/detail views. Other prototype features are not exposed; betting and
+receipt mutation APIs remain gated. Accounts must already be provisioned in
+the dev backend.
+
+For an approved isolated dev backend listening on `127.0.0.1:8080`, configure
+its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From
+`client/`, run `npm run dev` and open `http://127.0.0.1:5173`. Vite proxies
+same-origin `/api` requests to the backend and preserves the browser's Origin;
+the browser obtains a CSRF token before login and logout. Use the exact host and
+port shown, and do not expose this development proxy to a network. This proxy
+is for Vite development only, not a production deployment configuration.
+For an isolated backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its
+HTTP loopback origin when starting Vite.
+
+Never start or reconfigure a backend against shared infrastructure without
+approval: startup automatically applies pending migrations.
 
 ## Authentication for API development
 

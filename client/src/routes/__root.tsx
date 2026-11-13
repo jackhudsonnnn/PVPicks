@@ -1,10 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  Outlet,
   Link,
   createRootRouteWithContext,
   useRouter,
-  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -13,15 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AppStoreProvider } from "@/features/store";
-import { SettingsProvider } from "@/features/settings/settings-provider";
-import { AppShell } from "@/components/app-shell";
-import { Toaster } from "@/components/ui/sonner";
-import { NotificationsProvider } from "@/features/notifications/notifications";
-import { AuthProvider, useAuth } from "@/features/auth/auth-provider";
-import { SignInScreen } from "@/features/auth/sign-in-screen";
-import { SignUpScreen } from "@/features/auth/sign-up-screen";
-import { AdminShell } from "@/features/admin/components/admin-shell";
+import { ErrorToasts } from "@/components/error-toasts";
+import { BackendApp } from "@/features/auth/backend-app";
 
 function NotFoundComponent() {
   return (
@@ -139,34 +130,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <SignedInApp />
-      </AuthProvider>
+      <BackendApp />
+      <ErrorToasts />
     </QueryClientProvider>
   );
 }
 
-/** Sign-in gate: the app loads the signed-in account's sample data as that account's person. */
-function SignedInApp() {
-  const { session, ready } = useAuth();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (!ready) return <div className="min-h-dvh bg-background" />;
-  if (!session) return pathname === "/sign-up" ? <SignUpScreen /> : <SignInScreen />;
-  if (session.world === "admin") return <AdminShell />;
-  return (
-    <AppStoreProvider
-      key={session.key}
-      account={session.world}
-      me={session.persona}
-      storageKey={session.key}
-    >
-      <SettingsProvider>
-        <NotificationsProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-        </NotificationsProvider>
-      </SettingsProvider>
-    </AppStoreProvider>
-  );
-}

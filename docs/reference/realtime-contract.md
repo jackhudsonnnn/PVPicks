@@ -1,7 +1,7 @@
 # Realtime contract — Phase 0 draft
 
-This specifies intended behavior, not an implemented gateway. The v3 plan uses
-WebSocket/STOMP. HTTP reads remain authoritative and provide recovery when
+This specifies intended behavior, not an implemented gateway. The planned
+transport is WebSocket/STOMP. HTTP reads remain authoritative and provide recovery when
 realtime delivery is interrupted.
 
 ## Connection and authorization
@@ -31,7 +31,6 @@ realtime delivery is interrupted.
 |---|---|---|
 | `/topic/tables/{id}/chat` | Authorized table members | `chat.changed`, a table-level invalidation without a message identity; fetch the filtered HTTP window. |
 | `/topic/tables/{id}/bets` | Authorized table members | `bet.changed` with bet identity; fetch the caller's authorized bet view. |
-| `/user/queue/notifications` | Authenticated user only | `notifications.changed`; fetch the user's notification page. |
 | `/topic/ticker` | Authenticated users | `ticker.changed`, a generic invalidation without private identities; refetch `GET /ticker`. |
 
 These are invalidation messages, not complete chat or bet projections. That
@@ -44,11 +43,10 @@ or delivery is implemented.
 The internal `table.remainder.changed.v1` and system
 `chat.message.created.v1` events likewise require a future relay. A table-view
 invalidation destination is not yet defined; do not treat either event as an
-implemented client notification.
+implemented client delivery.
 Host changes also write internal table and system-chat events. They are not
 delivery; a future relay must reauthorize recipients and invalidate the
-relevant table and filtered chat views without treating system lines as
-ordinary user-chat notifications.
+relevant table and filtered chat views.
 Table-profile changes also affect pending invitation views. A future relay must
 invalidate those views privately for currently eligible recipients; invitees
 must not gain access to table topics. No such delivery is implemented.
@@ -74,7 +72,7 @@ accept only the corresponding event type in the table above. A chat event has
 no message ID: a shared topic cannot safely contain a recipient-specific
 blocked-message view. A table member may observe that the table changed, but
 message content and identity must come only from the filtered HTTP response.
-Notification and ticker invalidations contain no table or resource ID.
+Ticker invalidations contain no table or resource ID.
 The sports-only ticker invalidates on changes to its game snapshot; bet
 lifecycle changes do not add bet activity to this shared topic.
 

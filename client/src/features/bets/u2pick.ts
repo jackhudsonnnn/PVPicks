@@ -38,15 +38,15 @@ export function cleanOptions(options: string[]) {
 /** Why a custom bet can't be sent yet, or null when it's ready. */
 export function customBetProblem(question: string, options: string[]): string | null {
   if (!question.trim()) return "Write what you're betting on.";
-  if (question.trim().length > MAX_QUESTION)
-    return `Keep the question under ${MAX_QUESTION} characters.`;
+  if ([...question.trim()].length > MAX_QUESTION)
+    return `Keep the question to ${MAX_QUESTION} characters or fewer.`;
   const raw = options.map((o) => o.trim()).filter(Boolean);
   const clean = cleanOptions(options);
   if (clean.length < 2) return "Add at least two options.";
   if (clean.length !== raw.length) return "Each option needs to be different.";
   if (clean.length > MAX_OPTIONS) return `Use ${MAX_OPTIONS} options or fewer.`;
-  if (clean.some((o) => o.length > MAX_OPTION))
-    return `Keep options under ${MAX_OPTION} characters.`;
+  if (clean.some((o) => [...o].length > MAX_OPTION))
+    return `Keep options to ${MAX_OPTION} characters or fewer.`;
   if (clean.some((o) => o.toLowerCase() === PASS || o.toLowerCase() === "no guess"))
     return `"No guess" means sitting out, so it can't be an option.`;
   return null;

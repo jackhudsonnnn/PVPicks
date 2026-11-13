@@ -10,6 +10,8 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 class DebtQuery {
@@ -21,13 +23,36 @@ class DebtQuery {
 
     Optional<BigInteger> read(Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        List<DebtInput> inputs = jdbc.query("""
-                WITH viewer AS (
+        return read(userId, """
                     SELECT u.id FROM auth_sessions session
                     JOIN users u ON u.id = session.user_id
                     WHERE session.id = ? AND u.id = ? AND session.revoked_at IS NULL
                       AND session.expires_at > now() AND u.status = 'ACTIVE'
-                )
+                """, UUID.fromString(jwt.getId()), userId);
+    }
+
+    // The caller must lock the user row before querying debt for a mutation.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public BigInteger readForLockedUser(UUID userId) {
+        return read(userId, "SELECT id FROM users WHERE id = ?", userId)
+                .orElseThrow(() -> new IllegalStateException("Locked debt user no longer exists"));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean canRiskForLockedUser(UUID userId, long wagerCents, boolean forFun) {
+        if (wagerCents < 0) throw new IllegalArgumentException("Wager must be nonnegative");
+        if (forFun) return true;
+        List<Integer> caps = jdbc.query("""
+                SELECT c.cap_cents FROM users u LEFT JOIN debt_caps c ON c.user_id = u.id WHERE u.id = ?
+                """, (rs, row) -> rs.getObject("cap_cents", Integer.class), userId);
+        if (caps.isEmpty()) throw new IllegalStateException("Locked debt user no longer exists");
+        Integer cap = caps.getFirst();
+        return cap == null || readForLockedUser(userId).add(BigInteger.valueOf(wagerCents))
+                .compareTo(BigInteger.valueOf(cap)) <= 0;
+    }
+
+    private Optional<BigInteger> read(UUID userId, String viewerQuery, Object... parameters) {
+        List<DebtInput> inputs = jdbc.query("WITH viewer AS (" + viewerQuery + ")" + """
                 SELECT input.kind, input.id, input.other_id, input.results, input.pending, input.amount
                 FROM viewer
                 LEFT JOIN LATERAL (
@@ -59,7 +84,7 @@ class DebtQuery {
                         rs.getObject("other_id", UUID.class),
                         rs.getBigDecimal("results") == null ? null : rs.getBigDecimal("results").toBigIntegerExact(),
                         rs.getBigDecimal("pending") == null ? null : rs.getBigDecimal("pending").toBigIntegerExact(),
-                        rs.getObject("amount", Long.class)), UUID.fromString(jwt.getId()), userId);
+                        rs.getObject("amount", Long.class)), parameters);
         if (inputs.isEmpty()) {
             return Optional.empty();
         }

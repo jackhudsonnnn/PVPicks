@@ -82,4 +82,10 @@ describe("custom bet options", () => {
     expect(customBetProblem("Q?", ["1", "2", "3", "4", "5", "6"])).toBeNull();
     expect(customBetProblem("Q?", ["1", "2", "3", "4", "5", "6", "7"])).not.toBeNull();
   });
+
+  it("counts Unicode code points at the question and option limits", () => {
+    expect(customBetProblem("🎉".repeat(120), ["🎉".repeat(40), "No"])).toBeNull();
+    expect(customBetProblem("🎉".repeat(121), ["Yes", "No"])).not.toBeNull();
+    expect(customBetProblem("Q?", ["🎉".repeat(41), "No"])).not.toBeNull();
+  });
 });

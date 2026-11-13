@@ -39,13 +39,12 @@ class ProcessedEventStorageTest {
     }
 
     @Test
-    void deduplicatesPerConsumerEvenAfterInboxEntryIsCleared() {
-        UUID user = user();
+    void deduplicatesPerConsumerEvenAfterEffectIsCleared() {
         UUID event = UUID.randomUUID();
-        assertThat(transaction.<Integer>execute(status -> createNotificationOnce(user, event))).isEqualTo(1);
-        jdbc.update("DELETE FROM notifications WHERE recipient_id = ?", user);
-        assertThat(transaction.<Integer>execute(status -> createNotificationOnce(user, event))).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications WHERE recipient_id = ?", Integer.class, user))
+        assertThat(transaction.<Integer>execute(status -> createEffectOnce(event))).isEqualTo(1);
+        jdbc.update("DELETE FROM outbox WHERE id = ?", event);
+        assertThat(transaction.<Integer>execute(status -> createEffectOnce(event))).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox WHERE id = ?", Integer.class, event))
                 .isZero();
         assertThat(markProcessed("other-consumer", event)).isEqualTo(1);
         assertThat(markProcessed("other-consumer", event)).isZero();
@@ -55,19 +54,18 @@ class ProcessedEventStorageTest {
 
     @Test
     void processingFailureRollsBackMarkerAndAllowsRetry() {
-        UUID user = user();
         UUID event = UUID.randomUUID();
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-            markProcessed("notifications", event);
+            markProcessed("test-consumer", event);
             jdbc.update("""
-                    INSERT INTO notifications (id, recipient_id, source_event_id, notification_key, tone, title)
-                    VALUES (?, ?, ?, 'invite', 'invite', '')
-                    """, UUID.randomUUID(), user, event);
+                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
+                    VALUES (?, '', 'test', 'test.v1', '{}'::jsonb)
+                    """, event);
         })).isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM processed_events WHERE consumer_name = 'notifications' AND event_id = ?
+                SELECT count(*) FROM processed_events WHERE consumer_name = 'test-consumer' AND event_id = ?
                 """, Integer.class, event)).isZero();
-        assertThat(transaction.<Integer>execute(status -> createNotificationOnce(user, event))).isEqualTo(1);
+        assertThat(transaction.<Integer>execute(status -> createEffectOnce(event))).isEqualTo(1);
     }
 
     @Test
@@ -104,13 +102,13 @@ class ProcessedEventStorageTest {
         }
     }
 
-    private static int createNotificationOnce(UUID user, UUID event) {
-        int inserted = markProcessed("notifications", event);
+    private static int createEffectOnce(UUID event) {
+        int inserted = markProcessed("test-consumer", event);
         if (inserted == 1) {
             jdbc.update("""
-                    INSERT INTO notifications (id, recipient_id, source_event_id, notification_key, tone, title)
-                    VALUES (?, ?, ?, 'invite', 'invite', 'Invitation')
-                    """, UUID.randomUUID(), user, event);
+                    INSERT INTO outbox (id, aggregate_type, aggregate_id, event_type, payload)
+                    VALUES (?, 'test', 'test', 'test.v1', '{}'::jsonb)
+                    """, event);
         }
         return inserted;
     }
@@ -120,15 +118,6 @@ class ProcessedEventStorageTest {
                 INSERT INTO processed_events (consumer_name, event_id) VALUES (?, ?)
                 ON CONFLICT (consumer_name, event_id) DO NOTHING
                 """, consumer, event);
-    }
-
-    private static UUID user() {
-        UUID user = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO users (id, username, hue, password_hash, role, status)
-                VALUES (?, ?, 1, 'test', 'PLAYER', 'ACTIVE')
-                """, user, "u" + user.toString().substring(0, 12).replace("-", ""));
-        return user;
     }
 
     private static void await(CountDownLatch latch) {

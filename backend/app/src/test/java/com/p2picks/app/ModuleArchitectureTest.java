@@ -25,7 +25,7 @@ class ModuleArchitectureTest {
     private static final String MODULE_ROOT = "com.p2picks.modules.";
     private static final Set<String> DOMAIN_MODULES = Set.of(
             "identity", "social", "tables", "chat", "bets", "settlement",
-            "quickpicks", "notifications", "admin", "sportsdata", "audit");
+            "quickpicks", "admin", "sportsdata", "audit");
 
     @Test
     void discoversAndVerifiesAllDomainModules() {

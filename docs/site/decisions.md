@@ -4,13 +4,9 @@ These decisions apply to the current developer handbook.
 
 ## Source of truth
 
-The user chose the new guides and roadmap as the current authority, with the
-original v3 document and diary archived as historical references. Current
-domain rules and accepted ADRs supply detailed invariants. A draft contract
-describes intended interfaces and must not be mistaken for implemented behavior.
-
-The transition is incremental: reconcile historical requirements and record
-unresolved contradictions rather than assuming every old rule has been ported.
+The guides, roadmap, domain rules and accepted ADRs describe current design
+decisions and implementation status. Draft contracts describe intended
+interfaces and must not be mistaken for implemented behavior.
 
 ## Availability and presentation
 

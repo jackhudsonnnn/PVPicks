@@ -11,7 +11,6 @@ import { formatPts } from "@/features/bets/ledger";
 import { netSettleUps } from "@/features/table/settlements";
 import { ScrollContainer } from "@/components/scroll-container";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
-import { NotificationBell } from "@/features/notifications/components/notification-bell";
 import { LiveTicker } from "@/features/bets/components/live-ticker";
 
 const NAV = [
@@ -67,6 +66,7 @@ function SignOutButton() {
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useMe();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isTable = pathname.startsWith("/tables/");
   const { state } = useAppStore();
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
   const seatIds = new Set(state.tables.filter((t) => t.memberIds.includes(me)).map((t) => t.id));
@@ -75,13 +75,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   ).length;
 
   return (
-    <div className="min-h-dvh bg-field [--app-top-height:6rem] [--app-bottom-height:4rem] md:[--app-top-height:2.5rem] md:[--app-bottom-height:0rem]">
+    <div className={cn(
+      "min-h-dvh bg-field [--app-bottom-height:4rem] md:[--app-bottom-height:0rem]",
+      isTable ? "[--app-top-height:3.5rem] md:[--app-top-height:0rem]" : "[--app-top-height:6rem] md:[--app-top-height:2.5rem]",
+    )}>
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
         <div className="flex h-16 items-center justify-between pl-5 pr-3">
           <Logo />
           <div className="flex items-center gap-1">
-            <NotificationBell align="start" />
             <SignOutButton />
           </div>
         </div>
@@ -168,15 +170,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="glass-bar flex h-14 items-center justify-between border-b px-4 md:hidden">
         <Logo />
         <div className="flex items-center gap-1">
-          <NotificationBell />
           <PointsPill />
           <SignOutButton />
         </div>
       </header>
-      <LiveTicker />
+      {!isTable && <LiveTicker />}
       </div>
 
-      <main className={cn("md:pl-64", !pathname.startsWith("/tables/") && "pb-20 md:pb-0")}>{children}</main>
+      <main className={cn("md:pl-64", !isTable && "pb-20 md:pb-0")}>{children}</main>
 
       {/* Mobile tab bar */}
       <nav className="glass-bar fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t md:hidden">

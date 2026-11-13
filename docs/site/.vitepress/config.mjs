@@ -1,12 +1,13 @@
 import { withMermaid } from "vitepress-plugin-mermaid";
 
-export default withMermaid({
+const config = withMermaid({
   title: "P2Picks Engineering",
   description: "Developer documentation for the P2Picks project.",
   base: "/docs/",
   appearance: "force-dark",
   cleanUrls: false,
   mermaid: { securityLevel: "strict", theme: "dark" },
+  vite: { optimizeDeps: { include: ["mermaid > fastdom", "mermaid > fastdom/extensions/fastdom-promised.js"] } },
   themeConfig: {
     siteTitle: "P2Picks / Engineering",
     search: { provider: "local" },
@@ -36,7 +37,7 @@ export default withMermaid({
       {
         text: "GO DEEPER",
         items: [
-          { text: "Reference & archive", link: "/reference" },
+          { text: "References", link: "/reference" },
           { text: "Documentation decisions", link: "/decisions" }
         ]
       }
@@ -45,3 +46,7 @@ export default withMermaid({
     footer: { message: "Internal development documentation · Local dev only" }
   }
 });
+
+// The plugin prebundles debug even though the installed Mermaid tree no longer uses it.
+config.vite.optimizeDeps.include = config.vite.optimizeDeps.include.filter((name) => name !== "debug");
+export default config;

@@ -1,6 +1,6 @@
 # ADR 0003: Keep Redis disposable
 
-- Status: accepted (v3 plan)
+- Status: accepted
 - Date: 2026-11-11
 
 ## Context
@@ -20,8 +20,7 @@ Design explicit behavior for Redis outages, including authentication, rate
 limits and realtime delivery; do not assume all features can continue unchanged.
 Test that Redis loss cannot produce duplicate or inconsistent ledger effects.
 
-The user selected a 24-hour HTTP duplicate-prevention window, matching the
-v3 response-cache baseline. The future implementation must keep its
+The HTTP duplicate-prevention window is at least 24 hours. Implementations must keep the
 authoritative idempotency record in PostgreSQL for at least 24 hours after
 commit, atomically with the mutation, even when Redis is unavailable. Redis
 may cache a response but cannot be the sole record. Retention and deletion

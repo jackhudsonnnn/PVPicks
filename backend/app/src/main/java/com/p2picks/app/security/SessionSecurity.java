@@ -123,9 +123,13 @@ class SessionSecurity {
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/me").authenticated()
+                            .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
+                            .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
                             .requestMatchers("/admin", "/admin/**").access((authentication, context) ->
-                                    new AuthorizationDecision(isActiveAdmin(authentication.get(), jdbc)))
-                            .anyRequest().authenticated();
+                                    new AuthorizationDecision(isActiveRole(authentication.get(), jdbc, "ADMIN")))
+                            .anyRequest().access((authentication, context) ->
+                                    new AuthorizationDecision(isActiveRole(authentication.get(), jdbc, "PLAYER")));
                 })
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
@@ -142,7 +146,7 @@ class SessionSecurity {
         return http.build();
     }
 
-    private static boolean isActiveAdmin(Authentication authentication, JdbcTemplate jdbc) {
+    private static boolean isActiveRole(Authentication authentication, JdbcTemplate jdbc, String role) {
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication) || !authentication.isAuthenticated()) {
             return false;
         }
@@ -162,9 +166,9 @@ class SessionSecurity {
                 SELECT EXISTS (
                     SELECT 1 FROM auth_sessions s JOIN users u ON u.id = s.user_id
                     WHERE s.id = ? AND s.user_id = ? AND s.revoked_at IS NULL
-                      AND s.expires_at > now() AND u.status = 'ACTIVE' AND u.role = 'ADMIN'
+                      AND s.expires_at > now() AND u.status = 'ACTIVE' AND u.role = ?
                 )
-                """, Boolean.class, sessionId, userId);
-        return Objects.requireNonNull(allowed, "Admin authorization query returned null");
+                """, Boolean.class, sessionId, userId, role);
+        return Objects.requireNonNull(allowed, "Role authorization query returned null");
     }
 }

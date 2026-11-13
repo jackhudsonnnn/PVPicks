@@ -2,7 +2,7 @@
 // server-side; the client reducer should only apply server-confirmed events/optimistic updates.
 import { settlementLines } from "@/features/bets/payout";
 import { settleGroups } from "@/features/social/settle-groups";
-import { settlePairKey } from "@/features/social/settle-changes";
+import { requiresReceiptReview, requiresSettleReview, settlePairKey, settleReviewKey } from "@/features/social/settle-changes";
 import { isHost } from "@/features/table/hosts";
 import {
   canAskForgive,
@@ -42,15 +42,24 @@ function onSettlement(
   return changed ? { ...state, messages } : state;
 }
 
-export type PaymentAction = ActionOf<"settlePoints" | "payment" | "forgiveAsk" | "settlePerson">;
+export type PaymentAction = ActionOf<"settlePoints" | "payment" | "forgiveAsk" | "settlePerson" | "reviewSettleChange">;
 
 /** Host "Settle points" and the sent / paid / forgive steps on each settle-up line. */
 export function paymentsReducer(state: AppState, action: PaymentAction): AppState {
   switch (action.type) {
+    case "reviewSettleChange": {
+      if (action.actorId !== state.meId || action.actorId === action.otherUserId
+          || state.settleChanges?.[settlePairKey(action.actorId, action.otherUserId)] !== action.change) return state;
+      return { ...state, settleReviews: {
+        ...state.settleReviews, [settleReviewKey(action.actorId, action.otherUserId)]: action.change,
+      } };
+    }
     case "settlePerson": {
       const group = settleGroups(state.messages, action.actorId).find((g) => g.otherUserId === action.otherUserId);
       if (!group) return state;
       if (action.expectedRevision !== undefined && action.expectedRevision !== group.revision) return state;
+      if ((action.step === "sent" || action.step === "ask")
+          && requiresSettleReview(state, action.actorId, action.otherUserId)) return state;
       const p = group.payment;
       const ok = group.net === 0
         ? action.step === "paid"
@@ -69,9 +78,7 @@ export function paymentsReducer(state: AppState, action: PaymentAction): AppStat
             : setForgiveAsk(setPaymentStatus(m, line.lineUserId, action.step), line.lineUserId, undefined),
         );
       }
-      const settleChanges = { ...next.settleChanges };
-      delete settleChanges[settlePairKey(action.actorId, action.otherUserId)];
-      return { ...next, settleChanges };
+      return next;
     }
     case "settlePoints": {
       const me = state.meId;
@@ -92,12 +99,16 @@ export function paymentsReducer(state: AppState, action: PaymentAction): AppStat
       );
     }
     case "payment":
+      if (action.status === "sent"
+          && requiresReceiptReview(state, action.messageId, action.lineUserId, action.actorId)) return state;
       return onSettlement(state, action.messageId, (m) => {
         const p = paymentsOf(m).find((x) => x.lineUserId === action.lineUserId);
         if (!p || !PAYMENT_RULE[action.status](p, action.actorId)) return null;
         return setPaymentStatus(m, action.lineUserId, action.status);
       });
     case "forgiveAsk":
+      if (action.answer === "ask"
+          && requiresReceiptReview(state, action.messageId, action.lineUserId, action.actorId)) return state;
       return onSettlement(state, action.messageId, (m) => {
         const p = paymentsOf(m).find((x) => x.lineUserId === action.lineUserId);
         if (!p) return null;

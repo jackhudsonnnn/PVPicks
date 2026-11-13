@@ -1,6 +1,7 @@
 import { settleGroups } from "./settle-groups";
 import type { Message } from "@/features/table/types";
-import { setForgiveAsk, setPaymentStatus } from "@/features/table/settlements";
+import { paymentsOf, setForgiveAsk, setPaymentStatus } from "@/features/table/settlements";
+import type { AppState } from "@/features/store/state";
 
 export interface SettleChange {
   fromId: string;
@@ -12,10 +13,26 @@ export interface SettleChange {
 }
 
 export const settlePairKey = (a: string, b: string) => JSON.stringify([a, b].sort());
+export const settleReviewKey = (actor: string, other: string) => JSON.stringify([actor, other]);
 
 /** Reviewing one notice never acknowledges a later balance-change notice. */
 export const needsSettleReview = (change: SettleChange | undefined, reviewed: SettleChange | undefined) =>
   change !== undefined && change !== reviewed;
+
+export function requiresSettleReview(state: AppState, actor: string, other: string) {
+  return needsSettleReview(
+    state.settleChanges?.[settlePairKey(actor, other)],
+    state.settleReviews?.[settleReviewKey(actor, other)],
+  );
+}
+
+export function requiresReceiptReview(state: AppState, messageId: string, lineUserId: string, actor: string) {
+  const message = state.messages.find((item) => item.id === messageId && item.kind === "settlement");
+  if (!message || message.kind !== "settlement") return false;
+  const payment = paymentsOf(message).find((item) => item.lineUserId === lineUserId);
+  if (!payment || (payment.from !== actor && payment.to !== actor)) return false;
+  return requiresSettleReview(state, actor, payment.from === actor ? payment.to : payment.from);
+}
 
 /** Cancel claims, not transfers: only a changed open net invalidates pending intent. */
 export function reconcileSettleChanges(before: Message[], after: Message[]) {

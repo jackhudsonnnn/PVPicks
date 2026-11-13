@@ -55,7 +55,6 @@ dependencies {
     implementation(project(":modules:bets"))
     implementation(project(":modules:settlement"))
     implementation(project(":modules:quickpicks"))
-    implementation(project(":modules:notifications"))
     implementation(project(":modules:admin"))
     implementation(project(":modules:sportsdata"))
     implementation(project(":modules:audit"))

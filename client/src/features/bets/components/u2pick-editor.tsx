@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import type { SettlerRule } from "../types";
-import { MAX_OPTION, MAX_OPTIONS, MAX_QUESTION, SETTLER_RULES } from "../u2pick";
+import { MAX_OPTIONS, SETTLER_RULES } from "../u2pick";
 import { Section } from "./form-parts";
 
 /** U2Pick (custom) bet: the question, 2–6 options and who calls the result. */
@@ -43,7 +43,6 @@ export function U2PickEditor({
         <Input
           value={question}
           onChange={(e) => onQuestionChange(e.target.value)}
-          maxLength={MAX_QUESTION}
           placeholder="Jack to spill beer on his shirt tonight?"
           aria-label="Bet question"
           className="h-11 bg-surface"
@@ -58,7 +57,6 @@ export function U2PickEditor({
                 onChange={(e) =>
                   onOptionsChange(options.map((x, j) => (j === i ? e.target.value : x)))
                 }
-                maxLength={MAX_OPTION}
                 placeholder={`Option ${i + 1}`}
                 aria-label={`Option ${i + 1}`}
                 className="h-10 bg-surface"

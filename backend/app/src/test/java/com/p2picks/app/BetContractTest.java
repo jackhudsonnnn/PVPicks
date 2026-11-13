@@ -141,6 +141,30 @@ class BetContractTest {
         assertThat(proposalSchema.validate(proposal)).isNotEmpty();
     }
 
+    @Test
+    void proposalPickWindowIsBoundedForBothModeFamilies() throws IOException {
+        JsonSchema proposalSchema = OpenApiSchemas.load("BetProposal");
+        ObjectNode proposal = JSON.createObjectNode();
+        proposal.put("modeId", "u2pick");
+        proposal.putObject("config");
+        proposal.put("question", "Next play?");
+        proposal.putArray("choices").add("Pass").add("Run");
+        proposal.put("wagerCents", 100);
+        proposal.put("forFun", false);
+        for (String mode : new String[] {"u2pick", "either_or"}) {
+            proposal.put("modeId", mode);
+            if (mode.equals("either_or")) proposal.put("gameId", "game-1");
+            for (int seconds : new int[] {30, 45, 600}) {
+                proposal.put("durationSec", seconds);
+                assertThat(proposalSchema.validate(proposal)).as("%s: %s", mode, seconds).isEmpty();
+            }
+            for (int seconds : new int[] {0, 29, 601}) {
+                proposal.put("durationSec", seconds);
+                assertThat(proposalSchema.validate(proposal)).as("%s: %s", mode, seconds).isNotEmpty();
+            }
+        }
+    }
+
     private static ObjectNode bet(String status) {
         ObjectNode bet = JSON.createObjectNode();
         bet.put("id", "95586d98-8dae-455a-b642-51bd5c8cb8f8");

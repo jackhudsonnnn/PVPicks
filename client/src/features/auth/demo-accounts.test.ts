@@ -44,7 +44,7 @@ describe("each demo account is its own person", () => {
     expect(u.find((x) => x.id === ME)).toMatchObject({ username: "casey_l" });
   });
 
-  it("saved profile, inbox and blocks never share a key between accounts", () => {
+  it("saved account data never shares a key between accounts", () => {
     const a = Object.values(accountStorageKeys("newbie"));
     const b = Object.values(accountStorageKeys("pro"));
     expect(a.some((k) => b.includes(k))).toBe(false);

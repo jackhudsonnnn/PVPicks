@@ -6,13 +6,13 @@ financial truth.
 
 ```mermaid
 flowchart LR
-  Client["Browser-local prototype"] -. "API adapter planned" .-> App["Spring Boot application"]
+  Client["Read-only frontend preview"] -- "session, table and bet reads" --> App["Spring Boot application"]
   Docs["Local developer docs"] --> App
   App --> PG[("PostgreSQL 16")]
   App --> Redis[("Redis 7")]
   PG --> Outbox["Transactional outbox rows"]
   Outbox -. "relay planned" .-> Kafka["Kafka KRaft"]
-  Kafka -. "consumers planned" .-> Realtime["Realtime / notifications"]
+  Kafka -. "consumers planned" .-> Realtime["Realtime"]
 ```
 
 Solid lines describe existing infrastructure or direct reads/writes; dotted
@@ -22,13 +22,35 @@ consumer, or delivery guarantee yet.
 ## Code boundaries
 
 The `app` project owns the current dev HTTP controllers, services, security and
-support code. Eleven Gradle domain modules have named `api` interfaces and
+support code. Ten Gradle domain modules have named `api` interfaces and
 private `internal` packages; most remain skeletons. The bets and settlement
 modules provide pure calculators, not transactional domain services. The shared
 kernel contains exact integer-cent money.
 
 Spring Modulith and ArchUnit tests check module discovery and dependencies.
 Organizational subdirectories inside `app` are not separate Java packages.
+The dev HTTP filter checks the current account role: admin accounts cannot call
+player APIs, and players cannot call admin APIs. Both can use session endpoints;
+public dev docs and health remain available. No account-role change API exists.
+Migration V24 rejects ordinary role updates; privileged database operators can
+bypass the guard. The request-level boundary alone does not stop an in-flight
+request after an out-of-band role change.
+
+## Shared betting and mode boundaries
+
+U2Pick and sports bets share table authorization, pick privacy, debt-cap
+checks, locking, remainder snapshots, payout, ledger and points settlement.
+The payout and table-settlement calculators are exposed through their modules'
+named APIs so both paths can use the same cent-safe rules. They do not perform
+authorization, database writes or event delivery.
+
+Keep mode-specific proposal validation and result authority separate: U2Pick
+uses a custom question and choices and an eligible member calls its outcome;
+sports modes require validated game data and resolve only from the feed.
+Feed freshness, baselines, overtime and chronology must not be inferred from a
+U2Pick result, and a member-called result must never authorize a sports bet.
+U2Pick transactions and shared points settlement exist internally, with HTTP
+adapters gated for tests only. The sports feed remains planned.
 
 ## Transaction pattern
 

@@ -8,7 +8,7 @@
   "properties": {
     "eventId": { "type": "string", "format": "uuid" },
     "type": {
-      "enum": ["chat.changed", "bet.changed", "notifications.changed", "ticker.changed"]
+      "enum": ["chat.changed", "bet.changed", "ticker.changed"]
     },
     "schemaVersion": { "const": 1 },
     "occurredAt": { "type": "string", "format": "date-time" },
@@ -26,7 +26,7 @@
     },
     {
       "if": {
-        "properties": { "type": { "enum": ["notifications.changed", "ticker.changed"] } },
+        "properties": { "type": { "const": "ticker.changed" } },
         "required": ["type"]
       },
       "then": { "properties": { "tableId": false, "resourceId": false } }

@@ -1,6 +1,6 @@
 # ADR 0001: Start with a modular monolith
 
-- Status: accepted (v3 plan)
+- Status: accepted
 - Date: 2026-11-11
 
 ## Context
