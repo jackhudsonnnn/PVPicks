@@ -21,18 +21,14 @@ backend test guidance before declaring the contract complete.
 Some frontend tests exercise presentation rather than backend rules and should
 remain frontend tests rather than being artificially ported.
 
-## Proposal, pick and lock — design draft
+## Proposal, pick and lock
 
-The mutation lifecycle below is an implementation target, not an available
-workflow. Shared bet list and detail reads are available; an internal shared
-pick transaction, lock transition and U2Pick proposal and resolution
-transactions exist but their mutations are not exposed. An opt-in U2Pick lock
-worker is disabled by default. Gated HTTP adapters for U2Pick proposal,
-shared pick/clear, member-called resolution, shared host points settlement and
-individual/group receipt history and actions are exercised only in tests; no
-readiness bean is registered in the application. Do not enable the gate until
-the complete lifecycle, including private net-change delivery, is safe. U2Pick
-is the first bet mode; sports modes follow later.
+U2Pick, the first bet mode, is available end to end over HTTP and in the
+frontend: proposal, pick/clear, deadline locking by the dev lock worker,
+member-called resolution, host points settlement and individual/group receipt
+history and actions. Balance-change warnings are delivered privately through
+the pending-review list that clients read; realtime delivery is future work.
+Sports modes follow later and are not yet implemented.
 
 Both mode families use the same pick, privacy, cap, lock, payout and points
 settlement invariants. U2Pick validates custom questions and choices and uses
@@ -73,7 +69,7 @@ The user chose debt caps as the only spending limit: the prototype's separate
   deadline; retries must not redraw the recipient. Settings, current hosts
   and participant eligibility are evaluated at actual lock processing time,
   not reconstructed at the deadline; outages can therefore affect the snapshot.
-  The opt-in dev worker scans overdue Active bets on startup and after each
+  The dev worker scans overdue Active bets on startup and after each
   five-second delay, ordered by deadline and ID in pages of 100 using a
   database-clock scan horizon. It continues past individual failures and
   retries overdue bets on later scans, including when a new picker appeared
@@ -81,8 +77,9 @@ The user chose debt caps as the only spending limit: the prototype's separate
   two-second database lock timeout; competing workers use the same shared
   lock transaction and cannot commit the transition twice. Item failures are
   logged, while a scan-level failure is logged by the scheduler and retried.
-  The worker is disabled by default; enabling it changes existing overdue
-  bets in the connected database. Sports modes are logged and left Active
+  The dev profile enables the worker by default
+  (`PVPICKS_BET_LOCK_WORKER_ENABLED=false` disables it), so starting the
+  backend changes existing overdue bets in the connected database. Sports modes are logged and left Active
   until their feed-specific lifecycle is implemented. A scan is not a
   deadline guarantee; the pick transaction still rejects late changes.
 - **Reads and recovery:** Active views expose only the caller's own state and
@@ -106,8 +103,7 @@ The user chose debt caps as the only spending limit: the prototype's separate
   resolved non-4fun bets, including a zero-net group, atomically recording
   settlement history, bet links and any payer/payee receipts. Resolution alone
   does not clear table deletion or member-removal guards; applicable points
-  must also be settled. The shared internal settlement and receipt services
-  are exposed only by test-gated adapters. The gated settlement adapter rechecks current host
+  must also be settled. The settlement adapter rechecks current host
   access and returns current line statuses on an authorized retry. Sent receipts
   remain outstanding until confirmed.
 
@@ -223,7 +219,7 @@ touching multiple bets must lock them in a consistent order and retry deadlocks.
 This storage check does not implement settlement authorization, idempotency
 or the required transactional outbox producer. The internal shared resolution
 writer invokes the bets module's pure payout calculator and posts its results;
-it is not exposed as an end-to-end workflow.
+`POST /bets/{id}/settle` exposes it.
 
 The calculator accepts participants in first-participation order, with no choice
 for No guess, and applies the lock-time remainder snapshot. Host and proposer
@@ -297,14 +293,14 @@ to direct parties, including archived-table and completed records. Individual
 actions require the current line revision and payer/payee authority; they
 never invalidate other in-flight receipts. A matching retry rechecks party
 and action authority and returns the current receipt without reapplying. The
-gated history adapter returns an empty list for unrelated or unknown users,
+history adapter returns an empty list for unrelated or unknown users,
 without disclosing whether they exist.
 
 Internal person-group reads net open lines with exact arithmetic, including
 opposing offsets and archived-table receipts. Their opaque revision includes
-every open line ID and revision. The gated group-list adapter returns an
+every open line ID and revision. The group-list adapter returns an
 explicit 409 rather than truncating any net outside the signed 64-bit API range;
-individual receipt history remains accessible. The gated pending-review list
+individual receipt history remains accessible. The pending-review list
 independently discovers the caller's unreviewed warnings, including after
 closure and when a group net is out of range; it does not deliver events or
 expose the other party's review state. Group actions lock both parties in PostgreSQL
@@ -322,8 +318,8 @@ group ask/decline updates all requests while preserving sent offset claims.
 Reconciliation resets both types of in-flight claim on a changed net.
 Receipt mutation events remain private outbox records only. Pair-change events
 may also be materialized by the internal consumer described above. Future
-consumers must restrict them to the two parties. Receipt HTTP adapters are
-gated, and user-visible event delivery remains future work.
+consumers must restrict them to the two parties. Realtime delivery of these
+events remains future work; clients discover warnings through the review list.
 
 Table deletion is a host action blocked while any bet is ACTIVE or PENDING or
 any resolved non-4fun bet has not had its points settled. Washed and 4fun
@@ -509,8 +505,7 @@ shared current membership, shared unexpired archive membership, a direct
 receipt, or a reference in accessible bet, system-attribution or settlement
 chat. The same 404 covers other deleted users, hidden blocks and missing IDs.
 Deleted identities referenced only by future history APIs will need their own
-authorization design; account deletion is not implemented and receipt history
-HTTP access remains gated.
+authorization design; account deletion is not implemented.
 Social transactions lock both user rows in PostgreSQL UUID order before the
 session and relationship rows; future follow, block, invitation, deletion and
 moderation writers must use compatible ordering. Account-deletion cleanup,

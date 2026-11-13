@@ -23,22 +23,23 @@ cover.
     `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
     reads, profile, settings, permissions, remainder and Quick Pick controls.
   - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
-    gated HTTP), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
+    HTTP adapters), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
     `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
   - `settlement`: `PointsSettlementIntegrationTest`, `ReceiptIntegrationTest`
     (receipts, groups and balance-change reviews) and `DebtIntegrationTest`.
-    The gated HTTP adapters are registered only in tests, by
-    `GatedBetAdapters` and `GatedSettlementAdapters`.
   - `MigrationIntegrationTest`: schema constraints and populated V2–V25
     upgrades. `PlatformIntegrationTest`: health, developer docs and
     infrastructure connectivity.
-  - `FrontendPreviewIntegrationTest`: opt-in runs of the React betting and
-    settlement previews over HTTP against the containers. Their invocation and
-    prerequisites are in the [frontend README](../../client/README.md). These
-    use jsdom, not a browser.
-- `bets.BettingLifecycleGateTest`, `settlement.SettlementLifecycleGateTest`,
-  `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the
-  readiness gate and opt-in lock recovery.
+  - `bets.BettingFrontendIntegrationTest` and
+    `settlement.SettlementFrontendIntegrationTest`: opt-in runs of the React
+    app over HTTP against the containers. The betting run creates and picks,
+    lets the backend lock the bet, then calls the result and settles points.
+    Their invocation and prerequisites are in the
+    [frontend README](../../client/README.md). These use jsdom, not a browser.
+- `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the lock
+  worker and its recovery; integration tests turn the worker off and lock
+  bets explicitly. `settlement.SettlementGroupControllerTest` checks the
+  pending-review list's identity rules and contract.
 - Plain unit tests cover the pure payout and U2Pick settler (`bets`) and debt
   and table-settlement (`settlement`) calculators; `shared/kernel` tests cover
   `Money`.

@@ -17,36 +17,33 @@ planned operations; it is not an implementation inventory.
 - Debt and debt-cap reads and updates, feedback, and admin health.
 - Admin accounts can access admin endpoints, but not player APIs; login,
   logout and the current-session identity endpoint remain available.
-- PostgreSQL schema, migrations, internal outbox storage, unexposed U2Pick
-  proposal and resolution transactions, shared pick, lock and host points-
-  settlement transactions, internal receipt reads/actions, and pure
+- U2Pick betting over HTTP: proposal, pick and clear, member-called results
+  and washes, host points settlement, and individual/group receipt history,
+  actions and private balance-change reviews. Review acknowledgments are
+  durable per person and revision; pending warnings remain discoverable after
+  receipts close and independently of group-net overflow through the private
+  review list, and a counterparty list supports individual receipt histories
+  during overflow.
+- The U2Pick lock worker, on by default in the dev profile
+  (`PVPICKS_BET_LOCK_WORKER_ENABLED=false` turns it off). It does not lock
+  sports bets.
+- PostgreSQL schema, migrations, internal outbox storage and pure
   payout/debt/settlement calculators.
-- An opt-in U2Pick lock worker; it is disabled by default and does not
-  automatically lock sports bets.
-- Proposal, pick/clear, U2Pick result and shared host points-settlement HTTP
-  adapters, plus individual/group receipt history, action and private review
-  adapters, exist behind an unregistered readiness marker and are exercised
-  only in tests. Review acknowledgments are durable per person and revision;
-  pending warnings remain discoverable after receipts close and independently
-  of group-net overflow through a gated private review list. A gated
-  counterparty list supports individual receipt histories during overflow.
-- The frontend entry point supports backend sign-in, session restoration and
-  read-only table and bet list/detail views. Active picks remain private;
-  participant names are loaded from the backend after lock. The previous mock
-  app is not exposed there; betting actions and other frontend workflows are
-  not yet connected.
-- A test-only settlement preview reads reviews and receipts and exercises their
-  actions against an isolated backend. Uncertain actions retain their retry
-  key in the current tab's session storage; cross-device retry recovery remains
-  unfinished. The normal frontend and backend gates remain disabled.
-- A separate test-only U2Pick frontend preview creates bets, places and clears
-  picks against gated adapters. It shares the settlement preview's same-tab
-  uncertain-action recovery and preserves Active-pick privacy. Result calling
-  and points settlement are not connected in this preview.
+- The frontend entry point supports backend sign-in, session restoration,
+  table and bet list/detail views, U2Pick creation, picking, result calling,
+  host points settlement, and settle-up receipts with balance-change reviews.
+  Active picks remain private; participant names are loaded from the backend
+  after lock. The previous mock app is not exposed there; chat, social and
+  other frontend workflows are not yet connected.
+- An action whose outcome is unknown (for example, a lost response) keeps its
+  retry key per user in the browser's local storage, so every tab sees it and
+  blocks new actions until it is retried with the same key or cleared after
+  review. Other devices reconcile from the server's reads; retries are refused
+  after 23 hours.
 
 ## Not yet available
 
-- Bet mutation and receipt APIs, default-on automatic locking, and end-to-end cap enforcement.
+- Sports-bet modes and locking, Quick Pick copy propagation, and end-to-end cap enforcement.
 - Outbox relay, Kafka consumers, realtime gateway, and a production sports feed.
 - Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
 - LAN/production security and deployment.

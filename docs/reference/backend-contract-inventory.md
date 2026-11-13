@@ -12,18 +12,20 @@ a client.
 `realtime-contract.md` records the proposed realtime behavior.
 
 Source: `client/src/features/store/commands.ts`. These are retained prototype
-commands, not the current frontend entry point. The backend preview uses
-asynchronous sign-in, table reads and bet reads; integrating the remaining commands will
-require asynchronous adapters and screen changes where results are consumed.
+commands, not the current frontend entry point. The backend-backed app uses
+asynchronous sign-in, table and bet reads, U2Pick proposal, picks and results,
+host points settlement, and receipt reviews and actions; integrating the
+remaining commands will require asynchronous adapters and screen changes where
+results are consumed.
 
 ## Commands
 
 | Frontend command | Intended backend operation |
 |---|---|
 | `setDebtCap` | `PUT /me/debt-cap`; `GET /me/debt` for current debt |
-| `propose` | `POST /tables/{id}/bets` |
-| `pick` | `PUT /bets/{id}/pick`; `DELETE /bets/{id}/pick` for No guess |
-| `settle` | `POST /bets/{id}/settle` for authorized U2Pick settlers only |
+| `propose` | Dev `POST /tables/{id}/bets` (U2Pick only) |
+| `pick` | Dev `PUT /bets/{id}/pick`; `DELETE /bets/{id}/pick` for No guess |
+| `settle` | Dev `POST /bets/{id}/settle` for authorized U2Pick settlers only |
 | `simulateResult` | Prototype/test facility only; no public player endpoint |
 | `overrideQuickPick` | `POST /bets/{id}/wash`, subject to copy/host rules |
 | `send`, `sendGif` | Dev `POST /tables/{id}/messages` |
@@ -46,11 +48,11 @@ require asynchronous adapters and screen changes where results are consumed.
 | `setQuickPicks`, `setSharing` | Dev `PUT /tables/{id}/quick-picks` and `POST`/`DELETE /tables/{id}/quick-picks/share`; rotation is `POST /tables/{id}/quick-picks/rotate`. |
 | `subscribe` | `POST /tables/{id}/quick-picks/subscribe` with code |
 | `unsubscribe` | `DELETE /tables/{id}/quick-picks/subscribe?sourceTableId=...` |
-| `settlePoints` | `POST /tables/{id}/settle-points` |
-| `settlePerson` | `POST /people/{id}/settle` with step and expected revision |
-| `reviewSettleChange` | Gated `GET /users/{id}/settlement-review` and idempotent `POST /users/{id}/settlement-review/acknowledge` |
-| `markSent`, `confirmPaid`, `disputePaid`, `forgive`, `askForgive` | `POST /settlement-lines/{id}/{action}` with revision |
-| `declineForgive` | Proposed `POST /settlement-lines/{id}/decline-forgive` with revision |
+| `settlePoints` | Dev `POST /tables/{id}/settle-points` |
+| `settlePerson` | Dev `POST /people/{id}/settle` with step and expected revision |
+| `reviewSettleChange` | Dev `GET /users/{id}/settlement-review` and idempotent `POST /users/{id}/settlement-review/acknowledge` |
+| `markSent`, `confirmPaid`, `disputePaid`, `forgive`, `askForgive` | Dev `POST /settlement-lines/{id}/{action}` with revision |
+| `declineForgive` | Dev `POST /settlement-lines/{id}/decline-forgive` with revision |
 
 ## Other contract surfaces
 
@@ -174,14 +176,15 @@ require asynchronous adapters and screen changes where results are consumed.
   relationships; chat window reads filter blocked text and GIF authors.
 - Dev bet list and detail reads require a current player session and membership
   in the non-archived table. Active reads expose only the caller's participation
-  and selection plus the aggregate pick count; locked reads reveal picks. Pick
-  mutations exist internally and their HTTP adapters are gated. Current pick storage is
-  plaintext and accessible to an operator with infrastructure access.
+  and selection plus the aggregate pick count; locked reads reveal picks. Current
+  pick storage is plaintext and accessible to an operator with infrastructure access.
 - HTTP idempotency has a draft minimum 24-hour per-user guarantee, independent
   of event-consumer markers. The dev invite-preference PUT, debt-cap PUT,
   feedback POST, invitation response
   POST, follow/block POST/DELETE, reaction PUT/DELETE, chat POST, last-read PUT
-  member-permission PUT, remainder PATCH and host PUT/DELETE implement it
+  member-permission PUT, remainder PATCH, host PUT/DELETE, bet proposal,
+  pick/clear and result POSTs, points-settlement POST, and receipt, group and
+  review-acknowledgment POSTs implement it
   using a PostgreSQL transaction, keyed fingerprints and bodyless 201 or 204
   outcomes, plus a resource reference for the original chat-creation response.
   The guard checks the current account and session before
@@ -189,7 +192,10 @@ require asynchronous adapters and screen changes where results are consumed.
   commit-relative pruning, account-deletion behavior, response retention for
   other operations, and key rotation/recovery remain to be designed. Other
   mutations do not have this protection. After the guarantee, clients must
-  reconcile state instead of retrying an uncertain operation blindly.
+  reconcile state instead of retrying an uncertain operation blindly. The
+  frontend keeps an uncertain action's key in per-user local storage, shared by
+  the browser's tabs, and refuses to retry it after 23 hours; other devices
+  reconcile from reads.
 - Prototype-only reducer actions such as local `tick`, `gameResult`, and
   `loadBlocks` are not public player commands. Server-side clock and feed events
   drive lock and game result transitions.

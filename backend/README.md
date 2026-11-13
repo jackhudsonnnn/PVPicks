@@ -34,9 +34,8 @@ backend/
       feedback/  admin/   feedback submission; admin health
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
-                          Outbox/OutboxEvent, ApiErrors, PostgresText,
-                          BettingLifecycleReady; sessions, filters,
-                          MutationAuthentication
+                          Outbox/OutboxEvent, ApiErrors, PostgresText;
+                          sessions, filters, MutationAuthentication
     src/main/resources/   application config and Flyway migrations (db/migration)
     src/test/java/        tests mirror the main packages; IntegrationTestSupport
                           holds the shared containers, Spring context and helpers
@@ -71,11 +70,6 @@ for example `tables` may use `chat`, `settlement`, `common` and `security`.
 Controllers map service outcomes to HTTP statuses and use `ApiErrors.error` for
 `{code, message}` error bodies. Mutations that support retries call
 `MutationAuthentication` and `IdempotencyGuard` inside their transaction.
-
-Proposal, pick/clear, U2Pick result, points-settlement and receipt HTTP adapters
-are conditional on `BettingLifecycleReady`, which has no application bean. Tests
-register them through `GatedBetAdapters` and `GatedSettlementAdapters`. Do not
-register the marker until the complete betting and receipt workflow is safe.
 
 ## Local setup
 
@@ -154,10 +148,11 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   an existing nonempty schema: back up and inspect it first.
 - The database role needs permission to install the `citext` and `pgcrypto`
   extensions.
-- The U2Pick lock worker is off by default. `PVPICKS_BET_LOCK_WORKER_ENABLED=true`
-  makes it scan immediately and then five seconds after each scan, locking
-  overdue U2Pick bets in the connected database. Sports bets are not
-  auto-locked. Do not enable it against shared data without approval.
+- The U2Pick lock worker is on by default in the dev profile: it scans at
+  startup and then five seconds after each scan, locking overdue U2Pick bets
+  in the connected database. Sports bets are not auto-locked. Set
+  `PVPICKS_BET_LOCK_WORKER_ENABLED=false` before starting against shared data
+  unless locking it has been approved.
 - Privileged database operators bypass application rules (including the V24
   role guard) and can read plaintext picks.
 
@@ -187,4 +182,4 @@ From `backend/`:
 Application integration tests share one Spring context and start PostgreSQL,
 Redis and Kafka Testcontainers once per run, so Docker is required. They never
 use the dev database. See the [test guide](../docs/reference/backend-test-map.md)
-for what each suite covers and how to run the opt-in frontend preview tests.
+for what each suite covers and how to run the opt-in frontend integration tests.

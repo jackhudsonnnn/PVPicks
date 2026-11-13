@@ -15,11 +15,11 @@ and current decisions remain the working references.
   accounts cannot use player APIs or participate in bets.
 - A remainder rule is snapshotted at lock. The Host rule selects one current
   host randomly and retains the chosen recipient, even if hosting changes later.
-- Debt cap is off by default; changing it requires zero debt. Internal
-  proposal, pick and lock transactions enforce the cap.
+- Debt cap is off by default; changing it requires zero debt. Proposal, pick
+  and lock transactions enforce the cap.
 
-Bet transitions, picks and settlement services exist internally; their HTTP
-adapters remain gated and are exercised only in tests.
+U2Pick proposal, picks, locking, results, points settlement and receipts are
+available over HTTP and in the frontend. Sports modes are planned.
 
 ## Privacy
 
@@ -38,7 +38,7 @@ the Active-bet restrictions on the server. Dev bet reads enforce them.
 - Table deletion has the same unsettled-bet gate. Members at deletion can find
   their read-only chat archive for 90 days; afterward it is hidden but its
   data remains pending a separate deletion policy. Open receipts continue
-  counting toward debt; receipt action HTTP adapters are gated.
+  counting toward debt and their receipt actions remain available.
 - Remainder changes are rejected while a bet is Active, except an unchanged
   value is a no-op. Pending snapshots remain unchanged.
 - Betting switches affect future proposals and Quick Pick fan-out, not existing

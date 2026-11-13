@@ -1,27 +1,28 @@
 # Frontend
 
-The current entry point signs in to the dev backend and shows read-only table
-and bet lists and details. Active bets show only the viewer's participation
-and aggregate pick count; picks and participant names are revealed after lock.
-Unavailable profiles are reported with a retry option. The mock-backed
-app remains in the source but is not exposed. Betting actions, chat,
-registration and other frontend workflows are not connected.
+The current entry point (`src/features/auth/backend-app.tsx`) signs in to the
+dev backend and connects tables, bets and settle-up receipts:
 
-A settlement receipt and durable-review preview is wired only for tests via
-the `BackendApp` test prop; the normal entry point does not enable it. It reads
-private warnings, supports individual and group receipt actions, and preserves
-64-bit cent values. An uncertain action is saved per user in the current tab's
-session storage; retry uses the same key and is refused after 23 hours. Before
-clearing it, check receipt history because the action may already have succeeded.
-Storage failure disables actions. These safeguards are not cross-tab or
-cross-device recovery, and the backend receipt adapters remain gated.
+- **U2Pick betting:** create a bet, pick or clear a choice, call the result or
+  wash it once the bet locks (if the bet's settler rule allows you), and, as a
+  host, settle the table's resolved points. Creating does not place a pick;
+  clearing a joined pick leaves the player as No guess. Active bets show only
+  the viewer's participation and the aggregate pick count; picks and
+  participant names are revealed after lock.
+- **Receipts:** private balance-change reviews, individual and group receipt
+  actions, and receipt history, preserving 64-bit cent values.
 
-A separate test-only `bettingPreview` enables U2Pick creation, picking and
-clearing against gated backend adapters. Creating does not place a pick;
-clearing a joined pick leaves the player as No guess. Active picks remain
-private. It uses the same per-user, current-tab retry safeguards as settlement;
-check the original table and your pick before clearing an uncertain action.
-Neither preview is available from the normal entry point.
+Chat, registration and the other prototype workflows are not connected; the
+mock-backed app remains in the source but is not exposed.
+
+Every mutation sends an `Idempotency-Key`. When an outcome is unknown (for
+example, a lost response), the action and its key are saved per user in
+local storage. Every tab sees it and blocks new bet or receipt actions until
+it is retried with the same key or cleared after review; retries are refused
+after 23 hours. Before clearing, check the bet list, your pick or receipt
+history, because the action may have succeeded. Other devices do not see the
+saved action; they reconcile from the server's reads. Storage failure disables
+actions.
 
 For local development, use an approved isolated backend on `127.0.0.1:8080`
 configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
@@ -38,14 +39,16 @@ backend or proxy to a network.
 Run `npm test` and `npx tsc --noEmit` for client checks.
 The lint toolchain temporarily overrides its transitive minimatch dependency
 to a patched major version; recheck the override when upgrading typescript-eslint.
-The opt-in frontend/backend integration test requires installed client
+The opt-in frontend/backend integration tests require installed client
 dependencies, JDK 21, and Docker. From `backend/`, run:
 
 ```sh
 PVPICKS_FRONTEND_INTEGRATION=true ./gradlew :app:test --rerun \
-  --tests 'com.p2picks.app.FrontendPreviewIntegrationTest'
+  --tests '*FrontendIntegrationTest'
 ```
 
-It uses Testcontainers and a random loopback port, registers gated controllers
-only in the test context, and runs the React preview through real HTTP with a
-test cookie jar. It does not exercise a browser or enable the normal app gate.
+They use Testcontainers and a random loopback port, and run the React app
+through real HTTP with a test cookie jar. The betting test runs
+`betting-integration.test.tsx` twice: once to create and pick, then, after
+the backend locks the bet, to call the result and settle points. They do not
+exercise a browser.

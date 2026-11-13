@@ -25,7 +25,8 @@ features:
 
 ::: warning Development only
 The backend is not ready for real users or network exposure. The frontend
-connects sign-in and read-only table views; other workflows remain unavailable.
+connects sign-in, tables, U2Pick betting and settle-up receipts; other workflows
+remain unavailable.
 :::
 
 ## Documentation hierarchy

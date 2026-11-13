@@ -50,12 +50,14 @@ database, rebuilding shared infrastructure, or regenerating credentials.
 Pending Flyway migrations run automatically when the backend starts.
 :::
 
-## Frontend backend preview
+## Frontend
 
-The current frontend provides backend sign-in and read-only table and bet
-list/detail views. Other prototype features are not exposed; betting and
-receipt mutation APIs remain gated. Accounts must already be provisioned in
-the dev backend.
+The current frontend provides backend sign-in, table and bet views, U2Pick
+betting (create, pick, call results, host points settlement) and settle-up
+receipts. Chat, social and other prototype features are not exposed yet.
+Accounts must already be provisioned in the dev backend. The dev backend's
+lock worker locks U2Pick bets at their deadline; set
+`PVPICKS_BET_LOCK_WORKER_ENABLED=false` to turn it off.
 
 For an approved isolated dev backend listening on `127.0.0.1:8080`, configure
 its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From

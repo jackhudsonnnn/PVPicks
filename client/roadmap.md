@@ -1,28 +1,24 @@
 # Frontend roadmap
 
-The current frontend is a read-only backend preview: it signs in with provisioned
-accounts, restores and revokes backend sessions, and reads current tables and
-their bets. Active bets expose only the viewer's participation and aggregate
-pick count; after lock, participant names are loaded from the backend.
-The former mock-backed betting, chat, social and settlement UI remains in the
-source but is not exposed by the current entry point. Betting mutations and
-receipt actions remain gated; this preview does not use mock data as a
-substitute for unavailable server data.
+The current frontend signs in with provisioned accounts, restores and revokes
+backend sessions, reads tables and bets, and connects the U2Pick workflow:
+creation, picking and clearing, result calling, host points settlement, and
+settle-up receipts with private balance-change reviews. Active bets expose
+only the viewer's participation and aggregate pick count; after lock,
+participant names are loaded from the backend. The former mock-backed chat,
+social and settlement UI remains in the source but is not exposed; the app
+does not use mock data as a substitute for unavailable server data.
 
-A backend-backed receipt and durable-review preview exists only in tests.
-It covers group and individual actions, review-before-send enforcement, and
-same-tab retry of uncertain actions. It is not exposed in the normal app and
-does not provide cross-device retry recovery.
-
-A separate test-only U2Pick preview connects creation, picking and clearing.
-It preserves Active-pick privacy and uses the same same-tab retry mechanism.
-Result calling and points settlement are not connected in this preview.
+Uncertain actions keep their retry key per user in local storage, shared by
+the browser's tabs. Other devices reconcile from server reads.
 
 ## Next steps
 
 - Integrate additional workflows incrementally with asynchronous API flows.
 - Apply server authorization and Active-pick privacy to every integrated view.
-- Restore chat, betting and settlement views as they become server-backed,
+- Restore chat and social views as they become server-backed,
   preserving paging, unread state, reconciliation and accessible interactions.
-- Complete and validate the gated betting lifecycle and safe retry recovery
-  before exposing settlement and betting mutations.
+- Replace the minimal betting and receipt views with the prototype's ticket
+  and table designs.
+- Refresh bets and reviews from realtime events once the outbox relay and
+  gateway exist; until then views refresh on demand.

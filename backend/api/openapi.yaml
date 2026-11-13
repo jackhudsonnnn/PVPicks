@@ -8,8 +8,10 @@ info:
     invite preference replacement, debt-cap updates, feedback submission,
     follow/block mutations, table creation, member requests, profile and betting settings,
     invitation responses, reaction mutations and chat
-    unread-state reads and updates, chat window reads and text/GIF sending. Other
-    operations remain unimplemented.
+    unread-state reads and updates, chat window reads and text/GIF sending,
+    U2Pick proposal, picks and results, host points settlement, and receipt,
+    group and balance-change-review reads and actions. Other operations remain
+    unimplemented.
     This contract is not ready for client generation until the complete
     Phase 0 review.
     In dev, browser requests are same-origin. All POST, PUT, PATCH and DELETE
@@ -273,8 +275,8 @@ paths:
       operationId: proposeBet
       summary: Propose a bet at a table
       description: >-
-        Draft API; the U2Pick HTTP adapter is gated and not available in the
-        dev backend. Sports proposal validation is not implemented.
+        Dev implementation for U2Pick only; sports proposal
+        validation is not implemented.
         The server checks table permissions, wager rules and debt cap, captures
         any game baseline, and assigns the bet identity and lock time. The
         proposer is the visible author but does not join the bet automatically.
@@ -331,7 +333,7 @@ paths:
     put:
       operationId: putMyPick
       summary: Add or change the current user's pick
-      description: Draft API; the shared pick adapter is gated and unavailable in the dev backend.
+      description: Dev implementation.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -362,7 +364,7 @@ paths:
     delete:
       operationId: clearMyPick
       summary: Clear the current user's guess
-      description: Draft API; the shared pick adapter is gated and unavailable in the dev backend.
+      description: Dev implementation.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -383,8 +385,7 @@ paths:
       operationId: settleCustomBet
       summary: Call the result of a U2Pick bet
       description: >-
-        Draft API; the U2Pick result adapter is gated and unavailable in the
-        dev backend.
+        Dev implementation for U2Pick.
         Only a settler authorized by the proposal may call a pending original
         U2Pick. Game bets are settled exclusively by the sports feed.
       parameters:
@@ -1238,8 +1239,7 @@ paths:
       operationId: settleTablePoints
       summary: Settle a table's resolved balances through the host
       description: >-
-        Draft API; the shared points-settlement HTTP adapter is gated and
-        unavailable in the dev backend. A matching retry requires current host
+        Dev implementation. A matching retry requires current host
         authorization and returns the settlement with current receipt statuses.
         Creates a separate settlement with immutable payer, payee and amount
         identities. The server atomically settles eligible results, creates
@@ -1283,7 +1283,7 @@ paths:
       operationId: transitionSettlementLine
       summary: Apply an authorized transition to a settlement receipt
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         The payer marks sent or asks for forgiveness. The payee confirms,
         disputes, forgives or declines forgiveness. Sent remains outstanding
         until confirmed; only paid and forgiven close a line. A dispute returns
@@ -1331,7 +1331,7 @@ paths:
       operationId: settleWithPerson
       summary: Atomically apply a step to all open lines with one person
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         The revision represents the current group, not an individual receipt.
         Reject a stale revision with 409. Authorization is determined by the
         current net payer and payee; offsets are included in the atomic update.
@@ -1374,7 +1374,7 @@ paths:
       operationId: listSettlementGroups
       summary: Get the current user's settle-up groups
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         If any open group net exceeds the signed 64-bit range, the entire
         response fails with 409 and code group_net_out_of_range. Individual
         receipt history and settlement-review reads remain available.
@@ -1408,7 +1408,7 @@ paths:
       operationId: listSettlementCounterparties
       summary: List the caller's direct receipt counterparties
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         Returns only IDs of people with direct receipt history, including closed
         and archived-table receipts. It does not calculate group nets and remains
         available when a group total is out of range.
@@ -1428,7 +1428,7 @@ paths:
       operationId: listPendingSettlementReviews
       summary: List the caller's pending balance-change warnings
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         Returns only the caller's unreviewed warnings for direct receipt parties,
         including after all receipts close. This read does not calculate group
         nets and remains available when a group total is out of range.
@@ -1452,7 +1452,7 @@ paths:
       operationId: getSettlementReview
       summary: Read the caller's balance-change warning for one person
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         Accessible only to a direct receipt party, including after all receipts
         close. A null revision means there is no unreviewed warning. This read
         is independent of group net size.
@@ -1476,7 +1476,7 @@ paths:
       operationId: acknowledgeSettlementReview
       summary: Acknowledge the caller's current balance-change warning
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         Acknowledges only the caller's warning at the supplied revision.
         A changed warning returns 409 with code stale_review; a matching retry
         never acknowledges a newer warning.
@@ -1876,7 +1876,7 @@ paths:
       operationId: getUserSettlementHistory
       summary: Read authorized settlement receipts for a user
       description: >-
-        Draft API; this HTTP adapter is gated and unavailable in the dev backend.
+        Dev implementation.
         Return only receipts the caller is authorized to see, including
         completed and archived-table history. Optionally filter by table.
         An unrelated or unknown user yields an empty list.

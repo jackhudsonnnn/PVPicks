@@ -20,21 +20,16 @@ current code, not an estimated delivery date.
 
 ## 3. Betting & settlement — in progress
 
-- Shared bet reads, pure calculators, storage, internal U2Pick proposal and
-  resolution, shared pick, lock and host points-settlement transactions, and
-  internal receipt reads and actions exist. A U2Pick lock worker is available
-  only by explicit opt-in. Proposal, pick/clear, U2Pick resolution and shared
-  host points-settlement and individual/group receipt HTTP adapters are gated and
-  test-only; the mutation workflow and sports-feed locking are not available.
-- Build U2Pick before sports bets, without depending on the sports feed. The
-  first milestone includes proposal, picks, locking, outcome resolution,
-  ledger writes, host points settlement, individual and grouped receipt
-  actions, and forgiveness.
-- Define and review authorization, deadlines and recovery for the betting
-  lifecycle. Active picks must be hidden from other players and admin views.
-- Implement authorization, debt-cap enforcement, lifecycle transitions, ledger
-  writes and settlement receipts with concurrency and zero-sum tests.
-- Preserve lock-time remainder snapshots, including the randomly chosen host.
+- **Available:** U2Pick proposal, picks, deadline locking by the dev lock
+  worker, member-called results and washes, ledger writes, host points
+  settlement, and individual/group receipt actions with private balance-change
+  reviews, over HTTP and in the frontend.
+- **Later:** sports-bet modes and their feed-driven locking and results, Quick
+  Pick copy propagation, and end-to-end debt-cap enforcement.
+- Sports modes must reuse the shared pick, privacy, cap, lock, payout and
+  settlement transactions; only the feed may supply their outcomes.
+- Preserve lock-time remainder snapshots, including the randomly chosen host,
+  and keep Active picks hidden from other players and admin views.
 
 ## 4. Delivery & sports data — planned
 
@@ -45,13 +40,12 @@ current code, not an estimated delivery date.
 
 ## 5. Frontend integration — in progress
 
-- Backend sign-in, session restoration and read-only table and bet list/detail
-  views are connected. The mock-backed app is retained in source but is not
-  exposed by the current entry point.
-- Receipt and durable-review interactions are connected in a test-only gated
-  preview. A separate gated preview connects U2Pick creation and picking.
-  They share same-tab uncertain-action recovery; cross-device recovery, result
-  calling and points settlement remain to be completed before exposure.
+- Backend sign-in, session restoration, table and bet views, U2Pick betting,
+  result calling, host points settlement and settle-up receipts are connected.
+  The mock-backed app is retained in source but is not exposed by the current
+  entry point.
+- Uncertain actions are saved per user in local storage and shared across
+  tabs; other devices reconcile from server reads.
 - Integrate one real workflow at a time; validate recovery, permissions, mobile
   layout and accessibility. Prototype completion is not backend completion.
 - See the <a href="/docs/source/frontend-roadmap.md" download>frontend roadmap</a>

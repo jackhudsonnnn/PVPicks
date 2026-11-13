@@ -6,7 +6,7 @@ financial truth.
 
 ```mermaid
 flowchart LR
-  Client["Read-only frontend preview"] -- "session, table and bet reads" --> App["Spring Boot application"]
+  Client["React frontend"] -- "sessions, tables, U2Pick betting, receipts" --> App["Spring Boot application"]
   Docs["Local developer docs"] --> App
   App --> PG[("PostgreSQL 16")]
   App --> Redis[("Redis 7")]
@@ -81,8 +81,8 @@ uses a custom question and choices and an eligible member calls its outcome;
 sports modes require validated game data and resolve only from the feed.
 Feed freshness, baselines, overtime and chronology must not be inferred from a
 U2Pick result, and a member-called result must never authorize a sports bet.
-U2Pick transactions and shared points settlement exist internally, with HTTP
-adapters gated for tests only. The sports feed remains planned.
+U2Pick transactions and shared points settlement are exposed over HTTP. The
+sports feed remains planned.
 
 ## Transaction pattern
 
