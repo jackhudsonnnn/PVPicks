@@ -76,6 +76,7 @@ services:
       PVPICKS_OUTBOX_CLEANUP_ENABLED: ${PVPICKS_OUTBOX_CLEANUP_ENABLED:-true}
       PVPICKS_OUTBOX_RETENTION: ${PVPICKS_OUTBOX_RETENTION:-P7D}
       PVPICKS_BALLDONTLIE_API_KEY: ${PVPICKS_BALLDONTLIE_API_KEY:-}
+      PVPICKS_SPORTS_RECORDING_DIR: /recordings
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,6 +84,9 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    volumes:
+      # Raw sports feed responses (git-ignored); see backend/README.md.
+      - ./recordings:/recordings
     ports:
       - "127.0.0.1:${PVPICKS_PORT:-8080}:8080"
     healthcheck:

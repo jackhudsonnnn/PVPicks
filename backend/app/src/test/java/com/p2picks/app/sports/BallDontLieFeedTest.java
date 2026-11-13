@@ -7,6 +7,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,23 +58,46 @@ class BallDontLieFeedTest {
     }
 
     @Test
-    void mapsNflGamesFromTheirStartAndStatusLabels() throws Exception {
+    void usesStatusStateForTheLifecycleAndSkipsUnknownGames() throws Exception {
+        assertThat(BallDontLieFeed.state("in_progress", "7:00 pm ET", 0)).isEqualTo(GameStatus.LIVE);
+        assertThat(BallDontLieFeed.state("final", "4th Qtr", 4)).isEqualTo(GameStatus.FINAL);
+        assertThat(BallDontLieFeed.state("delayed", "Delayed", 0)).isEqualTo(GameStatus.SCHEDULED);
+        assertThat(BallDontLieFeed.state("canceled", "Canceled", 0)).isEqualTo(GameStatus.POSTPONED);
+        assertThat(BallDontLieFeed.state("unknown", "Final", 4)).isNull();
+        assertThat(BallDontLieFeed.state(null, "Final", 4)).as("label fallback").isEqualTo(GameStatus.FINAL);
+        // Some historical overtime finals report period 4; the state still decides.
+        FeedGame overtimeFinal = BallDontLieFeed.nba(json("""
+                {"id": 9, "datetime": "2026-11-12T23:00:00Z", "status": "Final/OT", "status_state": "final",
+                 "period": 4, "time": " ", "home_team_score": 120, "visitor_team_score": 118,
+                 "home_team": {"abbreviation": "DEN"}, "visitor_team": {"abbreviation": "PHX"}}
+                """));
+        assertThat(overtimeFinal.status()).isEqualTo(GameStatus.FINAL);
+        assertThat(BallDontLieFeed.nba(json("""
+                {"id": 10, "datetime": "2026-11-12T23:00:00Z", "status": "??", "status_state": "unknown",
+                 "home_team": {"abbreviation": "DEN"}, "visitor_team": {"abbreviation": "PHX"}}
+                """))).isNull();
+    }
+
+    @Test
+    void takesTheNflPeriodFromQuarterScoresBecauseThereIsNoClock() throws Exception {
         FeedGame live = BallDontLieFeed.nfl(json("""
-                {"id": 7, "date": "2026-11-15T18:00:00.000Z", "status": "2nd Quarter",
+                {"id": 7, "date": "2026-11-15T18:00:00.000Z", "status": "In Progress", "status_state": "in_progress",
+                 "home_team_q1": 3, "home_team_q2": 7, "visitor_team_q1": 7, "visitor_team_q2": null,
                  "home_team_score": 10, "visitor_team_score": 7,
                  "home_team": {"abbreviation": "KC", "location": "Kansas City", "name": "Chiefs"},
                  "visitor_team": {"abbreviation": "BUF", "location": "Buffalo", "name": "Bills"}}
                 """));
         assertThat(live.status()).isEqualTo(GameStatus.LIVE);
         assertThat(live.period()).isEqualTo(2);
-        assertThat(live.clock()).isEqualTo("2nd Quarter");
+        assertThat(live.clock()).isEqualTo("In Progress");
         assertThat(live.home().city()).isEqualTo("Kansas City");
         FeedGame scheduled = BallDontLieFeed.nfl(json("""
-                {"id": 8, "date": "2026-11-16T01:20:00Z", "status": "Scheduled",
+                {"id": 8, "date": "2026-11-16T01:20:00Z", "status": "Scheduled", "status_state": "scheduled",
                  "home_team": {"abbreviation": "DAL"}, "visitor_team": {"abbreviation": "PHI"}}
                 """));
         assertThat(scheduled.status()).isEqualTo(GameStatus.SCHEDULED);
         assertThat(scheduled.home().score()).isNull();
+        assertThat(BallDontLieFeed.scoredPeriod(json("{\"home_team_ot\": 3, \"home_team_q4\": 7}"))).isEqualTo(5);
     }
 
     @Test
@@ -85,7 +112,7 @@ class BallDontLieFeedTest {
     }
 
     @Test
-    void sendsTheKeyAndDateAndReportsRateLimits() throws Exception {
+    void asksForEveryDateInOneRequestRecordsResponsesWithoutTheKeyAndReportsRateLimits() throws Exception {
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> query = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -109,15 +136,24 @@ class BallDontLieFeedTest {
         server.start();
         try {
             String base = "http://127.0.0.1:" + server.getAddress().getPort();
-            BallDontLieFeed feed = new BallDontLieFeed("test-key", base, JSON);
-            List<FeedGame> games = feed.gamesOn(League.NBA, LocalDate.parse("2026-11-12"));
+            Path recordings = Files.createTempDirectory("feed-recordings");
+            Clock clock = Clock.fixed(Instant.parse("2026-11-13T02:00:00Z"), ZoneOffset.UTC);
+            BallDontLieFeed feed = new BallDontLieFeed("test-key", base, JSON,
+                    new FeedRecorder(recordings.toString(), clock, JSON));
+            List<LocalDate> dates = List.of(LocalDate.parse("2026-11-11"), LocalDate.parse("2026-11-12"),
+                    LocalDate.parse("2026-11-13"));
+            List<FeedGame> games = feed.games(League.NBA, dates);
             assertThat(games).extracting(FeedGame::id).containsExactly("NBA-5");
             assertThat(authorization.get()).isEqualTo("test-key");
-            assertThat(query.get()).contains("dates[]=2026-11-12");
-            assertThatThrownBy(() -> feed.gamesOn(League.NFL, LocalDate.parse("2026-11-12")))
+            assertThat(java.net.URLDecoder.decode(query.get(), StandardCharsets.UTF_8))
+                    .contains("dates[]=2026-11-11", "dates[]=2026-11-12", "dates[]=2026-11-13");
+            String recorded = Files.readString(recordings.resolve("nba-2026-11-12.jsonl"));
+            assertThat(recorded).contains("\"league\":\"NBA\"", "\"id\":5").doesNotContain("test-key");
+            assertThatThrownBy(() -> feed.games(League.NFL, dates))
                     .isInstanceOfSatisfying(GameFeed.FeedUnavailable.class,
                             exception -> assertThat(exception.rateLimited()).isTrue());
-            assertThatThrownBy(() -> new BallDontLieFeed("", base, JSON).gamesOn(League.NBA, LocalDate.now()))
+            assertThatThrownBy(() -> new BallDontLieFeed("", base, JSON, new FeedRecorder("", clock, JSON))
+                    .games(League.NBA, dates))
                     .isInstanceOf(GameFeed.FeedUnavailable.class).hasMessageContaining("No BallDontLie API key");
         } finally {
             server.stop(0);

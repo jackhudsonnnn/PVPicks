@@ -4,7 +4,6 @@ import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,13 +74,6 @@ class GameSync {
                 """, league.name(), Timestamp.from(at), reason);
     }
 
-    /** Whether a game scheduled on that New York date may still change (so the date is worth polling). */
-    boolean hasUnfinishedGames(League league, LocalDate date) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM games WHERE league = ? AND status IN ('SCHEDULED', 'LIVE')
-                    AND (starts_at AT TIME ZONE '""" + NEW_YORK + "')::date = ?)",
-                Boolean.class, league.name(), date));
-    }
 
     private Map<String, FeedGame> previous(List<FeedGame> games) {
         Map<String, FeedGame> previous = new HashMap<>();

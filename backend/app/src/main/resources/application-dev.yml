@@ -13,7 +13,10 @@ pvpicks:
     # Without a key the feed is not polled and the ticker reports itself unavailable.
     balldontlie:
       api-key: ${PVPICKS_BALLDONTLIE_API_KEY:}
+    # One request per league per poll: 2 a minute at the default, within the free tier's 5.
     poll-interval: ${PVPICKS_SPORTS_POLL_INTERVAL:PT60S}
+    # Raw provider responses are appended here as JSON lines when set (for replay and debugging).
+    recording-dir: ${PVPICKS_SPORTS_RECORDING_DIR:}
     freshness: ${PVPICKS_SPORTS_FRESHNESS:PT3M}
 
 spring:

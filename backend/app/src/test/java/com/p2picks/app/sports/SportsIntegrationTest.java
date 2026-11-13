@@ -32,7 +32,7 @@ class SportsIntegrationTest extends IntegrationTestSupport {
         boolean down;
 
         @Override
-        public List<FeedGame> gamesOn(League league, LocalDate date) throws FeedUnavailable {
+        public List<FeedGame> games(League league, List<LocalDate> dates) throws FeedUnavailable {
             if (down) throw new FeedUnavailable("scripted outage", false, null);
             return games.getOrDefault(league, List.of());
         }

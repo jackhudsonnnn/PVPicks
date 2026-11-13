@@ -24,9 +24,11 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * BallDontLie, the runtime provider (ADR 0004). Requests carry the API key from
- * {@code PVPICKS_BALLDONTLIE_API_KEY}; without a key every read fails as unavailable. Provider fields are mapped
- * into {@link FeedGame} here and nowhere else; a game whose start time or teams cannot be read is skipped.
+ * BallDontLie, the runtime provider (ADR 0004; https://docs.balldontlie.io, https://nfl.balldontlie.io). Requests
+ * carry the API key from {@code PVPICKS_BALLDONTLIE_API_KEY}; without a key every read fails as unavailable.
+ * Provider fields are mapped into {@link FeedGame} here and nowhere else. The lifecycle comes from
+ * {@code status_state}, as the provider recommends; the free-text {@code status} is only a fallback and a label.
+ * A game whose start time or teams cannot be read, or whose state is {@code unknown}, is skipped.
  */
 @Component
 class BallDontLieFeed implements GameFeed {
@@ -38,13 +40,15 @@ class BallDontLieFeed implements GameFeed {
     private final String baseUrl;
     private final ObjectMapper json;
     private final RestClient http;
+    private final FeedRecorder recorder;
 
     BallDontLieFeed(@Value("${pvpicks.sports.balldontlie.api-key:}") String apiKey,
             @Value("${pvpicks.sports.balldontlie.base-url:https://api.balldontlie.io}") String baseUrl,
-            ObjectMapper json) {
+            ObjectMapper json, FeedRecorder recorder) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.baseUrl = baseUrl;
         this.json = json;
+        this.recorder = recorder;
         JdkClientHttpRequestFactory requests = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
         requests.setReadTimeout(Duration.ofSeconds(10));
@@ -56,12 +60,12 @@ class BallDontLieFeed implements GameFeed {
     }
 
     @Override
-    public List<FeedGame> gamesOn(League league, LocalDate date) throws FeedUnavailable {
+    public List<FeedGame> games(League league, List<LocalDate> dates) throws FeedUnavailable {
         if (!configured()) throw new FeedUnavailable("No BallDontLie API key is configured", false, null);
         List<FeedGame> games = new ArrayList<>();
         String cursor = null;
         for (int page = 0; page < MAX_PAGES; page++) {
-            JsonNode body = fetch(league, date, cursor);
+            JsonNode body = fetch(league, dates, cursor);
             for (JsonNode game : body.path("data")) {
                 FeedGame parsed = league == League.NBA ? nba(game) : nfl(game);
                 if (parsed != null) games.add(parsed);
@@ -73,15 +77,16 @@ class BallDontLieFeed implements GameFeed {
         return games;
     }
 
-    private JsonNode fetch(League league, LocalDate date, String cursor) throws FeedUnavailable {
+    private JsonNode fetch(League league, List<LocalDate> dates, String cursor) throws FeedUnavailable {
         UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
                 .path(league == League.NBA ? "/v1/games" : "/nfl/v1/games")
-                .queryParam("dates[]", date.toString())
                 .queryParam("per_page", 100);
+        for (LocalDate date : dates) uri.queryParam("dates[]", date.toString());
         if (cursor != null) uri.queryParam("cursor", cursor);
+        var target = uri.encode().build().toUri();
         try {
-            String body = http.get().uri(uri.encode().build().toUri()).header("Authorization", apiKey)
-                    .retrieve().body(String.class);
+            String body = http.get().uri(target).header("Authorization", apiKey).retrieve().body(String.class);
+            recorder.record(league, target.getRawQuery(), body);
             return json.readTree(body == null ? "{}" : body);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
@@ -99,7 +104,8 @@ class BallDontLieFeed implements GameFeed {
             if (startsAt == null) startsAt = instant(status);
             if (startsAt == null) return null;
             int period = game.path("period").asInt(0);
-            GameStatus state = classify(status, period);
+            GameStatus state = state(game.path("status_state").asText(null), status, period);
+            if (state == null) return null;
             String time = game.path("time").asText("").trim();
             String clock = state != GameStatus.LIVE ? null
                     : !time.isEmpty() && !time.equalsIgnoreCase("final") ? time : status.trim();
@@ -114,20 +120,19 @@ class BallDontLieFeed implements GameFeed {
     }
 
     /**
-     * NFL games: {@code date} is the start. Live period and clock use {@code quarter}/{@code time} when present,
-     * otherwise the status label (for example "2nd Quarter").
+     * NFL games: {@code date} is the start. The response has no clock or quarter field, so the period is the
+     * latest quarter with a score (overtime is period 5) and the clock is the status label.
      */
     static FeedGame nfl(JsonNode game) {
         try {
             String status = game.path("status").asText("");
             Instant startsAt = instant(game.path("date").asText(null));
             if (startsAt == null) return null;
-            int period = game.path("quarter").asInt(0);
-            if (period == 0) period = game.path("period").asInt(0);
+            int period = scoredPeriod(game);
             if (period == 0) period = ordinalPeriod(status);
-            GameStatus state = classify(status, period);
-            String time = game.path("time").asText("").trim();
-            String clock = state != GameStatus.LIVE ? null : !time.isEmpty() ? time : status.trim();
+            GameStatus state = state(game.path("status_state").asText(null), status, period);
+            if (state == null) return null;
+            String clock = state != GameStatus.LIVE ? null : status.trim();
             return new FeedGame(League.NFL, game.path("id").asText(), state, startsAt,
                     state == GameStatus.LIVE && period >= 1 ? period : null, emptyToNull(clock),
                     team(game.path("home_team"), score(game, "home_team_score", state)),
@@ -136,6 +141,34 @@ class BallDontLieFeed implements GameFeed {
             log.debug("Skipped an unreadable NFL game", exception);
             return null;
         }
+    }
+
+    /**
+     * The canonical status from {@code status_state}; null for {@code unknown} (the provider cannot classify the
+     * game, so it is skipped). Without a state, falls back to the label.
+     */
+    static GameStatus state(String statusState, String status, int period) {
+        if (statusState == null || statusState.isBlank()) return classify(status, period);
+        return switch (statusState.trim().toLowerCase(Locale.ROOT)) {
+            case "scheduled", "delayed" -> GameStatus.SCHEDULED;
+            case "in_progress" -> GameStatus.LIVE;
+            case "final" -> GameStatus.FINAL;
+            case "postponed", "canceled", "cancelled", "suspended", "abandoned" -> GameStatus.POSTPONED;
+            default -> null;
+        };
+    }
+
+    /** The latest NFL period with a score, from {@code *_q1}..{@code *_q4} and {@code *_ot}. */
+    static int scoredPeriod(JsonNode game) {
+        if (scored(game, "ot")) return 5;
+        for (int quarter = 4; quarter >= 1; quarter--) {
+            if (scored(game, "q" + quarter)) return quarter;
+        }
+        return 0;
+    }
+
+    private static boolean scored(JsonNode game, String period) {
+        return game.path("home_team_" + period).isInt() || game.path("visitor_team_" + period).isInt();
     }
 
     /** Maps a provider status label to the canonical status; anything not clearly live or over is scheduled. */

@@ -15,9 +15,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Polls each league for today's New York games, plus yesterday's while any are still unfinished (late games run
- * past midnight). A failed league backs off exponentially, at least a minute when rate limited, capped at ten
- * minutes; other leagues keep polling.
+ * Polls each league once per interval with a single request covering yesterday, today and tomorrow in New York.
+ * That catches late games however the provider dates them (UTC or local) and keeps earlier games current while
+ * they run past midnight. Games are placed by their own start time. A failed league backs off exponentially, at
+ * least a minute when rate limited, capped at ten minutes; other leagues keep polling.
  */
 @Component
 class GamePoller {
@@ -49,9 +50,8 @@ class GamePoller {
         if (state != null && now.isBefore(state.retryAt())) return;
         LocalDate today = LocalDate.ofInstant(now, NEW_YORK);
         try {
-            List<FeedGame> games = new ArrayList<>(feed.gamesOn(league, today));
-            if (sync.hasUnfinishedGames(league, today.minusDays(1))) games.addAll(feed.gamesOn(league, today.minusDays(1)));
-            sync.record(league, games, now);
+            List<FeedGame> games = feed.games(league, List.of(today.minusDays(1), today, today.plusDays(1)));
+            sync.record(league, dedupe(games), now);
             if (state != null) log.info("{} feed recovered", league);
             backoff.remove(league);
         } catch (GameFeed.FeedUnavailable exception) {
@@ -63,6 +63,13 @@ class GamePoller {
             sync.failure(league, exception.getMessage(), now);
             if (failures == 1) log.warn("{} feed unavailable: {}", league, exception.getMessage());
         }
+    }
+
+    /** A game listed under two of the requested dates appears once, as its last listing. */
+    private static List<FeedGame> dedupe(List<FeedGame> games) {
+        Map<String, FeedGame> byId = new java.util.LinkedHashMap<>();
+        for (FeedGame game : games) byId.put(game.id(), game);
+        return new ArrayList<>(byId.values());
     }
 
     private record Backoff(int failures, Instant retryAt) {}
