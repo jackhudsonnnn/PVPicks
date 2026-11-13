@@ -34,6 +34,7 @@ import {
 import { PersonName } from "./backend-person-name";
 import { BackendChat } from "./backend-chat";
 import { BackendSettlements } from "./backend-settlements";
+import { BackendTicker } from "./backend-ticker";
 import { getChatUnread } from "./chat-api";
 import { useBetActions } from "./bet-actions";
 import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
@@ -240,6 +241,7 @@ function TableWorkspace({
             </Button>
           </div>
         </header>
+        <BackendTicker user={user} expire={expire} />
         <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
           <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
             Dev backend: U2Pick betting, results, points settlement, receipts and table chat are

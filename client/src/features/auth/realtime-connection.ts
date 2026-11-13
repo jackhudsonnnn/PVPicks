@@ -41,6 +41,8 @@ export const tableChatFeed = (tableId: string) => `/user/queue/tables/${tableId}
 export const settlementsFeed = "/user/queue/settlements";
 /** Your table list, invitations and the profiles of people you share a table or receipt with. */
 export const personalFeed = "/user/queue/me";
+/** Sports scores for the ticker, the same for every signed-in player. */
+export const tickerFeed = "/user/queue/ticker";
 
 const recentLimit = 200;
 
