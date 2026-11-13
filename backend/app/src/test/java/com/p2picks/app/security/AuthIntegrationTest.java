@@ -75,6 +75,21 @@ class AuthIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void authenticatedRequestsKeepTheCsrfTokenUntilLoginOrLogout() throws Exception {
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, 'csrfkeep', 1, ?, 'PLAYER', 'ACTIVE')",
+                UUID.randomUUID(), passwords.encode("a secure test password"));
+        Cookie session = loginAs("csrfkeep");
+        Csrf csrf = csrf();
+        MvcResult read = mvc.perform(get("/me").cookie(session, csrf.cookie())).andExpect(status().isOk()).andReturn();
+        assertThat(read.getResponse().getHeaders("Set-Cookie")).noneMatch(cookie -> cookie.startsWith("XSRF-TOKEN="));
+        for (String body : new String[] {"{\"capCents\":1000}", "{\"capCents\":2000}"}) {
+            MvcResult update = mvc.perform(debtCapPut(session, csrf, UUID.randomUUID().toString(), body))
+                    .andExpect(status().isNoContent()).andReturn();
+            assertThat(update.getResponse().getHeaders("Set-Cookie")).noneMatch(cookie -> cookie.startsWith("XSRF-TOKEN="));
+        }
+    }
+
+    @Test
     void rejectsWrongCredentialsAndDisablesFrozenAndExpiredSessions() throws Exception {
         UUID userId = UUID.randomUUID();
         jdbc.update(

@@ -35,6 +35,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 
@@ -95,9 +96,7 @@ class SessionSecurity {
     @Bean
     CsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
-        repository.setCookieName(CsrfCookie.COOKIE);
-        repository.setHeaderName(CsrfCookie.HEADER);
-        repository.setParameterName(CsrfCookie.PARAMETER);
+        repository.setHeaderName("X-CSRF-TOKEN");
         repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict").secure(false));
         return repository;
     }
@@ -114,7 +113,10 @@ class SessionSecurity {
         };
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.disable())
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+                // The session cookie authenticates every request, so Spring would treat each one as a new
+                // login and rotate the CSRF token. Login and logout rotate it explicitly instead.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository)
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
                 .authorizeHttpRequests(authorize -> {
                     String[] profiles = environment.getActiveProfiles();
                     if (profiles.length == 1 && profiles[0].equals("dev")) {
