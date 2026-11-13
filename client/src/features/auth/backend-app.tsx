@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
+import { SegmentedTabs } from "@/components/segmented-tabs";
 import {
   backendErrorMessage,
   BackendError,
@@ -31,10 +32,12 @@ import {
   type BetActions,
 } from "./backend-bet-controls";
 import { PersonName } from "./backend-person-name";
+import { BackendChat } from "./backend-chat";
 import { BackendSettlements } from "./backend-settlements";
+import { getChatUnread } from "./chat-api";
 import { useBetActions } from "./bet-actions";
 import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
-import { personalFeed, tableBetsFeed, tableViewFeed } from "./realtime-connection";
+import { personalFeed, tableBetsFeed, tableChatFeed, tableViewFeed } from "./realtime-connection";
 
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
@@ -239,8 +242,8 @@ function TableWorkspace({
         </header>
         <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
           <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-            Dev backend: U2Pick betting, results, points settlement and receipts are connected and
-            update live. Chat and other features are not connected in this view yet.
+            Dev backend: U2Pick betting, results, points settlement, receipts and table chat are
+            connected and update live. Table management and social features are not connected yet.
           </p>
           {error && (
             <p role="alert" className="text-loss">
@@ -427,10 +430,64 @@ function TableDetails({
               </div>
             </dl>
           </div>
-          <TableBetting user={user} table={query.data} expire={expire} />
+          <TableActivity user={user} table={query.data} expire={expire} />
         </>
       )}
     </section>
+  );
+}
+
+/** The table's bets and chat, as tabs; the chat tab shows the unread count. */
+function TableActivity({
+  user,
+  table,
+  expire,
+}: {
+  user: BackendUser;
+  table: BackendTable;
+  expire: () => void;
+}) {
+  const [tab, setTab] = useState<"bets" | "chat">("bets");
+  const queryClient = useQueryClient();
+  const unreadKey = [...tablesKey, user.id, table.id, "chat-unread"];
+  const unread = useQuery({
+    queryKey: unreadKey,
+    queryFn: ({ signal }) => getChatUnread(table.id, signal),
+    retry: false,
+  });
+  useRealtimeFeed(tableChatFeed(table.id), () => {
+    void queryClient.invalidateQueries({ queryKey: unreadKey });
+  });
+  // Shares its cache with the bet list, so bet cards in chat can show the question.
+  const bets = useQuery({
+    queryKey: [...tablesKey, user.id, table.id, "bets"],
+    queryFn: ({ signal }) => listTableBets(table.id, signal),
+    retry: false,
+  });
+  const count = unread.data?.unreadCount ?? 0;
+  return (
+    <>
+      <SegmentedTabs
+        ariaLabel="Table activity"
+        tabs={[
+          { id: "bets", label: "Bets" },
+          { id: "chat", label: count > 0 ? `Chat (${count})` : "Chat" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === "bets" ? (
+        <TableBetting user={user} table={table} expire={expire} />
+      ) : (
+        <BackendChat
+          user={user}
+          table={table}
+          expire={expire}
+          betQuestion={(betId) => bets.data?.find((bet) => bet.id === betId)?.question}
+          onRead={() => void queryClient.invalidateQueries({ queryKey: unreadKey })}
+        />
+      )}
+    </>
   );
 }
 

@@ -4,7 +4,7 @@ import { BackendError, mutationRequest, request } from "./backend-api";
 
 const uuid = z.guid();
 const integer = z.union([z.number().int().safe(), z.bigint()]).transform((value) => BigInt(value));
-const cents = integer.refine((value) => value >= 1n && value <= 9223372036854775807n);
+export const exactCents = integer.refine((value) => value >= 1n && value <= 9223372036854775807n);
 const netCents = integer.refine(
   (value) => value >= -9223372036854775808n && value <= 9223372036854775807n,
 );
@@ -16,7 +16,7 @@ const lineSchema = z.object({
   tableId: uuid,
   payerId: uuid,
   payeeId: uuid,
-  amountCents: cents,
+  amountCents: exactCents,
   status: z.enum(["unpaid", "sent", "paid", "disputed", "forgive_asked", "forgiven"]),
   revision: z.number().int().min(0).max(2147483647),
   forgiveRequestedAt: timestamp.nullable().optional(),
@@ -40,7 +40,8 @@ export type LineAction =
   "sent" | "confirm" | "dispute" | "forgive" | "ask-forgive" | "decline-forgive";
 export type GroupAction = "sent" | "paid" | "unpaid" | "forgiven" | "ask" | "decline";
 
-async function read<T>(response: Response, schema: z.ZodType<T, unknown>): Promise<T> {
+/** Parses a JSON response without losing precision in 64-bit integers, then validates it. */
+export async function readExact<T>(response: Response, schema: z.ZodType<T, unknown>): Promise<T> {
   const text = await response.text();
   let value: unknown;
   try {
@@ -79,7 +80,7 @@ export async function listPendingReviews(
   signal?: AbortSignal,
 ): Promise<PendingReview[]> {
   validId(actor);
-  const reviews = await read(
+  const reviews = await readExact(
     await request("/people/settlement-reviews", signal ? { signal } : undefined),
     z.array(reviewSchema),
   );
@@ -96,7 +97,7 @@ export async function listSettlementCounterparties(
   signal?: AbortSignal,
 ): Promise<string[]> {
   validId(actor);
-  const ids = await read(
+  const ids = await readExact(
     await request("/people/settlement-counterparties", signal ? { signal } : undefined),
     z.array(uuid),
   );
@@ -110,7 +111,7 @@ export async function listSettlementGroups(
   signal?: AbortSignal,
 ): Promise<SettlementGroup[]> {
   validId(actor);
-  const groups = await read(
+  const groups = await readExact(
     await request("/people/settle-groups?includeHistory=true", signal ? { signal } : undefined),
     z.array(groupSchema),
   );
@@ -132,7 +133,7 @@ export async function receiptHistory(
 ): Promise<SettlementLine[]> {
   validId(actor);
   validId(other);
-  const lines = await read(
+  const lines = await readExact(
     await request(
       `/users/${encodeURIComponent(other)}/settlements`,
       signal ? { signal } : undefined,
@@ -175,7 +176,7 @@ export async function transitionLine(
   validId(lineId);
   if (!z.number().int().min(0).max(2147483647).safeParse(revision).success)
     throw new BackendError("Invalid receipt revision.");
-  const line = await read(
+  const line = await readExact(
     await post(`/settlement-lines/${encodeURIComponent(lineId)}/${action}`, { revision }, key),
     lineSchema,
   );
@@ -196,4 +197,10 @@ export async function transitionGroup(
     { step: action, expectedRevision: revision },
     key,
   );
+}
+
+/** Formats signed cents as points, exactly (two decimals, grouped). */
+export function formatPoints(cents: bigint) {
+  const abs = cents < 0n ? -cents : cents;
+  return `${cents < 0n ? "-" : ""}${(abs / 100n).toLocaleString()}.${(abs % 100n).toString().padStart(2, "0")}`;
 }

@@ -37,10 +37,12 @@ planned operations; it is not an implementation inventory.
   reconnecting.
 - The frontend entry point supports backend sign-in, session restoration,
   table and bet list/detail views, U2Pick creation, picking, result calling,
-  host points settlement, and settle-up receipts with balance-change reviews,
-  updating live. Active picks remain private; participant names are loaded from the backend
-  after lock. The previous mock app is not exposed there; chat, social and
-  other frontend workflows are not yet connected.
+  host points settlement, settle-up receipts with balance-change reviews, and
+  table chat (paged history, text and GIF messages, reactions, unread marker
+  and read position), all updating live. Active picks remain private;
+  participant names are loaded from the backend after lock. The previous mock
+  app is not exposed there; table management, social and other frontend
+  workflows are not yet connected.
 - An action whose outcome is unknown (for example, a lost response) keeps its
   retry key per user in the browser's local storage, so every tab sees it and
   blocks new actions until it is retried with the same key or cleared after

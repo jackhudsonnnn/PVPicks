@@ -12,8 +12,14 @@ dev backend and connects tables, bets and settle-up receipts:
 - **Receipts:** private balance-change reviews, individual and group receipt
   actions, and receipt history, preserving 64-bit cent values.
 
-Chat, registration and the other prototype workflows are not connected; the
-mock-backed app remains in the source but is not exposed.
+- **Chat:** each table has a Bets/Chat tab pair. Chat loads at your first
+  unread message (marked "New"), pages older history, sends text (1–2000
+  characters) and catalog GIFs, toggles one reaction per message, and moves
+  your read position forward as new messages reach the bottom. Your text, GIF
+  and reaction permissions apply.
+
+Table management, registration and the other prototype workflows are not
+connected; the mock-backed app remains in the source but is not exposed.
 
 Bets and receipts update live. While signed in, the app keeps one STOMP
 connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on

@@ -14,6 +14,7 @@ import {
   type GroupAction,
   type SettlementGroup,
   type SettlementLine,
+  formatPoints,
 } from "./settlement-api";
 import { useRealtimeFeed } from "./realtime";
 import { settlementsFeed } from "./realtime-connection";
@@ -213,11 +214,6 @@ export function BackendSettlements({ user, expire }: { user: BackendUser; expire
   );
 }
 
-function points(cents: bigint) {
-  const abs = cents < 0n ? -cents : cents;
-  return `${cents < 0n ? "-" : ""}${(abs / 100n).toLocaleString()}.${(abs % 100n).toString().padStart(2, "0")}`;
-}
-
 function Group({
   group,
   user,
@@ -264,7 +260,7 @@ function Group({
         <PersonName id={group.otherUserId} user={user} expire={expire} queryKey={queryKey} />
       </h3>
       <p>
-        Open net: {points(group.netCents)} points{" "}
+        Open net: {formatPoints(group.netCents)} points{" "}
         {group.netCents < 0n ? "(you owe)" : group.netCents > 0n ? "(owed to you)" : ""}
       </p>
       {reviewRequired && (
@@ -385,8 +381,8 @@ function ReceiptLines({
         {lines.map((line) => (
           <AnimatedItem as="li" key={line.id} className="space-y-2 border-t pt-3 text-sm">
             <p>
-              {line.payerId === user.id ? "You owe" : "Owed to you"} {points(line.amountCents)}{" "}
-              points · {line.status.replaceAll("_", " ")}
+              {line.payerId === user.id ? "You owe" : "Owed to you"}{" "}
+              {formatPoints(line.amountCents)} points · {line.status.replaceAll("_", " ")}
             </p>
             <p className="break-all text-muted-foreground">
               Table {line.tableId} · {new Date(line.createdAt).toLocaleString()}
@@ -455,7 +451,7 @@ function LineActions({
             key={action}
             label={label}
             title={`${label}?`}
-            description={`This closes the receipt for ${points(line.amountCents)} points. Verify before continuing.`}
+            description={`This closes the receipt for ${formatPoints(line.amountCents)} points. Verify before continuing.`}
             disabled={blocked}
             onConfirm={() => actions.start(intent)}
           />

@@ -19,7 +19,8 @@ vi.mock("./backend-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./backend-api")>()),
   getProfile: vi.fn(),
 }));
-vi.mock("./settlement-api", () => ({
+vi.mock("./settlement-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./settlement-api")>()),
   listPendingReviews: vi.fn(),
   listSettlementCounterparties: vi.fn(),
   listSettlementGroups: vi.fn(),
