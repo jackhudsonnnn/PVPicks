@@ -23,9 +23,7 @@ import org.springframework.modulith.core.ApplicationModules;
 
 class ModuleArchitectureTest {
     private static final String MODULE_ROOT = "com.p2picks.modules.";
-    private static final Set<String> DOMAIN_MODULES = Set.of(
-            "identity", "social", "tables", "chat", "bets", "settlement",
-            "quickpicks", "admin", "sportsdata", "audit");
+    private static final Set<String> DOMAIN_MODULES = Set.of("bets", "settlement");
 
     @Test
     void discoversAndVerifiesAllDomainModules() {

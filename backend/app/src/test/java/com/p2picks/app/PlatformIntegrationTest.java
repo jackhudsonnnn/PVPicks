@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.p2picks.modules.identity.internal.ModuleDiscoveryProbe;
+import com.p2picks.modules.bets.internal.ModuleDiscoveryProbe;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.Test;
