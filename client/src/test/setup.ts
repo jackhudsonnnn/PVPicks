@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 globalThis.ResizeObserver = class {
@@ -55,3 +56,19 @@ if (!(globalThis.localStorage as Storage | undefined)?.setItem) {
     value: new MemoryStorage(),
   });
 }
+
+// Components never open real WebSockets in tests; realtime.test.ts injects its own fake client.
+vi.mock("@stomp/stompjs", () => ({
+  ReconnectionTimeMode: { LINEAR: 0, EXPONENTIAL: 1 },
+  Client: class {
+    connected = false;
+    brokerURL = "";
+    activate() {}
+    deactivate() {
+      return Promise.resolve();
+    }
+    subscribe() {
+      return { id: "inert", unsubscribe() {} };
+    }
+  },
+}));

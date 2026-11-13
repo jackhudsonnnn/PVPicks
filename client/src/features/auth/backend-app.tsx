@@ -33,6 +33,8 @@ import {
 import { PersonName } from "./backend-person-name";
 import { BackendSettlements } from "./backend-settlements";
 import { useBetActions } from "./bet-actions";
+import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
+import { tableBetsFeed } from "./realtime-connection";
 
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
@@ -190,6 +192,7 @@ function TableWorkspace({
   logout: () => Promise<void>;
   expire: () => void;
 }) {
+  const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const match = /^\/tables\/([^/]+)\/?$/.exec(pathname);
   const tableId = match?.[1];
@@ -209,43 +212,68 @@ function TableWorkspace({
   }
 
   return (
-    <div className="min-h-dvh bg-field">
-      <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
-        <Logo />
-        <div className="flex items-center gap-3">
-          <span className="text-sm">{user.username}</span>
-          <Button variant="outline" size="sm" onClick={() => void handleLogout()} disabled={busy}>
-            <LogOut /> Sign out
-          </Button>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
-        <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-          Dev backend: U2Pick betting, results, points settlement and receipts are connected. Chat
-          and other features are not connected in this view yet.
-        </p>
-        {error && (
-          <p role="alert" className="text-loss">
-            {error}
-          </p>
-        )}
-        {pathname === "/" ? (
-          <>
-            <TableList user={user} expire={expire} />
-            <BackendSettlements user={user} expire={expire} />
-          </>
-        ) : tableId ? (
-          <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
-        ) : (
-          <div className="space-y-3">
-            <h1 className="text-xl font-semibold">This page is not connected yet</h1>
-            <Link to="/" className="text-primary underline">
-              Your tables
-            </Link>
+    <RealtimeProvider
+      // Updates may have been missed while disconnected, so refetch everything on (re)connect.
+      onConnected={() => void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id] })}
+      // A closed socket can mean the session ended; HTTP is authoritative, so ask it. Network
+      // failures are ignored here and the socket keeps reconnecting.
+      onClosed={() =>
+        void currentUser()
+          .then((current) => {
+            if (current?.id !== user.id) expire();
+          })
+          .catch(() => {})
+      }
+    >
+      <div className="min-h-dvh bg-field">
+        <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
+          <Logo />
+          <div className="flex items-center gap-3">
+            <LiveStatus />
+            <span className="text-sm">{user.username}</span>
+            <Button variant="outline" size="sm" onClick={() => void handleLogout()} disabled={busy}>
+              <LogOut /> Sign out
+            </Button>
           </div>
-        )}
-      </main>
-    </div>
+        </header>
+        <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
+          <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
+            Dev backend: U2Pick betting, results, points settlement and receipts are connected and
+            update live. Chat and other features are not connected in this view yet.
+          </p>
+          {error && (
+            <p role="alert" className="text-loss">
+              {error}
+            </p>
+          )}
+          {pathname === "/" ? (
+            <>
+              <TableList user={user} expire={expire} />
+              <BackendSettlements user={user} expire={expire} />
+            </>
+          ) : tableId ? (
+            <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
+          ) : (
+            <div className="space-y-3">
+              <h1 className="text-xl font-semibold">This page is not connected yet</h1>
+              <Link to="/" className="text-primary underline">
+                Your tables
+              </Link>
+            </div>
+          )}
+        </main>
+      </div>
+    </RealtimeProvider>
+  );
+}
+
+function LiveStatus() {
+  const status = useRealtimeStatus();
+  if (!status) return null;
+  return (
+    <span role="status" className="text-xs text-muted-foreground">
+      {status === "live" ? "Live" : "Reconnecting…"}
+    </span>
   );
 }
 
@@ -400,6 +428,9 @@ function TableBetting({
     },
     expire,
   );
+  useRealtimeFeed(tableBetsFeed(table.id), () => {
+    void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, table.id, "bets"] });
+  });
   return (
     <>
       <BetMutationStatus actions={actions} />

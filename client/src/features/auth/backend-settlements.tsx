@@ -15,12 +15,15 @@ import {
   type SettlementGroup,
   type SettlementLine,
 } from "./settlement-api";
+import { useRealtimeFeed } from "./realtime";
+import { settlementsFeed } from "./realtime-connection";
 
 type Actions = ReturnType<typeof useSettlementActions>;
 
 export function BackendSettlements({ user, expire }: { user: BackendUser; expire: () => void }) {
   const queryClient = useQueryClient();
   const key = ["backend-tables", user.id, "settlements"] as const;
+  useRealtimeFeed(settlementsFeed, () => void queryClient.invalidateQueries({ queryKey: key }));
   const reviews = useQuery({
     queryKey: [...key, "reviews"],
     queryFn: ({ signal }) => listPendingReviews(user.id, signal),
@@ -471,4 +474,3 @@ function LineActions({
     </div>
   );
 }
-

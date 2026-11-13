@@ -29,6 +29,8 @@ export default defineConfig({
         "/api": {
           target: backend.origin,
           rewrite: (path) => path.replace(/^\/api(?=\/|$)/, ""),
+          // Realtime updates use a WebSocket at /api/ws.
+          ws: true,
         },
       },
     },
