@@ -1,4 +1,4 @@
-package com.p2picks.app;
+package com.p2picks.app.config;
 
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;

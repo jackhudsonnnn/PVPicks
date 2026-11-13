@@ -11,9 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
 
-final class OpenApiSchemas {
+public final class OpenApiSchemas {
 
-    static JsonSchema load(String name) throws IOException {
+    public static JsonSchema load(String name) throws IOException {
         ObjectMapper yaml = new ObjectMapper(new YAMLFactory());
         try (InputStream input =
                 Objects.requireNonNull(OpenApiSchemas.class.getResourceAsStream("/openapi.yaml"))) {

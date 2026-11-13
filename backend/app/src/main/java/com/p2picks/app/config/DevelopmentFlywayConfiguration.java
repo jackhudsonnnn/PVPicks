@@ -1,4 +1,4 @@
-package com.p2picks.app;
+package com.p2picks.app.config;
 
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.context.annotation.Bean;

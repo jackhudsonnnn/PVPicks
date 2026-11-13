@@ -3,6 +3,10 @@ spring:
     name: p2picks
   flyway:
     enabled: false
+  modulith:
+    # Only packages annotated with @ApplicationModule (modules/*) are domain modules;
+    # com.p2picks.app feature packages are ordinary packages.
+    detection-strategy: explicitly-annotated
 
 management:
   endpoints:

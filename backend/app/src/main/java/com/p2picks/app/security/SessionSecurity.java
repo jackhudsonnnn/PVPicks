@@ -1,4 +1,4 @@
-package com.p2picks.app;
+package com.p2picks.app.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.time.Duration;

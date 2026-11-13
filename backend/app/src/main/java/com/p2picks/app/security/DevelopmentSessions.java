@@ -1,5 +1,6 @@
-package com.p2picks.app;
+package com.p2picks.app.security;
 
+import com.p2picks.app.common.PostgresText;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

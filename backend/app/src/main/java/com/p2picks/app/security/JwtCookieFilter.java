@@ -1,4 +1,4 @@
-package com.p2picks.app;
+package com.p2picks.app.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
