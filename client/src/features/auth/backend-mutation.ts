@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { BackendError, backendErrorMessage } from "./backend-api";
 
@@ -27,9 +27,11 @@ export function useRetryableMutation<Intent>({
     createdAt: z.number().int().nonnegative(),
   });
   type Pending = z.infer<typeof pendingSchema>;
-  const [saved, setSaved] = useState<{ pending: Pending | null; error: string | null }>(() => {
+  // Saved in localStorage so every tab of this browser sees the same uncertain action and
+  // blocks new ones until it is retried or cleared. Other devices reconcile from server reads.
+  function load(): { pending: Pending | null; error: string | null } {
     try {
-      const raw = sessionStorage.getItem(storageKey);
+      const raw = localStorage.getItem(storageKey);
       if (raw === null) return { pending: null, error: null };
       const result = pendingSchema.safeParse(JSON.parse(raw));
       return result.success
@@ -38,15 +40,25 @@ export function useRetryableMutation<Intent>({
     } catch {
       return { pending: null, error: "Retry storage is unavailable or invalid." };
     }
-  });
+  }
+  const [saved, setSaved] = useState(load);
+  useEffect(() => {
+    function sync(event: StorageEvent) {
+      if (event.key === storageKey || event.key === null) setSaved(load());
+    }
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+    // load only reads storageKey and the schema, which are fixed per key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
 
   function persist(pending: Pending | null): boolean {
     try {
-      if (pending) sessionStorage.setItem(storageKey, JSON.stringify(pending));
-      else sessionStorage.removeItem(storageKey);
+      if (pending) localStorage.setItem(storageKey, JSON.stringify(pending));
+      else localStorage.removeItem(storageKey);
       setSaved({ pending, error: null });
       return true;
     } catch {

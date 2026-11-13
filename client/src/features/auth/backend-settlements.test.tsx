@@ -68,7 +68,7 @@ function renderScreen() {
 }
 
 beforeEach(() => {
-  sessionStorage.clear();
+  localStorage.clear();
   vi.resetAllMocks();
   vi.mocked(getProfile).mockResolvedValue({ id: other, username: "player", hue: 1 });
   vi.mocked(listPendingReviews).mockResolvedValue([review]);
@@ -142,11 +142,11 @@ describe("gated settlement preview", () => {
     await waitFor(() => expect(transitionGroup).toHaveBeenCalledTimes(2));
     expect(vi.mocked(transitionGroup).mock.calls[1]?.[3]).toBe(key);
     expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
-    expect(sessionStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
+    expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
   });
 
   it("refuses an expired retry and keeps other actions blocked", async () => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       `p2picks:settlement-action:${user.id}`,
       JSON.stringify({
         intent: { kind: "group", other, action: "sent", revision: "group-revision" },
@@ -166,7 +166,7 @@ describe("gated settlement preview", () => {
   it("does not send a mutation when retry storage cannot be written", async () => {
     vi.mocked(listPendingReviews).mockResolvedValue([]);
     vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
-    vi.stubGlobal("sessionStorage", {
+    vi.stubGlobal("localStorage", {
       getItem: () => null,
       setItem: () => {
         throw new Error("storage unavailable");
@@ -206,15 +206,15 @@ describe("gated settlement preview", () => {
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Mark group sent" }));
     expect(await screen.findByText(/outcome is unknown/)).toBeInTheDocument();
-    const stored = sessionStorage.getItem(`p2picks:settlement-action:${user.id}`);
+    const stored = localStorage.getItem(`p2picks:settlement-action:${user.id}`);
     fireEvent.click(screen.getByRole("button", { name: "Retry same action" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "original action may have succeeded",
     );
-    expect(sessionStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
+    expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
     fireEvent.click(screen.getByRole("button", { name: "Retry same action" }));
     await waitFor(() => expect(expire).toHaveBeenCalled());
-    expect(sessionStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
+    expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
   });
 
   it("refreshes stale revisions without replaying with a new key", async () => {
@@ -227,7 +227,7 @@ describe("gated settlement preview", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("changed");
     await waitFor(() => expect(listPendingReviews).toHaveBeenCalledTimes(2));
     expect(acknowledgeReview).toHaveBeenCalledTimes(1);
-    expect(sessionStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
+    expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
   });
 
   it("checks confirmation before forgiving an individual receipt", async () => {

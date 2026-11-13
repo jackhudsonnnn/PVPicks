@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackendApp } from "./backend-app";
@@ -60,17 +60,32 @@ const bet: BackendBet = {
   myParticipation: "not_joined",
 };
 
-function renderApp(enabled = true) {
+const locked: BackendBet = {
+  ...bet,
+  status: "PENDING",
+  settledBy: "hosts",
+  pickCount: 1,
+  picks: [{ userId: user.id, choice: "Yes" }],
+  noGuessUserIds: [],
+  remainderRule: "host",
+};
+
+function renderApp() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BackendApp bettingPreview={enabled} />
+      <BackendApp />
     </QueryClientProvider>,
   );
 }
 
+async function confirm(label: string) {
+  fireEvent.click(await screen.findByRole("button", { name: label }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+}
+
 beforeEach(() => {
-  sessionStorage.clear();
+  localStorage.clear();
   vi.resetAllMocks();
   route.pathname = `/tables/${table.id}`;
   vi.mocked(currentUser).mockResolvedValue(user);
@@ -80,16 +95,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("test-only U2Pick preview", () => {
-  it("keeps the normal app read-only", async () => {
-    renderApp(false);
-    expect(await screen.findByText("Who wins?")).toBeInTheDocument();
-    expect(screen.queryByText("Create a U2Pick")).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    expect(await screen.findByText(/picks stay private/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save pick" })).not.toBeInTheDocument();
-  });
-
+describe("U2Pick betting", () => {
   it("validates and creates a U2Pick with the supplied settings", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(JSON.stringify(bet)));
     renderApp();
@@ -182,5 +188,94 @@ describe("test-only U2Pick preview", () => {
     fireEvent.click(await screen.findByRole("button", { name: "View details" }));
     expect(await screen.findByRole("button", { name: "Save pick" })).toBeDisabled();
     expect(mutationRequest).not.toHaveBeenCalled();
+  });
+
+  it("lets an eligible member call the result or wash a locked bet", async () => {
+    vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 204 }));
+    vi.mocked(listTableBets).mockResolvedValue([locked]);
+    vi.mocked(getBet).mockResolvedValue(locked);
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    expect(screen.queryByRole("button", { name: "Save pick" })).not.toBeInTheDocument();
+    await confirm("Call result");
+    await waitFor(() =>
+      expect(mutationRequest).toHaveBeenCalledWith(
+        `/bets/${bet.id}/settle`,
+        "POST",
+        expect.any(String),
+        { winningChoice: "Yes" },
+      ),
+    );
+    expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Wash" }));
+    await confirm("Call result");
+    await waitFor(() =>
+      expect(mutationRequest).toHaveBeenLastCalledWith(
+        `/bets/${bet.id}/settle`,
+        "POST",
+        expect.any(String),
+        { winningChoice: null },
+      ),
+    );
+  });
+
+  it("explains who calls the result when the viewer cannot", async () => {
+    vi.mocked(listTableBets).mockResolvedValue([
+      { ...locked, settledBy: "me", proposerId: table.id },
+    ]);
+    vi.mocked(getBet).mockResolvedValue({ ...locked, settledBy: "me", proposerId: table.id });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    expect(await screen.findByText(/Only the person who proposed it calls it/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Call result" })).not.toBeInTheDocument();
+  });
+
+  it("lets a host settle the table's resolved points", async () => {
+    vi.mocked(mutationRequest).mockResolvedValue(new Response("{}", { status: 201 }));
+    vi.mocked(listTableBets).mockResolvedValue([
+      { ...locked, status: "SETTLED", winningChoice: "Yes" },
+      { ...locked, id: "123e4567-e89b-42d3-a456-426614174003", status: "WASHED" },
+    ]);
+    renderApp();
+    expect(await screen.findByText(/1 resolved bet is waiting/)).toBeInTheDocument();
+    await confirm("Settle table points");
+    await waitFor(() =>
+      expect(mutationRequest).toHaveBeenCalledWith(
+        `/tables/${table.id}/settle-points`,
+        "POST",
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("hides points settlement from members who are not hosts", async () => {
+    vi.mocked(getTable).mockResolvedValue({ ...table, hostIds: [] });
+    vi.mocked(listTableBets).mockResolvedValue([{ ...locked, status: "SETTLED" }]);
+    renderApp();
+    expect(await screen.findByText("Who wins?")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Settle table points" })).not.toBeInTheDocument();
+  });
+
+  it("blocks new actions while another tab has an uncertain one", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByText("Create a U2Pick"));
+    expect(screen.getByRole("button", { name: "Create bet" })).toBeEnabled();
+    const storageKey = `p2picks:bet-action:${user.id}`;
+    const saved = JSON.stringify({
+      intent: { kind: "pick", tableId: table.id, betId: bet.id, choice: "Yes" },
+      key: "123e4567-e89b-42d3-a456-426614174009",
+      createdAt: Date.now(),
+    });
+    localStorage.setItem(storageKey, saved);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: storageKey, newValue: saved }));
+    });
+    expect(await screen.findByRole("button", { name: "Retry same action" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create bet" })).toBeDisabled();
+    localStorage.removeItem(storageKey);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: storageKey, newValue: null }));
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create bet" })).toBeEnabled());
   });
 });

@@ -15,6 +15,7 @@ import {
   signOut,
   type BackendBet,
 } from "./backend-api";
+import { listPendingReviews, listSettlementGroups } from "./settlement-api";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -36,6 +37,16 @@ vi.mock("./backend-api", async (importOriginal) => {
     getProfile: vi.fn(),
   };
 });
+
+vi.mock("./settlement-api", () => ({
+  listPendingReviews: vi.fn(),
+  listSettlementCounterparties: vi.fn(),
+  listSettlementGroups: vi.fn(),
+  receiptHistory: vi.fn(),
+  acknowledgeReview: vi.fn(),
+  transitionLine: vi.fn(),
+  transitionGroup: vi.fn(),
+}));
 
 const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "testuser", hue: 2 };
 const table = {
@@ -83,10 +94,12 @@ beforeEach(() => {
   vi.resetAllMocks();
   route.pathname = "/";
   vi.mocked(listTableBets).mockResolvedValue([]);
+  vi.mocked(listPendingReviews).mockResolvedValue([]);
+  vi.mocked(listSettlementGroups).mockResolvedValue([]);
 });
 
-describe("backend preview", () => {
-  it("signs in, reads tables, and revokes the session without mock betting controls", async () => {
+describe("backend app", () => {
+  it("signs in, reads tables and receipts, and revokes the session", async () => {
     vi.mocked(currentUser).mockResolvedValue(null);
     vi.mocked(signIn).mockResolvedValue(user);
     vi.mocked(listTables).mockResolvedValue([table]);
@@ -97,8 +110,7 @@ describe("backend preview", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
     expect(await screen.findByText("Test table")).toBeInTheDocument();
     expect(signIn).toHaveBeenCalledWith("testuser", "password");
-    expect(screen.queryByRole("button", { name: /^bet$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Settle-up receipts" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Settle-up receipts" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     expect(await screen.findByLabelText("Username")).toBeInTheDocument();
     expect(signOut).toHaveBeenCalledOnce();
@@ -131,11 +143,11 @@ describe("backend preview", () => {
       .mockRejectedValueOnce(new BackendError("expired", 401));
     renderApp();
     expect(await screen.findByRole("alert")).toHaveTextContent("cannot access");
-    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(screen.getByText(/session expired/i)).toBeInTheDocument());
   });
 
-  it("loads bet list and details without exposing other active picks or mutation controls", async () => {
+  it("loads bet list and details without exposing other active picks", async () => {
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
@@ -149,7 +161,6 @@ describe("backend preview", () => {
     expect(screen.getByText(/picks stay private until lock/i)).toBeInTheDocument();
     expect(screen.queryByText("Picks after lock")).not.toBeInTheDocument();
     expect(getProfile).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: /^bet$/i })).not.toBeInTheDocument();
     expect(getBet).toHaveBeenCalledWith(table.id, bet.id, expect.any(AbortSignal));
     fireEvent.click(screen.getByRole("button", { name: "Hide details" }));
     expect(screen.queryByText("Your pick: Yes")).not.toBeInTheDocument();

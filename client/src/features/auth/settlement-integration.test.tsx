@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  sessionStorage.clear();
+  localStorage.clear();
 });
 
 describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integration", () => {
@@ -22,7 +22,7 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <BackendApp settlementPreview />
+        <BackendApp />
       </QueryClientProvider>,
     );
     fireEvent.change(await screen.findByLabelText("Username"), {
@@ -34,7 +34,7 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Preview")).toBeInTheDocument();
     expect(await screen.findByText(/Balance changed with/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "I've reviewed this" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),

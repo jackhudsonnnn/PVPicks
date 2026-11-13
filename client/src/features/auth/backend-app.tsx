@@ -25,7 +25,9 @@ import {
 import {
   BetMutationStatus,
   PickControls,
+  PointsSettlementControl,
   ProposalForm,
+  ResultControls,
   type BetActions,
 } from "./backend-bet-controls";
 import { PersonName } from "./backend-person-name";
@@ -35,13 +37,7 @@ import { useBetActions } from "./bet-actions";
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
 
-export function BackendApp({
-  settlementPreview = false,
-  bettingPreview = false,
-}: {
-  settlementPreview?: boolean;
-  bettingPreview?: boolean;
-}) {
+export function BackendApp() {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const session = useQuery({
@@ -53,10 +49,17 @@ export function BackendApp({
   async function clearSession(message?: string) {
     await queryClient.cancelQueries({ queryKey: sessionKey });
     queryClient.setQueryData(sessionKey, null);
-    await queryClient.cancelQueries({ queryKey: tablesKey });
-    queryClient.removeQueries({ queryKey: tablesKey });
     setNotice(message ?? null);
   }
+
+  // Drop the previous user's data only after the signed-in views have unmounted; removing it
+  // while they are still mounted lets a re-render fetch it again.
+  const signedOut = session.data === null;
+  useEffect(() => {
+    if (!signedOut) return;
+    void queryClient.cancelQueries({ queryKey: tablesKey });
+    queryClient.removeQueries({ queryKey: tablesKey });
+  }, [signedOut, queryClient]);
 
   async function login(username: string, password: string) {
     const user = await signIn(username, password);
@@ -93,8 +96,6 @@ export function BackendApp({
       key={session.data.id}
       user={session.data}
       logout={logout}
-      settlementPreview={settlementPreview}
-      bettingPreview={bettingPreview}
       expire={() => void clearSession("Your session expired. Please sign in again.")}
     />
   );
@@ -184,14 +185,10 @@ function TableWorkspace({
   user,
   logout,
   expire,
-  settlementPreview,
-  bettingPreview,
 }: {
   user: BackendUser;
   logout: () => Promise<void>;
   expire: () => void;
-  settlementPreview: boolean;
-  bettingPreview: boolean;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const match = /^\/tables\/([^/]+)\/?$/.exec(pathname);
@@ -224,9 +221,8 @@ function TableWorkspace({
       </header>
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
         <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-          {bettingPreview
-            ? "Test-only betting preview: U2Pick creation and picking are enabled; results and points settlement are not connected."
-            : "Backend preview: tables and bets are read-only. Betting actions, chat and other features are not connected in this view."}
+          Dev backend: U2Pick betting, results, points settlement and receipts are connected. Chat
+          and other features are not connected in this view yet.
         </p>
         {error && (
           <p role="alert" className="text-loss">
@@ -236,16 +232,10 @@ function TableWorkspace({
         {pathname === "/" ? (
           <>
             <TableList user={user} expire={expire} />
-            {settlementPreview && <BackendSettlements user={user} expire={expire} />}
+            <BackendSettlements user={user} expire={expire} />
           </>
         ) : tableId ? (
-          <TableDetails
-            key={tableId}
-            user={user}
-            tableId={tableId}
-            expire={expire}
-            bettingPreview={bettingPreview}
-          />
+          <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
         ) : (
           <div className="space-y-3">
             <h1 className="text-xl font-semibold">This page is not connected yet</h1>
@@ -318,12 +308,10 @@ function TableDetails({
   user,
   tableId,
   expire,
-  bettingPreview,
 }: {
   user: BackendUser;
   tableId: string;
   expire: () => void;
-  bettingPreview: boolean;
 }) {
   const query = useQuery({
     queryKey: [...tablesKey, user.id, tableId],
@@ -388,18 +376,14 @@ function TableDetails({
               </div>
             </dl>
           </div>
-          {bettingPreview ? (
-            <GatedTableBets user={user} table={query.data} expire={expire} />
-          ) : (
-            <TableBets user={user} tableId={tableId} expire={expire} />
-          )}
+          <TableBetting user={user} table={query.data} expire={expire} />
         </>
       )}
     </section>
   );
 }
 
-function GatedTableBets({
+function TableBetting({
   user,
   table,
   expire,
@@ -420,30 +404,23 @@ function GatedTableBets({
     <>
       <BetMutationStatus actions={actions} />
       <ProposalForm table={table} user={user} actions={actions} />
-      <TableBets
-        user={user}
-        tableId={table.id}
-        expire={expire}
-        actions={actions}
-        canBet={!table.disabledPermissions[user.id]?.includes("bets")}
-      />
+      <TableBets user={user} table={table} expire={expire} actions={actions} />
     </>
   );
 }
 
 function TableBets({
   user,
-  tableId,
+  table,
   expire,
   actions,
-  canBet = false,
 }: {
   user: BackendUser;
-  tableId: string;
+  table: BackendTable;
   expire: () => void;
-  actions?: BetActions;
-  canBet?: boolean;
+  actions: BetActions;
 }) {
+  const tableId = table.id;
   const [selected, setSelected] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const betsKey = [...tablesKey, user.id, tableId, "bets"] as const;
@@ -471,6 +448,9 @@ function TableBets({
           <RefreshCw /> Refresh bets
         </Button>
       </div>
+      {query.data && (
+        <PointsSettlementControl table={table} user={user} bets={query.data} actions={actions} />
+      )}
       {query.isPending ? (
         <p>Loading bets…</p>
       ) : query.isError ? (
@@ -509,12 +489,11 @@ function TableBets({
                 {selected === bet.id && (
                   <BetDetails
                     user={user}
-                    tableId={tableId}
+                    table={table}
                     betId={bet.id}
                     expire={expire}
                     queryKey={[...betsKey, bet.id]}
                     actions={actions}
-                    canBet={canBet}
                   />
                 )}
               </AnimatedItem>
@@ -539,24 +518,23 @@ function formatPoints(cents: number) {
 
 function BetDetails({
   user,
-  tableId,
+  table,
   betId,
   expire,
   queryKey,
   actions,
-  canBet,
 }: {
   user: BackendUser;
-  tableId: string;
+  table: BackendTable;
   betId: string;
   expire: () => void;
   queryKey: readonly string[];
-  actions: BetActions | undefined;
-  canBet: boolean;
+  actions: BetActions;
 }) {
+  const canBet = !table.disabledPermissions[user.id]?.includes("bets");
   const query = useQuery({
     queryKey,
-    queryFn: ({ signal }) => getBet(tableId, betId, signal),
+    queryFn: ({ signal }) => getBet(table.id, betId, signal),
     retry: false,
   });
   const unauthorized = query.error instanceof BackendError && query.error.status === 401;
@@ -578,9 +556,8 @@ function BetDetails({
       ) : (
         <>
           <BetFacts bet={query.data} user={user} expire={expire} queryKey={queryKey} />
-          {actions && (
-            <PickControls bet={query.data} tableId={tableId} actions={actions} canBet={canBet} />
-          )}
+          <PickControls bet={query.data} tableId={table.id} actions={actions} canBet={canBet} />
+          <ResultControls bet={query.data} table={table} user={user} actions={actions} />
         </>
       )}
     </div>

@@ -14,7 +14,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  sessionStorage.clear();
+  localStorage.clear();
 });
 
 async function signIn(username: string) {
@@ -26,18 +26,31 @@ async function signIn(username: string) {
   expect(await screen.findByText("Create a U2Pick")).toBeInTheDocument();
 }
 
-describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated U2Pick integration", () => {
+function renderTable() {
+  const tableId = process.env["PVPICKS_TEST_TABLE_ID"];
+  if (!tableId) throw new Error("Missing test table ID");
+  route.pathname = `/tables/${tableId}`;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <BackendApp />
+    </QueryClientProvider>,
+  );
+}
+
+async function confirm(label: string) {
+  fireEvent.click(await screen.findByRole("button", { name: label }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+}
+
+// BettingFrontendIntegrationTest runs this file twice: "pick" before the backend locks the bet,
+// then "result" after it.
+const phase = process.env["PVPICKS_TEST_PORT"] ? process.env["PVPICKS_TEST_PHASE"] : undefined;
+
+describe.runIf(phase === "pick")("isolated U2Pick integration: proposal and picks", () => {
   it("creates a bet and keeps two users' active picks private", async () => {
-    const tableId = process.env["PVPICKS_TEST_TABLE_ID"];
-    if (!tableId) throw new Error("Missing test table ID");
-    route.pathname = `/tables/${tableId}`;
     useIsolatedBackend();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <BackendApp bettingPreview />
-      </QueryClientProvider>,
-    );
+    renderTable();
     await signIn("betuihost");
     fireEvent.click(screen.getByText("Create a U2Pick"));
     fireEvent.change(screen.getByLabelText("Bet question"), { target: { value: "Cats or dogs?" } });
@@ -61,5 +74,23 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated U2Pick integration"
     fireEvent.click(screen.getByRole("button", { name: "Save pick" }));
     expect(await screen.findByText("Your pick: Dogs")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/2 picks ·/)).toBeInTheDocument());
+  }, 30000);
+});
+
+describe.runIf(phase === "result")("isolated U2Pick integration: result and points", () => {
+  it("lets the host call the result and settle the table's points", async () => {
+    useIsolatedBackend();
+    renderTable();
+    await signIn("betuihost");
+    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    expect(await screen.findByText("Picks after lock")).toBeInTheDocument();
+    expect(await screen.findByText("You: Cats")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Cats" }));
+    await confirm("Call result");
+    expect(await screen.findByText("Winning choice: Cats")).toBeInTheDocument();
+    expect(await screen.findByText(/1 resolved bet is waiting/)).toBeInTheDocument();
+    await confirm("Settle table points");
+    expect(await screen.findByText("Table points settlement: Complete")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Settle table points" })).not.toBeInTheDocument();
   }, 30000);
 });

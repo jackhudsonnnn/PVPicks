@@ -58,6 +58,7 @@ const betSchema = z
     pickCount: z.number().int().safe().nonnegative(),
     myPick: z.string().nullable(),
     myParticipation: z.enum(["picked", "no_guess", "not_joined"]),
+    settledBy: z.enum(["anyone", "non_participants", "hosts", "me"]).optional(),
     picks: z.array(z.object({ userId: uuid, choice: z.string() })).optional(),
     noGuessUserIds: z.array(uuid).optional(),
     remainderRule: z.enum(["host", "proposer", "earliest", "random"]).optional(),

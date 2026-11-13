@@ -5,11 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { U2PickEditor } from "@/features/bets/components/u2pick-editor";
-import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
+import { cleanOptions, customBetProblem, settlerRule } from "@/features/bets/u2pick";
 import type { SettlerRule } from "@/features/bets/types";
 import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
 import { ConfirmAction } from "./backend-confirm-action";
 import { useBetActions } from "./bet-actions";
+import { awaitingPointsSettlement, canCallResult } from "./bet-results";
 
 export type BetActions = ReturnType<typeof useBetActions>;
 
@@ -22,7 +23,7 @@ export function BetMutationStatus({ actions }: { actions: BetActions }) {
         <div className="space-y-2 rounded-lg border bg-surface p-3">
           <p>
             A bet action has an unknown outcome for table {actions.pending.intent.tableId}. Retry
-            the same action before making other changes.
+            the same action before making other changes. It may have been started in another tab.
           </p>
           <Button
             size="sm"
@@ -202,6 +203,85 @@ export function PickControls({
         )}
       </div>
       <p className="text-muted-foreground">Clearing a joined pick leaves you as No guess.</p>
+    </div>
+  );
+}
+
+const wash = "wash";
+
+export function ResultControls({
+  bet,
+  table,
+  user,
+  actions,
+}: {
+  bet: BackendBet;
+  table: BackendTable;
+  user: BackendUser;
+  actions: BetActions;
+}) {
+  const [selected, setSelected] = useState("0");
+  if (bet.modeId !== "u2pick" || bet.status !== "PENDING") return null;
+  const rule = settlerRule(bet.settledBy ?? "hosts");
+  if (!canCallResult(bet, table, user.id))
+    return <p className="text-muted-foreground">Waiting for the result. {rule.description}</p>;
+  const disabled = actions.busy || !!actions.pending || !!actions.storageError;
+  const winningChoice = selected === wash ? null : (bet.choices[Number(selected)] ?? null);
+  return (
+    <div className="space-y-2">
+      <p className="font-semibold">Call the result</p>
+      <SegmentedTabs
+        size="sm"
+        ariaLabel="Result"
+        tabs={[
+          ...bet.choices.map((option, index) => ({ id: String(index), label: option, disabled })),
+          { id: wash, label: "Wash", disabled },
+        ]}
+        value={selected}
+        onChange={setSelected}
+      />
+      <ConfirmAction
+        label="Call result"
+        title={winningChoice === null ? "Wash this bet?" : `Call “${winningChoice}” as the result?`}
+        description={
+          winningChoice === null
+            ? "Nobody wins or loses points. This can't be undone."
+            : "Points move between players who picked. This can't be undone."
+        }
+        disabled={disabled}
+        onConfirm={() =>
+          actions.start({ kind: "resolve", tableId: table.id, betId: bet.id, winningChoice })
+        }
+      />
+    </div>
+  );
+}
+
+export function PointsSettlementControl({
+  table,
+  user,
+  bets,
+  actions,
+}: {
+  table: BackendTable;
+  user: BackendUser;
+  bets: BackendBet[];
+  actions: BetActions;
+}) {
+  const waiting = awaitingPointsSettlement(bets);
+  if (!table.hostIds.includes(user.id) || waiting === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-surface p-4">
+      <p>
+        {waiting} resolved {waiting === 1 ? "bet is" : "bets are"} waiting for points settlement.
+      </p>
+      <ConfirmAction
+        label="Settle table points"
+        title="Settle this table's points?"
+        description="Every resolved bet at this table is settled together, and players get receipts for what they owe."
+        disabled={actions.busy || !!actions.pending || !!actions.storageError}
+        onConfirm={() => actions.start({ kind: "settle-points", tableId: table.id })}
+      />
     </div>
   );
 }
