@@ -86,6 +86,7 @@ public abstract class IntegrationTestSupport {
         // Tests publish the outbox explicitly through OutboxRelay; reading the topic from the start means
         // the realtime consumer cannot miss an event published while it is still joining.
         registry.add("pvpicks.outbox-relay.enabled", () -> "false");
+        registry.add("pvpicks.outbox-cleanup.enabled", () -> "false");
         registry.add("pvpicks.realtime.offset-reset", () -> "earliest");
         registry.add("PVPICKS_DEV_JWT_SECRET", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         registry.add("PVPICKS_DEV_IDEMPOTENCY_SECRET", () -> "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=");

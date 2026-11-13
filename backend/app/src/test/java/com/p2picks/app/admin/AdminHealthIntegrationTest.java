@@ -52,6 +52,7 @@ class AdminHealthIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("pvpicks.bet-lock-worker.enabled", () -> "false");
         registry.add("pvpicks.outbox-relay.enabled", () -> "false");
+        registry.add("pvpicks.outbox-cleanup.enabled", () -> "false");
         registry.add("PVPICKS_DEV_JWT_SECRET", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         registry.add("PVPICKS_DEV_IDEMPOTENCY_SECRET", () -> "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA=");
     }

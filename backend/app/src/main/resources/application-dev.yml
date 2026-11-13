@@ -6,6 +6,9 @@ pvpicks:
     enabled: ${PVPICKS_BET_LOCK_WORKER_ENABLED:true}
   outbox-relay:
     enabled: ${PVPICKS_OUTBOX_RELAY_ENABLED:true}
+  outbox-cleanup:
+    enabled: ${PVPICKS_OUTBOX_CLEANUP_ENABLED:true}
+    retention: ${PVPICKS_OUTBOX_RETENTION:P7D}
 
 spring:
   flyway:
