@@ -4,6 +4,8 @@ server:
 pvpicks:
   bet-lock-worker:
     enabled: ${PVPICKS_BET_LOCK_WORKER_ENABLED:true}
+  outbox-relay:
+    enabled: ${PVPICKS_OUTBOX_RELAY_ENABLED:true}
 
 spring:
   flyway:

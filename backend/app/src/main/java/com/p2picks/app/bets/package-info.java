@@ -1,5 +1,5 @@
 /**
- * Bets: U2Pick proposal, picks, locking, resolution and payout, plus bet reads and the opt-in lock worker.
+ * Bets: U2Pick proposal, picks, locking, resolution and payout, plus bet reads and the deadline lock worker.
  *
  * <p>Public types in this package are the module API; everything else is package-private.
  */

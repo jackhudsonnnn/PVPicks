@@ -95,7 +95,9 @@ class SessionSecurity {
     @Bean
     CsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
-        repository.setHeaderName("X-CSRF-TOKEN");
+        repository.setCookieName(CsrfCookie.COOKIE);
+        repository.setHeaderName(CsrfCookie.HEADER);
+        repository.setParameterName(CsrfCookie.PARAMETER);
         repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict").secure(false));
         return repository;
     }

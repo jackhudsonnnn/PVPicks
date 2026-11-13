@@ -4,9 +4,15 @@ spring:
   flyway:
     enabled: false
   modulith:
-    # Only packages annotated with @ApplicationModule (modules/*) are domain modules;
-    # com.p2picks.app feature packages are ordinary packages.
+    # Each com.p2picks.app package with an @ApplicationModule package-info is a module.
     detection-strategy: explicitly-annotated
+  kafka:
+    producer:
+      properties:
+        # Fail fast while the relay holds outbox row locks; unsent rows are retried.
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
 
 management:
   endpoints:
