@@ -1,7 +1,7 @@
 # Test guide
 
 Run frontend tests with `npm --prefix client test`. They cover backend session,
-table-read, profile lookup and privacy-aware bet-read handling as well as the retained browser-local prototype's
+tables, betting, receipts, chat, the ticker and realtime handling of the backend-backed app as well as the retained browser-local prototype's
 presentation, storage isolation, betting calculations, chat unread state,
 settlement warnings and error toasts.
 

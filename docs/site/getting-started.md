@@ -1,6 +1,6 @@
 # Getting started
 
-Get oriented without changing shared data or exposing local credentials.
+Get oriented, run the stack locally and keep credentials out of source control.
 
 ## Prerequisites
 
@@ -39,23 +39,21 @@ From `backend/`, using an installed Java 21:
 
 Integration tests use disposable Testcontainers and require Docker. The
 <a href="/docs/source/backend-readme.md" download>backend setup notes</a> cover local JDK selection,
-provisioning, configuration, and the existing dev stack. They include
-operations that affect local services: inspect and obtain approval before
-running them against a shared environment.
+provisioning, configuration, and the dev stack.
 
-::: danger Shared environment
-Development data is disposable, but the environment may be shared. Confirm the
-target and obtain explicit approval before resetting or migrating a shared
-database, rebuilding shared infrastructure, or regenerating credentials.
-Pending Flyway migrations run automatically when the backend starts.
+::: tip Disposable local environment
+The project is pre-MVP and the dev environment is local: development data is
+disposable, and you may reset or migrate the database, rebuild infrastructure
+or regenerate credentials. Pending Flyway migrations run automatically when the
+backend starts. Never commit credentials or expose the dev stack to a network.
 :::
 
 ## Frontend
 
 The current frontend provides backend sign-in, table and bet views, U2Pick
 betting (create, pick, call results, host points settlement) and settle-up
-receipts, which update live over a WebSocket. Chat, social and other
-prototype features are not exposed yet. Accounts must already be provisioned
+receipts, table chat and a live sports ticker, all updating live over a
+WebSocket. Table management and social features are not exposed yet. Accounts must already be provisioned
 in the dev backend. In dev, the lock worker locks U2Pick bets at their
 deadline and the outbox relay publishes events for live updates; set
 `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or `PVPICKS_OUTBOX_RELAY_ENABLED=false`
@@ -63,18 +61,16 @@ to turn either off. The sports ticker needs a BallDontLie API key in
 `PVPICKS_BALLDONTLIE_API_KEY`; without one it says live scores are
 unavailable.
 
-For an approved isolated dev backend listening on `127.0.0.1:8080`, configure
+For a dev backend listening on `127.0.0.1:8080`, configure
 its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From
 `client/`, run `npm run dev` and open `http://127.0.0.1:5173`. Vite proxies
 same-origin `/api` requests to the backend and preserves the browser's Origin;
 the browser obtains a CSRF token before login and logout. Use the exact host and
 port shown, and do not expose this development proxy to a network. This proxy
 is for Vite development only, not a production deployment configuration.
-For an isolated backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its
-HTTP loopback origin when starting Vite.
-
-Never start or reconfigure a backend against shared infrastructure without
-approval: startup automatically applies pending migrations.
+If port 8080 is taken, start Compose with `PVPICKS_PORT` set to another port
+and start Vite with `PVPICKS_DEV_BACKEND_URL` set to that HTTP loopback origin.
+Startup applies pending migrations automatically.
 
 ## Authentication for API development
 

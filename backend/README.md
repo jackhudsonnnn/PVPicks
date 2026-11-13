@@ -146,20 +146,19 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
 
 ## Safety
 
-- Startup applies pending Flyway migrations. Do not start an updated backend
-  against a shared database without explicit approval. Flyway does not baseline
-  an existing nonempty schema: back up and inspect it first.
+- Startup applies pending Flyway migrations. The dev environment is local and
+  disposable (see AGENTS.md), so resetting it is fine; any future shared or
+  production database needs backups and approval first. Flyway does not
+  baseline an existing nonempty schema.
 - The database role needs permission to install the `citext` and `pgcrypto`
   extensions.
 - The U2Pick lock worker is on by default in the dev profile: it scans at
   startup and then five seconds after each scan, locking overdue U2Pick bets
-  in the connected database. Sports bets are not auto-locked. Set
-  `PVPICKS_BET_LOCK_WORKER_ENABLED=false` before starting against shared data
-  unless locking it has been approved.
+  in the connected database. Sports bets are not auto-locked.
+  `PVPICKS_BET_LOCK_WORKER_ENABLED=false` turns it off.
 - The outbox relay is also on by default in dev: it publishes unpublished
-  outbox rows to Kafka and sets their `published_at`. Set
-  `PVPICKS_OUTBOX_RELAY_ENABLED=false` before starting against shared data
-  unless that has been approved. Realtime delivery needs Kafka; without it the
+  outbox rows to Kafka and sets their `published_at`;
+  `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns it off. Realtime delivery needs Kafka; without it the
   app still runs and clients fall back to refreshing on demand. A daily job
   also deletes published outbox rows older than `PVPICKS_OUTBOX_RETENTION`
   (default `P7D`); `PVPICKS_OUTBOX_CLEANUP_ENABLED=false` turns it off.

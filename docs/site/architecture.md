@@ -86,6 +86,8 @@ uses a custom question and choices and an eligible member calls its outcome;
 sports modes require validated game data and resolve only from the feed.
 Feed freshness, baselines, overtime and chronology must not be inferred from a
 U2Pick result, and a member-called result must never authorize a sports bet.
+The only manual path for a sports bet is the planned host override, which
+records the host and announces the change (see the domain rules).
 U2Pick transactions and shared points settlement are exposed over HTTP. The
 `sports` module polls the feed into game snapshots and serves the ticker;
 sports bets do not read it yet.

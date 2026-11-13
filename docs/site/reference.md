@@ -20,6 +20,7 @@ the repository, not necessarily in a browser.
 - <a href="/docs/source/adr/0002-transactional-outbox.md" download>Transactional outbox</a>
 - <a href="/docs/source/adr/0003-redis-cache-only.md" download>Redis as cache only</a>
 - <a href="/docs/source/adr/0004-sports-feed.md" download>Sports feed</a>
+- <a href="/docs/source/adr/0005-sports-data-model.md" download>Sports data model, ingestion and replay (proposed)</a>
 - <a href="/docs/source/adr/0000-template.md" download>ADR template</a>
 
 - <a href="/docs/source/frontend-roadmap.md" download>Frontend roadmap</a>

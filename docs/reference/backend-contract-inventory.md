@@ -26,8 +26,8 @@ results are consumed.
 | `propose` | Dev `POST /tables/{id}/bets` (U2Pick only) |
 | `pick` | Dev `PUT /bets/{id}/pick`; `DELETE /bets/{id}/pick` for No guess |
 | `settle` | Dev `POST /bets/{id}/settle` for authorized U2Pick settlers only |
-| `simulateResult` | Prototype/test facility only; no public player endpoint |
-| `overrideQuickPick` | `POST /bets/{id}/wash`, subject to copy/host rules |
+| `simulateResult` | Dev-only stand-in for the feed, retired once replayed feed data exists (ADR 0005); no player endpoint |
+| `overrideQuickPick` | Planned host override (wash or set a result) for sports bets and Quick Pick copies until points are settled; endpoint not yet designed |
 | `send`, `sendGif` | Dev `POST /tables/{id}/messages` |
 | `react` | Dev `PUT`/`DELETE /messages/{id}/reaction` |
 | `updateProfile` | Dev `PATCH /me/profile` |
@@ -222,5 +222,5 @@ results are consumed.
 
 - [ ] Describe every command and read surface in OpenAPI 3.1, with schemas and
       errors; reconcile the table above with the client and current decisions.
-- [ ] Specify and review authenticated realtime destinations and event shapes.
+- [x] Specify and review authenticated realtime destinations and event shapes.
 - [ ] Verify sports-feed chronology and coverage before auto-settlement.

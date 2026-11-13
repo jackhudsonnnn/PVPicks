@@ -42,7 +42,7 @@ history, because the action may have succeeded. Other devices do not see the
 saved action; they reconcile from the server's reads. Storage failure disables
 actions.
 
-For local development, use an approved isolated backend on `127.0.0.1:8080`
+For local development, run the dev backend on `127.0.0.1:8080`
 configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
 `npm run dev`, then visit `http://127.0.0.1:5173`. Vite proxies `/api` requests
 to the backend; this development-only proxy is not a production deployment.
@@ -50,9 +50,8 @@ Sign in with an already provisioned backend account.
 For an isolated backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its
 HTTP loopback origin when starting Vite.
 
-Starting the backend applies pending migrations automatically. Do not start it
-against shared infrastructure without approval, and do not expose the dev
-backend or proxy to a network.
+Starting the backend applies pending migrations automatically. Do not expose
+the dev backend or proxy to a network.
 
 Run `npm test` and `npx tsc --noEmit` for client checks.
 The lint toolchain temporarily overrides its transitive minimatch dependency

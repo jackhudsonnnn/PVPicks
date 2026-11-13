@@ -47,4 +47,5 @@ are skipped. Scores are not yet used to resolve bets.
 When `PVPICKS_SPORTS_RECORDING_DIR` is set, every raw response is appended to
 `<league>-<New York date>.jsonl` there (Compose mounts the git-ignored
 `infra/compose/recordings/`). Recordings omit the API key. They are meant for
-debugging and for a planned dev replay feed, which would amend this decision.
+debugging and for the dev replay feed proposed in ADR 0005, which would amend
+this decision.

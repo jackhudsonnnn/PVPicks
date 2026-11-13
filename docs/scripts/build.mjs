@@ -23,7 +23,7 @@ const sources = [
   ["docs/reference/realtime-contract.md", "source/reference/realtime-contract.md"],
   ["client/roadmap.md", "source/frontend-roadmap.md"],
   ...["0000-template.md", "0001-modular-monolith.md", "0002-transactional-outbox.md",
-    "0003-redis-cache-only.md", "0004-sports-feed.md"].map(name => [`docs/adr/${name}`, `source/adr/${name}`])
+    "0003-redis-cache-only.md", "0004-sports-feed.md", "0005-sports-data-model.md"].map(name => [`docs/adr/${name}`, `source/adr/${name}`])
 ];
 
 for (const [source, destination] of sources) {

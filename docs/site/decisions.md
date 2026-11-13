@@ -19,7 +19,10 @@ depend on a CDN.
 
 ## Operational safety
 
-The existing environment may be shared. Preserve databases and credentials;
-destructive resets or migrations of shared data require explicit approval.
-Tests should use disposable resources. The project roadmap permits parallel
-work where dependencies allow.
+The project is pre-MVP and the dev environment is local and not shared:
+development data is disposable, and the database, infrastructure and local
+credentials may be reset, migrated or regenerated. Credentials stay out of
+source control and the dev stack stays off the network. Tests use disposable
+resources. Before any shared, LAN or production environment exists, this
+changes to preserving data and approving destructive operations. The project
+roadmap permits parallel work where dependencies allow.

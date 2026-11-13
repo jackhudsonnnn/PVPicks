@@ -8,8 +8,7 @@ current code, not an estimated delivery date.
 - Maintain this handbook, the current domain rules, ADRs and draft contracts.
 - Add an interactive API reference later, after defining request execution and
   access safeguards; the current site links to the draft OpenAPI file.
-- Complete API and realtime contract review and finish dev infrastructure
-  verification without modifying shared data.
+- Complete the API contract review.
 
 ## 2. Tables & social — in progress
 
@@ -24,8 +23,10 @@ current code, not an estimated delivery date.
   worker, member-called results and washes, ledger writes, host points
   settlement, and individual/group receipt actions with private balance-change
   reviews, over HTTP and in the frontend.
-- **Later:** sports-bet modes and their feed-driven locking and results, Quick
-  Pick copy propagation, and end-to-end debt-cap enforcement.
+- **Later:** sports-bet modes and their feed-driven locking and results, with
+  the decided automatic outcomes and host overrides (domain rules, "Sports
+  outcomes and host overrides"); Quick Pick copy propagation; end-to-end
+  debt-cap enforcement.
 - Sports modes must reuse the shared pick, privacy, cap, lock, payout and
   settlement transactions; only the feed may supply their outcomes.
 - Preserve lock-time remainder snapshots, including the randomly chosen host,
@@ -40,7 +41,8 @@ current code, not an estimated delivery date.
 - **Later:** ordering and gap detection beyond refetch-on-reconnect; durable
   consumers that record processed events; verify the feed's NFL fields,
   coverage, chronology and per-game statistics against live data before using
-  it to resolve sports bets.
+  it to resolve sports bets; game history, rosters, player stats and a dev
+  replay feed (ADR 0005), and choosing a BallDontLie plan for player modes.
 
 ## 5. Frontend integration — in progress
 
@@ -62,4 +64,5 @@ current code, not an estimated delivery date.
 - Design retention and rotation for retry records and audit data.
 - Add rate limits, secure cookies, TLS and operational protections before LAN.
   Validate backup/recovery and observability before production or AWS.
-- Preserve existing data; destructive resets require explicit approval.
+- Until then the dev environment is disposable; before LAN, switch to preserving
+  data and approving destructive operations.

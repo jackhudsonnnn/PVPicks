@@ -7,11 +7,11 @@ examples rather than a list of implemented tests.
 | Area | Invariants to preserve | Existing frontend tests | Example JUnit targets |
 |---|---|---|---|
 | Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Host/proposer can receive remainder even when not a winner; earliest/random distribute to winners. | `bets/payout.test.ts`, `bets/ledger.test.ts` | `splitsLoserPotInCents`, `washWhenNoWinner`, `remainderCanGoToNonParticipant`, `settlementIsZeroSum` |
-| Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come only from the feed; authorized people settle U2Pick. | `store/reducer.test.ts`, `bets/picks.test.ts`, `bets/u2pick.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
+| Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `store/reducer.test.ts`, `bets/picks.test.ts`, `bets/u2pick.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
 | Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/modes.test.ts`, `bets/overtime.test.ts`, `bets/info.test.ts` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
 | Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `table/scenarios.test.ts`, `settings/debt-cap.test.ts` | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
 | Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `table/settlements.test.ts`, `social/settle-receipts.test.ts`, `social/settle-groups.test.ts`, `social/settle-changes.test.ts` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
-| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash their copy; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `table/quick-picks.test.ts`, `store/reducer.test.ts` | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
+| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `table/quick-picks.test.ts`, `store/reducer.test.ts` | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `auth/local-accounts.test.ts`, `settings/profile.test.ts`, `settings/deletion.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
 | Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `social/follows.test.ts`, `social/invites.test.ts`, `social/safety.test.ts`, `admin/admin-pages.test.ts` | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
 | Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. | `table/chat-window.test.ts`, `table/reactions.test.ts`, `table/unread.test.ts` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
@@ -34,8 +34,9 @@ Sports modes follow later and are not yet implemented.
 Both mode families use the same pick, privacy, cap, lock, payout and points
 settlement invariants. U2Pick validates custom questions and choices and uses
 an authorized member-called result. Sports modes validate game-specific data,
-baselines and applicable overtime rules, and only the feed can supply their
-outcomes. Neither mode may bypass the shared transactional lifecycle.
+baselines and applicable overtime rules; their outcomes come from the feed,
+and only a host may override them (see Sports outcomes and host overrides).
+Neither mode may bypass the shared transactional lifecycle.
 The current proposal transaction handles U2Pick only. When sports proposal
 validation is added, reuse or extract its common authorization, retry, debt-cap
 and deadline mechanics; do not reuse U2Pick's custom definition or settler
@@ -551,3 +552,58 @@ retention and account-deletion cleanup remain unresolved, as with other retry
 records. The outbox records events but does not deliver them; future
 consumers must recheck invitation eligibility before exposing or delivering an
 event that may have been cancelled after it was written.
+
+## Sports outcomes and host overrides — planned
+
+Nothing in this section is implemented yet. It records the user's decisions
+for sports bets, which resolve from the feed (ADR 0004, ADR 0005).
+
+**Hosts have the final say.** A host is the person the table trusts to be fair
+and to facilitate the money exchange, so a host may override any sports bet
+outcome until the table's points are settled, including on bets they are part
+of. After points settlement the result is final.
+
+Automatic resolution, before any override:
+
+| Situation | Automatic outcome |
+|---|---|
+| Game canceled, postponed or abandoned while the bet is Active or Pending | Wash |
+| Game delayed or rescheduled | Stays Active; locks at the actual start, the first time the feed reports it live |
+| Game suspended | Settles normally if it finishes within 48 hours; otherwise washes |
+| Tie on a bet with no tie choice (for example an NFL moneyline) | Wash |
+| Feed reports Final | Settles after a grace period of about 15–30 minutes, so quick stat corrections land first |
+| Score corrected after the bet resolved | No automatic re-settlement |
+| Feed outage or `unknown` status | Never settles automatically; waits |
+| Player prop whose player did not play | Wash |
+| Proposal after the game started | Rejected; sports bets lock at the start |
+
+Host override:
+
+- A host may **wash** a bet or **set its result** to any of its choices at any
+  time while it is Active, Pending or resolved with points not yet settled. The
+  server does not ask for or judge a reason.
+- An override may replace an automatic outcome, including an automatic wash,
+  and may correct an earlier resolution. Corrections append compensating,
+  zero-sum ledger entries; they never edit or delete earlier entries.
+- Overrides apply immediately, are recorded with the acting host and time, and
+  post an attributed system chat message naming the bet and the new outcome.
+- On a Quick Pick copy, the subscriber table's host has the same powers. Once
+  they override, the copy stops following the source table's result. The
+  source table's later results never change it again.
+- Overrides are part of the shared transactional lifecycle: they recheck that
+  the actor is a current host, lock affected users before bets, and are
+  idempotent like other mutations.
+
+Interface: the host override reuses the prototype ticket's outcome menu (the
+bet's choices plus a wash), in the same place. The prototype's **Simulate**
+menu in that location stands in for the feed. It stays as a dev-only tool until
+replayed feed data is available (ADR 0005), and is then removed.
+
+Open:
+
+- A host setting for who may override (for example all hosts, or only hosts
+  outside the pot), similar to the remainder rule, may be added later.
+- Showing host-modified outcomes in the settlement message (for example a
+  details popup) may be added later.
+- Whether the same host override applies to U2Pick results is not decided;
+  U2Pick follows its settler rule.

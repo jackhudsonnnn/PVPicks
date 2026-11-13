@@ -25,8 +25,9 @@ features:
 
 ::: warning Development only
 The backend is not ready for real users or network exposure. The frontend
-connects sign-in, tables, U2Pick betting and settle-up receipts; other workflows
-remain unavailable.
+connects sign-in, tables, U2Pick betting, settle-up receipts, table chat and a
+live sports ticker; table management, social features and sports bets remain
+unavailable.
 :::
 
 ## Documentation hierarchy

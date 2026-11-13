@@ -57,7 +57,8 @@ planned operations; it is not an implementation inventory.
 ## Not yet available
 
 - Sports-bet modes and locking, Quick Pick copy propagation, and end-to-end cap enforcement.
-- Sports-bet modes and feed-driven results; the feed's NFL mapping still needs checking against live data.
+- Sports-bet modes, feed-driven results and host overrides (rules decided; see the domain guide); the feed's NFL mapping still needs checking against live data.
+- Sports data history, rosters, player stats and a dev replay feed (ADR 0005, proposed).
 - Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
 - LAN/production security and deployment.
 

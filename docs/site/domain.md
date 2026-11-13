@@ -21,6 +21,21 @@ and current decisions remain the working references.
 U2Pick proposal, picks, locking, results, points settlement and receipts are
 available over HTTP and in the frontend. Sports modes are planned.
 
+## Sports outcomes (planned)
+
+- Sports bets resolve from the feed. Canceled, postponed or abandoned games,
+  ties without a tie choice, suspensions longer than 48 hours and player props
+  for players who did not play wash automatically; a Final settles after a
+  short grace period, and an outage never settles anything.
+- **Hosts have the final say.** They are trusted by the table and facilitate
+  the money exchange, so any host may wash a sports bet or set its result,
+  without giving a reason, until the table's points are settled, even on bets
+  they joined. Overrides apply immediately, are announced in chat and can
+  overrule an automatic wash or correct an earlier result. After points
+  settlement every result is final.
+- A subscriber table's host has the same powers over a Quick Pick copy; the
+  copy then stops following the source table.
+
 ## Privacy
 
 The current pick schema stores plaintext; an operator with infrastructure
@@ -42,7 +57,7 @@ the Active-bet restrictions on the server. Dev bet reads enforce them.
 - Remainder changes are rejected while a bet is Active, except an unchanged
   value is a no-op. Pending snapshots remain unchanged.
 - Betting switches affect future proposals and Quick Pick fan-out, not existing
-  bets. Internal U2Pick proposal enforces them; fan-out remains planned.
+  bets. U2Pick proposal enforces them; fan-out remains planned.
 - Enabling Quick Picks enables sharing. Disabling it disconnects incoming and
   outgoing subscriptions; stopping sharing or rotating the code disconnects
   incoming subscriptions. Existing copies remain. Subscription APIs and fan-out
