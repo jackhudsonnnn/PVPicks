@@ -137,6 +137,16 @@ export function useBackendChat(tableId: string, expire: () => void) {
           update({ newBelow: true });
           return;
         }
+        if (!newerCursor.current) {
+          // An empty chat has no cursor to continue from, so start from the latest window.
+          const latest = await getChatWindow(tableId, { latest: true });
+          if (latest.nextCursor) newerCursor.current = latest.nextCursor;
+          update({
+            messages: appendNewer(current.current.messages, latest.items),
+            olderCursor: current.current.olderCursor ?? latest.previousCursor,
+          });
+          return;
+        }
         await loadNewer();
         const latest = await getChatWindow(tableId, { latest: true });
         update({ messages: mergeRange(current.current.messages, latest.items) });

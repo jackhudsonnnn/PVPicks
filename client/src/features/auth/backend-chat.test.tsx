@@ -223,6 +223,31 @@ describe("table chat", () => {
     expect(await screen.findByText(/90,071,992,547,409\.93 points/)).toBeInTheDocument();
   });
 
+  it("shows the first message in a chat that started empty", async () => {
+    vi.mocked(getChatWindow).mockResolvedValueOnce({
+      items: [],
+      previousCursor: null,
+      nextCursor: null,
+    });
+    renderChat();
+    expect(await screen.findByText(/No messages yet/)).toBeInTheDocument();
+    vi.mocked(getChatWindow).mockResolvedValue({
+      items: [message(1)],
+      previousCursor: null,
+      nextCursor: "after-1",
+    });
+    act(() =>
+      feeds.get(`/user/queue/tables/${table.id}/chat`)?.({
+        eventId: "123e4567-e89b-42d3-a456-426614174098",
+        type: "chat.changed",
+        schemaVersion: 1,
+        occurredAt: "2026-11-13T12:00:00Z",
+        tableId: table.id,
+      }),
+    );
+    expect(await screen.findByText("hello 1")).toBeInTheDocument();
+  });
+
   it("loads arrivals when the chat feed says it changed", async () => {
     renderChat();
     await screen.findByText("hello 2");
