@@ -1,6 +1,6 @@
 package com.p2picks.app.tables;
 
-import com.p2picks.app.chat.SystemChatWriter;
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -25,17 +25,17 @@ class TableMemberRemovalService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
-    private final SystemChatWriter systemChat;
+    private final ChatMessageWriter chatMessages;
     private final TableSettlementGuard settlementGuard;
     private final Outbox outbox;
 
     TableMemberRemovalService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, SystemChatWriter systemChat, TableSettlementGuard settlementGuard,
+            IdempotencyGuard idempotency, ChatMessageWriter chatMessages, TableSettlementGuard settlementGuard,
             Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
-        this.systemChat = systemChat;
+        this.chatMessages = chatMessages;
         this.settlementGuard = settlementGuard;
         this.outbox = outbox;
     }
@@ -83,7 +83,7 @@ class TableMemberRemovalService {
                 """, tableId, targetId, targetId);
         int deleted = jdbc.update("DELETE FROM table_members WHERE table_id = ? AND user_id = ?", tableId, targetId);
         if (deleted != 1) throw new IllegalStateException("Locked table member disappeared");
-        systemChat.write(tableId, "A member was removed");
+        chatMessages.system(tableId, "A member was removed");
         outbox.append(OutboxEvent.TABLE_MEMBER_REMOVED, tableId,
                 Map.of("tableId", tableId, "removedUserId", targetId));
         authentication.requireUnexpired(jwt);

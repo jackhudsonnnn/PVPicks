@@ -1,6 +1,6 @@
 package com.p2picks.app.tables;
 
-import com.p2picks.app.chat.SystemChatWriter;
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -22,15 +22,15 @@ class TableSettingsService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
-    private final SystemChatWriter systemChat;
+    private final ChatMessageWriter chatMessages;
     private final Outbox outbox;
 
     TableSettingsService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            SystemChatWriter systemChat, Outbox outbox) {
+            ChatMessageWriter chatMessages, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
-        this.systemChat = systemChat;
+        this.chatMessages = chatMessages;
         this.outbox = outbox;
     }
 
@@ -73,11 +73,11 @@ class TableSettingsService {
                         u2pick_enabled = COALESCE(?, u2pick_enabled) WHERE id = ?
                     """, changes.hostsOnlyBets(), changes.u2pickEnabled(), tableId);
             if (hostsChanged) {
-                systemChat.write(tableId, changes.hostsOnlyBets()
+                chatMessages.system(tableId, changes.hostsOnlyBets()
                         ? "Only hosts can propose new bets" : "Host-only bet proposals turned off");
             }
             if (u2pickChanged) {
-                systemChat.write(tableId, changes.u2pickEnabled()
+                chatMessages.system(tableId, changes.u2pickEnabled()
                         ? "U2Pick custom bets turned on" : "U2Pick custom bets turned off");
             }
             outbox.append(OutboxEvent.TABLE_SETTINGS_CHANGED, tableId, Map.of("tableId", tableId));

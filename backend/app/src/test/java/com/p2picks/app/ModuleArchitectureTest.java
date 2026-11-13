@@ -7,6 +7,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -71,6 +76,27 @@ class ModuleArchitectureTest {
     }
 
     @Test
+    void outboxAndChatMessagesHaveOneWriterEach() throws IOException {
+        Path sources = Path.of("src/main/java/com/p2picks/app");
+        List<String> violations;
+        try (var files = Files.walk(sources)) {
+            violations = files.filter(file -> file.toString().endsWith(".java"))
+                    .flatMap(file -> {
+                        String path = sources.relativize(file).toString().replace('\\', '/');
+                        String code = read(file);
+                        return Stream.of(
+                                code.contains("INSERT INTO outbox") && !path.equals("common/Outbox.java")
+                                        ? path + " writes the outbox; use common.Outbox" : null,
+                                code.contains("INSERT INTO chat_messages") && !path.startsWith("chat/")
+                                        ? path + " writes chat_messages; use chat.ChatMessageWriter" : null);
+                    })
+                    .filter(violation -> violation != null)
+                    .toList();
+        }
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
     void modulithRejectsAccessToAnotherModulesInternals() {
         ApplicationModules fixture = ApplicationModules.of("com.p2picks.archfixture.modules", location -> true);
         var source = fixture.getModuleByName("source").orElseThrow();
@@ -83,5 +109,13 @@ class ModuleArchitectureTest {
     void modulithRejectsModuleCycles() {
         ApplicationModules fixture = ApplicationModules.of("com.p2picks.archfixture.cycle", location -> true);
         assertThat(fixture.detectViolations().toString()).containsIgnoringCase("cycle detected");
+    }
+
+    private static String read(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 }

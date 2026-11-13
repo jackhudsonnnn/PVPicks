@@ -1,5 +1,6 @@
 package com.p2picks.app.social;
 
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -22,14 +23,17 @@ public class InvitationResponseService {
     private final SocialRelationshipQueries relationships;
     private final IdempotencyGuard idempotency;
     private final Outbox outbox;
+    private final ChatMessageWriter chatMessages;
 
     InvitationResponseService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            SocialRelationshipQueries relationships, IdempotencyGuard idempotency, Outbox outbox) {
+            SocialRelationshipQueries relationships, IdempotencyGuard idempotency, Outbox outbox,
+            ChatMessageWriter chatMessages) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.relationships = relationships;
         this.idempotency = idempotency;
         this.outbox = outbox;
+        this.chatMessages = chatMessages;
     }
 
     @Transactional
@@ -96,15 +100,9 @@ public class InvitationResponseService {
                     invitation.table(), userId);
             String username = Objects.requireNonNull(jdbc.queryForObject(
                     "SELECT username::text FROM users WHERE id = ?", String.class, userId));
-            UUID messageId = UUID.randomUUID();
-            jdbc.update("""
-                    INSERT INTO chat_messages (id, table_id, kind, text)
-                    VALUES (?, ?, 'system', ?)
-                    """, messageId, invitation.table(), username + " joined the table");
             outbox.append(OutboxEvent.TABLE_MEMBER_JOINED, invitation.table(),
                     Map.of("tableId", invitation.table(), "userId", userId));
-            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, invitation.table(),
-                    Map.of("tableId", invitation.table(), "messageId", messageId, "kind", "system"));
+            chatMessages.system(invitation.table(), username + " joined the table");
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

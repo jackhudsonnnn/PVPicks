@@ -1,6 +1,6 @@
 package com.p2picks.app.tables;
 
-import com.p2picks.app.chat.SystemChatWriter;
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.sql.SQLException;
@@ -24,15 +24,15 @@ class TableQuickPickService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
-    private final SystemChatWriter systemChat;
+    private final ChatMessageWriter chatMessages;
     private final QuickPickSubscriptions subscriptions;
 
     TableQuickPickService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, SystemChatWriter systemChat, QuickPickSubscriptions subscriptions) {
+            IdempotencyGuard idempotency, ChatMessageWriter chatMessages, QuickPickSubscriptions subscriptions) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
-        this.systemChat = systemChat;
+        this.chatMessages = chatMessages;
         this.subscriptions = subscriptions;
     }
 
@@ -90,7 +90,7 @@ class TableQuickPickService {
                 case STOP_SHARING -> jdbc.update("UPDATE tables SET quickpick_sharing = false WHERE id = ?", tableId);
                 case ROTATE -> code = rotate(tableId, current.code());
             }
-            systemChat.write(tableId, switch (action) {
+            chatMessages.system(tableId, switch (action) {
                 case ENABLE -> "Quick Picks turned on";
                 case DISABLE -> "Quick Picks turned off";
                 case SHARE -> "Quick Pick sharing turned on";

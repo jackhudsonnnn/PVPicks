@@ -1,5 +1,6 @@
 package com.p2picks.app.settlement;
 
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -41,14 +42,17 @@ public class TablePointsSettlementService {
     private final IdempotencyGuard idempotency;
     private final SettlementNetReconciliation reconciliation;
     private final Outbox outbox;
+    private final ChatMessageWriter chatMessages;
 
     TablePointsSettlementService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, SettlementNetReconciliation reconciliation, Outbox outbox) {
+            IdempotencyGuard idempotency, SettlementNetReconciliation reconciliation, Outbox outbox,
+            ChatMessageWriter chatMessages) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.reconciliation = reconciliation;
         this.outbox = outbox;
+        this.chatMessages = chatMessages;
     }
 
     @Transactional
@@ -132,13 +136,9 @@ public class TablePointsSettlementService {
                     line.amount().cents());
             reconciliation.reconcile(before);
         }
-        UUID messageId = UUID.randomUUID();
-        jdbc.update("INSERT INTO chat_messages (id, table_id, kind, settlement_id) VALUES (?, ?, 'settlement', ?)",
-                messageId, tableId, settlementId);
         outbox.append(OutboxEvent.SETTLEMENT_CREATED, settlementId,
                 Map.of("tableId", tableId, "settlementId", settlementId));
-        outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
-                Map.of("tableId", tableId, "messageId", messageId, "kind", "settlement"));
+        chatMessages.settlementCard(tableId, settlementId);
         idempotency.saveResponseReference(actor, key, OPERATION, settlementId);
         authentication.requireUnexpired(jwt);
         return new Result(Outcome.CREATED, settlementId);

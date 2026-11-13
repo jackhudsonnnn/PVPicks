@@ -1,6 +1,6 @@
 package com.p2picks.app.tables;
 
-import com.p2picks.app.chat.SystemChatWriter;
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -22,15 +22,15 @@ class TableProfileService {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
-    private final SystemChatWriter systemChat;
+    private final ChatMessageWriter chatMessages;
     private final Outbox outbox;
 
     TableProfileService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            SystemChatWriter systemChat, Outbox outbox) {
+            ChatMessageWriter chatMessages, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
-        this.systemChat = systemChat;
+        this.chatMessages = chatMessages;
         this.outbox = outbox;
     }
 
@@ -67,7 +67,7 @@ class TableProfileService {
             jdbc.update("""
                     UPDATE tables SET name = COALESCE(?, name), emoji = COALESCE(?, emoji) WHERE id = ?
                     """, changes.name(), changes.emoji(), tableId);
-            systemChat.write(tableId, "Table details changed");
+            chatMessages.system(tableId, "Table details changed");
             outbox.append(OutboxEvent.TABLE_PROFILE_CHANGED, tableId, Map.of("tableId", tableId));
         }
         authentication.requireUnexpired(jwt);

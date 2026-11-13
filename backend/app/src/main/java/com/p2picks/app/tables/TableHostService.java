@@ -1,5 +1,6 @@
 package com.p2picks.app.tables;
 
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -22,13 +23,16 @@ class TableHostService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final Outbox outbox;
+    private final ChatMessageWriter chatMessages;
 
     TableHostService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            Outbox outbox) {
+            Outbox outbox,
+            ChatMessageWriter chatMessages) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.outbox = outbox;
+        this.chatMessages = chatMessages;
     }
 
     @Transactional
@@ -83,15 +87,9 @@ class TableHostService {
                         WHERE table_id = ? AND from_id = ? AND status = 'PENDING'
                         """, tableId, targetId);
             }
-            UUID messageId = UUID.randomUUID();
-            jdbc.update("""
-                    INSERT INTO chat_messages (id, table_id, kind, text, system_event, system_subject_id)
-                    VALUES (?, ?, 'system', ?, ?, ?)
-                    """, messageId, tableId, host ? "A member is now a host" : "A member is no longer a host",
-                    host ? "host_promoted" : "host_demoted", targetId);
             outbox.append(OutboxEvent.TABLE_HOST_CHANGED, tableId, Map.of("tableId", tableId));
-            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
-                    Map.of("tableId", tableId, "messageId", messageId, "kind", "system"));
+            chatMessages.attributedSystem(tableId, host ? "A member is now a host" : "A member is no longer a host",
+                    host ? "host_promoted" : "host_demoted", targetId);
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;

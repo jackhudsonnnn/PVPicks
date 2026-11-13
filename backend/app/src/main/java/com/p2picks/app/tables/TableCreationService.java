@@ -2,7 +2,7 @@ package com.p2picks.app.tables;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2picks.app.chat.SystemChatWriter;
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -30,16 +30,16 @@ class TableCreationService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final ObjectMapper json;
-    private final SystemChatWriter systemChat;
+    private final ChatMessageWriter chatMessages;
     private final Outbox outbox;
 
     TableCreationService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, ObjectMapper json, SystemChatWriter systemChat, Outbox outbox) {
+            IdempotencyGuard idempotency, ObjectMapper json, ChatMessageWriter chatMessages, Outbox outbox) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.json = json;
-        this.systemChat = systemChat;
+        this.chatMessages = chatMessages;
         this.outbox = outbox;
     }
 
@@ -68,7 +68,7 @@ class TableCreationService {
         insertTable(tableId, name, emoji);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", tableId, actor);
         outbox.append(OutboxEvent.TABLE_CREATED, tableId, Map.of("tableId", tableId));
-        systemChat.write(tableId, "Table created");
+        chatMessages.system(tableId, "Table created");
         List<MemberOutcome> outcomes = addRequested(tableId, actor, requested, statuses);
         idempotency.saveResponseReference(actor, key, CREATE, tableId);
         idempotency.saveResponseData(actor, key, CREATE, writeOutcomes(outcomes));
@@ -167,7 +167,7 @@ class TableCreationService {
             }
             outcomes.add(new MemberOutcome(target, outcome));
         }
-        if (added) systemChat.write(tableId, "Members were added to the table");
+        if (added) chatMessages.system(tableId, "Members were added to the table");
         return List.copyOf(outcomes);
     }
 

@@ -1,5 +1,6 @@
 package com.p2picks.app.tables;
 
+import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
@@ -43,13 +44,16 @@ class TableRemainderService {
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
     private final Outbox outbox;
+    private final ChatMessageWriter chatMessages;
 
     TableRemainderService(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            Outbox outbox) {
+            Outbox outbox,
+            ChatMessageWriter chatMessages) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
         this.outbox = outbox;
+        this.chatMessages = chatMessages;
     }
 
     @Transactional
@@ -84,14 +88,8 @@ class TableRemainderService {
             if (active == null) throw new IllegalStateException("Active bet check returned no result");
             if (active) throw new ActiveBet();
             jdbc.update("UPDATE tables SET remainder_rule = ? WHERE id = ?", rule.value, tableId);
-            UUID messageId = UUID.randomUUID();
-            jdbc.update("""
-                    INSERT INTO chat_messages (id, table_id, kind, text)
-                    VALUES (?, ?, 'system', ?)
-                    """, messageId, tableId, "Leftover cents set to: " + rule.label);
             outbox.append(OutboxEvent.TABLE_REMAINDER_CHANGED, tableId, Map.of("tableId", tableId));
-            outbox.append(OutboxEvent.CHAT_MESSAGE_CREATED, tableId,
-                    Map.of("tableId", tableId, "messageId", messageId, "kind", "system"));
+            chatMessages.system(tableId, "Leftover cents set to: " + rule.label);
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;
