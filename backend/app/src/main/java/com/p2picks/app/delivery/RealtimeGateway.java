@@ -19,10 +19,20 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class RealtimeGateway {
-    static final String TABLE_DESTINATION = "/queue/tables/%s/%s";
+    static final String TABLE_DESTINATION = "/queue/tables/%s%s";
     static final String SETTLEMENTS_DESTINATION = "/queue/settlements";
+    static final String PERSONAL_DESTINATION = "/queue/me";
 
-    enum TableFeed { BETS, CHAT }
+    /** A table's feeds: its bets, its chat, and the table view itself (settings, hosts, members). */
+    enum TableFeed {
+        BETS("/bets"), CHAT("/chat"), VIEW("");
+
+        final String suffix;
+
+        TableFeed(String suffix) {
+            this.suffix = suffix;
+        }
+    }
 
     private final SimpMessagingTemplate messaging;
     private final SimpUserRegistry users;
@@ -37,19 +47,27 @@ class RealtimeGateway {
         this.access = access;
     }
 
-    void toTable(UUID tableId, TableFeed feed, Invalidation invalidation) {
-        String destination = TABLE_DESTINATION.formatted(tableId, feed.name().toLowerCase(java.util.Locale.ROOT));
+    /**
+     * Sends to current members subscribed to the table feed; when {@code onlyUsers} is not null, only to those
+     * of them in that set.
+     */
+    void toTable(UUID tableId, TableFeed feed, Invalidation invalidation, Set<UUID> onlyUsers) {
+        String destination = TABLE_DESTINATION.formatted(tableId, feed.suffix);
         Map<String, String> subscribers = subscribers(destination, null);
         if (subscribers.isEmpty()) return;
         Set<UUID> userIds = new HashSet<>();
         subscribers.values().forEach(user -> userIds.add(UUID.fromString(user)));
         Set<UUID> members = access.currentMembers(tableId, userIds);
-        send(destination, invalidation, subscribers, user -> members.contains(UUID.fromString(user)));
+        send(destination, invalidation, subscribers, user -> {
+            UUID id = UUID.fromString(user);
+            return members.contains(id) && (onlyUsers == null || onlyUsers.contains(id));
+        });
     }
 
-    void toUser(UUID userId, Invalidation invalidation) {
-        Map<String, String> subscribers = subscribers(SETTLEMENTS_DESTINATION, userId.toString());
-        send(SETTLEMENTS_DESTINATION, invalidation, subscribers, user -> true);
+    /** Sends to the user's own subscriptions of a personal destination. */
+    void toUser(UUID userId, String destination, Invalidation invalidation) {
+        Map<String, String> subscribers = subscribers(destination, userId.toString());
+        send(destination, invalidation, subscribers, user -> true);
     }
 
     /** Socket ID to user name for subscriptions to the user destination, optionally for one user. */

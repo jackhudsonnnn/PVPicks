@@ -1,7 +1,7 @@
 # Realtime contract
 
-Realtime delivery is implemented for table bet feeds, table chat feeds and a
-private settlement feed. The transport is STOMP over a WebSocket at `/ws`
+Realtime delivery is implemented for every outbox event: table view, bet and
+chat feeds, a private settlement feed and a personal feed. The transport is STOMP over a WebSocket at `/ws`
 (`/api/ws` through the Vite dev proxy). Messages are invalidations only: HTTP
 reads remain authoritative and provide recovery when realtime delivery is
 interrupted. The ticker feed is planned and not implemented.
@@ -20,7 +20,7 @@ interrupted. The ticker feed is planned and not implemented.
   Redis.
 - Every subscription is authorized when it is made, and every delivery
   rechecks it. A table feed is restricted to current members of the
-  non-archived table; the settlement feed is the caller's own. There are no
+  non-archived table; the settlement and personal feeds are the caller's own. There are no
   shared broadcast topics: each message is sent to one connection after the
   checks, so a removed member stops receiving immediately.
 - Never rely on the client to hide data. A table message cannot contain an
@@ -38,38 +38,30 @@ subscribing connection only.
 
 | Subscribe to | Audience | Payload | Source outbox events |
 |---|---|---|---|
+| `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`; refetch the table | `table.profile.changed`, `table.settings.changed`, `table.remainder.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
 | `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`; `settlement.created` (list) |
 | `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed` |
 | `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.line.changed`, `settlement.group.changed`, `settlement.net.changed` |
+| `/user/queue/me` | The user only | `tables.changed`, `invitations.changed` (no IDs) or `profile.changed` with the user ID | see below |
 | `/topic/ticker` (planned) | Authenticated users | `ticker.changed`; refetch `GET /ticker` | Sports feed, not implemented |
 
-Other outbox events have no realtime destination yet. They are not delivered
-to clients, and the notes below still apply to any future delivery.
+Personal-feed audiences, looked up when each event is delivered:
 
-### Events without a destination yet
+- `tables.changed`: all members when a table is created, renamed or a host
+  changes; the user who joined or was removed; everyone snapshotted when a
+  table is deleted.
+- `invitations.changed`: the invitee of a new invitation, and every pending
+  invitee when the table's name or emoji changes. Invitees never gain access to
+  table feeds.
+- `profile.changed`: the user and everyone who shares a current table or a
+  receipt with them, excluding anyone in a block relationship with them in
+  either direction. It names only the user whose profile changed.
 
-These table, membership and profile events reach Kafka but are not delivered to
-clients. Each needs its own audience and privacy review first:
-
-- `table.member.permission.changed.v1` is not a shared-table event: only current
-  hosts and the affected member may learn the change, so it needs a private
-  invalidation.
-- `table.remainder.changed.v1`, `table.host.changed.v1`,
-  `table.settings.changed.v1` and `table.profile.changed.v1` need a table-view
-  invalidation destination. Their system chat messages already reach the chat
-  feed. Table-profile changes also affect pending invitation views, which must
-  be invalidated privately for currently eligible recipients; invitees must not
-  gain access to table feeds.
-- Quick Pick control events contain only the affected table ID; delivery must
-  recheck membership and must not expose the source's code or cross-table
-  relationships.
-- `table.member.removed.v1` contains the removed user ID. Delivery rechecks
-  already stop that user's table feeds; a private table-list invalidation is
-  still needed. Never broadcast the raw event.
-- `table.archived.v1` should end table subscriptions and privately invalidate
-  eligible archive lists.
-- `user.profile.changed.v1` contains only a user ID; profile invalidations need
-  recipient-specific authorization and block filtering.
+Permission changes reveal only that the table changed; the HTTP table view
+already limits which permissions each viewer can see. Quick Pick invalidations
+contain only the affected table ID, never the source's code or cross-table
+relationships. A removed member stops receiving table feeds at once because
+every delivery rechecks membership.
 
 ## Invalidation envelope
 
@@ -95,9 +87,10 @@ lifecycle changes do not add bet activity to this shared topic.
 
 `eventId` identifies the emitted invalidation for deduplication. It is
 derived from the outbox event ID and the invalidation type, so a redelivered
-event keeps its ID. `resourceId` is the affected bet for `bet.changed` only.
-`bets.changed` names only the table; `settlements.changed` carries no table or
-resource ID. The envelope contains no pick, message
+event keeps its ID. `resourceId` is the affected bet for `bet.changed` and
+the affected user for `profile.changed`. `bets.changed` and `table.changed`
+name only the table; `settlements.changed`, `tables.changed` and
+`invitations.changed` carry no table or resource ID. The envelope contains no pick, message
 identity or text, username, credential or financial amount. The schema and its
 tests define the contract the gateway sends.
 

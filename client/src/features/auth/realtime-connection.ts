@@ -17,6 +17,10 @@ const invalidationSchema = z.object({
     "bet.changed",
     "bets.changed",
     "chat.changed",
+    "table.changed",
+    "tables.changed",
+    "invitations.changed",
+    "profile.changed",
     "settlements.changed",
     "ticker.changed",
   ]),
@@ -31,8 +35,12 @@ export type RealtimeStatus = "connecting" | "live";
 type Listener = (event: Invalidation) => void;
 type Feed = { listeners: Set<Listener>; subscription: StompSubscription | null };
 
+export const tableViewFeed = (tableId: string) => `/user/queue/tables/${tableId}`;
 export const tableBetsFeed = (tableId: string) => `/user/queue/tables/${tableId}/bets`;
+export const tableChatFeed = (tableId: string) => `/user/queue/tables/${tableId}/chat`;
 export const settlementsFeed = "/user/queue/settlements";
+/** Your table list, invitations and the profiles of people you share a table or receipt with. */
+export const personalFeed = "/user/queue/me";
 
 const recentLimit = 200;
 

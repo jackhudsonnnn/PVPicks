@@ -8,7 +8,17 @@
   "properties": {
     "eventId": { "type": "string", "format": "uuid" },
     "type": {
-      "enum": ["chat.changed", "bet.changed", "bets.changed", "settlements.changed", "ticker.changed"]
+      "enum": [
+        "chat.changed",
+        "bet.changed",
+        "bets.changed",
+        "table.changed",
+        "tables.changed",
+        "invitations.changed",
+        "profile.changed",
+        "settlements.changed",
+        "ticker.changed"
+      ]
     },
     "schemaVersion": { "const": 1 },
     "occurredAt": { "type": "string", "format": "date-time" },
@@ -25,15 +35,21 @@
       "then": { "required": ["tableId"], "properties": { "resourceId": false } }
     },
     {
-      "if": { "properties": { "type": { "const": "bets.changed" } }, "required": ["type"] },
+      "if": { "properties": { "type": { "enum": ["bets.changed", "table.changed"] } }, "required": ["type"] },
       "then": { "required": ["tableId"], "properties": { "resourceId": false } }
     },
     {
       "if": {
-        "properties": { "type": { "enum": ["ticker.changed", "settlements.changed"] } },
+        "properties": {
+          "type": { "enum": ["ticker.changed", "settlements.changed", "tables.changed", "invitations.changed"] }
+        },
         "required": ["type"]
       },
       "then": { "properties": { "tableId": false, "resourceId": false } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "profile.changed" } }, "required": ["type"] },
+      "then": { "required": ["resourceId"], "properties": { "tableId": false } }
     }
   ]
 }

@@ -34,7 +34,7 @@ import { PersonName } from "./backend-person-name";
 import { BackendSettlements } from "./backend-settlements";
 import { useBetActions } from "./bet-actions";
 import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
-import { tableBetsFeed } from "./realtime-connection";
+import { personalFeed, tableBetsFeed, tableViewFeed } from "./realtime-connection";
 
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
@@ -225,6 +225,7 @@ function TableWorkspace({
           .catch(() => {})
       }
     >
+      <PersonalUpdates user={user} />
       <div className="min-h-dvh bg-field">
         <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
           <Logo />
@@ -265,6 +266,23 @@ function TableWorkspace({
       </div>
     </RealtimeProvider>
   );
+}
+
+/** Refreshes the table list and displayed profiles when the personal feed says they changed. */
+function PersonalUpdates({ user }: { user: BackendUser }) {
+  const queryClient = useQueryClient();
+  useRealtimeFeed(personalFeed, (event) => {
+    if (event.type === "tables.changed") {
+      void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "list"] });
+    } else if (event.type === "profile.changed" && event.resourceId) {
+      const id = event.resourceId;
+      void queryClient.invalidateQueries({
+        predicate: ({ queryKey }) =>
+          queryKey[0] === tablesKey[0] && queryKey.at(-2) === "profile" && queryKey.at(-1) === id,
+      });
+    }
+  });
+  return null;
 }
 
 function LiveStatus() {
@@ -341,10 +359,15 @@ function TableDetails({
   tableId: string;
   expire: () => void;
 }) {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: [...tablesKey, user.id, tableId],
     queryFn: ({ signal }) => getTable(tableId, signal),
     retry: false,
+  });
+  useRealtimeFeed(tableViewFeed(tableId), () => {
+    // Only the table itself; its bets and chat have their own feeds.
+    void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, tableId], exact: true });
   });
   const unauthorized = query.error instanceof BackendError && query.error.status === 401;
   useEffect(() => {

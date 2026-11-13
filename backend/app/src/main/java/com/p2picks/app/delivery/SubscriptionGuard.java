@@ -17,12 +17,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * Authorizes inbound STOMP frames. CSRF is checked on CONNECT before this runs. Clients may only subscribe to
- * their own settlement feed or to the feeds of a table they currently belong to, and may never SEND.
+ * their own personal and settlement feeds or to the feeds of a table they currently belong to, and may never
+ * SEND.
  */
 @Component
 class SubscriptionGuard implements ChannelInterceptor {
-    static final Pattern TABLE_FEED = Pattern.compile("^/user/queue/tables/([0-9a-fA-F-]{36})/(bets|chat)$");
-    static final String SETTLEMENT_FEED = "/user" + RealtimeGateway.SETTLEMENTS_DESTINATION;
+    static final Pattern TABLE_FEED = Pattern.compile("^/user/queue/tables/([0-9a-fA-F-]{36})(/bets|/chat)?$");
+    static final Set<String> PERSONAL_FEEDS = Set.of(
+            "/user" + RealtimeGateway.SETTLEMENTS_DESTINATION, "/user" + RealtimeGateway.PERSONAL_DESTINATION);
 
     private final RealtimeSessions sessions;
     private final RealtimeAccess access;
@@ -53,7 +55,7 @@ class SubscriptionGuard implements ChannelInterceptor {
             throw new AccessDeniedException("The session has ended.");
         }
         String destination = stomp.getDestination();
-        if (SETTLEMENT_FEED.equals(destination)) return;
+        if (destination != null && PERSONAL_FEEDS.contains(destination)) return;
         Matcher table = destination == null ? null : TABLE_FEED.matcher(destination);
         if (table != null && table.matches()) {
             UUID tableId;

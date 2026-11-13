@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.common.OutboxEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -42,11 +43,11 @@ class RealtimeConsumer {
             properties = "auto.offset.reset=${pvpicks.realtime.offset-reset:latest}")
     void onEvent(String value) {
         try {
-            for (Route route : routes(json.readTree(value), access::settlementParties)) {
+            for (Route route : routes(json.readTree(value), access)) {
                 if (route.tableFeed() != null) {
-                    gateway.toTable(route.tableId(), route.tableFeed(), route.invalidation());
+                    gateway.toTable(route.tableId(), route.tableFeed(), route.invalidation(), route.onlyUsers());
                 } else {
-                    gateway.toUser(route.userId(), route.invalidation());
+                    gateway.toUser(route.userId(), route.destination(), route.invalidation());
                 }
             }
         } catch (Exception exception) {
@@ -55,63 +56,117 @@ class RealtimeConsumer {
         }
     }
 
-    /** Where an outbox event is delivered; pure apart from looking up a settlement's parties. */
-    static List<Route> routes(JsonNode event, Function<UUID, Set<UUID>> settlementParties) {
+    /**
+     * Where an outbox event is delivered. Audiences are looked up at delivery time, so they reflect current
+     * membership, invitations and blocks. Invalidations name at most a table and one resource; they never carry
+     * picks, message content, names or amounts.
+     */
+    static List<Route> routes(JsonNode event, Audiences audiences) {
         OutboxEvent type = EVENTS.get(event.path("eventType").asText());
         if (type == null) return List.of();
-        UUID id = UUID.fromString(event.path("id").asText());
-        String at = event.path("createdAt").asText();
+        Routes routes = new Routes(UUID.fromString(event.path("id").asText()), event.path("createdAt").asText());
         JsonNode payload = event.path("payload");
-        List<Route> routes = new ArrayList<>();
         switch (type) {
             case BET_CREATED, BET_PICK_COUNT_CHANGED, BET_LOCKED, BET_RESOLVED -> {
                 UUID table = uuid(payload, "tableId");
-                routes.add(Route.table(table, RealtimeGateway.TableFeed.BETS,
-                        Invalidation.of(id, Invalidation.BET_CHANGED, at, table, uuid(payload, "betId"))));
+                routes.table(table, RealtimeGateway.TableFeed.BETS, Invalidation.BET_CHANGED,
+                        uuid(payload, "betId"), null);
             }
             case SETTLEMENT_CREATED -> {
+                routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.BETS, Invalidation.BETS_CHANGED,
+                        null, null);
+                routes.settlements(audiences.settlementParties(uuid(payload, "settlementId")));
+            }
+            case SETTLEMENT_LINE_CHANGED -> routes.settlements(Set.of(uuid(payload, "payerId"), uuid(payload, "payeeId")));
+            case SETTLEMENT_GROUP_CHANGED, SETTLEMENT_NET_CHANGED ->
+                    routes.settlements(Set.of(uuid(payload, "userId"), uuid(payload, "otherUserId")));
+            case CHAT_MESSAGE_CREATED, CHAT_REACTION_CHANGED ->
+                    routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.CHAT, Invalidation.CHAT_CHANGED,
+                            null, null);
+            case TABLE_CREATED -> routes.personal(audiences.tableMembers(uuid(payload, "tableId")),
+                    Invalidation.TABLES_CHANGED, null);
+            case TABLE_PROFILE_CHANGED -> {
+                // The name and emoji also appear in table lists and in pending invitations.
                 UUID table = uuid(payload, "tableId");
-                routes.add(Route.table(table, RealtimeGateway.TableFeed.BETS,
-                        Invalidation.of(id, Invalidation.BETS_CHANGED, at, table, null)));
-                for (UUID party : settlementParties.apply(uuid(payload, "settlementId"))) {
-                    routes.add(Route.user(party, Invalidation.of(id, Invalidation.SETTLEMENTS_CHANGED, at, null, null)));
-                }
+                routes.tableView(table, null);
+                routes.personal(audiences.tableMembers(table), Invalidation.TABLES_CHANGED, null);
+                routes.personal(audiences.pendingInvitees(table), Invalidation.INVITATIONS_CHANGED, null);
             }
-            case SETTLEMENT_LINE_CHANGED -> {
-                for (String field : List.of("payerId", "payeeId")) {
-                    routes.add(Route.user(uuid(payload, field),
-                            Invalidation.of(id, Invalidation.SETTLEMENTS_CHANGED, at, null, null)));
-                }
-            }
-            case SETTLEMENT_GROUP_CHANGED, SETTLEMENT_NET_CHANGED -> {
-                for (String field : List.of("userId", "otherUserId")) {
-                    routes.add(Route.user(uuid(payload, field),
-                            Invalidation.of(id, Invalidation.SETTLEMENTS_CHANGED, at, null, null)));
-                }
-            }
-            case CHAT_MESSAGE_CREATED, CHAT_REACTION_CHANGED -> {
+            case TABLE_SETTINGS_CHANGED, TABLE_REMAINDER_CHANGED, TABLE_QUICKPICKS_CHANGED ->
+                    routes.tableView(uuid(payload, "tableId"), null);
+            case TABLE_HOST_CHANGED -> {
                 UUID table = uuid(payload, "tableId");
-                routes.add(Route.table(table, RealtimeGateway.TableFeed.CHAT,
-                        Invalidation.of(id, Invalidation.CHAT_CHANGED, at, table, null)));
+                routes.tableView(table, null);
+                routes.personal(audiences.tableMembers(table), Invalidation.TABLES_CHANGED, null);
             }
-            default -> {
-                // Table, membership, profile and invitation events have no realtime destination yet.
+            case TABLE_MEMBER_JOINED -> {
+                routes.tableView(uuid(payload, "tableId"), null);
+                routes.personal(Set.of(uuid(payload, "userId")), Invalidation.TABLES_CHANGED, null);
+            }
+            case TABLE_MEMBER_REMOVED -> {
+                // Table-feed deliveries recheck membership, so the removed user no longer receives them.
+                routes.tableView(uuid(payload, "tableId"), null);
+                routes.personal(Set.of(uuid(payload, "removedUserId")), Invalidation.TABLES_CHANGED, null);
+            }
+            case TABLE_MEMBER_PERMISSION_CHANGED -> {
+                // Only current hosts and the affected member may learn that a permission changed.
+                UUID table = uuid(payload, "tableId");
+                Set<UUID> audience = new HashSet<>(audiences.tableHosts(table));
+                audience.add(uuid(payload, "userId"));
+                routes.tableView(table, audience);
+            }
+            case TABLE_ARCHIVED -> routes.personal(audiences.archiveMembers(uuid(payload, "tableId")),
+                    Invalidation.TABLES_CHANGED, null);
+            case TABLE_INVITATION_CREATED -> routes.personal(
+                    Set.of(UUID.fromString(event.path("aggregateId").asText())), Invalidation.INVITATIONS_CHANGED, null);
+            case USER_PROFILE_CHANGED -> {
+                UUID user = uuid(payload, "userId");
+                Set<UUID> audience = new HashSet<>(audiences.profileAudience(user));
+                audience.add(user);
+                routes.personal(audience, Invalidation.PROFILE_CHANGED, user);
             }
         }
-        return routes;
+        return routes.list;
     }
 
     private static UUID uuid(JsonNode payload, String field) {
         return UUID.fromString(payload.path(field).asText());
     }
 
-    record Route(UUID tableId, RealtimeGateway.TableFeed tableFeed, UUID userId, Invalidation invalidation) {
-        static Route table(UUID tableId, RealtimeGateway.TableFeed feed, Invalidation invalidation) {
-            return new Route(tableId, feed, null, invalidation);
+    record Route(UUID tableId, RealtimeGateway.TableFeed tableFeed, Set<UUID> onlyUsers, UUID userId,
+                 String destination, Invalidation invalidation) {}
+
+    private static final class Routes {
+        private final UUID outboxId;
+        private final String occurredAt;
+        private final List<Route> list = new ArrayList<>();
+
+        Routes(UUID outboxId, String occurredAt) {
+            this.outboxId = outboxId;
+            this.occurredAt = occurredAt;
         }
 
-        static Route user(UUID userId, Invalidation invalidation) {
-            return new Route(null, null, userId, invalidation);
+        void table(UUID table, RealtimeGateway.TableFeed feed, String type, UUID resource, Set<UUID> onlyUsers) {
+            list.add(new Route(table, feed, onlyUsers, null, null,
+                    Invalidation.of(outboxId, type, occurredAt, table, resource)));
+        }
+
+        void tableView(UUID table, Set<UUID> onlyUsers) {
+            table(table, RealtimeGateway.TableFeed.VIEW, Invalidation.TABLE_CHANGED, null, onlyUsers);
+        }
+
+        void settlements(Set<UUID> users) {
+            for (UUID user : users) {
+                list.add(new Route(null, null, null, user, RealtimeGateway.SETTLEMENTS_DESTINATION,
+                        Invalidation.of(outboxId, Invalidation.SETTLEMENTS_CHANGED, occurredAt, null, null)));
+            }
+        }
+
+        void personal(Set<UUID> users, String type, UUID resource) {
+            for (UUID user : users) {
+                list.add(new Route(null, null, null, user, RealtimeGateway.PERSONAL_DESTINATION,
+                        Invalidation.of(outboxId, type, occurredAt, null, resource)));
+            }
         }
     }
 }

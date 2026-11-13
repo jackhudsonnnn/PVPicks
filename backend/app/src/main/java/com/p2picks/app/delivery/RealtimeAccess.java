@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /** Database checks behind every realtime subscription and delivery; PostgreSQL is authoritative, not Redis. */
 @Component
-class RealtimeAccess {
+class RealtimeAccess implements Audiences {
     private final JdbcTemplate jdbc;
 
     RealtimeAccess(JdbcTemplate jdbc) {
@@ -55,14 +55,65 @@ class RealtimeAccess {
         return members;
     }
 
-    /** Both parties of every receipt line in a points settlement. */
-    Set<UUID> settlementParties(UUID settlementId) {
-        Set<UUID> parties = new HashSet<>();
-        jdbc.query("SELECT payer_id, payee_id FROM settlement_lines WHERE settlement_id = ?", rs -> {
-            parties.add(rs.getObject("payer_id", UUID.class));
-            parties.add(rs.getObject("payee_id", UUID.class));
-        }, settlementId);
-        return parties;
+    @Override
+    public Set<UUID> settlementParties(UUID settlementId) {
+        return ids("""
+                SELECT payer_id FROM settlement_lines WHERE settlement_id = ?
+                UNION SELECT payee_id FROM settlement_lines WHERE settlement_id = ?
+                """, settlementId, settlementId);
+    }
+
+    @Override
+    public Set<UUID> tableMembers(UUID tableId) {
+        return ids("""
+                SELECT m.user_id FROM table_members m JOIN tables t ON t.id = m.table_id
+                WHERE m.table_id = ? AND t.archived_at IS NULL
+                """, tableId);
+    }
+
+    @Override
+    public Set<UUID> tableHosts(UUID tableId) {
+        return ids("""
+                SELECT m.user_id FROM table_members m JOIN tables t ON t.id = m.table_id
+                WHERE m.table_id = ? AND t.archived_at IS NULL AND m.role = 'HOST'
+                """, tableId);
+    }
+
+    @Override
+    public Set<UUID> pendingInvitees(UUID tableId) {
+        return ids("SELECT user_id FROM table_invites WHERE table_id = ? AND status = 'PENDING'", tableId);
+    }
+
+    @Override
+    public Set<UUID> archiveMembers(UUID tableId) {
+        return ids("SELECT user_id FROM table_archive_members WHERE table_id = ?", tableId);
+    }
+
+    @Override
+    public Set<UUID> profileAudience(UUID userId) {
+        return ids("""
+                SELECT other FROM (
+                    SELECT them.user_id AS other
+                    FROM table_members me
+                    JOIN tables t ON t.id = me.table_id AND t.archived_at IS NULL
+                    JOIN table_members them ON them.table_id = me.table_id
+                    WHERE me.user_id = ?
+                    UNION SELECT payee_id FROM settlement_lines WHERE payer_id = ?
+                    UNION SELECT payer_id FROM settlement_lines WHERE payee_id = ?
+                ) audience
+                WHERE other <> ? AND NOT EXISTS (
+                    SELECT 1 FROM blocks b
+                    WHERE (b.blocker_id = ? AND b.blocked_id = audience.other)
+                       OR (b.blocker_id = audience.other AND b.blocked_id = ?))
+                """, userId, userId, userId, userId, userId, userId);
+    }
+
+    private Set<UUID> ids(String sql, Object... arguments) {
+        Set<UUID> ids = new HashSet<>();
+        jdbc.query(sql, rs -> {
+            ids.add(rs.getObject(1, UUID.class));
+        }, arguments);
+        return ids;
     }
 
     private static Array uuidArray(java.sql.Connection connection, Collection<UUID> ids) throws java.sql.SQLException {

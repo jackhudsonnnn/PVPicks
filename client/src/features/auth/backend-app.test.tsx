@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BackendApp } from "./backend-app";
@@ -16,6 +16,30 @@ import {
   type BackendBet,
 } from "./backend-api";
 import { listPendingReviews, listSettlementGroups } from "./settlement-api";
+import type { Invalidation } from "./realtime-connection";
+
+const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
+vi.mock("./realtime", () => ({
+  RealtimeProvider: ({ children }: { children: ReactNode }) => children,
+  useRealtimeStatus: () => "live",
+  useRealtimeFeed: (destination: string, listener: (event: Invalidation) => void) => {
+    feeds.set(destination, listener);
+  },
+}));
+
+function deliver(destination: string, event: Partial<Invalidation>) {
+  const listener = feeds.get(destination);
+  if (!listener) throw new Error(`Nothing listens to ${destination}`);
+  act(() =>
+    listener({
+      eventId: "123e4567-e89b-42d3-a456-426614174099",
+      schemaVersion: 1,
+      occurredAt: "2026-11-13T12:00:00Z",
+      type: "tables.changed",
+      ...event,
+    }),
+  );
+}
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -91,6 +115,7 @@ function renderApp() {
 }
 
 beforeEach(() => {
+  feeds.clear();
   vi.resetAllMocks();
   route.pathname = "/";
   vi.mocked(listTableBets).mockResolvedValue([]);
@@ -316,5 +341,44 @@ describe("backend app", () => {
         .getQueriesData({ queryKey: ["backend-tables"] })
         .every(([, data]) => data === undefined),
     ).toBe(true);
+  });
+
+  it("refreshes the table list, the open table and displayed names from realtime feeds", async () => {
+    const memberId = "123e4567-e89b-42d3-a456-426614174003";
+    const locked: BackendBet = {
+      ...bet,
+      status: "PENDING",
+      picks: [{ userId: memberId, choice: "No" }],
+      noGuessUserIds: [],
+      remainderRule: "host",
+      remainderHostId: user.id,
+    };
+    route.pathname = `/tables/${table.id}`;
+    vi.mocked(currentUser).mockResolvedValue(user);
+    vi.mocked(getTable).mockResolvedValue(table);
+    vi.mocked(listTableBets).mockResolvedValue([locked]);
+    vi.mocked(getBet).mockResolvedValue(locked);
+    vi.mocked(getProfile).mockResolvedValue({ id: memberId, username: "player", hue: 1 });
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    await screen.findByText("player: No");
+
+    vi.mocked(getProfile).mockResolvedValue({ id: memberId, username: "renamed", hue: 1 });
+    deliver("/user/queue/me", { type: "profile.changed", resourceId: memberId });
+    expect(await screen.findByText("renamed: No")).toBeInTheDocument();
+
+    vi.mocked(getTable).mockResolvedValue({ ...table, name: "Renamed table" });
+    deliver(`/user/queue/tables/${table.id}`, { type: "table.changed", tableId: table.id });
+    expect(await screen.findByText(/Renamed table/)).toBeInTheDocument();
+    expect(listTableBets).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads the table list when the personal feed says it changed", async () => {
+    vi.mocked(currentUser).mockResolvedValue(user);
+    vi.mocked(listTables).mockResolvedValueOnce([table]).mockResolvedValue([]);
+    renderApp();
+    expect(await screen.findByText("Test table")).toBeInTheDocument();
+    deliver("/user/queue/me", { type: "tables.changed" });
+    expect(await screen.findByText("No tables yet.")).toBeInTheDocument();
   });
 });

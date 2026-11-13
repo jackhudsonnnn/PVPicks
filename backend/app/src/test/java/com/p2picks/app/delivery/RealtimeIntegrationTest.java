@@ -167,6 +167,45 @@ class RealtimeIntegrationTest extends IntegrationTestSupport {
         assertThat(outsiderFeed.poll(1, TimeUnit.SECONDS)).isNull();
     }
 
+    @Test
+    void permissionChangesReachOnlyHostsAndTheAffectedMember() throws Exception {
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')", table, outsider);
+        String view = "/user/queue/tables/" + table;
+        BlockingQueue<JsonNode> hostFeed = connect("rh" + suffix).subscribe(view);
+        BlockingQueue<JsonNode> memberFeed = connect("rm" + suffix).subscribe(view);
+        BlockingQueue<JsonNode> otherFeed = connect("ro" + suffix).subscribe(view);
+        awaitSubscribers(view, 3);
+
+        append(OutboxEvent.TABLE_MEMBER_PERMISSION_CHANGED, table, Map.of("tableId", table, "userId", member));
+        relay.publishPending();
+        for (BlockingQueue<JsonNode> feed : List.of(hostFeed, memberFeed)) {
+            JsonNode message = next(feed);
+            assertThat(message.path("type").asText()).isEqualTo("table.changed");
+            assertThat(RealtimeSchema.SCHEMA.validate(message)).isEmpty();
+        }
+        assertThat(otherFeed.poll(1, TimeUnit.SECONDS)).as("another member").isNull();
+    }
+
+    @Test
+    void profileChangesReachPeopleWhoShareATableUnlessBlocked() throws Exception {
+        BlockingQueue<JsonNode> hostFeed = connect("rh" + suffix).subscribe("/user/queue/me");
+        BlockingQueue<JsonNode> outsiderFeed = connect("ro" + suffix).subscribe("/user/queue/me");
+        awaitSubscribers("/user/queue/me", 2);
+
+        append(OutboxEvent.USER_PROFILE_CHANGED, member, Map.of("userId", member));
+        relay.publishPending();
+        JsonNode message = next(hostFeed);
+        assertThat(message.path("type").asText()).isEqualTo("profile.changed");
+        assertThat(message.path("resourceId").asText()).isEqualTo(member.toString());
+        assertThat(RealtimeSchema.SCHEMA.validate(message)).isEmpty();
+        assertThat(outsiderFeed.poll(1, TimeUnit.SECONDS)).as("no shared table").isNull();
+
+        jdbc.update("INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?)", member, host);
+        append(OutboxEvent.USER_PROFILE_CHANGED, member, Map.of("userId", member));
+        relay.publishPending();
+        assertThat(hostFeed.poll(2, TimeUnit.SECONDS)).as("blocked by the member").isNull();
+    }
+
     private String tableFeed(String feed) {
         return "/user/queue/tables/" + table + "/" + feed;
     }
