@@ -46,8 +46,10 @@ class RealtimeConsumer {
             for (Route route : routes(json.readTree(value), access)) {
                 if (route.tableFeed() != null) {
                     gateway.toTable(route.tableId(), route.tableFeed(), route.invalidation(), route.onlyUsers());
-                } else {
+                } else if (route.userId() != null) {
                     gateway.toUser(route.userId(), route.destination(), route.invalidation());
+                } else {
+                    gateway.toSubscribers(route.destination(), route.invalidation());
                 }
             }
         } catch (Exception exception) {
@@ -119,6 +121,8 @@ class RealtimeConsumer {
                     Invalidation.TABLES_CHANGED, null);
             case TABLE_INVITATION_CREATED -> routes.personal(
                     Set.of(UUID.fromString(event.path("aggregateId").asText())), Invalidation.INVITATIONS_CHANGED, null);
+            case SPORTS_GAMES_CHANGED -> routes.everyone(RealtimeGateway.TICKER_DESTINATION,
+                    Invalidation.TICKER_CHANGED);
             case USER_PROFILE_CHANGED -> {
                 UUID user = uuid(payload, "userId");
                 Set<UUID> audience = new HashSet<>(audiences.profileAudience(user));
@@ -160,6 +164,11 @@ class RealtimeConsumer {
                 list.add(new Route(null, null, null, user, RealtimeGateway.SETTLEMENTS_DESTINATION,
                         Invalidation.of(outboxId, Invalidation.SETTLEMENTS_CHANGED, occurredAt, null, null)));
             }
+        }
+
+        void everyone(String destination, String type) {
+            list.add(new Route(null, null, null, null, destination,
+                    Invalidation.of(outboxId, type, occurredAt, null, null)));
         }
 
         void personal(Set<UUID> users, String type, UUID resource) {

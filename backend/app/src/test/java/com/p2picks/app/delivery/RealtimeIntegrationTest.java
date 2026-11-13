@@ -206,6 +206,20 @@ class RealtimeIntegrationTest extends IntegrationTestSupport {
         assertThat(hostFeed.poll(2, TimeUnit.SECONDS)).as("blocked by the member").isNull();
     }
 
+    @Test
+    void tickerChangesReachEverySignedInSubscriber() throws Exception {
+        BlockingQueue<JsonNode> hostFeed = connect("rh" + suffix).subscribe("/user/queue/ticker");
+        BlockingQueue<JsonNode> outsiderFeed = connect("ro" + suffix).subscribe("/user/queue/ticker");
+        awaitSubscribers("/user/queue/ticker", 2);
+        append(OutboxEvent.SPORTS_GAMES_CHANGED, "NBA", Map.of("league", "NBA", "changed", 1));
+        relay.publishPending();
+        for (BlockingQueue<JsonNode> feed : List.of(hostFeed, outsiderFeed)) {
+            JsonNode message = next(feed);
+            assertThat(message.path("type").asText()).isEqualTo("ticker.changed");
+            assertThat(RealtimeSchema.SCHEMA.validate(message)).isEmpty();
+        }
+    }
+
     private String tableFeed(String feed) {
         return "/user/queue/tables/" + table + "/" + feed;
     }

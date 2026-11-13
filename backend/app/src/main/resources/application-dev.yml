@@ -9,6 +9,12 @@ pvpicks:
   outbox-cleanup:
     enabled: ${PVPICKS_OUTBOX_CLEANUP_ENABLED:true}
     retention: ${PVPICKS_OUTBOX_RETENTION:P7D}
+  sports:
+    # Without a key the feed is not polled and the ticker reports itself unavailable.
+    balldontlie:
+      api-key: ${PVPICKS_BALLDONTLIE_API_KEY:}
+    poll-interval: ${PVPICKS_SPORTS_POLL_INTERVAL:PT60S}
+    freshness: ${PVPICKS_SPORTS_FRESHNESS:PT3M}
 
 spring:
   flyway:

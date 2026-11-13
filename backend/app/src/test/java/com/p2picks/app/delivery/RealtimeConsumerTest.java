@@ -164,6 +164,18 @@ class RealtimeConsumerTest {
     }
 
     @Test
+    void sportsChangesInvalidateTheTickerForEverySubscriber() {
+        assertThat(routes(OutboxEvent.SPORTS_GAMES_CHANGED, Map.of("league", "NBA", "changed", 3)))
+                .singleElement().satisfies(route -> {
+                    assertThat(route.userId()).isNull();
+                    assertThat(route.tableFeed()).isNull();
+                    assertThat(route.destination()).isEqualTo(RealtimeGateway.TICKER_DESTINATION);
+                    assertThat(route.invalidation().type()).isEqualTo("ticker.changed");
+                    assertThat(RealtimeSchema.SCHEMA.validate(JSON.valueToTree(route.invalidation()))).isEmpty();
+                });
+    }
+
+    @Test
     void everyInvalidationMatchesTheContract() {
         Map<OutboxEvent, Map<String, ?>> payloads = Map.ofEntries(
                 Map.entry(OutboxEvent.BET_LOCKED, Map.of("tableId", TABLE, "betId", BET)),

@@ -22,6 +22,8 @@ class RealtimeGateway {
     static final String TABLE_DESTINATION = "/queue/tables/%s%s";
     static final String SETTLEMENTS_DESTINATION = "/queue/settlements";
     static final String PERSONAL_DESTINATION = "/queue/me";
+    /** Sports scores only, the same for every signed-in player. */
+    static final String TICKER_DESTINATION = "/queue/ticker";
 
     /** A table's feeds: its bets, its chat, and the table view itself (settings, hosts, members). */
     enum TableFeed {
@@ -68,6 +70,11 @@ class RealtimeGateway {
     void toUser(UUID userId, String destination, Invalidation invalidation) {
         Map<String, String> subscribers = subscribers(destination, userId.toString());
         send(destination, invalidation, subscribers, user -> true);
+    }
+
+    /** Sends to every subscriber of a destination whose login is still valid. */
+    void toSubscribers(String destination, Invalidation invalidation) {
+        send(destination, invalidation, subscribers(destination, null), user -> true);
     }
 
     /** Socket ID to user name for subscriptions to the user destination, optionally for one user. */

@@ -18,6 +18,7 @@ record Invalidation(UUID eventId, String type, int schemaVersion, String occurre
     static final String TABLES_CHANGED = "tables.changed";
     static final String INVITATIONS_CHANGED = "invitations.changed";
     static final String PROFILE_CHANGED = "profile.changed";
+    static final String TICKER_CHANGED = "ticker.changed";
 
     /**
      * The event ID is derived from the outbox event and the invalidation type, so a redelivered outbox event

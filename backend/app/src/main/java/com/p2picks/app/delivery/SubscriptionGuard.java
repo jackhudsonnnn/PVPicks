@@ -24,7 +24,8 @@ import org.springframework.stereotype.Component;
 class SubscriptionGuard implements ChannelInterceptor {
     static final Pattern TABLE_FEED = Pattern.compile("^/user/queue/tables/([0-9a-fA-F-]{36})(/bets|/chat)?$");
     static final Set<String> PERSONAL_FEEDS = Set.of(
-            "/user" + RealtimeGateway.SETTLEMENTS_DESTINATION, "/user" + RealtimeGateway.PERSONAL_DESTINATION);
+            "/user" + RealtimeGateway.SETTLEMENTS_DESTINATION, "/user" + RealtimeGateway.PERSONAL_DESTINATION,
+            "/user" + RealtimeGateway.TICKER_DESTINATION);
 
     private final RealtimeSessions sessions;
     private final RealtimeAccess access;

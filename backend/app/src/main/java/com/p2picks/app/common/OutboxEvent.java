@@ -34,7 +34,10 @@ public enum OutboxEvent {
     /** Keyed by "userId:otherUserId". */
     SETTLEMENT_GROUP_CHANGED("settlement_pair", "settlement.group.changed.v1"),
     /** Keyed by "userId:otherUserId"; the payload carries numeric beforeCents and afterCents. */
-    SETTLEMENT_NET_CHANGED("settlement_pair", "settlement.net.changed.v1");
+    SETTLEMENT_NET_CHANGED("settlement_pair", "settlement.net.changed.v1"),
+
+    /** A feed poll changed at least one game snapshot; keyed by league. */
+    SPORTS_GAMES_CHANGED("sports_feed", "sports.games.changed.v1");
 
     private final String aggregateType;
     private final String eventType;
