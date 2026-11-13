@@ -12,23 +12,34 @@ stores only the latest snapshot of each game. It needs history for resolution
 and audit, roster and player-stat data for player modes, and a way to develop
 and test against real game data without the live API.
 
-BallDontLie plans as of 2026-11-13 (check before buying):
+BallDontLie plans as of 2026-11-13, per league unless noted (account-tier tables at
+https://nba.balldontlie.io and https://nfl.balldontlie.io; check before buying):
 
-| Plan | Price | Rate limit | Data |
+| Plan | Price | Rate limit | Adds |
 |---|---|---|---|
-| Free | $0 | 5 requests/min | Basic: teams, players, games and scores |
-| All-Star | $95.90/year per league | 60 requests/min | Extended: adds player stats |
-| GOAT | $383.90/year per league | 600 requests/min | Full: adds live box scores |
-| All-Access | $2,879.90/year, all leagues | 600 requests/min | Full, plus webhooks |
+| Free | $0 | 5 requests/min | Teams, players, games and scores |
+| All-Star | $9.99/month or $95.90/year | 60 requests/min | Player game stats (real time during games), active players, injuries; NFL also team and season stats, standings and snap counts |
+| GOAT | $39.99/month or $383.90/year | 600 requests/min | Box scores, advanced stats, play-by-play, betting odds, sportsbook player props, lineups; NFL team rosters |
+| All-Access | $2,879.90/year, all leagues | 600 requests/min | Everything, plus webhooks |
 
-Game-result modes work on the free plan. Player-prop and stat modes need at
-least All-Star per league, and live in-game stats need GOAT. Which tier the
-project needs depends on the first sports modes, which are still being chosen.
+The GOAT 7-day trial is limited to 5 requests a minute.
+
+The user plans to start on All-Star and upgrade as the app grows. All-Star
+covers game results and player props, including live prop progress during a
+game, and injuries for proposal warnings. GOAT is the upgrade for sportsbook
+lines and odds, play-by-play bet types and higher request rates. On All-Star,
+NFL rosters must be derived from players' team fields, because the NFL Team
+Roster endpoint is GOAT-only; this needs checking against real responses.
 
 ## Decision
 
 PostgreSQL is the source of truth for sports data. Files are only for
 recordings, replay and test fixtures.
+
+Treat the provider plan as a per-league setting (for example
+`PVPICKS_BALLDONTLIE_PLAN_NBA=ALL_STAR`). The plan decides the request budget
+and poll interval, which endpoints are called, and which bet modes are offered,
+so upgrading a league is a configuration change.
 
 Keep three datasets apart, because they change at different rates and come
 from different endpoints:
@@ -63,4 +74,4 @@ tested against real recorded games instead of guesses. Replay only reproduces
 what was polled: at one poll a minute it misses changes in between, which is
 fine for status and score lifecycles but not for order-dependent play-by-play
 modes. Those need a richer source before they can settle automatically.
-Player modes add a paid-plan dependency per league.
+Player modes add a paid-plan dependency per league, starting with All-Star.
