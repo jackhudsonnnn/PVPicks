@@ -2,7 +2,7 @@ package com.p2picks.app.settlement;
 
 import static com.p2picks.app.common.ApiErrors.error;
 
-import com.p2picks.app.bets.BettingLifecycleReady;
+import com.p2picks.app.common.BettingLifecycleReady;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.Map;

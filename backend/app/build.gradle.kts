@@ -48,8 +48,6 @@ val modulithVersion: String by project
 
 dependencies {
     implementation(project(":shared:kernel"))
-    implementation(project(":modules:bets"))
-    implementation(project(":modules:settlement"))
     implementation("org.springframework.modulith:spring-modulith-api:$modulithVersion")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")

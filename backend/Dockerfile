@@ -16,7 +16,6 @@ COPY backend/gradle/ gradle/
 COPY backend/app/build.gradle.kts app/build.gradle.kts
 COPY backend/app/src/ app/src/
 COPY backend/shared/kernel/ shared/kernel/
-COPY backend/modules/ modules/
 COPY --from=docs /workspace/docs/site/.vitepress/dist /workspace/docs/site/.vitepress/dist
 RUN ./gradlew :app:bootJar --no-daemon -PdocsPrebuilt=true
 

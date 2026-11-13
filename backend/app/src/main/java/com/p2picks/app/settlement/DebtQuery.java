@@ -1,6 +1,5 @@
 package com.p2picks.app.settlement;
 
-import com.p2picks.modules.settlement.api.DebtCalculator;
 import com.p2picks.shared.kernel.Money;
 import java.math.BigInteger;
 import java.util.ArrayList;

@@ -2,10 +2,9 @@ package com.p2picks.app.settlement;
 
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
-import com.p2picks.modules.settlement.api.TableSettlementCalculator.ExactBetDeltas;
-import com.p2picks.modules.settlement.api.TableSettlementCalculator.Line;
-import com.p2picks.modules.settlement.api.TableSettlementCalculator.Plan;
-import com.p2picks.modules.settlement.api.TableSettlementCalculator;
+import com.p2picks.app.settlement.TableSettlementCalculator.ExactBetDeltas;
+import com.p2picks.app.settlement.TableSettlementCalculator.Line;
+import com.p2picks.app.settlement.TableSettlementCalculator.Plan;
 import java.math.BigInteger;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;

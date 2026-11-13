@@ -10,8 +10,6 @@
 !backend/gradle/**
 !backend/app/
 !backend/app/**
-!backend/modules/
-!backend/modules/**
 !backend/shared/
 !backend/shared/**
 !backend/api/

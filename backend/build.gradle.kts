@@ -1,9 +1,8 @@
-val modulithVersion: String by project
 val junitVersion: String by project
 val assertjVersion: String by project
 
-// Plain Java libraries: the domain modules and the shared kernel.
-configure(subprojects.filter { it.parent?.path == ":modules" || it.path == ":shared:kernel" }) {
+// The shared kernel is a plain Java library with no Spring dependencies.
+project(":shared:kernel") {
     apply(plugin = "java-library")
 
     group = "com.p2picks"
@@ -26,12 +25,5 @@ configure(subprojects.filter { it.parent?.path == ":modules" || it.path == ":sha
 
     tasks.withType<Test> {
         useJUnitPlatform()
-    }
-}
-
-configure(subprojects.filter { it.parent?.path == ":modules" }) {
-    dependencies {
-        add("api", project(":shared:kernel"))
-        add("implementation", "org.springframework.modulith:spring-modulith-api:$modulithVersion")
     }
 }

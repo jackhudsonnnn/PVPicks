@@ -19,22 +19,43 @@ Solid lines describe existing infrastructure or direct reads/writes; dotted
 lines show planned integrations. The outbox is storage only: there is no relay,
 consumer, or delivery guarantee yet.
 
-## Code boundaries
+## Modules and data ownership
 
-The `app` project owns the dev HTTP controllers, services and security, in one
-Java package per feature: `users`, `social`, `tables`, `chat`, `bets`,
-`settlement`, `feedback` and `admin`, plus `security`, `config` and `common`
-(retry protection, error responses and text validation). Classes stay
-package-private unless another feature uses them.
+The backend is one Spring Boot application, `backend/app`. Each package under
+`com.p2picks.app` is a Spring Modulith module. A module's public types are its
+API and everything else is package-private. Each `package-info.java` declares
+the module's allowed dependencies, and the architecture tests reject cycles,
+undeclared dependencies and calculators that use Spring or JDBC.
 
-Two Gradle domain modules, `bets` and `settlement`, expose pure payout,
-settler, debt and table-settlement calculators through named `api` packages;
-they are not transactional services. Folders for other planned modules are
-reserved but not built. The shared kernel contains exact integer-cent money.
+```mermaid
+flowchart LR
+  tables --> chat
+  tables --> settlement
+  bets --> settlement
+  users & social & tables & chat & bets & settlement & feedback --> shared["common + security (open)"]
+```
 
-Only `@ApplicationModule` packages are Spring Modulith modules. Modulith and
-ArchUnit tests check module discovery, cycles and API-only access, and that
-modules and the kernel never depend on `app`.
+| Module | Owns (writes) these tables |
+|---|---|
+| `security` | `auth_sessions` |
+| `users` | `users` (profile fields) |
+| `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
+| `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
+| `chat` | `chat_messages`, `reactions`, `chat_read_positions` |
+| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` |
+| `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
+| `feedback`, `admin` | `feedback`; `admin_user_flags` (storage only) |
+| `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`; every module inserts its own `outbox` rows |
+
+Java dependencies follow the module graph. The database does not yet: many
+queries read or lock other modules' tables inside one transaction (for
+example, `users` joins settlements and chat, and several modules insert system
+chat messages and outbox rows directly). This keeps lock order and checks
+atomic. Before a module is extracted, replace those joins with calls to the
+owning module and revisit the transaction boundaries.
+
+The shared kernel is a plain Java library containing exact integer-cent money.
+
 The dev HTTP filter checks the current account role: admin accounts cannot call
 player APIs, and players cannot call admin APIs. Both can use session endpoints;
 public dev docs and health remain available. No account-role change API exists.

@@ -7,20 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.p2picks.modules.bets.internal.ModuleDiscoveryProbe;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MvcResult;
 
 class PlatformIntegrationTest extends IntegrationTestSupport {
-    @Autowired
-    private ModuleDiscoveryProbe moduleDiscoveryProbe;
-
     @Test
     void exposesHealthWithoutDependencyDetails() {
         ResponseEntity<JsonNode> response = client.getForEntity("/actuator/health", JsonNode.class);
@@ -52,7 +47,6 @@ class PlatformIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void connectsToPostgresRedisAndKafka() throws Exception {
-        assertThat(moduleDiscoveryProbe).isNotNull();
         assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
         try (RedisConnection connection = redisConnectionFactory.getConnection()) {
             assertThat(connection.ping()).isEqualTo("PONG");

@@ -19,47 +19,54 @@ What is implemented and what is planned:
 
 ```text
 backend/
-  app/                    Spring Boot application, HTTP layer and services
+  app/                    Spring Boot application: one Modulith module per package
     src/main/java/com/p2picks/app/
       P2PicksApplication.java
-      config/             dev-only profile guard, Flyway, developer docs
-      security/           sessions, login/logout, CSRF/origin filters, MutationAuthentication
-      common/             IdempotencyGuard, ApiErrors, PostgresText
       users/              profile, user search and lookup
       social/             follows/blocks, invitations, invite preferences
       tables/             create, profile, settings, members, hosts, permissions,
                           remainder, Quick Pick controls, archives, reads
       chat/               message windows, sending, reactions, read state
-      bets/               U2Pick proposal/pick/lock/resolution, bet reads, lock worker
-      settlement/         points settlement, receipts, reviews, debt and debt cap
-      feedback/  admin/
+      bets/               U2Pick proposal/pick/lock/resolution, payout and settler
+                          rules, bet reads, lock worker
+      settlement/         points settlement, receipts, reviews, debt and debt cap,
+                          settlement and debt calculators
+      feedback/  admin/   feedback submission; admin health
+      config/             dev-only profile guard, Flyway, developer docs
+      common/  security/  shared infrastructure (open modules): IdempotencyGuard,
+                          ApiErrors, PostgresText, BettingLifecycleReady; sessions,
+                          filters, MutationAuthentication
     src/main/resources/   application config and Flyway migrations (db/migration)
     src/test/java/        tests mirror the main packages; IntegrationTestSupport
                           holds the shared containers, Spring context and helpers
-  modules/
-    bets/  settlement/    Spring Modulith modules: pure payout, settler, debt and
-                          table-settlement calculators behind an `api` package
-    identity/ social/ tables/ chat/ quickpicks/ admin/ sportsdata/ audit/
-                          reserved module folders (.gitkeep only, not in Gradle)
-  shared/kernel/          Money: exact integer-cent value type
+  shared/kernel/          Money: exact integer-cent value type (plain Java library)
   api/                    draft OpenAPI and realtime contracts
   dev/                    dev seed SQL
 ```
 
-Each `app` feature package keeps its classes package-private unless another
-package needs them. A feature's controllers map service outcomes to HTTP
-statuses and use `ApiErrors.error` for `{code, message}` error bodies.
-Mutations that support retries call `MutationAuthentication` and
-`IdempotencyGuard` inside their transaction.
+### Module rules
 
-Only packages annotated with `@ApplicationModule` are Spring Modulith modules
-(`spring.modulith.detection-strategy: explicitly-annotated`). Modules expose
-`com.p2picks.modules.<module>.api` and keep `internal` private; a module that
-needs another module's API declares an explicit Gradle dependency.
-`ModuleArchitectureTest` checks module discovery, cycles and API-only access,
-and that modules and the kernel never depend on `app`. To start a reserved
-module, add its sources, include it in `settings.gradle.kts` and add it to the
-test's module set.
+Each package's `package-info.java` marks it as a Spring Modulith module and
+states what it covers. Feature modules also list their `allowedDependencies`;
+for example `tables` may use `chat`, `settlement`, `common` and `security`.
+
+- A module's **public types are its API**. Everything else stays package-private,
+  so a class becomes visible to other modules only by being made public.
+- Feature modules depend only on the modules they declare. The graph must stay
+  acyclic, and `common` and `security` must not depend on feature modules.
+- The payout, U2Pick settler, debt and table-settlement calculators are pure
+  Java: no Spring, JDBC or other modules.
+- `ModuleArchitectureTest` enforces all of this; `MODULES.verify()` names the
+  offending class when a rule is broken. When adding a module, create its
+  package with a `package-info.java` and add it to the test's module set.
+- The database is not yet divided along module lines: many queries read or lock
+  other modules' tables inside one transaction. The
+  [architecture guide](../docs/site/architecture.md#modules-and-data-ownership)
+  maps which module owns each table.
+
+Controllers map service outcomes to HTTP statuses and use `ApiErrors.error` for
+`{code, message}` error bodies. Mutations that support retries call
+`MutationAuthentication` and `IdempotencyGuard` inside their transaction.
 
 Proposal, pick/clear, U2Pick result, points-settlement and receipt HTTP adapters
 are conditional on `BettingLifecycleReady`, which has no application bean. Tests

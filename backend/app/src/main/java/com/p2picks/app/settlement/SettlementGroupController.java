@@ -4,7 +4,7 @@ import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.p2picks.app.bets.BettingLifecycleReady;
+import com.p2picks.app.common.BettingLifecycleReady;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.ArrayList;

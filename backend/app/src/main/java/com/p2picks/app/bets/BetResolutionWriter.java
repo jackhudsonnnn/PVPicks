@@ -1,6 +1,5 @@
 package com.p2picks.app.bets;
 
-import com.p2picks.modules.bets.api.PayoutCalculator;
 import com.p2picks.shared.kernel.Money;
 import java.util.List;
 import java.util.Map;

@@ -13,7 +13,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.IntegrationTestSupport;
 import com.p2picks.app.OpenApiSchemas;
 import com.p2picks.app.settlement.TablePointsSettlementService;
-import com.p2picks.modules.bets.api.U2PickSettler;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;

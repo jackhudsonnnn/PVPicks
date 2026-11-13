@@ -9,8 +9,8 @@ Get oriented without changing shared data or exposing local credentials.
 - Docker and Docker Compose for infrastructure integration tests.
 
 The codebase contains a Spring Boot backend in `backend/`, a TanStack
-frontend in `client/`, and documentation in `docs/`. The backend app is
-organized in one Java package per feature; the
+frontend in `client/`, and documentation in `docs/`. The backend app has
+one Spring Modulith module per Java package; the
 <a href="/docs/source/backend-readme.md" download>backend README</a> maps them.
 
 ## Build the documentation

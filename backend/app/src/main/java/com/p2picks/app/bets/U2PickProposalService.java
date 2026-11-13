@@ -8,7 +8,7 @@ import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
 import com.p2picks.app.settlement.DebtQuery;
-import com.p2picks.modules.bets.api.U2PickSettler;
+import com.p2picks.app.bets.U2PickSettler;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
