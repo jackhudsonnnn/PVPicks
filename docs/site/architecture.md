@@ -21,14 +21,20 @@ consumer, or delivery guarantee yet.
 
 ## Code boundaries
 
-The `app` project owns the current dev HTTP controllers, services, security and
-support code. Ten Gradle domain modules have named `api` interfaces and
-private `internal` packages; most remain skeletons. The bets and settlement
-modules provide pure calculators, not transactional domain services. The shared
-kernel contains exact integer-cent money.
+The `app` project owns the dev HTTP controllers, services and security, in one
+Java package per feature: `users`, `social`, `tables`, `chat`, `bets`,
+`settlement`, `feedback` and `admin`, plus `security`, `config` and `common`
+(retry protection, error responses and text validation). Classes stay
+package-private unless another feature uses them.
 
-Spring Modulith and ArchUnit tests check module discovery and dependencies.
-Organizational subdirectories inside `app` are not separate Java packages.
+Two Gradle domain modules, `bets` and `settlement`, expose pure payout,
+settler, debt and table-settlement calculators through named `api` packages;
+they are not transactional services. Folders for other planned modules are
+reserved but not built. The shared kernel contains exact integer-cent money.
+
+Only `@ApplicationModule` packages are Spring Modulith modules. Modulith and
+ArchUnit tests check module discovery, cycles and API-only access, and that
+modules and the kernel never depend on `app`.
 The dev HTTP filter checks the current account role: admin accounts cannot call
 player APIs, and players cannot call admin APIs. Both can use session endpoints;
 public dev docs and health remain available. No account-role change API exists.

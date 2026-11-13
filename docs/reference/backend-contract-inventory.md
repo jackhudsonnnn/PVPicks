@@ -65,8 +65,11 @@ require asynchronous adapters and screen changes where results are consumed.
   invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
   list supplies its name and emoji for the pending-invite screen. Dev
-  `GET /tables` and `GET /tables/{id}` are implemented for active memberships;
-  `GET /me/relationships` returns the caller's private relationship view, and
+  `GET /tables` and `GET /tables/{id}` are implemented for active memberships:
+  hosts see the Quick Pick code and all disabled permissions, other members see
+  only their own disabled permissions, and missing, archived and non-member
+  tables all return 404. `GET /me/relationships` returns the caller's private
+  relationship view, suppressing follows across blocks and to deleted users, and
   `GET /me/invites` returns visible pending invitations. `GET /tables/archives`
   lists available read-only chat archives. Other reads remain incomplete.
 - The sports-only home ticker uses the drafted `GET /ticker` snapshot;
@@ -75,9 +78,13 @@ require asynchronous adapters and screen changes where results are consumed.
 - Dev `GET`/`PUT /tables/{id}/last-read` supplies filtered unread count and
   first unread message ID and advances only to a currently visible message.
   Last-read endpoints do not support archives.
-- Dev `GET /chat/{id}/messages` returns filtered latest, around, before and
-  after windows. Its opaque cursors are user/table-bound; every nonempty page
-  has a next cursor for later arrivals. Around takes a visible message ID.
+- Dev `GET /chat/{id}/messages` returns filtered latest (30), around (up to 30)
+  and before/after (up to 25) windows. Its opaque cursors are encrypted and
+  user/table-bound, with a key derived from the dev idempotency secret; every
+  nonempty page has a next cursor for later arrivals. Around takes a visible
+  message ID. Bet cards contain no picks and settlement cards only static
+  amounts and parties. Deleted users' reactions are excluded; blocked users'
+  reactions on visible messages remain.
   Archive members may read for 90 days after deletion.
   Realtime delivery is not implemented.
 - Dev reaction PUT and DELETE require current membership and react permission,
@@ -87,7 +94,8 @@ require asynchronous adapters and screen changes where results are consumed.
 - Dev chat sending validates the current text/GIF permission, trims text to
   1–2000 Unicode code points and restricts GIF IDs to the prototype catalog.
   A retry rechecks access and returns the original 201 representation without
-  resending; if the message was removed or its content changed, it returns 404. Rate limiting,
+  resending; if the message was removed or its content changed, it returns 404.
+  The retry record stores a message reference, not a copy of the text. Rate limiting,
   and realtime delivery remain unimplemented.
 - Dev member-permission PUT lets hosts quietly change the four permissions of
   current non-host members, including frozen members. Retries recheck the
@@ -141,8 +149,13 @@ require asynchronous adapters and screen changes where results are consumed.
   realtime delivery remain unimplemented.
 - Reports, feedback and admin operations are outside
   `AppCommands`. Dev `POST /feedback` submits feedback but does not implement
-  rate limiting or moderation reads. Report submission, moderation reads,
-  report-status updates and most admin operations remain incomplete.
+  rate limiting, moderation reads or personal-data cleanup; links stored before
+  V18 are not revalidated. Dev `GET /admin/health` reports PostgreSQL and Redis
+  status without connection details; Kafka is `NOT_CHECKED` and no latency or
+  error metrics exist. Admin flag and strike storage does not enforce
+  authorization, automatic freezes, session revocation or deletion cleanup.
+  Report submission, moderation reads, report-status updates and most admin
+  operations remain incomplete.
 - Dev `GET /me/debt-cap` reads the saved setting and default. Dev
   `GET /me/debt` reads current table exposure and open receipt nets in one
   database snapshot. Dev `PUT /me/debt-cap` requires zero debt and whole-point
@@ -151,7 +164,9 @@ require asynchronous adapters and screen changes where results are consumed.
 - Dev `GET`/`PUT /me/invite-preferences` read or replace the caller's policy.
   Defaults are friends `open` and following `request`; updates cancel
   ineligible pending invitations. Dev invitation responses enforce current
-  host, follow, block and preference rules; table member requests can create invitations.
+  host, follow, block and preference rules; acceptance adds the member and a
+  system chat message. Losing eligibility cancels a pending invitation
+  permanently. Table member requests can create invitations.
 - Dev follow/unfollow and block/unblock mutations use pair locking and the
   retry guard. Blocks remove follows and cancel pending invitations in both
   directions. Blocked follow attempts return the same 404 as unavailable
@@ -181,8 +196,10 @@ require asynchronous adapters and screen changes where results are consumed.
 - Bet outcome resolution (`SETTLED`) is distinct from the host's later
   settlement of table points (`pointsSettled`); clients need both for balances
   and Quick Pick wash eligibility.
-- Dev table deletion retains a read-only chat archive for members at deletion
-  for 90 days and preserves receipts and Quick Pick copies. It requires
+- Dev table deletion snapshots members, disconnects subscriptions, cancels
+  pending invitations and retains a read-only chat archive for those members
+  for 90 days; afterwards the archive is hidden but its data remains. It
+  preserves receipts and Quick Pick copies. It requires
   settlement of all resolved non-4fun bet points. Receipt actions and zero-net
   settlement exist internally; retained-data cleanup remains unimplemented.
 - Planned STOMP destinations: `/topic/tables/{id}/chat`,

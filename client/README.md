@@ -43,8 +43,7 @@ dependencies, JDK 21, and Docker. From `backend/`, run:
 
 ```sh
 PVPICKS_FRONTEND_INTEGRATION=true ./gradlew :app:test --rerun \
-  --tests 'com.p2picks.app.P2PicksApplicationTest.bettingPreviewRunsAgainstIsolatedBackend' \
-  --tests 'com.p2picks.app.P2PicksApplicationTest.settlementPreviewRunsAgainstIsolatedBackend'
+  --tests 'com.p2picks.app.FrontendPreviewIntegrationTest'
 ```
 
 It uses Testcontainers and a random loopback port, registers gated controllers

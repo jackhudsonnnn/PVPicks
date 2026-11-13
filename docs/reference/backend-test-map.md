@@ -5,25 +5,44 @@ table-read, profile lookup and privacy-aware bet-read handling as well as the re
 presentation, storage isolation, betting calculations, chat unread state,
 settlement warnings and error toasts.
 
-Run backend tests from `backend/` with `./gradlew :app:test`. Integration tests
-use disposable PostgreSQL, Redis and Kafka containers; they do not target the
-shared development database.
+Run backend tests from `backend/` with `./gradlew test` (all projects) or
+`./gradlew :app:test`. Integration tests use disposable PostgreSQL, Redis and
+Kafka containers, started once per run; they do not target the shared
+development database. Test classes live in the same package as the code they
+cover.
 
-- `P2PicksApplicationTest` exercises authenticated dev HTTP flows, database
-  upgrades, chat visibility and read positions, and internal betting and
-  settlement transactions. Gated HTTP adapters are registered only in tests.
-  The opt-in `bettingPreviewRunsAgainstIsolatedBackend` and
-  `settlementPreviewRunsAgainstIsolatedBackend` tests also run the React
-  previews over HTTP against those containers; their invocation and
-  prerequisites are in the [frontend README](../../client/README.md). These
-  use jsdom, not a browser.
-- `BettingLifecycleGateTest`, `BetLockWorkerTest` and `BetLockSchedulingTest`
-  cover the readiness gate and opt-in lock recovery.
-- The bets and settlement module tests cover pure payout, U2Pick settler,
-  debt and table-settlement calculations.
+- Feature integration tests extend `IntegrationTestSupport`, which owns the
+  containers, the single shared Spring context and common HTTP helpers
+  (`loginAs`, `csrf` and request builders). Do not change the context
+  configuration in a subclass; that would start a second context.
+  - `security.AuthIntegrationTest`: login, CSRF/origin, session expiry and
+    role-based route access.
+  - `users`, `social`, `chat`, `feedback`: profile, search/lookup,
+    relationships, invitations, chat windows, sending, reactions and read state.
+  - `tables.TableMembershipIntegrationTest` and
+    `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
+    reads, profile, settings, permissions, remainder and Quick Pick controls.
+  - `bets.BetIntegrationTest` and `settlement.SettlementIntegrationTest`:
+    internal betting and settlement transactions, debt and debt caps, and the
+    gated HTTP adapters, which `GatedBetAdapters` and `GatedSettlementAdapters`
+    register only in tests.
+  - `MigrationIntegrationTest`: schema constraints and populated V2–V25
+    upgrades. `PlatformIntegrationTest`: health, developer docs and
+    infrastructure connectivity.
+  - `FrontendPreviewIntegrationTest`: opt-in runs of the React betting and
+    settlement previews over HTTP against the containers. Their invocation and
+    prerequisites are in the [frontend README](../../client/README.md). These
+    use jsdom, not a browser.
+- `bets.BettingLifecycleGateTest`, `settlement.SettlementLifecycleGateTest`,
+  `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the
+  readiness gate and opt-in lock recovery.
+- The `bets` and `settlement` module tests cover pure payout, U2Pick settler,
+  debt and table-settlement calculations; `shared/kernel` tests cover `Money`.
+- `ModuleArchitectureTest` checks Modulith modules and ArchUnit boundaries,
+  including negative fixtures under `com.p2picks.archfixture`.
 - Contract tests validate draft OpenAPI and realtime shapes; they do not imply
   that every drafted operation is implemented.
-- Storage and `ProcessedEventStorageTest` cover database invariants and
+- Storage tests and `ProcessedEventStorageTest` cover database invariants and
   transactional event deduplication.
 
 Keep UI and browser-only behavior in frontend tests. Add backend tests for

@@ -9,8 +9,9 @@ Get oriented without changing shared data or exposing local credentials.
 - Docker and Docker Compose for infrastructure integration tests.
 
 The codebase contains a Spring Boot backend in `backend/`, a TanStack
-frontend in `client/`, and documentation in `docs/`. Java classes in the
-backend app's organizational folders still share the `com.p2picks.app` package.
+frontend in `client/`, and documentation in `docs/`. The backend app is
+organized in one Java package per feature; the
+<a href="/docs/source/backend-readme.md" download>backend README</a> maps them.
 
 ## Build the documentation
 
@@ -33,7 +34,7 @@ in `docs/scripts/build.mjs`; add new reference files there when needed.
 From `backend/`, using an installed Java 21:
 
 ```sh
-./gradlew :app:test
+./gradlew test
 ```
 
 Integration tests use disposable Testcontainers and require Docker. The
