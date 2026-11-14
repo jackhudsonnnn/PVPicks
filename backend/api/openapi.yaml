@@ -304,6 +304,141 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /me/bets:
+    get:
+      operationId: listMyBets
+      summary: List bets at the caller's current tables, newest first
+      description: >-
+        Bets at every non-archived table the caller is a member of (or one of
+        them with tableId), using the same projection as listTableBets: each
+        Active bet contains only the caller's own pick. Counts cover the same
+        tables for every status, ignoring the status filter and cursor.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, PENDING, SETTLED, WASHED]
+        - $ref: '#/components/parameters/OptionalTableId'
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        '200':
+          description: A page of bets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /tables/{tableId}/tomatoes:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: listRecentTomatoes
+      summary: Tomatoes thrown at the table in the last 30 seconds
+      description: >-
+        For animating throws after a tomatoes.changed invalidation. Requires
+        current membership of a non-archived table. Throws involving anyone
+        the caller is in a block relationship with (either direction) are
+        omitted.
+      responses:
+        '200':
+          description: Recent throws, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TomatoThrow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: throwTomato
+      summary: Throw a tomato at another member
+      description: >-
+        A playful effect every member sees; it never changes points or files
+        a report. Requires the caller's reaction permission. The target must
+        be another active current member with no block relationship with the
+        caller in either direction (otherwise 404). One throw per thrower per
+        table every 5 seconds (429 with Retry-After).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [targetId]
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Thrown.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /tables/{tableId}/balances:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: listTableBalances
+      summary: Each current member's points at the table
+      description: >-
+        settleCents is what the next points settlement would move: the
+        member's ledger deltas from resolved bets whose points are not yet
+        settled. trueCents also subtracts their wagers in Pending (locked)
+        non-4fun pots, the worst case. Active picks are never counted. Members
+        can already read every input through bet reads. Requires current
+        membership of a non-archived table.
+      responses:
+        '200':
+          description: One balance per current member.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /bets/{betId}:
     parameters:
       - $ref: '#/components/parameters/BetId'
@@ -1768,6 +1903,12 @@ paths:
     post:
       operationId: submitReport
       summary: Submit a report for the moderation queue
+      description: >-
+        Dev implementation. The target must be another player. tableId must be
+        a non-archived table the caller is a member of; messageId requires
+        tableId and must be a text or GIF message the target wrote there (its
+        content is kept with the report). At most 20 reports per caller per
+        rolling day (429). Reports are stored for a future moderation queue.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2527,6 +2668,57 @@ components:
         updatedAt:
           type: string
           format: date-time
+    BetPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor, counts]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bet'
+        nextCursor:
+          type: [string, 'null']
+        counts:
+          type: object
+          additionalProperties: false
+          required: [ACTIVE, PENDING, SETTLED, WASHED]
+          properties:
+            ACTIVE: {type: integer, minimum: 0}
+            PENDING: {type: integer, minimum: 0}
+            SETTLED: {type: integer, minimum: 0}
+            WASHED: {type: integer, minimum: 0}
+    TomatoThrow:
+      type: object
+      additionalProperties: false
+      required: [id, throwerId, targetId, thrownAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        throwerId:
+          type: string
+          format: uuid
+        targetId:
+          type: string
+          format: uuid
+        thrownAt:
+          type: string
+          format: date-time
+    TableBalance:
+      type: object
+      additionalProperties: false
+      required: [userId, settleCents, trueCents]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        settleCents:
+          type: integer
+          format: int64
+        trueCents:
+          type: integer
+          format: int64
     SettlementGroup:
       type: object
       additionalProperties: false

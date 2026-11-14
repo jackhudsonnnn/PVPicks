@@ -1,9 +1,11 @@
 # Frontend
 
 The current entry point (`src/features/auth/backend-app.tsx`) signs in to the
-dev backend. A header switches between Home, Friends, How to play and
-Preferences. It is the only app: every route renders it, and the route files
-only supply paths and page metadata.
+dev backend. On desktop a sidebar holds Home, Tickets, Friends, How to play and
+Preferences, your tables, and your net settle-up points; phones get a top bar
+and a bottom tab bar. It is the only app: every route renders it, and the
+route files only supply paths and page metadata. The look follows the
+original prototype (git tag `prototype-ui`), adapted to the server's data.
 
 - **Home:** pending table invitations (join or decline), your tables,
   "Create a table" (name, icon, and people who follow you), and deleted tables
@@ -13,19 +15,22 @@ only supply paths and page metadata.
   follow back, block and unblock. A host can only add people who follow them,
   and each person's invite preferences decide whether they join right away or
   get an invitation.
-- **Table page:** Bets, Chat and Members tabs. Members shows everyone's role;
-  hosts can add followers, remove members, make or remove hosts, switch member
-  permissions, and change the name, icon, betting settings and leftover-cents
-  rule, or delete the table.
+- **Table page:** a card-room felt with members seated around it (each
+  showing their points at the table and, for the focused bet, their pick) and
+  the open bets fanned as cards in the middle; tap the front card to open its
+  ticket. A side panel (tabs on phones) holds Chat, Peers (everyone's Settle
+  and True points at the table) and Host (or About for members): points
+  settlement, members, roles, permissions and table settings.
+- **Tickets:** every bet at your tables as tickets, by status (Active,
+  Pending, Resolved, Washed) with counts, optionally for one table, paged.
 
-- **U2Pick betting:** create a bet, pick or clear a choice, call the result or
-  wash it once the bet locks (if the bet's settler rule allows you), and, as a
-  host, settle the table's resolved points. Creating does not place a pick;
-  clearing a joined pick leaves the player as No guess. Active bets show only
-  the viewer's participation and the aggregate pick count; picks and
-  participant names are revealed after lock.
-- **Receipts:** private balance-change reviews, individual and group receipt
-  actions, and receipt history, preserving 64-bit cent values.
+- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (sports modes
+  show as coming soon), set up a U2Pick, the wager (+0.01/+0.10/+1.00 steps,
+  0.10 to 10.00, or 4fun) and the pick window, preview the ticket, send. On a
+  ticket, tap a choice to pick (you confirm first), tap it again to clear it,
+  and use "Call it" on a locked ticket if its settler rule allows you.
+  Creating does not place a pick. Active tickets show only your own pick and
+  the pick count; picks, players and the pot appear after lock.
 
 - **Chat:** each table has a Bets/Chat tab pair. Chat loads at your first
   unread message (marked "New"), pages older history, sends text (1–2000
@@ -74,8 +79,9 @@ configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
 `npm run dev`, then visit `http://127.0.0.1:5173`. Vite proxies `/api` requests
 to the backend; this development-only proxy is not a production deployment.
 Sign in with an already provisioned backend account.
-For an isolated backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its
-HTTP loopback origin when starting Vite.
+For a backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its HTTP
+loopback origin, in the shell or in a git-ignored `client/.env.local`
+(`PVPICKS_DEV_BACKEND_URL=http://127.0.0.1:8090`); the shell wins.
 
 Starting the backend applies pending migrations automatically. Do not expose
 the dev backend or proxy to a network.

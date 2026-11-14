@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile, type BackendTable } from "./backend-api";
 import { BackendFriends } from "./backend-friends";
 import { CreateTable, Invitations } from "./backend-home";
-import { TableMembers } from "./backend-table-members";
+import { AboutPanel, HostPanel } from "./backend-host-panel";
+import { useBetActions } from "./bet-actions";
 import { addableFollowers, peopleIn, searchTerm, tableNameProblem } from "./management-rules";
 import {
   getRelationships,
@@ -92,8 +93,23 @@ function wrap(children: ReactNode) {
 }
 
 function Members({ value }: { value: BackendTable }) {
-  const actions = useTableActions(me.id, async () => {}, expire);
-  return <TableMembers user={me} table={value} expire={expire} actions={actions} />;
+  const tableActions = useTableActions(me.id, async () => {}, expire);
+  const betActions = useBetActions(me.id, async () => {}, expire);
+  const props = {
+    table: value,
+    bets: [],
+    balances: [],
+    tableActions,
+    betActions,
+    user: me,
+    expire,
+    peopleKey: ["backend-tables", me.id, "people"],
+  };
+  return value.hostIds.includes(me.id) ? (
+    <HostPanel {...props} />
+  ) : (
+    <AboutPanel {...props} onOpenPeers={() => {}} />
+  );
 }
 
 async function confirm(label: string) {
@@ -238,8 +254,10 @@ describe("table members", () => {
     vi.mocked(setPermission).mockResolvedValue();
     vi.mocked(removeMember).mockResolvedValue();
     wrap(<Members value={table} />);
-    expect(await screen.findByText(/Turned off: gifs/)).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("GIFs"));
+    expect(await screen.findByText(/1 limit/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /^friend/ }));
+    const dialog = within(await screen.findByRole("dialog"));
+    fireEvent.click(dialog.getByLabelText(/^GIFs/));
     await waitFor(() =>
       expect(setPermission).toHaveBeenCalledWith(
         table.id,
@@ -249,11 +267,12 @@ describe("table members", () => {
         expect.any(String),
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Make host" }));
+    fireEvent.click(dialog.getByLabelText(/^Host/));
     await waitFor(() =>
       expect(setHost).toHaveBeenCalledWith(table.id, friend, true, expect.any(String)),
     );
-    await confirm("Remove");
+    fireEvent.click(dialog.getByRole("button", { name: /Remove from table/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     await waitFor(() =>
       expect(removeMember).toHaveBeenCalledWith(table.id, friend, expect.any(String)),
     );
@@ -262,9 +281,8 @@ describe("table members", () => {
   it("adds followers who are not members yet", async () => {
     vi.mocked(addMembers).mockResolvedValue([{ userId: fan, outcome: "invited" }]);
     wrap(<Members value={table} />);
-    fireEvent.click(screen.getByText("Add people"));
-    fireEvent.click(await screen.findByLabelText("fan"));
-    fireEvent.click(screen.getByRole("button", { name: "Add 1" }));
+    expect(await screen.findByText("fan")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(addMembers).toHaveBeenCalledWith(table.id, [fan], expect.any(String)),
     );
@@ -277,7 +295,7 @@ describe("table members", () => {
     const { BackendError } = await import("./backend-api");
     vi.mocked(deleteTable).mockRejectedValue(new BackendError("x", 409, "table_archive_unsettled"));
     wrap(<Members value={table} />);
-    fireEvent.click(screen.getByLabelText("Only hosts can start bets"));
+    fireEvent.click(screen.getByLabelText(/^Only hosts start bets/));
     await waitFor(() =>
       expect(updateTableSettings).toHaveBeenCalledWith(
         table.id,
@@ -285,19 +303,24 @@ describe("table members", () => {
         expect.any(String),
       ),
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Random" }));
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Leftover cents go to" }), {
+      key: "Enter",
+    });
+    fireEvent.click(await screen.findByRole("option", { name: "Random" }));
     await waitFor(() =>
       expect(setRemainderRule).toHaveBeenCalledWith(table.id, "random", expect.any(String)),
     );
-    await confirm("Delete table");
+    fireEvent.click(screen.getByRole("button", { name: /Delete table/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     expect(await screen.findByText(/can't be deleted while bets are active/)).toBeInTheDocument();
   });
 
   it("shows members read-only settings without host controls", async () => {
     wrap(<Members value={{ ...table, hostIds: [friend] }} />);
     expect(await screen.findByText("Leftover cents go to")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Make host" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Add people")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Delete table" })).not.toBeInTheDocument();
+    expect(screen.getByText("Your permissions")).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.queryByText("Add players")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Delete table/ })).not.toBeInTheDocument();
   });
 });

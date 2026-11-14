@@ -56,6 +56,10 @@ const betSchema = z
     forFun: z.boolean(),
     status: z.enum(["ACTIVE", "PENDING", "SETTLED", "WASHED"]),
     locksAt: z.string().datetime({ offset: true }),
+    createdAt: z.string().datetime({ offset: true }),
+    lockedAt: z.string().datetime({ offset: true }).optional(),
+    closedAt: z.string().datetime({ offset: true }).optional(),
+    settledAt: z.string().datetime({ offset: true }).optional(),
     pointsSettled: z.boolean(),
     pickCount: z.number().int().safe().nonnegative(),
     myPick: z.string().nullable(),
@@ -227,6 +231,37 @@ export async function listTableBets(tableId: string, signal?: AbortSignal): Prom
   if (bets.some((bet) => bet.tableId !== tableId))
     throw new BackendError("The backend returned an unexpected response.");
   return bets;
+}
+
+const betPageSchema = z.object({
+  items: z.array(betSchema),
+  nextCursor: z.string().min(1).nullable(),
+  counts: z.object({
+    ACTIVE: z.number().int().safe().nonnegative(),
+    PENDING: z.number().int().safe().nonnegative(),
+    SETTLED: z.number().int().safe().nonnegative(),
+    WASHED: z.number().int().safe().nonnegative(),
+  }),
+});
+export type BetPage = z.infer<typeof betPageSchema>;
+
+/** Your bets across your current tables (or one), newest first, with per-status counts for the Tickets tabs. */
+export async function listMyBets(
+  filter: { status?: BackendBet["status"]; tableId?: string; cursor?: string },
+  signal?: AbortSignal,
+): Promise<BetPage> {
+  const params = new URLSearchParams();
+  if (filter.status) params.set("status", filter.status);
+  if (filter.tableId) params.set("tableId", filter.tableId);
+  if (filter.cursor) params.set("cursor", filter.cursor);
+  const query = params.size ? `?${params}` : "";
+  const page = await read(
+    await request(`/me/bets${query}`, signal ? { signal } : undefined),
+    betPageSchema,
+  );
+  if (filter.status && page.items.some((bet) => bet.status !== filter.status))
+    throw new BackendError("The backend returned an unexpected response.");
+  return page;
 }
 
 export async function getBet(

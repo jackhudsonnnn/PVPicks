@@ -43,6 +43,7 @@ const bet = {
   forFun: false,
   status: "ACTIVE",
   locksAt: "2026-11-11T12:00:00+00:00",
+  createdAt: "2026-11-11T11:58:00+00:00",
   pointsSettled: false,
   pickCount: 1,
   myPick: "Yes",

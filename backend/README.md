@@ -25,16 +25,18 @@ backend/
       users/              profile, user search and lookup
       social/             follows/blocks, invitations, invite preferences
       tables/             create, profile, settings, members, hosts, permissions,
-                          remainder, Quick Pick controls, archives, reads
+                          remainder, Quick Pick controls, archives, reads, tomatoes
       chat/               message windows, sending, reactions, read state
       bets/               U2Pick proposal/pick/lock/resolution, payout and settler
-                          rules, bet reads, lock worker
+                          rules, bet reads (per table and GET /me/bets), table
+                          balances, lock worker
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
       sports/             sports feed (BallDontLie), game snapshots, GET /ticker
       delivery/           outbox relay to Kafka and cleanup, realtime consumer and
                           the STOMP WebSocket gateway (/ws) with its audience checks
       feedback/  admin/   feedback submission; admin health
+      moderation/         player reports (POST /reports), stored for a moderation queue
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
                           Outbox/OutboxEvent, ApiErrors, PostgresText;
@@ -122,6 +124,9 @@ bash scripts/seed-dev.sh --seed
   LAN, production or real-user data.
 - Compose requires `PVPICKS_DB_PASSWORD` in the ignored `infra/compose/.env`
   or the shell. `PVPICKS_PORT` (default 8080) changes the loopback host port.
+- PostgreSQL is published on loopback at `PVPICKS_DB_PORT` (default 5433) for a
+  local client such as pgAdmin: database and user `p2picks`, password
+  `PVPICKS_DB_PASSWORD`.
 - Add `--profile tools` before `up` for Kafka UI on `PVPICKS_KAFKA_UI_PORT`
   (default 8081). It is unauthenticated: use it only with disposable data.
 - `down -v` deletes the PostgreSQL and Kafka volumes.

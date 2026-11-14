@@ -107,7 +107,7 @@ describe("table chat", () => {
     );
     renderChat();
     expect(await screen.findByText("hello 3")).toBeInTheDocument();
-    expect(screen.getByText("New")).toBeInTheDocument();
+    expect(screen.getByText("New messages")).toBeInTheDocument();
     expect(getChatWindow).toHaveBeenCalledWith(table.id, { around: message(2).id });
     expect(getChatWindow).toHaveBeenCalledWith(table.id, { after: "after-2" });
     await waitFor(() =>
@@ -219,7 +219,7 @@ describe("table chat", () => {
     });
     renderChat();
     expect(await screen.findByText(/Table created/)).toBeInTheDocument();
-    expect(screen.getByText("Proposed a bet: Who wins?")).toBeInTheDocument();
+    expect(screen.getByText("Who wins?")).toBeInTheDocument();
     expect(await screen.findByText(/90,071,992,547,409\.93 points/)).toBeInTheDocument();
   });
 

@@ -4,9 +4,17 @@
   "title": "Realtime invalidation, version 1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["eventId", "type", "schemaVersion", "occurredAt"],
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt"
+  ],
   "properties": {
-    "eventId": { "type": "string", "format": "uuid" },
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
     "type": {
       "enum": [
         "chat.changed",
@@ -17,39 +25,131 @@
         "invitations.changed",
         "profile.changed",
         "settlements.changed",
-        "ticker.changed"
+        "ticker.changed",
+        "tomatoes.changed"
       ]
     },
-    "schemaVersion": { "const": 1 },
-    "occurredAt": { "type": "string", "format": "date-time" },
-    "tableId": { "type": "string", "format": "uuid" },
-    "resourceId": { "type": "string", "format": "uuid" }
+    "schemaVersion": {
+      "const": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tableId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "resourceId": {
+      "type": "string",
+      "format": "uuid"
+    }
   },
   "allOf": [
     {
-      "if": { "properties": { "type": { "const": "bet.changed" } }, "required": ["type"] },
-      "then": { "required": ["tableId", "resourceId"] }
-    },
-    {
-      "if": { "properties": { "type": { "const": "chat.changed" } }, "required": ["type"] },
-      "then": { "required": ["tableId"], "properties": { "resourceId": false } }
-    },
-    {
-      "if": { "properties": { "type": { "enum": ["bets.changed", "table.changed"] } }, "required": ["type"] },
-      "then": { "required": ["tableId"], "properties": { "resourceId": false } }
+      "if": {
+        "properties": {
+          "type": {
+            "const": "bet.changed"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "tableId",
+          "resourceId"
+        ]
+      }
     },
     {
       "if": {
         "properties": {
-          "type": { "enum": ["ticker.changed", "settlements.changed", "tables.changed", "invitations.changed"] }
+          "type": {
+            "const": "chat.changed"
+          }
         },
-        "required": ["type"]
+        "required": [
+          "type"
+        ]
       },
-      "then": { "properties": { "tableId": false, "resourceId": false } }
+      "then": {
+        "required": [
+          "tableId"
+        ],
+        "properties": {
+          "resourceId": false
+        }
+      }
     },
     {
-      "if": { "properties": { "type": { "const": "profile.changed" } }, "required": ["type"] },
-      "then": { "required": ["resourceId"], "properties": { "tableId": false } }
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "bets.changed",
+              "table.changed",
+              "tomatoes.changed"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "tableId"
+        ],
+        "properties": {
+          "resourceId": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "ticker.changed",
+              "settlements.changed",
+              "tables.changed",
+              "invitations.changed"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tableId": false,
+          "resourceId": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "profile.changed"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "required": [
+          "resourceId"
+        ],
+        "properties": {
+          "tableId": false
+        }
+      }
     }
   ]
 }

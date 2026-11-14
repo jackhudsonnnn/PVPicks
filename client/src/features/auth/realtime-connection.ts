@@ -23,6 +23,7 @@ const invalidationSchema = z.object({
     "profile.changed",
     "settlements.changed",
     "ticker.changed",
+    "tomatoes.changed",
   ]),
   schemaVersion: z.literal(1),
   occurredAt: z.string(),

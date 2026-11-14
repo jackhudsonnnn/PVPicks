@@ -14,7 +14,12 @@ const archiveSchema = z.object({
   expiresAt: z.string().datetime({ offset: true }),
 });
 
+const cents = z.union([z.number().int().safe(), z.bigint()]).transform((value) => BigInt(value));
+const balanceSchema = z.object({ userId: uuid, settleCents: cents, trueCents: cents });
+
 export type MemberOutcome = z.infer<typeof outcomeSchema>;
+/** A member's points at a table: what the next settlement moves, and that minus their locked wagers. */
+export type TableBalance = z.infer<typeof balanceSchema>;
 export type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs";
 export type RemainderRule = "host" | "proposer" | "earliest" | "random";
@@ -111,4 +116,60 @@ export async function listArchives(signal?: AbortSignal): Promise<TableArchive[]
     await request("/tables/archives", signal ? { signal } : undefined),
     z.array(archiveSchema),
   );
+}
+
+export async function listTableBalances(
+  tableId: string,
+  signal?: AbortSignal,
+): Promise<TableBalance[]> {
+  if (!uuid.safeParse(tableId).success) throw new BackendError("Table not found.", 404);
+  return read(
+    await request(
+      `/tables/${encodeURIComponent(tableId)}/balances`,
+      signal ? { signal } : undefined,
+    ),
+    z.array(balanceSchema),
+  );
+}
+
+export async function setQuickPicksEnabled(tableId: string, enabled: boolean, key: string) {
+  await mutationRequest(`${tablePath(tableId)}/quick-picks`, "PUT", key, { enabled });
+}
+
+export async function setQuickPickSharing(tableId: string, sharing: boolean, key: string) {
+  await mutationRequest(
+    `${tablePath(tableId)}/quick-picks/share`,
+    sharing ? "POST" : "DELETE",
+    key,
+  );
+}
+
+/** A new code; old subscribers are disconnected. */
+export async function rotateQuickPickCode(tableId: string, key: string): Promise<string> {
+  return (
+    await read(
+      await mutationRequest(`${tablePath(tableId)}/quick-picks/rotate`, "POST", key),
+      z.object({ code: z.string().regex(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/) }),
+    )
+  ).code;
+}
+
+const tomatoSchema = z.object({
+  id: uuid,
+  throwerId: uuid,
+  targetId: uuid,
+  thrownAt: z.string().datetime({ offset: true }),
+});
+export type TomatoThrow = z.infer<typeof tomatoSchema>;
+
+/** Tomatoes thrown at the table in the last 30 seconds, without any involving people you're blocked with. */
+export async function listTomatoes(tableId: string, signal?: AbortSignal): Promise<TomatoThrow[]> {
+  return read(
+    await request(`${tablePath(tableId)}/tomatoes`, signal ? { signal } : undefined),
+    z.array(tomatoSchema),
+  );
+}
+
+export async function throwTomato(tableId: string, targetId: string, key: string) {
+  await mutationRequest(`${tablePath(tableId)}/tomatoes`, "POST", key, { targetId });
 }

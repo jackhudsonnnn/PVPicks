@@ -72,3 +72,8 @@ vi.mock("@stomp/stompjs", () => ({
     }
   },
 }));
+
+// Radix Select uses pointer capture and scrollIntoView, which jsdom doesn't implement.
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.scrollIntoView ??= () => {};

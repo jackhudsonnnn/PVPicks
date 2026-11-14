@@ -38,7 +38,7 @@ subscribing connection only.
 
 | Subscribe to | Audience | Payload | Source outbox events |
 |---|---|---|---|
-| `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`; refetch the table | `table.profile.changed`, `table.settings.changed`, `table.remainder.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
+| `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`: refetch the table; `tomatoes.changed`: refetch `GET /tables/{id}/tomatoes` (from `table.tomato.thrown`) | `table.profile.changed`, `table.settings.changed`, `table.remainder.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
 | `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`; `settlement.created` (list) |
 | `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed` |
 | `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.line.changed`, `settlement.group.changed`, `settlement.net.changed` |
@@ -88,8 +88,9 @@ lifecycle changes do not add bet activity to this shared topic.
 `eventId` identifies the emitted invalidation for deduplication. It is
 derived from the outbox event ID and the invalidation type, so a redelivered
 event keeps its ID. `resourceId` is the affected bet for `bet.changed` and
-the affected user for `profile.changed`. `bets.changed` and `table.changed`
-name only the table; `settlements.changed`, `tables.changed` and
+the affected user for `profile.changed`. `bets.changed`, `table.changed` and
+`tomatoes.changed` name only the table (who threw a tomato at whom comes from the
+block-filtered HTTP read); `settlements.changed`, `tables.changed` and
 `invitations.changed` carry no table or resource ID. The envelope contains no pick, message
 identity or text, username, credential or financial amount. The schema and its
 tests define the contract the gateway sends.

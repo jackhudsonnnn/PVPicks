@@ -1,3 +1,4 @@
+import { formatCents } from "@/lib/money";
 import { parse, parseNumberAndBigInt } from "lossless-json";
 import { z } from "zod";
 import { BackendError, mutationRequest, request } from "./backend-api";
@@ -200,7 +201,4 @@ export async function transitionGroup(
 }
 
 /** Formats signed cents as points, exactly (two decimals, grouped). */
-export function formatPoints(cents: bigint) {
-  const abs = cents < 0n ? -cents : cents;
-  return `${cents < 0n ? "-" : ""}${(abs / 100n).toLocaleString()}.${(abs % 100n).toString().padStart(2, "0")}`;
-}
+export const formatPoints = (cents: bigint) => formatCents(cents);

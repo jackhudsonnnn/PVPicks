@@ -117,6 +117,9 @@ class RealtimeConsumer {
                 audience.add(uuid(payload, "userId"));
                 routes.tableView(table, audience);
             }
+            // Names only the table: who threw at whom comes from the block-filtered HTTP read.
+            case TABLE_TOMATO_THROWN -> routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.VIEW,
+                    Invalidation.TOMATOES_CHANGED, null, null);
             case TABLE_ARCHIVED -> routes.personal(audiences.archiveMembers(uuid(payload, "tableId")),
                     Invalidation.TABLES_CHANGED, null);
             case TABLE_INVITATION_CREATED -> routes.personal(

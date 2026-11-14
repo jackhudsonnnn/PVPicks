@@ -25,8 +25,10 @@ chat, receipts and names refresh live from the realtime gateway.
   modes and host overrides.
 - Admin tools beyond site health (user audit, moderation, report and feedback
   queues) once the backend has endpoints for them.
-- Replace the minimal betting and receipt views with the ticket and table
-  designs from the `prototype-ui` tag.
-- Bring chat closer to the prototype design (seated table, avatars) and keep
-  reactions on older loaded messages current; today a change refreshes the
-  newest window and the message you reacted to.
+- Port the rest of the prototype design (`prototype-ui` tag): the Home page
+  and the receipt views. Tickets, the proposal sheet, the app shell, the felt
+  table page with its chat, Peers, Host/About panels and profile dialogs, and
+  the Tickets page are already ported.
+- Quick Picks subscribing (needs subscription and copy fan-out on the server).
+- Keep reactions on older loaded chat messages current; today a change
+  refreshes the newest window and the message you reacted to.

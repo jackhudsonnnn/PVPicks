@@ -1,52 +1,32 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LogIn, LogOut, RefreshCw } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { LogIn, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
-import { AnimatedItem, AnimatedList } from "@/components/animated-list";
-import { SegmentedTabs } from "@/components/segmented-tabs";
 import {
   backendErrorMessage,
   BackendError,
   currentUser,
-  getBet,
-  getTable,
-  listTableBets,
   listTables,
   signIn,
   signOut,
-  type BackendBet,
-  type BackendTable,
   type BackendUser,
 } from "./backend-api";
-import {
-  BetMutationStatus,
-  PickControls,
-  PointsSettlementControl,
-  ProposalForm,
-  ResultControls,
-  type BetActions,
-} from "./backend-bet-controls";
-import { PersonName } from "./backend-person-name";
-import { BackendChat } from "./backend-chat";
 import { AdminWorkspace } from "./backend-admin";
 import { ArchivedTable, ArchivedTables } from "./backend-archives";
 import { BackendFriends } from "./backend-friends";
 import { BackendGuide } from "./backend-guide";
 import { CreateTable, Invitations } from "./backend-home";
 import { BackendPreferences } from "./backend-preferences";
-import { TableMembers } from "./backend-table-members";
-import { useTableActions } from "./table-actions";
-import { BackendTicker } from "./backend-ticker";
-import { getChatUnread } from "./chat-api";
-import { useBetActions } from "./bet-actions";
-import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
-import { personalFeed, tableBetsFeed, tableChatFeed, tableViewFeed } from "./realtime-connection";
-import { dateTimeLabel } from "@/lib/time";
+import { AppShell } from "./backend-shell";
+import { TablePage } from "./backend-table-page";
+import { TicketsPage } from "./backend-tickets";
+import { RealtimeProvider, useRealtimeFeed } from "./realtime";
+import { personalFeed } from "./realtime-connection";
 
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
@@ -241,87 +221,51 @@ function TableWorkspace({
       }
     >
       <PersonalUpdates user={user} />
-      <div className="min-h-dvh bg-field">
-        <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
-          <div className="flex items-center gap-4">
-            <Logo />
-            <nav aria-label="Main" className="flex gap-3 text-sm">
-              <Link
-                to="/"
-                aria-current={pathname === "/" ? "page" : undefined}
-                className={pathname === "/" ? "font-semibold" : "text-muted-foreground"}
-              >
-                Home
-              </Link>
-              <Link
-                to="/friends"
-                aria-current={pathname === "/friends" ? "page" : undefined}
-                className={pathname === "/friends" ? "font-semibold" : "text-muted-foreground"}
-              >
-                Friends
-              </Link>
-              <Link
-                to="/how-to-play"
-                aria-current={pathname === "/how-to-play" ? "page" : undefined}
-                className={pathname === "/how-to-play" ? "font-semibold" : "text-muted-foreground"}
-              >
-                How to play
-              </Link>
-              <Link
-                to="/preferences"
-                aria-current={pathname === "/preferences" ? "page" : undefined}
-                className={pathname === "/preferences" ? "font-semibold" : "text-muted-foreground"}
-              >
-                Preferences
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <LiveStatus />
-            <span className="text-sm">{user.username}</span>
-            <Button variant="outline" size="sm" onClick={() => void handleLogout()} disabled={busy}>
-              <LogOut /> Sign out
-            </Button>
-          </div>
-        </header>
-        <BackendTicker user={user} expire={expire} />
-        <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
-          <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-            Dev backend: tables, members, friends, U2Pick betting, results, points settlement,
-            receipts, chat and the sports ticker are connected and update live.
+      <AppShell
+        user={user}
+        pathname={pathname}
+        expire={expire}
+        onSignOut={() => void handleLogout()}
+        signingOut={busy}
+      >
+        {error && (
+          <p role="alert" className="mx-auto max-w-4xl px-4 pt-4 text-loss md:px-8">
+            {error}
           </p>
-          {error && (
-            <p role="alert" className="text-loss">
-              {error}
-            </p>
-          )}
-          {pathname === "/" ? (
-            <>
-              <Invitations user={user} expire={expire} />
-              <TableList user={user} expire={expire} />
-              <CreateTable user={user} expire={expire} />
-              <ArchivedTables user={user} />
-            </>
-          ) : pathname === "/friends" ? (
-            <BackendFriends user={user} expire={expire} />
-          ) : pathname === "/how-to-play" ? (
-            <BackendGuide user={user} expire={expire} />
-          ) : pathname === "/preferences" ? (
-            <BackendPreferences user={user} expire={expire} />
-          ) : archiveId ? (
-            <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
-          ) : tableId ? (
-            <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
-          ) : (
-            <div className="space-y-3">
-              <h1 className="text-xl font-semibold">This page is not connected yet</h1>
-              <Link to="/" className="text-primary underline">
-                Your tables
-              </Link>
-            </div>
-          )}
-        </main>
-      </div>
+        )}
+        {tableId ? (
+          // The table page fills the screen, like the felt in a card room.
+          <TablePage key={tableId} user={user} tableId={tableId} expire={expire} />
+        ) : (
+          <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
+            {pathname === "/" ? (
+              <>
+                <Invitations user={user} expire={expire} />
+                <TableList user={user} expire={expire} />
+                <CreateTable user={user} expire={expire} />
+                <ArchivedTables user={user} />
+              </>
+            ) : pathname === "/friends" ? (
+              <BackendFriends user={user} expire={expire} />
+            ) : pathname === "/how-to-play" ? (
+              <BackendGuide user={user} expire={expire} />
+            ) : pathname === "/preferences" ? (
+              <BackendPreferences user={user} expire={expire} />
+            ) : archiveId ? (
+              <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
+            ) : pathname === "/tickets" ? (
+              <TicketsPage user={user} expire={expire} />
+            ) : (
+              <div className="space-y-3">
+                <h1 className="text-xl font-semibold">This page is not connected yet</h1>
+                <Link to="/" className="text-primary underline">
+                  Your tables
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+      </AppShell>
     </RealtimeProvider>
   );
 }
@@ -343,16 +287,6 @@ function PersonalUpdates({ user }: { user: BackendUser }) {
     }
   });
   return null;
-}
-
-function LiveStatus() {
-  const status = useRealtimeStatus();
-  if (!status) return null;
-  return (
-    <span role="status" className="text-xs text-muted-foreground">
-      {status === "live" ? "Live" : "Reconnecting…"}
-    </span>
-  );
 }
 
 function TableList({ user, expire }: { user: BackendUser; expire: () => void }) {
@@ -407,389 +341,5 @@ function TableList({ user, expire }: { user: BackendUser; expire: () => void }) 
         </ul>
       )}
     </section>
-  );
-}
-
-function TableDetails({
-  user,
-  tableId,
-  expire,
-}: {
-  user: BackendUser;
-  tableId: string;
-  expire: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const query = useQuery({
-    queryKey: [...tablesKey, user.id, tableId],
-    queryFn: ({ signal }) => getTable(tableId, signal),
-    retry: false,
-  });
-  useRealtimeFeed(tableViewFeed(tableId), () => {
-    // Only the table itself; its bets and chat have their own feeds.
-    void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, tableId], exact: true });
-  });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
-  return (
-    <section className="space-y-4">
-      <Link to="/" className="text-sm text-primary underline">
-        Back to tables
-      </Link>
-      {query.isPending ? (
-        <p>Loading table…</p>
-      ) : query.isError ? (
-        <div className="space-y-3">
-          <p role="alert">{backendErrorMessage(query.error)}</p>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Try again
-          </Button>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-4 rounded-lg border bg-surface p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="font-display text-3xl font-bold uppercase">
-                {query.data.emoji} {query.data.name}
-              </h1>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={query.isFetching}
-                onClick={() => void query.refetch()}
-              >
-                <RefreshCw /> Refresh
-              </Button>
-            </div>
-            <p>
-              {query.data.memberIds.length}{" "}
-              {query.data.memberIds.length === 1 ? "member" : "members"} ·{" "}
-              {query.data.hostIds.includes(user.id) ? "You are a host" : "You are a member"}
-            </p>
-          </div>
-          <TableActivity user={user} table={query.data} expire={expire} />
-        </>
-      )}
-    </section>
-  );
-}
-
-/** The table's bets, chat and members, as tabs; the chat tab shows the unread count. */
-function TableActivity({
-  user,
-  table,
-  expire,
-}: {
-  user: BackendUser;
-  table: BackendTable;
-  expire: () => void;
-}) {
-  const [tab, setTab] = useState<"bets" | "chat" | "members">("bets");
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  // One instance per table page, so every members and settings control shares its pending state.
-  const tableActions = useTableActions(
-    user.id,
-    async (intent) => {
-      if (intent?.kind === "delete") {
-        await queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "list"] });
-        void navigate({ to: "/" });
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id] });
-    },
-    expire,
-  );
-  const unreadKey = [...tablesKey, user.id, table.id, "chat-unread"];
-  const unread = useQuery({
-    queryKey: unreadKey,
-    queryFn: ({ signal }) => getChatUnread(table.id, signal),
-    retry: false,
-  });
-  useRealtimeFeed(tableChatFeed(table.id), () => {
-    void queryClient.invalidateQueries({ queryKey: unreadKey });
-  });
-  // Shares its cache with the bet list, so bet cards in chat can show the question.
-  const bets = useQuery({
-    queryKey: [...tablesKey, user.id, table.id, "bets"],
-    queryFn: ({ signal }) => listTableBets(table.id, signal),
-    retry: false,
-  });
-  const count = unread.data?.unreadCount ?? 0;
-  return (
-    <>
-      <SegmentedTabs
-        ariaLabel="Table activity"
-        tabs={[
-          { id: "bets", label: "Bets" },
-          { id: "chat", label: count > 0 ? `Chat (${count})` : "Chat" },
-          { id: "members", label: "Members" },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-      {tab === "bets" ? (
-        <TableBetting user={user} table={table} expire={expire} />
-      ) : tab === "members" ? (
-        <TableMembers user={user} table={table} expire={expire} actions={tableActions} />
-      ) : (
-        <BackendChat
-          user={user}
-          table={table}
-          expire={expire}
-          betQuestion={(betId) => bets.data?.find((bet) => bet.id === betId)?.question}
-          onRead={() => void queryClient.invalidateQueries({ queryKey: unreadKey })}
-        />
-      )}
-    </>
-  );
-}
-
-function TableBetting({
-  user,
-  table,
-  expire,
-}: {
-  user: BackendUser;
-  table: BackendTable;
-  expire: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const actions = useBetActions(
-    user.id,
-    async () => {
-      await queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id] });
-    },
-    expire,
-  );
-  useRealtimeFeed(tableBetsFeed(table.id), () => {
-    void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, table.id, "bets"] });
-  });
-  return (
-    <>
-      <BetMutationStatus actions={actions} />
-      <ProposalForm table={table} user={user} actions={actions} />
-      <TableBets user={user} table={table} expire={expire} actions={actions} />
-    </>
-  );
-}
-
-function TableBets({
-  user,
-  table,
-  expire,
-  actions,
-}: {
-  user: BackendUser;
-  table: BackendTable;
-  expire: () => void;
-  actions: BetActions;
-}) {
-  const tableId = table.id;
-  const [selected, setSelected] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const betsKey = [...tablesKey, user.id, tableId, "bets"] as const;
-  const query = useQuery({
-    queryKey: betsKey,
-    queryFn: ({ signal }) => listTableBets(tableId, signal),
-    retry: false,
-  });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
-
-  function refresh() {
-    void queryClient.invalidateQueries({ queryKey: betsKey });
-  }
-
-  return (
-    <section className="space-y-4" aria-labelledby="table-bets-heading">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="table-bets-heading" className="font-display text-2xl font-bold uppercase">
-          Bets
-        </h2>
-        <Button variant="outline" size="sm" disabled={query.isFetching} onClick={refresh}>
-          <RefreshCw /> Refresh bets
-        </Button>
-      </div>
-      {query.data && (
-        <PointsSettlementControl table={table} user={user} bets={query.data} actions={actions} />
-      )}
-      {query.isPending ? (
-        <p>Loading bets…</p>
-      ) : query.isError ? (
-        <div className="space-y-3">
-          <p role="alert">{backendErrorMessage(query.error)}</p>
-          <Button variant="outline" onClick={refresh}>
-            Try again
-          </Button>
-        </div>
-      ) : query.data.length === 0 ? (
-        <EmptyState boxed>No bets at this table yet.</EmptyState>
-      ) : (
-        <ul className="space-y-3">
-          <AnimatedList key={tableId}>
-            {query.data.map((bet) => (
-              <AnimatedItem as="li" key={bet.id} className="rounded-lg border bg-surface p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="break-words font-semibold">{bet.question}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {betStatus(bet.status)} · {bet.pickCount}{" "}
-                      {bet.pickCount === 1 ? "pick" : "picks"} ·{" "}
-                      {bet.forFun ? "For fun" : `${formatPoints(bet.wagerCents)} points`}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    aria-expanded={selected === bet.id}
-                    aria-controls={selected === bet.id ? `bet-details-${bet.id}` : undefined}
-                    onClick={() => setSelected(selected === bet.id ? null : bet.id)}
-                  >
-                    {selected === bet.id ? "Hide details" : "View details"}
-                  </Button>
-                </div>
-                {selected === bet.id && (
-                  <BetDetails
-                    user={user}
-                    table={table}
-                    betId={bet.id}
-                    expire={expire}
-                    queryKey={[...betsKey, bet.id]}
-                    actions={actions}
-                  />
-                )}
-              </AnimatedItem>
-            ))}
-          </AnimatedList>
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function betStatus(status: BackendBet["status"]) {
-  return { ACTIVE: "Active", PENDING: "Locked", SETTLED: "Resolved", WASHED: "Washed" }[status];
-}
-
-function formatPoints(cents: number) {
-  return (cents / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function BetDetails({
-  user,
-  table,
-  betId,
-  expire,
-  queryKey,
-  actions,
-}: {
-  user: BackendUser;
-  table: BackendTable;
-  betId: string;
-  expire: () => void;
-  queryKey: readonly string[];
-  actions: BetActions;
-}) {
-  const canBet = !table.disabledPermissions[user.id]?.includes("bets");
-  const query = useQuery({
-    queryKey,
-    queryFn: ({ signal }) => getBet(table.id, betId, signal),
-    retry: false,
-  });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
-
-  return (
-    <div id={`bet-details-${betId}`} className="mt-4 space-y-3 break-words border-t pt-4 text-sm">
-      {query.isPending ? (
-        <p>Loading bet details…</p>
-      ) : query.isError ? (
-        <div className="space-y-3">
-          <p role="alert">{backendErrorMessage(query.error)}</p>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            Try again
-          </Button>
-        </div>
-      ) : (
-        <>
-          <BetFacts bet={query.data} user={user} expire={expire} queryKey={queryKey} />
-          <PickControls bet={query.data} tableId={table.id} actions={actions} canBet={canBet} />
-          <ResultControls bet={query.data} table={table} user={user} actions={actions} />
-        </>
-      )}
-    </div>
-  );
-}
-
-function BetFacts({
-  bet,
-  user,
-  expire,
-  queryKey,
-}: {
-  bet: BackendBet;
-  user: BackendUser;
-  expire: () => void;
-  queryKey: readonly string[];
-}) {
-  const participation =
-    bet.myParticipation === "picked"
-      ? `Your pick: ${bet.myPick}`
-      : bet.myParticipation === "no_guess"
-        ? "You joined without a guess."
-        : "You have not joined.";
-  return (
-    <>
-      <p>{participation}</p>
-      <p>Choices: {bet.choices.join(", ")}</p>
-      <p>Lock time: {dateTimeLabel(bet.locksAt)}</p>
-      {bet.status === "ACTIVE" ? (
-        <p className="text-muted-foreground">Other players' picks stay private until lock.</p>
-      ) : (
-        <>
-          <div>
-            <p className="font-semibold">Picks after lock</p>
-            {bet.picks?.length ? (
-              <ul>
-                {bet.picks.map((pick) => (
-                  <li key={pick.userId} className="break-words">
-                    <PersonName id={pick.userId} user={user} expire={expire} queryKey={queryKey} />:{" "}
-                    {pick.choice}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No picks.</p>
-            )}
-          </div>
-          {bet.noGuessUserIds && bet.noGuessUserIds.length > 0 && (
-            <p className="break-words">
-              No guess:{" "}
-              {bet.noGuessUserIds.map((id, index) => (
-                <span key={id}>
-                  {index > 0 && ", "}
-                  <PersonName id={id} user={user} expire={expire} queryKey={queryKey} />
-                </span>
-              ))}
-            </p>
-          )}
-        </>
-      )}
-      {bet.winningChoice !== undefined && <p>Winning choice: {bet.winningChoice}</p>}
-      {bet.washReason !== undefined && <p>Wash reason: {bet.washReason}</p>}
-      {(bet.status === "SETTLED" || bet.status === "WASHED") && (
-        <p>Table points settlement: {bet.pointsSettled ? "Complete" : "Not yet complete"}</p>
-      )}
-    </>
   );
 }

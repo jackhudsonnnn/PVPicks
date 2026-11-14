@@ -91,6 +91,18 @@ class RealtimeConsumerTest {
     }
 
     @Test
+    void tomatoThrowsInvalidateTheTableViewNamingOnlyTheTable() {
+        assertThat(routes(OutboxEvent.TABLE_TOMATO_THROWN, Map.of("tableId", TABLE)))
+                .singleElement().satisfies(route -> {
+                    assertThat(route.tableFeed()).isEqualTo(RealtimeGateway.TableFeed.VIEW);
+                    assertThat(route.onlyUsers()).isNull();
+                    assertThat(route.invalidation().type()).isEqualTo(Invalidation.TOMATOES_CHANGED);
+                    assertThat(route.invalidation().tableId()).isEqualTo(TABLE);
+                    assertThat(route.invalidation().resourceId()).isNull();
+                });
+    }
+
+    @Test
     void chatEventsInvalidateTheChatWithoutMessageIdentity() {
         UUID message = UUID.randomUUID();
         assertThat(routes(OutboxEvent.CHAT_MESSAGE_CREATED, Map.of("tableId", TABLE, "messageId", message, "kind", "text")))

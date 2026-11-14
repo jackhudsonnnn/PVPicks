@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BackendApp } from "./backend-app";
@@ -24,7 +24,7 @@ async function signIn(username: string) {
     target: { value: "a secure test password" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-  expect(await screen.findByText("Create a U2Pick")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Bet" })).toBeInTheDocument();
 }
 
 function renderTable() {
@@ -48,33 +48,49 @@ async function confirm(label: string) {
 // then "result" after it.
 const phase = process.env["PVPICKS_TEST_PORT"] ? process.env["PVPICKS_TEST_PHASE"] : undefined;
 
+/** Opens the bet from the felt's deck and returns the ticket dialog. */
+async function openTicket() {
+  fireEvent.click(await screen.findByRole("button", { name: "Open ticket: Cats or dogs?" }));
+  return within(await screen.findByRole("dialog"));
+}
+
+async function pick(choice: string) {
+  const ticket = await openTicket();
+  fireEvent.click(ticket.getByRole("button", { name: choice }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+  const reopened = within(screen.getAllByRole("dialog")[0]!);
+  expect(await reopened.findByRole("button", { name: choice, pressed: true })).toBeInTheDocument();
+  fireEvent.keyDown(screen.getAllByRole("dialog")[0]!, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe.runIf(phase === "pick")("isolated U2Pick integration: proposal and picks", () => {
   it("creates a bet and keeps two users' active picks private", async () => {
     useIsolatedBackend();
     renderTable();
     await signIn("betuihost");
-    fireEvent.click(screen.getByText("Create a U2Pick"));
+    fireEvent.click(screen.getByRole("button", { name: "Bet" }));
+    fireEvent.click(await screen.findByRole("button", { name: /U2Pick/ }));
     fireEvent.change(screen.getByLabelText("Bet question"), { target: { value: "Cats or dogs?" } });
     fireEvent.change(screen.getByLabelText("Option 1"), { target: { value: "Cats" } });
     fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Dogs" } });
-    fireEvent.change(screen.getByLabelText(/Pick window/), { target: { value: "600" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create bet" }));
-    expect(await screen.findByText("Cats or dogs?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "View details" }));
-    expect(await screen.findByText("You have not joined.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save pick" }));
-    expect(await screen.findByText("Your pick: Cats")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "10m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Send/ }));
+    expect((await openTicket()).getByText(/Tap a choice to join/)).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await pick("Cats");
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await signIn("betuiplayer");
-    expect(await screen.findByText(/1 pick ·/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "View details" }));
-    expect(await screen.findByText("You have not joined.")).toBeInTheDocument();
-    expect(screen.queryByText("Your pick: Cats")).not.toBeInTheDocument();
-    expect(screen.queryByText("Picks after lock")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Dogs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save pick" }));
-    expect(await screen.findByText("Your pick: Dogs")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText(/2 picks ·/)).toBeInTheDocument());
+    const ticket = await openTicket();
+    expect(ticket.getByText(/Tap a choice to join/)).toBeInTheDocument();
+    // The host's pick stays private: no pressed choice and no tallies before lock.
+    expect(ticket.queryByRole("button", { pressed: true })).not.toBeInTheDocument();
+    expect(ticket.queryByText(/\d+ · \d+%/)).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await pick("Dogs");
   }, 30000);
 });
 
@@ -83,15 +99,24 @@ describe.runIf(phase === "result")("isolated U2Pick integration: result and poin
     useIsolatedBackend();
     renderTable();
     await signIn("betuihost");
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    expect(await screen.findByText("Picks after lock")).toBeInTheDocument();
-    expect(await screen.findByText("You: Cats")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Cats" }));
-    await confirm("Call result");
-    expect(await screen.findByText("Winning choice: Cats")).toBeInTheDocument();
+    const ticket = await openTicket();
+    expect(await ticket.findAllByText("1 · 50%")).toHaveLength(2);
+    const trigger = await screen.findByRole("button", { name: "Call it" });
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Cats" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    // The open ticket shows the result; resolved bets leave the deck, and points settlement is in
+    // the Host panel.
+    expect(
+      await within(screen.getAllByRole("dialog")[0]!).findByText("You won"),
+    ).toBeInTheDocument();
+    fireEvent.keyDown(screen.getAllByRole("dialog")[0]!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click((await screen.findAllByRole("tab", { name: "Host" }))[0]!);
     expect(await screen.findByText(/1 resolved bet is waiting/)).toBeInTheDocument();
     await confirm("Settle table points");
-    expect(await screen.findByText("Table points settlement: Complete")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Settle table points" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Settle table points" })).not.toBeInTheDocument(),
+    );
   }, 30000);
 });

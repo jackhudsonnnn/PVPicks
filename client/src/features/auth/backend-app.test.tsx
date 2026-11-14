@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BackendApp } from "./backend-app";
 import {
   BackendError,
   currentUser,
-  getBet,
   getProfile,
   getTable,
+  listMyBets,
   listTableBets,
   listTables,
   signIn,
@@ -18,28 +18,39 @@ import {
 import { listPendingReviews, listSettlementGroups } from "./settlement-api";
 import { getRelationships, listInvites } from "./social-api";
 import type { Invalidation } from "./realtime-connection";
+import { getChatUnread, getChatWindow } from "./chat-api";
+import { listTableBalances } from "./tables-api";
 
-const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
-vi.mock("./realtime", () => ({
-  RealtimeProvider: ({ children }: { children: ReactNode }) => children,
-  useRealtimeStatus: () => "live",
-  useRealtimeFeed: (destination: string, listener: (event: Invalidation) => void) => {
-    feeds.set(destination, listener);
-  },
-}));
+// Several components may listen to one destination (the table view feed carries table and tomato changes), so keep
+// each component's latest listener.
+const feeds = vi.hoisted(() => new Map<string, Map<unknown, (event: Invalidation) => void>>());
+vi.mock("./realtime", async () => {
+  const { useRef } = await import("react");
+  return {
+    RealtimeProvider: ({ children }: { children: ReactNode }) => children,
+    useRealtimeStatus: () => "live",
+    useRealtimeFeed: (destination: string | null, listener: (event: Invalidation) => void) => {
+      const owner = useRef({});
+      if (!destination) return;
+      if (!feeds.has(destination)) feeds.set(destination, new Map());
+      feeds.get(destination)!.set(owner.current, listener);
+    },
+  };
+});
 
 function deliver(destination: string, event: Partial<Invalidation>) {
-  const listener = feeds.get(destination);
-  if (!listener) throw new Error(`Nothing listens to ${destination}`);
-  act(() =>
-    listener({
-      eventId: "123e4567-e89b-42d3-a456-426614174099",
-      schemaVersion: 1,
-      occurredAt: "2026-11-13T12:00:00Z",
-      type: "tables.changed",
-      ...event,
-    }),
-  );
+  const listeners = feeds.get(destination);
+  if (!listeners?.size) throw new Error(`Nothing listens to ${destination}`);
+  for (const listener of listeners.values())
+    act(() =>
+      listener({
+        eventId: "123e4567-e89b-42d3-a456-426614174099",
+        schemaVersion: 1,
+        occurredAt: "2026-11-13T12:00:00Z",
+        type: "tables.changed",
+        ...event,
+      }),
+    );
 }
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
@@ -59,10 +70,20 @@ vi.mock("./backend-api", async (importOriginal) => {
     listTables: vi.fn(),
     getTable: vi.fn(),
     listTableBets: vi.fn(),
-    getBet: vi.fn(),
+    listMyBets: vi.fn(),
     getProfile: vi.fn(),
   };
 });
+vi.mock("./tables-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./tables-api")>()),
+  listTableBalances: vi.fn(),
+}));
+vi.mock("./chat-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./chat-api")>()),
+  getChatUnread: vi.fn(),
+  getChatWindow: vi.fn(),
+  markRead: vi.fn(),
+}));
 
 vi.mock("./social-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./social-api")>()),
@@ -116,6 +137,7 @@ const bet: BackendBet = {
   forFun: false,
   status: "ACTIVE",
   locksAt: "2026-11-11T12:00:00Z",
+  createdAt: "2026-11-11T11:58:00Z",
   pointsSettled: false,
   pickCount: 2,
   myPick: "Yes",
@@ -144,7 +166,22 @@ beforeEach(() => {
   });
   vi.mocked(listInvites).mockResolvedValue([]);
   vi.mocked(listSettlementGroups).mockResolvedValue([]);
+  vi.mocked(listTables).mockResolvedValue([]);
+  vi.mocked(listTableBalances).mockResolvedValue([]);
+  vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
+  vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
 });
+
+/** Opens a bet from the felt's deck and returns the ticket dialog. */
+async function openTicket(question: string) {
+  fireEvent.click(await screen.findByRole("button", { name: `Open ticket: ${question}` }));
+  return within(await screen.findByRole("dialog"));
+}
+
+const counts = { ACTIVE: 0, PENDING: 0, SETTLED: 0, WASHED: 0 };
+
+/** The sidebar and the phone top bar each have a Sign out button; only one shows at a time. */
+const signOutButton = () => screen.getAllByRole("button", { name: /sign out/i })[0]!;
 
 describe("backend app", () => {
   it("signs in, reads tables and invitations, and revokes the session", async () => {
@@ -167,11 +204,12 @@ describe("backend app", () => {
     fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "testuser" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(await screen.findByText("Test table")).toBeInTheDocument();
+    // Listed on Home and in the sidebar.
+    expect(await screen.findAllByText("Test table")).toHaveLength(2);
     expect(signIn).toHaveBeenCalledWith("testuser", "password");
     expect(await screen.findByRole("heading", { name: "Invitations" })).toBeInTheDocument();
     expect(screen.getByText("Create a table")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+    fireEvent.click(signOutButton());
     expect(await screen.findByLabelText("Username")).toBeInTheDocument();
     expect(signOut).toHaveBeenCalledOnce();
   });
@@ -183,7 +221,6 @@ describe("backend app", () => {
     const { rerender } = renderApp();
     expect(await screen.findByText(/Test table/)).toBeInTheDocument();
     expect(getTable).toHaveBeenCalledWith(table.id, expect.any(AbortSignal));
-    expect(listTables).not.toHaveBeenCalled();
     route.pathname = "/tables/123e4567-e89b-42d3-a456-426614174002";
     vi.mocked(getTable).mockRejectedValue(new BackendError("not found", 404));
     rerender(
@@ -207,23 +244,22 @@ describe("backend app", () => {
     await waitFor(() => expect(screen.getByText(/session expired/i)).toBeInTheDocument());
   });
 
-  it("loads bet list and details without exposing other active picks", async () => {
+  it("shows bets as tickets without exposing other active picks", async () => {
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets).mockResolvedValue([bet]);
-    vi.mocked(getBet).mockResolvedValue(bet);
     renderApp();
-    expect(await screen.findByText("Who wins?")).toBeInTheDocument();
-    expect(screen.getByText(/2 picks · 1.25 points/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "View details" }));
-    expect(await screen.findByText("Your pick: Yes")).toBeInTheDocument();
-    expect(screen.getByText(/picks stay private until lock/i)).toBeInTheDocument();
-    expect(screen.queryByText("Picks after lock")).not.toBeInTheDocument();
+    const ticket = await openTicket("Who wins?");
+    expect(ticket.getByRole("button", { name: "Yes", pressed: true })).toBeInTheDocument();
+    expect(ticket.getByText("Picks stay private until lock")).toBeInTheDocument();
+    expect(ticket.getByText("1.25")).toBeInTheDocument();
+    expect(ticket.queryByText(/\d+ · \d+%/)).not.toBeInTheDocument();
+    fireEvent.click(ticket.getByRole("button", { name: "Details" }));
+    expect(
+      await screen.findByText(/Your pick: Yes\. Other picks stay private/),
+    ).toBeInTheDocument();
     expect(getProfile).not.toHaveBeenCalled();
-    expect(getBet).toHaveBeenCalledWith(table.id, bet.id, expect.any(AbortSignal));
-    fireEvent.click(screen.getByRole("button", { name: "Hide details" }));
-    expect(screen.queryByText("Your pick: Yes")).not.toBeInTheDocument();
   });
 
   it("shows locked picks and distinguishes resolved outcomes from points settlement", async () => {
@@ -238,25 +274,36 @@ describe("backend app", () => {
       remainderRule: "host",
       remainderHostId: user.id,
       winningChoice: "Yes",
+      deltasCents: { [user.id]: 125, "123e4567-e89b-42d3-a456-426614174004": -125 },
     };
-    route.pathname = `/tables/${table.id}`;
+    // Closed bets live on the Tickets page.
+    route.pathname = "/tickets";
     vi.mocked(currentUser).mockResolvedValue(user);
-    vi.mocked(getTable).mockResolvedValue(table);
-    vi.mocked(listTableBets).mockResolvedValue([locked]);
-    vi.mocked(getBet).mockResolvedValue(locked);
+    vi.mocked(listTables).mockResolvedValue([table]);
+    vi.mocked(listMyBets).mockImplementation(async ({ status }) => ({
+      items: status === "SETTLED" ? [locked] : [],
+      nextCursor: null,
+      counts: { ...counts, SETTLED: 1 },
+    }));
     vi.mocked(getProfile).mockImplementation(async (id) =>
       id.endsWith("003")
         ? { id, displayName: "Deleted user", deleted: true }
         : { id, username: "otherplayer", hue: 3 },
     );
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    expect(await screen.findByText("You: Yes")).toBeInTheDocument();
-    expect(await screen.findByText("otherplayer: No")).toBeInTheDocument();
-    expect(await screen.findByText("Deleted user")).toBeInTheDocument();
+    expect(await screen.findByText("You won")).toBeInTheDocument();
+    expect(screen.getByText("+1.25 pts")).toBeInTheDocument();
+    expect(screen.getAllByText("1 · 50%")).toHaveLength(2);
+    expect(listMyBets).toHaveBeenCalledWith({ status: "SETTLED" }, expect.any(AbortSignal));
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("otherplayer")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Deleted user")).toBeInTheDocument();
+    expect(within(dialog).getByText("No guess")).toBeInTheDocument();
+    expect(within(dialog).getByText("-1.25")).toBeInTheDocument();
+    expect(within(dialog).getByText("Points settled")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Not yet")).toHaveLength(1);
     expect(getProfile).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Winning choice: Yes")).toBeInTheDocument();
-    expect(screen.getByText("Table points settlement: Not yet complete")).toBeInTheDocument();
   });
 
   it("shows a profile lookup error and retries without hiding the bet", async () => {
@@ -273,16 +320,21 @@ describe("backend app", () => {
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets).mockResolvedValue([locked]);
-    vi.mocked(getBet).mockResolvedValue(locked);
-    vi.mocked(getProfile)
-      .mockRejectedValueOnce(new BackendError("not found", 404))
-      .mockResolvedValueOnce({ id: memberId, username: "player", hue: 1 });
+    let available = false;
+    vi.mocked(getProfile).mockImplementation(async () => {
+      if (!available) throw new BackendError("not found", 404);
+      return { id: memberId, username: "player", hue: 1 };
+    });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    const ticket = await openTicket("Who wins?");
+    fireEvent.click(ticket.getByRole("button", { name: "Details" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(`Profile ${memberId}:`);
     expect(screen.getByRole("alert")).toHaveTextContent("unavailable");
+    expect(screen.getByText("Who wins?", { selector: "h3" })).toBeInTheDocument();
+    available = true;
     fireEvent.click(screen.getByRole("button", { name: "Retry profile" }));
-    expect(await screen.findByText("player: No")).toBeInTheDocument();
+    const details = screen.getAllByRole("dialog").at(-1)!;
+    expect(await within(details).findByText("player")).toBeInTheDocument();
   });
 
   it("expires the session when a profile lookup returns 401", async () => {
@@ -298,10 +350,10 @@ describe("backend app", () => {
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets).mockResolvedValue([locked]);
-    vi.mocked(getBet).mockResolvedValue(locked);
     vi.mocked(getProfile).mockRejectedValue(new BackendError("expired", 401));
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
+    // The ticket's avatars look the person up.
+    await openTicket("Who wins?");
     expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
   });
 
@@ -320,7 +372,6 @@ describe("backend app", () => {
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets).mockResolvedValue([locked]);
-    vi.mocked(getBet).mockResolvedValue(locked);
     vi.mocked(getProfile).mockResolvedValue({ id: memberId, username: "player", hue: 1 });
     vi.mocked(signOut).mockResolvedValue();
     render(
@@ -328,54 +379,45 @@ describe("backend app", () => {
         <BackendApp />
       </QueryClientProvider>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    await screen.findByText("player: No");
-    const profileKey = ["backend-tables", user.id, table.id, "bets", bet.id, "profile", memberId];
-    expect(client.getQueryData(profileKey)).toMatchObject({ username: "player" });
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await openTicket("Who wins?");
+    const profileKey = ["backend-tables", user.id, "people", "profile", memberId];
+    await waitFor(() =>
+      expect(client.getQueryData(profileKey)).toMatchObject({ username: "player" }),
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.click(signOutButton());
     await screen.findByLabelText("Username");
     expect(client.getQueryData(profileKey)).toBeUndefined();
+    expect(
+      client
+        .getQueriesData({ queryKey: ["backend-tables"] })
+        .every(([, data]) => data === undefined),
+    ).toBe(true);
   });
 
-  it("surfaces bet read errors, supports retry, and expires the session on detail 401", async () => {
+  it("surfaces bet list errors and supports retry", async () => {
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets)
       .mockRejectedValueOnce(new BackendError("failed", 503))
       .mockResolvedValueOnce([bet]);
-    vi.mocked(getBet).mockRejectedValue(new BackendError("expired", 401));
     renderApp();
     expect(await screen.findByRole("alert")).toHaveTextContent("503");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open ticket: Who wins?" }),
+    ).toBeInTheDocument();
   });
 
-  it("refreshes an open bet and clears its cached data on logout", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  it("returns to sign-in when the bet list says the session expired", async () => {
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
-    vi.mocked(listTableBets).mockResolvedValue([bet]);
-    vi.mocked(getBet).mockResolvedValue(bet);
-    vi.mocked(signOut).mockResolvedValue();
-    render(
-      <QueryClientProvider client={client}>
-        <BackendApp />
-      </QueryClientProvider>,
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    await screen.findByText("Your pick: Yes");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh bets" }));
-    await waitFor(() => expect(getBet).toHaveBeenCalledTimes(2));
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    await screen.findByLabelText("Username");
-    expect(
-      client
-        .getQueriesData({ queryKey: ["backend-tables"] })
-        .every(([, data]) => data === undefined),
-    ).toBe(true);
+    vi.mocked(listTableBets).mockRejectedValue(new BackendError("expired", 401));
+    renderApp();
+    expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
   });
 
   it("refreshes the table list, the open table and displayed names from realtime feeds", async () => {
@@ -392,19 +434,23 @@ describe("backend app", () => {
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(getTable).mockResolvedValue(table);
     vi.mocked(listTableBets).mockResolvedValue([locked]);
-    vi.mocked(getBet).mockResolvedValue(locked);
     vi.mocked(getProfile).mockResolvedValue({ id: memberId, username: "player", hue: 1 });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: "View details" }));
-    await screen.findByText("player: No");
+    const ticket = await openTicket("Who wins?");
+    fireEvent.click(ticket.getByRole("button", { name: "Details" }));
+    const dialog = screen.getAllByRole("dialog").at(-1)!;
+    expect(await within(dialog).findByText("player")).toBeInTheDocument();
 
     vi.mocked(getProfile).mockResolvedValue({ id: memberId, username: "renamed", hue: 1 });
     deliver("/user/queue/me", { type: "profile.changed", resourceId: memberId });
-    expect(await screen.findByText("renamed: No")).toBeInTheDocument();
+    expect(await within(dialog).findByText("renamed")).toBeInTheDocument();
 
     vi.mocked(getTable).mockResolvedValue({ ...table, name: "Renamed table" });
     deliver(`/user/queue/tables/${table.id}`, { type: "table.changed", tableId: table.id });
-    expect(await screen.findByText(/Renamed table/)).toBeInTheDocument();
+    // The open dialogs hide the page from the accessibility tree.
+    expect(
+      await screen.findByRole("heading", { name: /Renamed table/, hidden: true }),
+    ).toBeInTheDocument();
     expect(listTableBets).toHaveBeenCalledTimes(1);
   });
 
@@ -412,7 +458,7 @@ describe("backend app", () => {
     vi.mocked(currentUser).mockResolvedValue(user);
     vi.mocked(listTables).mockResolvedValueOnce([table]).mockResolvedValue([]);
     renderApp();
-    expect(await screen.findByText("Test table")).toBeInTheDocument();
+    expect(await screen.findAllByText("Test table")).toHaveLength(2);
     deliver("/user/queue/me", { type: "tables.changed" });
     expect(await screen.findByText("No tables yet.")).toBeInTheDocument();
   });

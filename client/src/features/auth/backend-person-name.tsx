@@ -30,6 +30,8 @@ function ProfileName({
     queryKey: [...queryKey, "profile", id],
     queryFn: ({ signal }) => getProfile(id, signal),
     retry: false,
+    // Live profile.changed events invalidate this, so it never needs to refetch on its own.
+    staleTime: Infinity,
   });
   const unauthorized = query.error instanceof BackendError && query.error.status === 401;
   useEffect(() => {

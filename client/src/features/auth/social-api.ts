@@ -71,3 +71,22 @@ export async function respondToInvite(inviteId: string, accept: boolean, key: st
     accept,
   });
 }
+
+export type ReportReason = "harassment" | "settlement" | "spam" | "offensive" | "other";
+
+export interface Report {
+  targetId: string;
+  reason: ReportReason;
+  note: string;
+  tableId?: string | undefined;
+  messageId?: string | undefined;
+}
+
+/** Files a private report for moderators; a message's content is kept with it. */
+export async function submitReport(report: Report, key: string) {
+  // Optional context is left out rather than sent as null.
+  const body = Object.fromEntries(
+    Object.entries(report).filter(([, value]) => value !== undefined),
+  );
+  await mutationRequest("/reports", "POST", key, body);
+}

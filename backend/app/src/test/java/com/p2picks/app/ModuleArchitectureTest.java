@@ -25,7 +25,7 @@ import org.springframework.modulith.core.ApplicationModules;
  */
 class ModuleArchitectureTest {
     private static final Set<String> FEATURE_MODULES = Set.of(
-            "users", "social", "tables", "chat", "bets", "settlement", "sports", "delivery", "feedback", "admin",
+            "users", "social", "tables", "chat", "bets", "settlement", "sports", "delivery", "feedback", "moderation", "admin",
             "config");
     private static final Set<String> SHARED_MODULES = Set.of("common", "security");
     private static final String[] FEATURE_PACKAGES = FEATURE_MODULES.stream()

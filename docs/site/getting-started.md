@@ -70,7 +70,8 @@ the browser obtains a CSRF token before login and logout. Use the exact host and
 port shown, and do not expose this development proxy to a network. This proxy
 is for Vite development only, not a production deployment configuration.
 If port 8080 is taken, start Compose with `PVPICKS_PORT` set to another port
-and start Vite with `PVPICKS_DEV_BACKEND_URL` set to that HTTP loopback origin.
+and set `PVPICKS_DEV_BACKEND_URL` to that HTTP loopback origin, in the shell
+or in a git-ignored `client/.env.local`, before starting Vite.
 Startup applies pending migrations automatically.
 
 ## Authentication for API development

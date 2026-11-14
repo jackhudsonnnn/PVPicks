@@ -7,7 +7,10 @@ import {
   createTable,
   deleteTable,
   removeMember,
+  rotateQuickPickCode,
   setHost,
+  setQuickPickSharing,
+  setQuickPicksEnabled,
   setPermission,
   setRemainderRule,
   updateTableProfile,
@@ -53,6 +56,9 @@ const intentSchema = z.discriminatedUnion("kind", [
     permission: z.enum(["bets", "text", "react", "gifs"]),
     enabled: z.boolean(),
   }),
+  z.object({ kind: z.literal("quickpicks"), tableId: uuid, enabled: z.boolean() }),
+  z.object({ kind: z.literal("sharing"), tableId: uuid, sharing: z.boolean() }),
+  z.object({ kind: z.literal("rotate"), tableId: uuid }),
 ]);
 
 export type TableIntent = z.infer<typeof intentSchema>;
@@ -158,6 +164,16 @@ export function useTableActions(
             key,
           );
           return "Permission saved.";
+        case "quickpicks":
+          await setQuickPicksEnabled(intent.tableId, intent.enabled, key);
+          return intent.enabled ? "Quick Picks on." : "Quick Picks off.";
+        case "sharing":
+          await setQuickPickSharing(intent.tableId, intent.sharing, key);
+          return intent.sharing ? "Sharing your code." : "Sharing stopped.";
+        case "rotate": {
+          const code = await rotateQuickPickCode(intent.tableId, key);
+          return `New code: ${code}. Old subscribers were disconnected.`;
+        }
       }
     },
   });

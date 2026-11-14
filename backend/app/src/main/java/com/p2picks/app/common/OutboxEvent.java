@@ -18,6 +18,8 @@ public enum OutboxEvent {
     TABLE_MEMBER_REMOVED("table", "table.member.removed.v1"),
     TABLE_MEMBER_PERMISSION_CHANGED("table", "table.member.permission.changed.v1"),
     TABLE_ARCHIVED("table", "table.archived.v1"),
+    /** A member threw a tomato at another; the payload names only the table. */
+    TABLE_TOMATO_THROWN("table", "table.tomato.thrown.v1"),
     /** Keyed by the invited user so it can reach them before they join the table. */
     TABLE_INVITATION_CREATED("user", "table.invitation.created.v1"),
 
