@@ -115,6 +115,8 @@ export function useRetryableMutation<Intent>({
   }
 
   return {
+    /** Hides the last result message. */
+    dismiss: () => setMessage(null),
     pending: saved.pending,
     storageError: saved.error,
     message,

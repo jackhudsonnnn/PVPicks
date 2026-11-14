@@ -6,6 +6,8 @@ export const userSchema = z.object({
   hue: z.number().int().min(1).max(5),
 });
 
+const currentUserSchema = userSchema.extend({ role: z.enum(["PLAYER", "ADMIN"]) });
+
 const profileSchema = z.union([
   userSchema,
   z.object({
@@ -93,6 +95,8 @@ const betSchema = z
   });
 
 export type BackendUser = z.infer<typeof userSchema>;
+/** The signed-in account; admins get the admin view because they cannot use player APIs. */
+export type CurrentUser = z.infer<typeof currentUserSchema>;
 export type BackendProfile = z.infer<typeof profileSchema>;
 export type BackendTable = z.infer<typeof tableSchema>;
 export type BackendBet = z.infer<typeof betSchema>;
@@ -175,16 +179,16 @@ export async function mutationRequest(
   });
 }
 
-export async function currentUser(signal?: AbortSignal): Promise<BackendUser | null> {
+export async function currentUser(signal?: AbortSignal): Promise<CurrentUser | null> {
   try {
-    return await read(await request("/me", signal ? { signal } : undefined), userSchema);
+    return await read(await request("/me", signal ? { signal } : undefined), currentUserSchema);
   } catch (error) {
     if (error instanceof BackendError && error.status === 401) return null;
     throw error;
   }
 }
 
-export async function signIn(username: string, password: string): Promise<BackendUser> {
+export async function signIn(username: string, password: string): Promise<CurrentUser> {
   const token = await csrf();
   await request("/auth/login", {
     method: "POST",

@@ -1,6 +1,4 @@
-import type { Table } from "@/features/table/types";
-import { isHost } from "@/features/table/hosts";
-import { PASS, type Bet, type SettlerRule } from "./types";
+import { PASS, type SettlerRule } from "./types";
 
 /** Rules for U2Pick, the custom mode where the proposer writes the question and options. */
 
@@ -50,30 +48,4 @@ export function customBetProblem(question: string, options: string[]): string | 
   if (clean.some((o) => o.toLowerCase() === PASS || o.toLowerCase() === "no guess"))
     return `"No guess" means sitting out, so it can't be an option.`;
   return null;
-}
-
-const inPot = (bet: Bet, userId: string) =>
-  bet.participants.some((p) => p.userId === userId && p.selection !== PASS);
-
-/** Whether `userId` may call the outcome of a custom bet at `table`. */
-export function canSettleCustom(bet: Bet, table: Table, userId: string) {
-  if (!table.memberIds.includes(userId)) return false;
-  switch (bet.settledBy ?? "hosts") {
-    case "anyone":
-      return true;
-    case "me":
-      return userId === bet.proposerId;
-    case "hosts":
-      return isHost(table, userId);
-    case "non_participants": {
-      const outsiders = table.memberIds.filter((m) => !inPot(bet, m));
-      if (outsiders.length === 0) return isHost(table, userId);
-      return !inPot(bet, userId);
-    }
-  }
-}
-
-/** Table members who could settle it right now (for "waiting on…" and sample settling). */
-export function eligibleSettlers(bet: Bet, table: Table) {
-  return table.memberIds.filter((m) => canSettleCustom(bet, table, m));
 }

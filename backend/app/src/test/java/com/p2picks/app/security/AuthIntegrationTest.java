@@ -52,7 +52,10 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         assertThat(loggedIn.getResponse().getHeaders("Set-Cookie"))
                 .anySatisfy(header -> assertThat(header).contains("SameSite=Strict", "Max-Age=28800"));
         MvcResult me = mvc.perform(get("/me").cookie(session)).andExpect(status().isOk()).andReturn();
-        assertThat(json.readTree(me.getResponse().getContentAsString()).path("username").asText()).isEqualTo("login_user");
+        JsonNode current = json.readTree(me.getResponse().getContentAsString());
+        assertThat(current.path("username").asText()).isEqualTo("login_user");
+        assertThat(current.path("role").asText()).isEqualTo("PLAYER");
+        assertThat(OpenApiSchemas.load("CurrentUser").validate(current)).isEmpty();
         Cookie tampered = new Cookie("session", "x" + session.getValue().substring(1));
         mvc.perform(get("/me").cookie(tampered)).andExpect(status().isUnauthorized());
         Csrf logoutCsrf = csrf();
@@ -168,7 +171,9 @@ class AuthIntegrationTest extends IntegrationTestSupport {
 
         session = loginAs("roleadmin");
         mvc.perform(get("/admin/security-probe").cookie(session)).andExpect(status().isNoContent());
-        mvc.perform(get("/me").cookie(session)).andExpect(status().isOk());
+        JsonNode admin = json.readTree(mvc.perform(get("/me").cookie(session)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(admin.path("role").asText()).isEqualTo("ADMIN");
         mvc.perform(get("/tables").cookie(session)).andExpect(status().isForbidden());
         mvc.perform(post("/tables").cookie(session, actionCsrf.cookie())
                         .header("Origin", "http://127.0.0.1:8080")

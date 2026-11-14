@@ -34,7 +34,11 @@ const initial: ChatState = {
  * Loads a table's chat as contiguous windows and keeps it current. Operations run one at a time, so a change
  * that arrives during a refresh schedules another refresh instead of being lost.
  */
-export function useBackendChat(tableId: string, expire: () => void) {
+export function useBackendChat(
+  tableId: string,
+  expire: () => void,
+  { readOnly = false }: { readOnly?: boolean } = {},
+) {
   const [state, setState] = useState<ChatState>(initial);
   // The source of truth for queued operations: updated synchronously, so an operation that awaits
   // several requests always builds on the latest messages rather than the last rendered ones.
@@ -87,7 +91,8 @@ export function useBackendChat(tableId: string, expire: () => void) {
   const load = useCallback(
     () =>
       run(async () => {
-        const unread = await getChatUnread(tableId);
+        // Archives have no read position: open them at the latest messages.
+        const unread = readOnly ? { firstUnreadMessageId: null } : await getChatUnread(tableId);
         const window = await getChatWindow(
           tableId,
           unread.firstUnreadMessageId ? { around: unread.firstUnreadMessageId } : { latest: true },
@@ -103,7 +108,7 @@ export function useBackendChat(tableId: string, expire: () => void) {
         });
         if (unread.firstUnreadMessageId) await loadNewer();
       }),
-    [loadNewer, run, tableId, update],
+    [loadNewer, readOnly, run, tableId, update],
   );
 
   useEffect(() => {

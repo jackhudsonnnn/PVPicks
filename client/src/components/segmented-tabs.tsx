@@ -113,7 +113,11 @@ export function SegmentedTabs<T extends string>({
             {/* Hidden copies of every label keep the box as wide as the longest one. */}
             <div className="grid min-w-0 text-left">
               {tabs.map(({ id, label, count }) => (
-                <span key={id} aria-hidden className="invisible col-start-1 row-start-1 h-0 truncate">
+                <span
+                  key={id}
+                  aria-hidden
+                  className="invisible col-start-1 row-start-1 h-0 truncate"
+                >
                   {label}
                   {count !== undefined && ` (${count})`}
                 </span>
@@ -137,71 +141,73 @@ export function SegmentedTabs<T extends string>({
           </SelectContent>
         </Select>
       )}
-      {!dropdownOnly && <div
-        ref={stripRef}
-        aria-hidden={collapsed || undefined}
-        role={collapsed ? undefined : "tablist"}
-        aria-label={ariaLabel}
-        onKeyDown={onKeyDown}
-        className={cn(
-          "gap-1 rounded-xl bg-sidebar p-1.5",
-          fitContent
-            ? "flex"
-            : "grid grid-cols-[repeat(var(--tabs-narrow),minmax(0,1fr))] md:grid-cols-[repeat(var(--tabs-wide),minmax(0,1fr))]",
-          className,
-          collapsed && "pointer-events-none invisible absolute inset-x-0 top-0",
-        )}
-        style={{ "--tabs-narrow": narrow, "--tabs-wide": wide } as CSSProperties}
-      >
-        {tabs.map(({ id, label, icon: Icon, count, disabled }) => {
-          const on = isActive ? isActive(id) : value === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              data-tab-id={id}
-              aria-selected={on}
-              tabIndex={id === focusable ? 0 : -1}
-              disabled={disabled}
-              onClick={() => onChange(id)}
-              className={cn(
-                "relative isolate flex min-w-0 items-center justify-center rounded-lg transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50",
-                size === "lg"
-                  ? "py-2 font-display text-base font-bold uppercase tracking-wide"
-                  : "py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest",
-                fitContent
-                  ? "flex-auto gap-1 px-1 tracking-normal sm:px-2 sm:tracking-widest"
-                  : "gap-2",
-                on
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground enabled:hover:text-foreground",
-              )}
-            >
-              {on && (
-                <motion.span
-                  layoutId={highlightId}
-                  transition={SLIDE}
-                  aria-hidden
-                  className="absolute inset-0 -z-10 rounded-lg bg-primary"
-                />
-              )}
-              {Icon && <Icon className={cn("shrink-0", size === "lg" ? "size-4" : "size-3.5")} />}
-              <span data-tab-label className="truncate">
-                {label}
-              </span>
-              {count !== undefined && (
-                <span className="shrink-0 font-mono text-[11px] opacity-70">{count}</span>
-              )}
-              {disabled && (
-                <span className="rounded bg-muted px-1 font-mono text-[8px] tracking-wider text-muted-foreground">
-                  Soon
+      {!dropdownOnly && (
+        <div
+          ref={stripRef}
+          aria-hidden={collapsed || undefined}
+          role={collapsed ? undefined : "tablist"}
+          aria-label={ariaLabel}
+          onKeyDown={onKeyDown}
+          className={cn(
+            "gap-1 rounded-xl bg-sidebar p-1.5",
+            fitContent
+              ? "flex"
+              : "grid grid-cols-[repeat(var(--tabs-narrow),minmax(0,1fr))] md:grid-cols-[repeat(var(--tabs-wide),minmax(0,1fr))]",
+            className,
+            collapsed && "pointer-events-none invisible absolute inset-x-0 top-0",
+          )}
+          style={{ "--tabs-narrow": narrow, "--tabs-wide": wide } as CSSProperties}
+        >
+          {tabs.map(({ id, label, icon: Icon, count, disabled }) => {
+            const on = isActive ? isActive(id) : value === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                data-tab-id={id}
+                aria-selected={on}
+                tabIndex={id === focusable ? 0 : -1}
+                disabled={disabled}
+                onClick={() => onChange(id)}
+                className={cn(
+                  "relative isolate flex min-w-0 items-center justify-center rounded-lg transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50",
+                  size === "lg"
+                    ? "py-2 font-display text-base font-bold uppercase tracking-wide"
+                    : "py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest",
+                  fitContent
+                    ? "flex-auto gap-1 px-1 tracking-normal sm:px-2 sm:tracking-widest"
+                    : "gap-2",
+                  on
+                    ? "text-primary-foreground"
+                    : "text-muted-foreground enabled:hover:text-foreground",
+                )}
+              >
+                {on && (
+                  <motion.span
+                    layoutId={highlightId}
+                    transition={SLIDE}
+                    aria-hidden
+                    className="absolute inset-0 -z-10 rounded-lg bg-primary"
+                  />
+                )}
+                {Icon && <Icon className={cn("shrink-0", size === "lg" ? "size-4" : "size-3.5")} />}
+                <span data-tab-label className="truncate">
+                  {label}
                 </span>
-              )}
-            </button>
-          );
-        })}
-      </div>}
+                {count !== undefined && (
+                  <span className="shrink-0 font-mono text-[11px] opacity-70">{count}</span>
+                )}
+                {disabled && (
+                  <span className="rounded bg-muted px-1 font-mono text-[8px] tracking-wider text-muted-foreground">
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

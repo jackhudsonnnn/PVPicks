@@ -25,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/page-header";
-import { FeedbackSection } from "@/features/feedback/components/feedback-form";
 import { useEffect, useState } from "react";
 import { MODES } from "@/features/bets/modes";
 import { ScrollContainer } from "@/components/scroll-container";
@@ -91,7 +90,8 @@ function ModesSection() {
   );
 }
 
-export function HowToPlay() {
+/** The player guide. `feedback` is the feedback form, supplied by the app so the guide stays static. */
+export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
   // Links like "Guide on settling up" jump to a section; the page mounts after sign-in loads,
   // so scroll once it's on screen.
   const hash = useRouterState({ select: (st) => st.location.hash });
@@ -176,7 +176,7 @@ export function HowToPlay() {
 
       <SafetySection />
 
-      <FeedbackSection />
+      {feedback}
 
       <MoneySection />
     </div>

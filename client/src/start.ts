@@ -1,5 +1,5 @@
-// TODO(backend-middleware): register request middleware here (attach JWT/bearer from AuthProvider session,
-// request id, error mapping to emitError). Every AppCommands call becomes an authenticated API call.
+// SSR request middleware. API calls go from the browser to the backend through `/api` with the session
+// cookie and CSRF token (see `features/auth/backend-api.ts`), not through server functions.
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";

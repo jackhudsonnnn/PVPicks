@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ErrorToasts } from "@/components/error-toasts";
 import { BackendApp } from "@/features/auth/backend-app";
+import { SettingsProvider } from "@/features/settings/settings-provider";
 
 function NotFoundComponent() {
   return (
@@ -130,9 +131,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BackendApp />
-      <ErrorToasts />
+      <SettingsProvider>
+        <BackendApp />
+        <ErrorToasts />
+      </SettingsProvider>
     </QueryClientProvider>
   );
 }
-

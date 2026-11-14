@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BackendError, request } from "./backend-api";
+import { timeLabel } from "@/lib/time";
 
 const team = z.object({
   abbreviation: z.string().min(1),
@@ -35,7 +36,7 @@ export async function getTicker(signal?: AbortSignal): Promise<TickerGame[] | nu
 }
 
 /** The status text shown beside a game's score. */
-export function tickerStatus(game: TickerGame, locale?: string): string {
+export function tickerStatus(game: TickerGame): string {
   switch (game.status) {
     case "LIVE":
       return game.clock ?? (game.period ? `Period ${game.period}` : "Live");
@@ -44,9 +45,6 @@ export function tickerStatus(game: TickerGame, locale?: string): string {
     case "POSTPONED":
       return "Postponed";
     case "SCHEDULED":
-      return new Date(game.startsAt).toLocaleTimeString(locale, {
-        hour: "numeric",
-        minute: "2-digit",
-      });
+      return timeLabel(game.startsAt);
   }
 }

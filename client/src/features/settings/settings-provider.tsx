@@ -1,48 +1,29 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { MotionConfig } from "motion/react";
-import { useAppStore, useGetUser, useMe } from "@/features/store";
-import { useAuth } from "@/features/auth/auth-provider";
-import { SHARED_KEYS, accountStorageKeys } from "@/features/auth/storage-keys";
-import { DEFAULT_INVITE_PREFS, type InvitePrefs } from "@/features/social/invites";
+import { SHARED_KEYS } from "@/features/auth/storage-keys";
 import { isRecord, readJson, writeJson } from "@/lib/storage";
 import { setClock24h } from "@/lib/time";
 import { DEFAULT_DISPLAY, MOTION_CONFIG, TEXT_SIZE_PX, type DisplayPrefs } from "./display";
-import type { Profile } from "./profile";
 
-const isProfile = (v: unknown): v is Profile =>
-  isRecord(v) && typeof v["username"] === "string" && typeof v["hue"] === "number";
-
-// Display settings stay with the device; profile and invite settings are saved per account.
-// TODO(backend): profile and invite settings belong to the account on the server.
+// Display settings stay with the device (theme, text size, motion, clock), signed in or not.
 
 interface SettingsValue {
   display: DisplayPrefs;
   updateDisplay: (patch: Partial<DisplayPrefs>) => void;
-  saveProfile: (p: Profile) => void;
-  saveInvitePrefs: (p: InvitePrefs) => void;
 }
 
 const Ctx = createContext<SettingsValue | null>(null);
 
-/** Needs to sit inside a provider keyed by account, so a new account starts fresh. */
+/** Applies display preferences to the whole page and owns the app-wide MotionConfig. */
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { actions } = useAppStore();
-  const { account } = useAuth();
-  const keys = accountStorageKeys(account ?? "none");
   const [display, setDisplay] = useState<DisplayPrefs>(DEFAULT_DISPLAY);
-  const loaded = useRef(false);
-  const actionsRef = useRef(actions);
-  actionsRef.current = actions;
+  const current = useRef(display);
+  current.current = display;
 
   // Read saved settings after hydration so server and client render the same first frame.
   useEffect(() => {
     setDisplay({ ...DEFAULT_DISPLAY, ...readJson(SHARED_KEYS.display, {}, isRecord) });
-    const profile = readJson<Profile | null>(keys.profile, null, isProfile);
-    if (profile) actionsRef.current.updateProfile(profile);
-    const invites = readJson<Partial<InvitePrefs> | null>(keys.tableInvites, null, isRecord);
-    if (invites) actionsRef.current.setInvitePrefs({ ...DEFAULT_INVITE_PREFS, ...invites });
-    loaded.current = true;
-  }, [keys.profile, keys.tableInvites]);
+  }, []);
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${TEXT_SIZE_PX[display.textSize]}px`;
@@ -60,7 +41,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     apply();
     mq.addEventListener("change", apply);
     rm.addEventListener("change", apply);
-    if (loaded.current) writeJson(SHARED_KEYS.display, display);
     return () => {
       mq.removeEventListener("change", apply);
       rm.removeEventListener("change", apply);
@@ -69,14 +49,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: SettingsValue = {
     display,
-    updateDisplay: (patch) => setDisplay((d) => ({ ...d, ...patch })),
-    saveProfile: (p) => {
-      actions.updateProfile(p);
-      writeJson(keys.profile, p);
-    },
-    saveInvitePrefs: (p) => {
-      actions.setInvitePrefs(p);
-      writeJson(keys.tableInvites, p);
+    // Saved only on a user change, so applying (or re-applying) settings never overwrites what's stored.
+    updateDisplay: (patch) => {
+      const next = { ...current.current, ...patch };
+      writeJson(SHARED_KEYS.display, next);
+      setDisplay(next);
     },
   };
 
@@ -91,10 +68,4 @@ export function useSettings() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useSettings must be used inside SettingsProvider");
   return ctx;
-}
-
-/** Your current username and avatar color. */
-export function useMyProfile(): Profile {
-  const u = useGetUser()(useMe());
-  return { username: u.username, hue: u.hue };
 }

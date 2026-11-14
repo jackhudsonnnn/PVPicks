@@ -71,11 +71,13 @@ class AuthenticationController {
     @GetMapping("/me")
     ResponseEntity<?> me(@AuthenticationPrincipal Jwt jwt) {
         var users = jdbc.query("""
-                SELECT id, username::text, hue FROM users WHERE id = ? AND status = 'ACTIVE'
+                SELECT id, username::text, hue, role FROM users WHERE id = ? AND status = 'ACTIVE'
                 """, (rs, row) -> Map.<String, Object>of(
                         "id", rs.getObject("id", UUID.class),
                         "username", rs.getString("username"),
-                        "hue", rs.getInt("hue")), UUID.fromString(jwt.getSubject()));
+                        "hue", rs.getInt("hue"),
+                        // The client shows admins the admin view; admins cannot use player APIs.
+                        "role", rs.getString("role")), UUID.fromString(jwt.getSubject()));
         if (users.isEmpty()) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }

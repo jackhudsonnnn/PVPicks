@@ -84,7 +84,12 @@ vi.mock("./settlement-api", async (importOriginal) => ({
   transitionGroup: vi.fn(),
 }));
 
-const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "testuser", hue: 2 };
+const user = {
+  id: "123e4567-e89b-42d3-a456-426614174000",
+  username: "testuser",
+  hue: 2,
+  role: "PLAYER" as const,
+};
 const table = {
   id: "123e4567-e89b-42d3-a456-426614174001",
   name: "Test table",

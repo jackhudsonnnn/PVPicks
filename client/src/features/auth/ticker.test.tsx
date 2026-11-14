@@ -62,7 +62,7 @@ describe("ticker API", () => {
     expect(tickerStatus({ ...live, clock: null })).toBe("Period 3");
     expect(tickerStatus({ ...live, status: "FINAL" })).toBe("Final");
     expect(tickerStatus({ ...live, status: "POSTPONED" })).toBe("Postponed");
-    expect(tickerStatus({ ...live, status: "SCHEDULED" }, "en-US")).toMatch(/\d{1,2}:30/);
+    expect(tickerStatus({ ...live, status: "SCHEDULED" })).toMatch(/\d{1,2}:30/);
   });
 });
 

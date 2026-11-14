@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HowToPlay } from "@/features/guide/components/guide-page";
 
 export const Route = createFileRoute("/how-to-play")({
   head: () => ({
@@ -20,5 +19,6 @@ export const Route = createFileRoute("/how-to-play")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: HowToPlay,
+  // The root renders BackendApp for every path; this route only provides the path and page metadata.
+  component: () => null,
 });

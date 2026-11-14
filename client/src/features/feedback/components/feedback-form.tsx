@@ -5,18 +5,35 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/features/auth/auth-provider";
 import { FEEDBACK_KINDS, FEEDBACK_MAX, feedbackProblem, type FeedbackKind } from "../feedback";
-import { useFeedback } from "../feedback-storage";
 
 /** Guide section: send game mode ideas, perk ideas, GIFs, bugs or anything else. */
-export function FeedbackSection() {
-  const { account } = useAuth();
-  const { send } = useFeedback();
+export interface FeedbackInput {
+  kind: FeedbackKind;
+  text: string;
+  link?: string;
+}
+
+/**
+ * The Guide's feedback form. It only collects and validates; `send` delivers it, and `sent` shows the thanks
+ * once delivery succeeded. `status` renders delivery messages (for example a retry for an unknown outcome).
+ */
+export function FeedbackSection({
+  send,
+  sent,
+  onSendMore,
+  disabled,
+  status,
+}: {
+  send: (input: FeedbackInput) => void;
+  sent: boolean;
+  onSendMore: () => void;
+  disabled: boolean;
+  status?: React.ReactNode;
+}) {
   const [kind, setKind] = useState<FeedbackKind>("mode");
   const [text, setText] = useState("");
   const [link, setLink] = useState("");
-  const [sent, setSent] = useState(false);
   const meta = FEEDBACK_KINDS.find((k) => k.id === kind)!;
   const problem = feedbackProblem(text, link);
 
@@ -33,6 +50,7 @@ export function FeedbackSection() {
         </p>
       </div>
 
+      {status}
       <div className="space-y-3 rounded-xl border bg-surface p-5">
         {sent ? (
           <div className="flex flex-col items-start gap-3">
@@ -42,7 +60,7 @@ export function FeedbackSection() {
             <p className="text-sm text-muted-foreground">
               We read everything. Good ideas show up in the app.
             </p>
-            <Button variant="outline" size="sm" onClick={() => setSent(false)}>
+            <Button variant="outline" size="sm" onClick={onSendMore}>
               Send more
             </Button>
           </div>
@@ -85,17 +103,11 @@ export function FeedbackSection() {
                 {text.length > 0 && problem ? problem : `${text.length}/${FEEDBACK_MAX}`}
               </p>
               <Button
-                disabled={!!problem}
+                disabled={!!problem || disabled}
                 onClick={() => {
-                  send({
-                    kind,
-                    text: text.trim(),
-                    link: link.trim() || undefined,
-                    account: account ?? undefined,
-                  });
+                  send({ kind, text: text.trim(), ...(link.trim() ? { link: link.trim() } : {}) });
                   setText("");
                   setLink("");
-                  setSent(true);
                 }}
               >
                 <SendHorizontal /> Send feedback

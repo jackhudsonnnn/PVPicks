@@ -33,7 +33,10 @@ import {
 } from "./backend-bet-controls";
 import { PersonName } from "./backend-person-name";
 import { BackendChat } from "./backend-chat";
+import { AdminWorkspace } from "./backend-admin";
+import { ArchivedTable, ArchivedTables } from "./backend-archives";
 import { BackendFriends } from "./backend-friends";
+import { BackendGuide } from "./backend-guide";
 import { CreateTable, Invitations } from "./backend-home";
 import { BackendPreferences } from "./backend-preferences";
 import { TableMembers } from "./backend-table-members";
@@ -43,6 +46,7 @@ import { getChatUnread } from "./chat-api";
 import { useBetActions } from "./bet-actions";
 import { RealtimeProvider, useRealtimeFeed, useRealtimeStatus } from "./realtime";
 import { personalFeed, tableBetsFeed, tableChatFeed, tableViewFeed } from "./realtime-connection";
+import { dateTimeLabel } from "@/lib/time";
 
 const sessionKey = ["backend-session"] as const;
 const tablesKey = ["backend-tables"] as const;
@@ -101,6 +105,8 @@ export function BackendApp() {
     );
   }
   if (!session.data) return <BackendSignIn login={login} notice={notice} />;
+  if (session.data.role === "ADMIN")
+    return <AdminWorkspace key={session.data.id} user={session.data} logout={logout} />;
   return (
     <TableWorkspace
       key={session.data.id}
@@ -203,6 +209,7 @@ function TableWorkspace({
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const match = /^\/tables\/([^/]+)\/?$/.exec(pathname);
+  const archiveId = /^\/archives\/([^/]+)\/?$/.exec(pathname)?.[1];
   const tableId = match?.[1];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,6 +261,13 @@ function TableWorkspace({
                 Friends
               </Link>
               <Link
+                to="/how-to-play"
+                aria-current={pathname === "/how-to-play" ? "page" : undefined}
+                className={pathname === "/how-to-play" ? "font-semibold" : "text-muted-foreground"}
+              >
+                How to play
+              </Link>
+              <Link
                 to="/preferences"
                 aria-current={pathname === "/preferences" ? "page" : undefined}
                 className={pathname === "/preferences" ? "font-semibold" : "text-muted-foreground"}
@@ -286,11 +300,16 @@ function TableWorkspace({
               <Invitations user={user} expire={expire} />
               <TableList user={user} expire={expire} />
               <CreateTable user={user} expire={expire} />
+              <ArchivedTables user={user} />
             </>
           ) : pathname === "/friends" ? (
             <BackendFriends user={user} expire={expire} />
+          ) : pathname === "/how-to-play" ? (
+            <BackendGuide user={user} expire={expire} />
           ) : pathname === "/preferences" ? (
             <BackendPreferences user={user} expire={expire} />
+          ) : archiveId ? (
+            <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
           ) : tableId ? (
             <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
           ) : (
@@ -733,7 +752,7 @@ function BetFacts({
     <>
       <p>{participation}</p>
       <p>Choices: {bet.choices.join(", ")}</p>
-      <p>Lock time: {new Date(bet.locksAt).toLocaleString()}</p>
+      <p>Lock time: {dateTimeLabel(bet.locksAt)}</p>
       {bet.status === "ACTIVE" ? (
         <p className="text-muted-foreground">Other players' picks stay private until lock.</p>
       ) : (

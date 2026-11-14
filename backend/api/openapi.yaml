@@ -119,11 +119,11 @@ paths:
       summary: Get the authenticated user
       responses:
         '200':
-          description: Current user.
+          description: Current user, with their role (admins cannot use player APIs).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/CurrentUser'
         '401':
           $ref: '#/components/responses/Unauthorized'
     delete:
@@ -3125,6 +3125,26 @@ components:
               deltasCents: false
               pointsSettled:
                 const: false
+    CurrentUser:
+      type: object
+      additionalProperties: false
+      required: [id, username, hue, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          minLength: 3
+          maxLength: 15
+          pattern: '^[a-z0-9_]+$'
+        hue:
+          type: integer
+          minimum: 1
+          maximum: 5
+        role:
+          type: string
+          enum: [PLAYER, ADMIN]
     User:
       type: object
       additionalProperties: false

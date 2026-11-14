@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { HUE_BG } from "@/features/social/components/hue";
+import { DisplaySettings } from "@/features/settings/components/display-settings";
 import { INVITE_MODES } from "@/features/social/invites";
 import { HUES, normalizeUsername, usernameError, type Hue } from "@/features/settings/profile";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,7 @@ const INVITE_ROWS = [
 /** Preferences: who can add you to tables, and your account (username, color, debt cap). */
 export function BackendPreferences({ user, expire }: { user: BackendUser; expire: () => void }) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"tables" | "account">("tables");
+  const [tab, setTab] = useState<"tables" | "account" | "display">("tables");
   const actions = usePreferencesActions(
     user.id,
     async () => {
@@ -63,6 +64,7 @@ export function BackendPreferences({ user, expire }: { user: BackendUser; expire
         tabs={[
           { id: "tables", label: "Tables" },
           { id: "account", label: "Account" },
+          { id: "display", label: "Display" },
         ]}
         value={tab}
         onChange={setTab}
@@ -74,6 +76,8 @@ export function BackendPreferences({ user, expire }: { user: BackendUser; expire
       />
       {tab === "tables" ? (
         <InviteSettings user={user} disabled={disabled} actions={actions} />
+      ) : tab === "display" ? (
+        <DisplaySettings />
       ) : (
         // Keyed by username so the form resets to the saved name after a rename.
         <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />

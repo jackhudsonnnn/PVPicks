@@ -39,13 +39,16 @@ export function RealtimeProvider({
   return <RealtimeContext.Provider value={connection}>{children}</RealtimeContext.Provider>;
 }
 
-/** Calls `listener` for each invalidation on `destination`; does nothing outside a RealtimeProvider. */
-export function useRealtimeFeed(destination: string, listener: Listener) {
+/**
+ * Calls `listener` for each invalidation on `destination`; does nothing outside a RealtimeProvider or when
+ * `destination` is null (for example a deleted table, whose feed the server would refuse).
+ */
+export function useRealtimeFeed(destination: string | null, listener: Listener) {
   const connection = useContext(RealtimeContext);
   const latest = useRef(listener);
   latest.current = listener;
   useEffect(() => {
-    if (!connection) return;
+    if (!connection || destination === null) return;
     return connection.listen(destination, (event) => latest.current(event));
   }, [connection, destination]);
 }

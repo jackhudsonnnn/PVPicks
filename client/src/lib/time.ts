@@ -6,7 +6,7 @@ export function setClock24h(on: boolean) {
 }
 
 /** Clock time as shown on new chat lines and tickets ("7:42 PM" or "19:42"). */
-export function timeLabel(date: Date | number = new Date()) {
+export function timeLabel(date: Date | number | string = new Date()) {
   return new Date(date).toLocaleTimeString([], {
     hour: clock24h ? "2-digit" : "numeric",
     minute: "2-digit",
@@ -14,11 +14,8 @@ export function timeLabel(date: Date | number = new Date()) {
   });
 }
 
-/** The current time as a label; see `timeLabel`. */
-export const nowLabel = () => timeLabel();
-
 /** Date + time for logs ("Nov 4, 7:42 PM"). */
-export function dateTimeLabel(date: Date | number) {
+export function dateTimeLabel(date: Date | number | string) {
   return new Date(date).toLocaleString([], {
     month: "short",
     day: "numeric",

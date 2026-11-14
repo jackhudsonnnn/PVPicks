@@ -23,7 +23,8 @@ const scrollContainerVariants = cva("relative min-h-0 min-w-0", {
     isHorizontal: {
       // A lone item sits in the middle instead of hugging the left edge.
       true: "flex overflow-x-auto overflow-y-hidden overscroll-x-contain has-[>:only-child]:justify-center",
-      mobile: "flex overflow-x-auto overflow-y-hidden overscroll-x-contain lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-y-auto",
+      mobile:
+        "flex overflow-x-auto overflow-y-hidden overscroll-x-contain lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-y-auto",
       false: "overflow-y-auto overflow-x-hidden overscroll-y-auto",
     },
     hasScrollbar: {
@@ -50,7 +51,9 @@ export const ScrollContainer = React.forwardRef<HTMLDivElement, ScrollContainerP
     <motion.div
       ref={ref}
       layoutScroll
-      data-scroll-direction={isHorizontal === "mobile" ? "responsive" : isHorizontal ? "horizontal" : "vertical"}
+      data-scroll-direction={
+        isHorizontal === "mobile" ? "responsive" : isHorizontal ? "horizontal" : "vertical"
+      }
       className={cn(scrollContainerVariants({ isVisible, isHorizontal, hasScrollbar }), className)}
       {...(props as unknown as HTMLMotionProps<"div">)}
     />

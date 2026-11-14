@@ -18,6 +18,7 @@ import {
 } from "./settlement-api";
 import { useRealtimeFeed } from "./realtime";
 import { settlementsFeed } from "./realtime-connection";
+import { dateTimeLabel } from "@/lib/time";
 
 type Actions = ReturnType<typeof useSettlementActions>;
 
@@ -385,7 +386,7 @@ function ReceiptLines({
               {formatPoints(line.amountCents)} points · {line.status.replaceAll("_", " ")}
             </p>
             <p className="break-all text-muted-foreground">
-              Table {line.tableId} · {new Date(line.createdAt).toLocaleString()}
+              Table {line.tableId} · {dateTimeLabel(line.createdAt)}
             </p>
             <LineActions
               line={line}

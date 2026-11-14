@@ -28,6 +28,7 @@ import { useRealtimeFeed, useRealtimeStatus } from "./realtime";
 import { tableChatFeed } from "./realtime-connection";
 import { formatPoints } from "./settlement-api";
 import { useBackendChat } from "./use-backend-chat";
+import { timeLabel } from "@/lib/time";
 
 /** A table's chat: paged history, text and GIF sending, reactions and read position, updated live. */
 export function BackendChat({
@@ -36,18 +37,21 @@ export function BackendChat({
   expire,
   betQuestion,
   onRead,
+  readOnly = false,
 }: {
   user: BackendUser;
-  table: BackendTable;
+  table: Pick<BackendTable, "id" | "disabledPermissions">;
   expire: () => void;
   /** The question of a bet at this table, for bet cards; undefined while unknown. */
   betQuestion: (betId: string) => string | undefined;
   /** Called after the read position moves, so unread counts can refresh. */
   onRead: () => void;
+  /** A deleted table's archive: history only, no sending, reactions, read position or live updates. */
+  readOnly?: boolean;
 }) {
-  const chat = useBackendChat(table.id, expire);
+  const chat = useBackendChat(table.id, expire, { readOnly });
   const { state } = chat;
-  useRealtimeFeed(tableChatFeed(table.id), () => void chat.refresh());
+  useRealtimeFeed(readOnly ? null : tableChatFeed(table.id), () => void chat.refresh());
   // Changes may have been missed while disconnected, so refresh after every reconnect.
   const live = useRealtimeStatus() === "live";
   const { refresh } = chat;
@@ -66,7 +70,12 @@ export function BackendChat({
   const blocked = actions.busy || !!actions.pending || !!actions.storageError;
   const names = ["backend-tables", user.id, table.id, "chat"] as const;
 
-  useMarkRead(table.id, state.atEnd ? state.messages.at(-1)?.id : undefined, onRead, expire);
+  useMarkRead(
+    table.id,
+    !readOnly && state.atEnd ? state.messages.at(-1)?.id : undefined,
+    onRead,
+    expire,
+  );
   const scroller = useChatScroll(state.messages);
 
   if (state.status === "loading") return <p>Loading chat…</p>;
@@ -114,7 +123,9 @@ export function BackendChat({
                   expire={expire}
                   names={names}
                   betQuestion={betQuestion}
-                  canReact={!disabled.includes("react") && !blocked && canReactTo(message)}
+                  canReact={
+                    !readOnly && !disabled.includes("react") && !blocked && canReactTo(message)
+                  }
                   onReact={(emoji) =>
                     actions.start({
                       kind: "react",
@@ -134,12 +145,14 @@ export function BackendChat({
           <ArrowDown /> {state.newBelow ? "New messages" : "Jump to latest"}
         </Button>
       )}
-      <Composer
-        canText={!disabled.includes("text")}
-        canGif={!disabled.includes("gifs")}
-        blocked={blocked}
-        send={(message) => actions.start({ kind: "send", tableId: table.id, message })}
-      />
+      {!readOnly && (
+        <Composer
+          canText={!disabled.includes("text")}
+          canGif={!disabled.includes("gifs")}
+          blocked={blocked}
+          send={(message) => actions.start({ kind: "send", tableId: table.id, message })}
+        />
+      )}
     </section>
   );
 }
@@ -162,10 +175,7 @@ function MessageRow({
   onReact: (emoji: string) => void;
 }) {
   const [picking, setPicking] = useState(false);
-  const time = new Date(message.createdAt).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const time = timeLabel(message.createdAt);
   if (message.kind === "system") {
     return (
       <p className="text-center text-xs text-muted-foreground">

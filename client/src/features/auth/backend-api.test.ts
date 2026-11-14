@@ -11,7 +11,12 @@ import {
   signOut,
 } from "./backend-api";
 
-const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "testuser", hue: 2 };
+const user = {
+  id: "123e4567-e89b-42d3-a456-426614174000",
+  username: "testuser",
+  hue: 2,
+  role: "PLAYER" as const,
+};
 const table = {
   id: "123e4567-e89b-42d3-a456-426614174001",
   name: "Test table",
@@ -188,7 +193,8 @@ describe("backend session and table API", () => {
       .mockResolvedValueOnce(json({ ...deleted, deleted: false }))
       .mockResolvedValueOnce(new Response(null, { status: 404 }));
     vi.stubGlobal("fetch", fetch);
-    await expect(getProfile(user.id)).resolves.toEqual(user);
+    const { role: _role, ...profile } = user;
+    await expect(getProfile(user.id)).resolves.toEqual(profile);
     await expect(getProfile(table.id)).resolves.toEqual(deleted);
     expect(fetch.mock.calls[0]?.[0]).toBe(`/api/users/${user.id}`);
     await expect(getProfile(table.id)).rejects.toThrow("unexpected response");

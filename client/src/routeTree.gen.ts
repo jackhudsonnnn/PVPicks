@@ -10,22 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as PreferencesRouteImport } from './routes/preferences'
-import { Route as SignUpRouteImport } from './routes/sign-up'
-import { Route as TicketsRouteImport } from './routes/tickets'
+import { Route as ArchivesTableIdRouteImport } from './routes/archives.$tableId'
 import { Route as TablesTableIdRouteImport } from './routes/tables.$tableId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FriendsRoute = FriendsRouteImport.update({
@@ -43,14 +36,9 @@ const PreferencesRoute = PreferencesRouteImport.update({
   path: '/preferences',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TicketsRoute = TicketsRouteImport.update({
-  id: '/tickets',
-  path: '/tickets',
+const ArchivesTableIdRoute = ArchivesTableIdRouteImport.update({
+  id: '/archives/$tableId',
+  path: '/archives/$tableId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TablesTableIdRoute = TablesTableIdRouteImport.update({
@@ -61,76 +49,62 @@ const TablesTableIdRoute = TablesTableIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
-  '/sign-up': typeof SignUpRoute
-  '/tickets': typeof TicketsRoute
+  '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
-  '/sign-up': typeof SignUpRoute
-  '/tickets': typeof TicketsRoute
+  '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
-  '/sign-up': typeof SignUpRoute
-  '/tickets': typeof TicketsRoute
+  '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
-    | '/sign-up'
-    | '/tickets'
+    | '/archives/$tableId'
     | '/tables/$tableId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
-    | '/sign-up'
-    | '/tickets'
+    | '/archives/$tableId'
     | '/tables/$tableId'
   id:
     | '__root__'
     | '/'
-    | '/admin'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
-    | '/sign-up'
-    | '/tickets'
+    | '/archives/$tableId'
     | '/tables/$tableId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
   FriendsRoute: typeof FriendsRoute
   HowToPlayRoute: typeof HowToPlayRoute
   PreferencesRoute: typeof PreferencesRoute
-  SignUpRoute: typeof SignUpRoute
-  TicketsRoute: typeof TicketsRoute
+  ArchivesTableIdRoute: typeof ArchivesTableIdRoute
   TablesTableIdRoute: typeof TablesTableIdRoute
 }
 
@@ -141,13 +115,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/friends': {
@@ -171,18 +138,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PreferencesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tickets': {
-      id: '/tickets'
-      path: '/tickets'
-      fullPath: '/tickets'
-      preLoaderRoute: typeof TicketsRouteImport
+    '/archives/$tableId': {
+      id: '/archives/$tableId'
+      path: '/archives/$tableId'
+      fullPath: '/archives/$tableId'
+      preLoaderRoute: typeof ArchivesTableIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tables/$tableId': {
@@ -197,12 +157,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
   FriendsRoute: FriendsRoute,
   HowToPlayRoute: HowToPlayRoute,
   PreferencesRoute: PreferencesRoute,
-  SignUpRoute: SignUpRoute,
-  TicketsRoute: TicketsRoute,
+  ArchivesTableIdRoute: ArchivesTableIdRoute,
   TablesTableIdRoute: TablesTableIdRoute,
 }
 export const routeTree = rootRouteImport

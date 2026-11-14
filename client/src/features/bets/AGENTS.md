@@ -1,9 +1,6 @@
 # Bets rules
 
-- AppShell owns the persistent game ticker and exposes top/bottom bar heights; table views subtract both with no document bottom padding. The ticker uses a games-only context, memoized whole-cycle buffers and compositor-only motion in a plain clipped strip (native swipe when reduced). Why: scores stay smooth across unrelated store ticks/navigation, and shared bars never cover filters or seats.
-
-- Game modes live in the registry `src/features/bets/modes.ts` (fields, question, choices per mode); add modes there, not in components. Modes are league-agnostic; per-league stats/outcomes/default lines live in `src/features/bets/sports.ts` and `Game` is a union keyed by `league`. Why: plugin-like mode system; adding a league means adding data, not modes.
-- U2Pick (custom) bets: validation and who-can-settle rules live in `src/features/bets/u2pick.ts` (tested); the store's settle reducer enforces them. Custom bets have no `gameId`. Why: settlement permissions stay testable and in one place.
-- Payout/wash rules live only in `src/features/bets/payout.ts` with tests beside it. Why: one source of truth for money logic.
-- Which modes offer the Overtime switch lives in `src/features/bets/overtime.ts` (tested); game bets always run to end of game. Ticket Info rows per mode live in `info.ts` (tested): starting values are copied onto the bet (`baseline`) when sent, current values come from a `GameSnapshot` (`live-stats.ts`, sample until a feed exists). The Bet/Info lists in `bet-facts.tsx` are shared by Details and the proposal preview. 4fun bets (`forFun`) are skipped by every money rule (payout, ledger, scenarios). Why: modes differ in which options make sense, and 4fun must never move points.
-- The leftover-cent rule is copied onto a bet (`remainder`) when it locks and used for its payout; hosts can't change the table setting while a bet is active. Why: a bet's payout never changes after picks lock.
+- The server owns every bet rule: modes, locking, picks, results, washes, payouts and the leftover-cent rule. This folder holds only what the client needs to describe and draft bets. Why: one source of truth for money logic.
+- `modes.ts` is the catalog the How to play guide shows (name, tagline, description, icon). Add a mode here when the server supports it; its fields and resolution live on the server.
+- U2Pick drafts: `u2pick.ts` (tested) validates the question and options before sending and lists the settler rules; `components/u2pick-editor.tsx` renders the draft. Who may call a result is checked in `features/auth/bet-results.ts` and rechecked by the server.
+- `ticker.ts` (tested) repeats games in whole cycles so the ticker's loop seam stays continuous; the strip itself is `features/auth/backend-ticker.tsx`.
