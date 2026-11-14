@@ -44,10 +44,12 @@
       overrides in the domain rules ("Sports outcomes and host overrides").
 - [ ] Sports data per ADR 0005: game history, rosters, player stats, per-game
       replay slices.
-- [ ] Buy All-Star per league (decided: start there, upgrade as the app
-      grows). It covers player props with live stats and injuries; GOAT adds
-      sportsbook lines, odds and play-by-play. Check BallDontLie's terms for
-      showing and storing their data in the app first.
+- [ ] Buy All-Star for NBA and NFL (decided) before the GOAT trial ends
+      (about Nov 20). Check BallDontLie's terms for showing and storing their
+      data in the app first. Build nothing on GOAT-only endpoints (odds,
+      sportsbook props, play-by-play, box scores, NFL rosters).
+- [ ] After buying: set the plan to All-Star for both leagues and shorten
+      the poll interval (60 requests/min allows polling every 15–20 s).
 - [ ] Make the plan a per-league setting that drives poll rate, endpoints and
       offered modes (ADR 0005).
 - [ ] Maybe: a host setting for who may override sports results, like the
