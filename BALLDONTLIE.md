@@ -30,6 +30,10 @@
 
 ## Next
 
+- [x] Tables, members, invitations and Friends (follow, block, search) in the
+      app.
+- [ ] Preferences: profile, debt cap and invite preferences.
+
 - [ ] Replay saved games as the dev data stream, and keep a few trimmed games
       as test fixtures.
 - [x] Try the whole app in a real browser on an isolated stack: WebSocket
