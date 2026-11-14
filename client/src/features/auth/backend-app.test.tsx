@@ -16,6 +16,7 @@ import {
   type BackendBet,
 } from "./backend-api";
 import { listPendingReviews, listSettlementGroups } from "./settlement-api";
+import { getRelationships, listInvites } from "./social-api";
 import type { Invalidation } from "./realtime-connection";
 
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
@@ -44,6 +45,7 @@ function deliver(destination: string, event: Partial<Invalidation>) {
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  useNavigate: () => () => Promise.resolve(),
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
     select({ location: route }),
 }));
@@ -62,6 +64,15 @@ vi.mock("./backend-api", async (importOriginal) => {
   };
 });
 
+vi.mock("./social-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./social-api")>()),
+  getRelationships: vi.fn(),
+  listInvites: vi.fn(),
+  searchUsers: vi.fn(),
+  setFollow: vi.fn(),
+  setBlock: vi.fn(),
+  respondToInvite: vi.fn(),
+}));
 vi.mock("./settlement-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./settlement-api")>()),
   listPendingReviews: vi.fn(),
@@ -121,22 +132,40 @@ beforeEach(() => {
   route.pathname = "/";
   vi.mocked(listTableBets).mockResolvedValue([]);
   vi.mocked(listPendingReviews).mockResolvedValue([]);
+  vi.mocked(getRelationships).mockResolvedValue({
+    followingIds: [],
+    followerIds: [],
+    blockedIds: [],
+  });
+  vi.mocked(listInvites).mockResolvedValue([]);
   vi.mocked(listSettlementGroups).mockResolvedValue([]);
 });
 
 describe("backend app", () => {
-  it("signs in, reads tables and receipts, and revokes the session", async () => {
+  it("signs in, reads tables and invitations, and revokes the session", async () => {
     vi.mocked(currentUser).mockResolvedValue(null);
     vi.mocked(signIn).mockResolvedValue(user);
     vi.mocked(listTables).mockResolvedValue([table]);
     vi.mocked(signOut).mockResolvedValue();
+    vi.mocked(listInvites).mockResolvedValue([
+      {
+        id: "123e4567-e89b-42d3-a456-426614174090",
+        tableId: "123e4567-e89b-42d3-a456-426614174091",
+        tableName: "Invited table",
+        tableEmoji: "🎲",
+        fromId: "123e4567-e89b-42d3-a456-426614174092",
+        userId: user.id,
+        createdAt: "2026-11-13T12:00:00Z",
+      },
+    ]);
     renderApp();
     fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "testuser" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
     expect(await screen.findByText("Test table")).toBeInTheDocument();
     expect(signIn).toHaveBeenCalledWith("testuser", "password");
-    expect(await screen.findByRole("heading", { name: "Settle-up receipts" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Invitations" })).toBeInTheDocument();
+    expect(screen.getByText("Create a table")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     expect(await screen.findByLabelText("Username")).toBeInTheDocument();
     expect(signOut).toHaveBeenCalledOnce();

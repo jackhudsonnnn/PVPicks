@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogIn, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,10 @@ import {
 } from "./backend-bet-controls";
 import { PersonName } from "./backend-person-name";
 import { BackendChat } from "./backend-chat";
-import { BackendSettlements } from "./backend-settlements";
+import { BackendFriends } from "./backend-friends";
+import { CreateTable, Invitations } from "./backend-home";
+import { TableMembers } from "./backend-table-members";
+import { useTableActions } from "./table-actions";
 import { BackendTicker } from "./backend-ticker";
 import { getChatUnread } from "./chat-api";
 import { useBetActions } from "./bet-actions";
@@ -232,7 +235,25 @@ function TableWorkspace({
       <PersonalUpdates user={user} />
       <div className="min-h-dvh bg-field">
         <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
-          <Logo />
+          <div className="flex items-center gap-4">
+            <Logo />
+            <nav aria-label="Main" className="flex gap-3 text-sm">
+              <Link
+                to="/"
+                aria-current={pathname === "/" ? "page" : undefined}
+                className={pathname === "/" ? "font-semibold" : "text-muted-foreground"}
+              >
+                Home
+              </Link>
+              <Link
+                to="/friends"
+                aria-current={pathname === "/friends" ? "page" : undefined}
+                className={pathname === "/friends" ? "font-semibold" : "text-muted-foreground"}
+              >
+                Friends
+              </Link>
+            </nav>
+          </div>
           <div className="flex items-center gap-3">
             <LiveStatus />
             <span className="text-sm">{user.username}</span>
@@ -244,8 +265,8 @@ function TableWorkspace({
         <BackendTicker user={user} expire={expire} />
         <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
           <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-            Dev backend: U2Pick betting, results, points settlement, receipts and table chat are
-            connected and update live. Table management and social features are not connected yet.
+            Dev backend: tables, members, friends, U2Pick betting, results, points settlement,
+            receipts, chat and the sports ticker are connected and update live.
           </p>
           {error && (
             <p role="alert" className="text-loss">
@@ -254,9 +275,12 @@ function TableWorkspace({
           )}
           {pathname === "/" ? (
             <>
+              <Invitations user={user} expire={expire} />
               <TableList user={user} expire={expire} />
-              <BackendSettlements user={user} expire={expire} />
+              <CreateTable user={user} expire={expire} />
             </>
+          ) : pathname === "/friends" ? (
+            <BackendFriends user={user} expire={expire} />
           ) : tableId ? (
             <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
           ) : (
@@ -277,7 +301,9 @@ function TableWorkspace({
 function PersonalUpdates({ user }: { user: BackendUser }) {
   const queryClient = useQueryClient();
   useRealtimeFeed(personalFeed, (event) => {
-    if (event.type === "tables.changed") {
+    if (event.type === "invitations.changed") {
+      void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "invites"] });
+    } else if (event.type === "tables.changed") {
       void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "list"] });
     } else if (event.type === "profile.changed" && event.resourceId) {
       const id = event.resourceId;
@@ -413,24 +439,6 @@ function TableDetails({
               {query.data.memberIds.length === 1 ? "member" : "members"} ·{" "}
               {query.data.hostIds.includes(user.id) ? "You are a host" : "You are a member"}
             </p>
-            <dl className="grid gap-2 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-muted-foreground">Remainder rule</dt>
-                <dd>{query.data.remainderRule}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Who can start bets</dt>
-                <dd>{query.data.hostsOnlyBets ? "Hosts only" : "Permitted members"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">U2Pick</dt>
-                <dd>{query.data.u2pickEnabled ? "Enabled" : "Disabled"}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Quick Picks</dt>
-                <dd>{query.data.quickPicksEnabled ? "Enabled" : "Disabled"}</dd>
-              </div>
-            </dl>
           </div>
           <TableActivity user={user} table={query.data} expire={expire} />
         </>
@@ -439,7 +447,7 @@ function TableDetails({
   );
 }
 
-/** The table's bets and chat, as tabs; the chat tab shows the unread count. */
+/** The table's bets, chat and members, as tabs; the chat tab shows the unread count. */
 function TableActivity({
   user,
   table,
@@ -449,8 +457,22 @@ function TableActivity({
   table: BackendTable;
   expire: () => void;
 }) {
-  const [tab, setTab] = useState<"bets" | "chat">("bets");
+  const [tab, setTab] = useState<"bets" | "chat" | "members">("bets");
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  // One instance per table page, so every members and settings control shares its pending state.
+  const tableActions = useTableActions(
+    user.id,
+    async (intent) => {
+      if (intent?.kind === "delete") {
+        await queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "list"] });
+        void navigate({ to: "/" });
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id] });
+    },
+    expire,
+  );
   const unreadKey = [...tablesKey, user.id, table.id, "chat-unread"];
   const unread = useQuery({
     queryKey: unreadKey,
@@ -474,12 +496,15 @@ function TableActivity({
         tabs={[
           { id: "bets", label: "Bets" },
           { id: "chat", label: count > 0 ? `Chat (${count})` : "Chat" },
+          { id: "members", label: "Members" },
         ]}
         value={tab}
         onChange={setTab}
       />
       {tab === "bets" ? (
         <TableBetting user={user} table={table} expire={expire} />
+      ) : tab === "members" ? (
+        <TableMembers user={user} table={table} expire={expire} actions={tableActions} />
       ) : (
         <BackendChat
           user={user}

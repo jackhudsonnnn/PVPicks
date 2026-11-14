@@ -19,8 +19,8 @@ chat, receipts and names refresh live from the realtime gateway.
 
 - Integrate additional workflows incrementally with asynchronous API flows.
 - Apply server authorization and Active-pick privacy to every integrated view.
-- Connect table management (creation, members, invitations, settings) and
-  social views, preserving reconciliation and accessible interactions.
+- Connect Preferences (profile, debt cap, invite preferences), table archives
+  and Quick Pick controls.
 - Replace the minimal betting and receipt views with the prototype's ticket
   and table designs.
 - Bring chat closer to the prototype design (seated table, avatars) and keep

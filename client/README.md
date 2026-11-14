@@ -1,7 +1,19 @@
 # Frontend
 
 The current entry point (`src/features/auth/backend-app.tsx`) signs in to the
-dev backend and connects tables, bets and settle-up receipts:
+dev backend. A header switches between Home and Friends.
+
+- **Home:** pending table invitations (join or decline), your tables, and
+  "Create a table" (name, icon, and people who follow you).
+- **Friends:** settle-up receipts, new followers, and lists of friends,
+  following, followers and blocked people, with username search, follow,
+  follow back, block and unblock. A host can only add people who follow them,
+  and each person's invite preferences decide whether they join right away or
+  get an invitation.
+- **Table page:** Bets, Chat and Members tabs. Members shows everyone's role;
+  hosts can add followers, remove members, make or remove hosts, switch member
+  permissions, and change the name, icon, betting settings and leftover-cents
+  rule, or delete the table.
 
 - **U2Pick betting:** create a bet, pick or clear a choice, call the result or
   wash it once the bet locks (if the bet's settler rule allows you), and, as a
@@ -22,8 +34,8 @@ dev backend and connects tables, bets and settle-up receipts:
   `GET /ticker`, live first, and says when live scores are unavailable rather
   than showing no games.
 
-Table management, registration and the other prototype workflows are not
-connected; the mock-backed app remains in the source but is not exposed.
+Your profile, debt cap and invite preferences, Quick Picks, archives,
+registration and the other prototype workflows are not connected; the mock-backed app remains in the source but is not exposed.
 
 Bets and receipts update live. While signed in, the app keeps one STOMP
 connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on

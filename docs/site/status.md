@@ -41,14 +41,18 @@ planned operations; it is not an implementation inventory.
   responses recorded under `recordings/sports/`, and `GET /ticker`, which reports the
   feed as unavailable rather than empty when polling has failed.
 - The frontend entry point supports backend sign-in, session restoration,
-  table and bet list/detail views, U2Pick creation, picking, result calling,
+  table creation, invitations (join or decline), members (add followers,
+  remove, host roles, permissions), table settings and deletion, a Friends
+  page (settle-ups, new followers, friends/following/followers/blocked lists,
+  username search, follow and block), table and bet list/detail views, U2Pick
+  creation, picking, result calling,
   host points settlement, settle-up receipts with balance-change reviews, and
   table chat (paged history, text and GIF messages, reactions, unread marker
   and read position), and a live sports ticker, all updating live. Active
   picks remain private;
   participant names are loaded from the backend after lock. The previous mock
-  app is not exposed there; table management, social and other frontend
-  workflows are not yet connected.
+  app is not exposed there; your profile, debt cap and invite preferences,
+  Quick Picks and archive views are not yet connected.
 - An action whose outcome is unknown (for example, a lost response) keeps its
   retry key per user in the browser's local storage, so every tab sees it and
   blocks new actions until it is retried with the same key or cleared after

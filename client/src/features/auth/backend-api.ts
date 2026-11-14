@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const userSchema = z.object({
+export const userSchema = z.object({
   id: z.guid(),
   username: z.string(),
   hue: z.number().int().min(1).max(5),
@@ -15,7 +15,7 @@ const profileSchema = z.union([
   }),
 ]);
 
-const tableSchema = z.object({
+export const tableSchema = z.object({
   id: z.guid(),
   name: z.string(),
   emoji: z.string(),
@@ -102,6 +102,8 @@ export class BackendError extends Error {
     message: string,
     readonly status?: number,
     readonly code?: string,
+    /** The server's explanation of a 409, for example "A table must retain an active host." */
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "BackendError";
@@ -116,21 +118,27 @@ export async function request(path: string, init?: RequestInit): Promise<Respons
   });
   if (!response.ok) {
     let code: string | undefined;
+    let detail: string | undefined;
     if (response.status === 409) {
       try {
         const body: unknown = await response.json();
-        const parsed = z.object({ code: z.string() }).safeParse(body);
-        if (parsed.success) code = parsed.data.code;
+        const parsed = z
+          .object({ code: z.string(), message: z.string().optional() })
+          .safeParse(body);
+        if (parsed.success) {
+          code = parsed.data.code;
+          detail = parsed.data.message;
+        }
       } catch (error) {
         if (!(error instanceof SyntaxError)) throw error;
       }
     }
-    throw new BackendError("Backend request failed.", response.status, code);
+    throw new BackendError("Backend request failed.", response.status, code, detail);
   }
   return response;
 }
 
-async function read<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
+export async function read<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
   let value: unknown;
   try {
     value = await response.json();
@@ -150,7 +158,7 @@ export async function csrf(): Promise<string> {
 
 export async function mutationRequest(
   path: string,
-  method: "POST" | "PUT" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   key: string,
   body?: object,
 ): Promise<Response> {
@@ -259,6 +267,7 @@ export function backendErrorMessage(error: unknown): string {
     if (error.status === 403)
       return "This account cannot access that action, or the request was rejected.";
     if (error.status === 404) return "This item is unavailable or you no longer have access.";
+    if (error.status === 409 && error.detail) return error.detail;
     if (error.status !== undefined) return `The backend returned an error (${error.status}).`;
     return error.message;
   }

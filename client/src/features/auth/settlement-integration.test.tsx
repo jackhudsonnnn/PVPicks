@@ -7,8 +7,9 @@ import { useIsolatedBackend } from "./backend-integration-utils";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  useNavigate: () => () => Promise.resolve(),
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
-    select({ location: { pathname: "/" } }),
+    select({ location: { pathname: "/friends" } }),
 }));
 
 afterEach(() => {
@@ -32,7 +33,7 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
       target: { value: "a secure test password" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByText("Preview")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Friends" })).toBeInTheDocument();
     expect(await screen.findByText(/Balance changed with/)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "I've reviewed this" }));

@@ -53,7 +53,8 @@ backend starts. Never commit credentials or expose the dev stack to a network.
 The current frontend provides backend sign-in, table and bet views, U2Pick
 betting (create, pick, call results, host points settlement) and settle-up
 receipts, table chat and a live sports ticker, all updating live over a
-WebSocket. Table management and social features are not exposed yet. Accounts must already be provisioned
+WebSocket, as well as creating and managing tables, inviting people who follow
+you, and a Friends page for following and blocking. Accounts must already be provisioned
 in the dev backend. In dev, the lock worker locks U2Pick bets at their
 deadline and the outbox relay publishes events for live updates; set
 `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or `PVPICKS_OUTBOX_RELAY_ENABLED=false`

@@ -15,7 +15,8 @@ export function useRetryableMutation<Intent>({
 }: {
   storageKey: string;
   intentSchema: z.ZodType<Intent>;
-  execute: (intent: Intent, key: string) => Promise<void>;
+  /** Performs the action; may return a message to show on success instead of the default. */
+  execute: (intent: Intent, key: string) => Promise<string | void>;
   refresh: () => Promise<void>;
   expire: () => void;
   checkDescription: string;
@@ -80,9 +81,9 @@ export function useRetryableMutation<Intent>({
     setBusy(true);
     setMessage(null);
     try {
-      await execute(pending.intent, pending.key);
+      const note = await execute(pending.intent, pending.key);
       if (persist(null)) {
-        setMessage("Action completed. Refreshing.");
+        setMessage(note || "Action completed. Refreshing.");
         void refresh();
       }
     } catch (error) {
