@@ -21,25 +21,6 @@ export const FILTERS = [
   { id: "nfl", label: "NFL" },
 ] as const;
 
-export const LIFECYCLE = [
-  {
-    status: "active" as const,
-    text: "The ticket is open with a countdown. Tap a choice to join, and change or clear your pick until time runs out. Picks stay hidden.",
-  },
-  {
-    status: "pending" as const,
-    text: "Picks lock and are revealed. Everyone with a guess puts the wager into the pot. Now we wait for the play.",
-  },
-  {
-    status: "resolved" as const,
-    text: "A winning choice emerges. Losers' pot is split evenly among the winners.",
-  },
-  {
-    status: "washed" as const,
-    text: "Everyone picked the same side, nobody picked the winner, or the outcome wasn't one of the choices. Points go back.",
-  },
-];
-
 export const SECTIONS = [
   { id: "lifecycle", label: "Bet lifecycle" },
   { id: "modes", label: "Game modes" },

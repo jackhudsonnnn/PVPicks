@@ -20,14 +20,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class ChatSendController {
-    private static final Set<String> GIF_IDS = Set.of(
-            "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9", "g10", "g11", "g12",
-            "g13", "g14", "g15", "g16", "g17", "g18", "g19", "g20", "g21", "g22", "g23", "g24");
-
     private final ChatSendService chat;
+    private final GifCatalog gifs;
 
-    ChatSendController(ChatSendService chat) {
+    ChatSendController(ChatSendService chat, GifCatalog gifs) {
         this.chat = chat;
+        this.gifs = gifs;
     }
 
     @PostMapping("/tables/{tableId}/messages")
@@ -51,7 +49,7 @@ class ChatSendController {
         }
     }
 
-    private static ChatSendService.Submission parse(JsonNode input) {
+    private ChatSendService.Submission parse(JsonNode input) {
         if (!input.isObject() || input.size() != 2 || !input.path("kind").isTextual()) return null;
         String kind = input.path("kind").textValue();
         if (kind.equals("text") && input.path("text").isTextual()) {
@@ -60,7 +58,7 @@ class ChatSendController {
                 return new ChatSendService.Submission(kind, text);
             }
         } else if (kind.equals("gif") && input.path("gifId").isTextual()
-                && GIF_IDS.contains(input.path("gifId").textValue())) {
+                && gifs.contains(input.path("gifId").textValue())) {
             return new ChatSendService.Submission(kind, input.path("gifId").textValue());
         }
         return null;

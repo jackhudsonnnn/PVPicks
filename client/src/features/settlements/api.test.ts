@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BackendError } from "@/lib/api-client";
 import {
   acknowledgeReview,
-  listPendingReviews,
-  listSettlementCounterparties,
   listSettlementGroups,
   receiptHistory,
   transitionGroup,
@@ -27,6 +25,7 @@ const line = {
   forgiveDeclinedAt: null,
   createdAt: "2026-11-11T12:00:00Z",
   updatedAt: "2026-11-11T12:00:00Z",
+  actions: [{ action: "sent", blockedByReview: false }],
 };
 const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
 
@@ -38,7 +37,7 @@ describe("gated settlement API", () => {
       '"amountCents":100',
       '"amountCents":9223372036854775807',
     );
-    const groups = `[{"otherUserId":"${other}","netCents":-9223372036854775808,"revision":"abc","pendingReviewRevision":null,"lines":[${hugeLine}]}]`;
+    const groups = `[{"otherUserId":"${other}","netCents":-9223372036854775808,"revision":"abc","pendingReviewRevision":null,"actions":[],"lines":[${hugeLine}]}]`;
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(groups))
@@ -94,20 +93,7 @@ describe("gated settlement API", () => {
       status: 409,
       code: "stale_review",
     });
-    await expect(listPendingReviews("../bad")).rejects.toBeInstanceOf(BackendError);
+    await expect(receiptHistory(actor, "../bad")).rejects.toBeInstanceOf(BackendError);
     expect(fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it("reads distinct counterparties and rejects the caller or duplicates", async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValueOnce(json([other]))
-      .mockResolvedValueOnce(json([actor]))
-      .mockResolvedValueOnce(json([other, other]));
-    vi.stubGlobal("fetch", fetch);
-    await expect(listSettlementCounterparties(actor)).resolves.toEqual([other]);
-    expect(fetch.mock.calls[0]?.[0]).toBe("/api/people/settlement-counterparties");
-    await expect(listSettlementCounterparties(actor)).rejects.toThrow("unexpected response");
-    await expect(listSettlementCounterparties(actor)).rejects.toThrow("unexpected response");
   });
 });

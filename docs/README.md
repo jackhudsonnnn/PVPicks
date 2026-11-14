@@ -14,4 +14,7 @@ local dev server and Mermaid diagrams before removing or changing them.
 The guides, current references and accepted decisions describe current
 behavior and planned work.
 
-Run `npx vitepress preview docs` to view.
+To view while editing, run `npm --prefix docs run dev` (live reload at
+`http://localhost:5173/docs/`, or the next free port; pass `-- --port 5180` to
+pick one). The running dev backend also serves the last build at
+`http://127.0.0.1:8090/docs/`; rebuild with `npm --prefix docs run build`.

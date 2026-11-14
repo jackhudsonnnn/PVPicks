@@ -28,14 +28,6 @@ class SettlementReceiptController {
         this.receipts = receipts;
     }
 
-    @GetMapping("/people/settlement-counterparties")
-    ResponseEntity<?> counterparties(@AuthenticationPrincipal Jwt jwt) {
-        var result = receipts.counterparties(jwt);
-        if (!result.authenticated()) return unauthorized();
-        if (!result.player()) return forbidden();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.userIds());
-    }
-
     @GetMapping("/users/{userId}/settlements")
     ResponseEntity<?> history(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId,
             @RequestParam MultiValueMap<String, String> parameters) {

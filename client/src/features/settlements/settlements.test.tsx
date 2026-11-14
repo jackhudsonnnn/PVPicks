@@ -6,8 +6,6 @@ import { getProfile } from "@/features/people/api";
 import { SettlementReceipts } from "./settlements";
 import {
   acknowledgeReview,
-  listPendingReviews,
-  listSettlementCounterparties,
   listSettlementGroups,
   receiptHistory,
   transitionGroup,
@@ -22,8 +20,6 @@ vi.mock("@/features/people/api", async (importOriginal) => ({
 }));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
-  listPendingReviews: vi.fn(),
-  listSettlementCounterparties: vi.fn(),
   listSettlementGroups: vi.fn(),
   receiptHistory: vi.fn(),
   acknowledgeReview: vi.fn(),
@@ -35,6 +31,7 @@ const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "testuser",
 const other = "123e4567-e89b-42d3-a456-426614174001";
 const lineId = "123e4567-e89b-42d3-a456-426614174002";
 const revision = "123e4567-e89b-42d3-a456-426614174003";
+/** You owe this receipt; the server says you may send it or ask to forgive it, both waiting on a review. */
 const line: SettlementLine = {
   id: lineId,
   settlementId: revision,
@@ -48,6 +45,10 @@ const line: SettlementLine = {
   forgiveDeclinedAt: null,
   createdAt: "2026-11-11T12:00:00Z",
   updatedAt: "2026-11-11T12:00:00Z",
+  actions: [
+    { action: "sent", blockedByReview: true },
+    { action: "ask-forgive", blockedByReview: true },
+  ],
 };
 const group: SettlementGroup = {
   otherUserId: other,
@@ -55,8 +56,18 @@ const group: SettlementGroup = {
   revision: "group-revision",
   lines: [line],
   pendingReviewRevision: revision,
+  actions: [
+    { action: "sent", blockedByReview: true },
+    { action: "ask", blockedByReview: true },
+  ],
 };
-const review = { otherUserId: other, pendingReviewRevision: revision };
+/** The same group once the warning is reviewed: nothing waits any more. */
+const reviewed: SettlementGroup = {
+  ...group,
+  pendingReviewRevision: null,
+  actions: group.actions.map((a) => ({ ...a, blockedByReview: false })),
+  lines: [{ ...line, actions: line.actions.map((a) => ({ ...a, blockedByReview: false })) }],
+};
 const expire = vi.fn();
 
 function renderScreen() {
@@ -69,33 +80,41 @@ function renderScreen() {
   );
 }
 
-beforeEach(() => {
-  localStorage.clear();
-  vi.resetAllMocks();
-  vi.mocked(getProfile).mockResolvedValue({ id: other, username: "player", hue: 1 });
-  vi.mocked(listPendingReviews).mockResolvedValue([review]);
-  vi.mocked(listSettlementGroups).mockResolvedValue([group]);
-  vi.mocked(receiptHistory).mockResolvedValue([line]);
-});
-
 /** Opens the person's receipts, where the group and receipt actions live. */
 async function openReceipts() {
   fireEvent.click(await screen.findByRole("button", { name: "Settle-up receipts" }));
   return within(await screen.findByRole("dialog"));
 }
 
+beforeEach(() => {
+  localStorage.clear();
+  vi.resetAllMocks();
+  vi.mocked(getProfile).mockResolvedValue({ id: other, username: "player", hue: 1 });
+  vi.mocked(listSettlementGroups).mockResolvedValue([group]);
+  vi.mocked(receiptHistory).mockResolvedValue([line]);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-describe("gated settlement preview", () => {
-  it("requires explicit review before payer actions and refreshes the current revision", async () => {
+describe("settle-ups", () => {
+  it("shows each person's net and what's waiting", async () => {
+    vi.mocked(listSettlementGroups).mockResolvedValue([
+      { ...reviewed, lines: [{ ...line, status: "sent" }] },
+    ]);
+    renderScreen();
+    expect(await screen.findByText("player")).toBeInTheDocument();
+    expect(screen.getByText("You pay them")).toBeInTheDocument();
+    expect(screen.getByText("1 table · 1 open")).toBeInTheDocument();
+    expect(screen.getByText("Awaiting receipt")).toBeInTheDocument();
+  });
+
+  it("keeps payer actions disabled until the balance change is reviewed", async () => {
     vi.mocked(acknowledgeReview).mockResolvedValue();
-    vi.mocked(listPendingReviews).mockResolvedValueOnce([review]).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups)
-      .mockResolvedValueOnce([group])
-      .mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
+    vi.mocked(listSettlementGroups).mockResolvedValueOnce([group]).mockResolvedValue([reviewed]);
+    vi.mocked(receiptHistory).mockResolvedValueOnce([line]).mockResolvedValue(reviewed.lines);
     renderScreen();
     expect(await screen.findByText("Balance changed: review")).toBeInTheDocument();
     const dialog = await openReceipts();
@@ -107,47 +126,35 @@ describe("gated settlement preview", () => {
       expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
     );
     expect(acknowledgeReview).toHaveBeenCalledWith(other, revision, expect.any(String));
-    expect(dialog.getByRole("button", { name: "I sent it" })).toBeEnabled();
+    await waitFor(() => expect(dialog.getByRole("button", { name: "I sent it" })).toBeEnabled());
   });
 
-  it("keeps a closed warning discoverable when group totals overflow", async () => {
-    vi.mocked(listSettlementGroups).mockRejectedValue(
-      new BackendError("overflow", 409, "group_net_out_of_range"),
-    );
-    vi.mocked(listSettlementCounterparties).mockResolvedValue([other]);
-    vi.mocked(receiptHistory).mockResolvedValue([{ ...line, status: "paid" }]);
+  it("offers only the actions the server lists", async () => {
+    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...reviewed, actions: [] }]);
+    vi.mocked(receiptHistory).mockResolvedValue([{ ...line, status: "paid", actions: [] }]);
     renderScreen();
-    expect(await screen.findByRole("alert")).toHaveTextContent("outside the supported range");
-    expect(await screen.findByText("Total unavailable")).toBeInTheDocument();
     const dialog = await openReceipts();
     expect(await dialog.findByText("Completed")).toBeInTheDocument();
     expect(dialog.getByText("−1.25")).toBeInTheDocument();
-    expect(dialog.getByRole("button", { name: "I've reviewed this" })).toBeEnabled();
     expect(dialog.queryByRole("button", { name: "Mark group sent" })).toBeNull();
+    expect(dialog.queryByRole("button", { name: "I sent it" })).toBeNull();
   });
 
-  it("finds receipt history on overflow even without a pending warning", async () => {
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups).mockRejectedValue(
-      new BackendError("overflow", 409, "group_net_out_of_range"),
-    );
-    vi.mocked(listSettlementCounterparties).mockResolvedValue([other]);
-    vi.mocked(receiptHistory).mockResolvedValue([line]);
+  it("shows why receipts can't load", async () => {
+    vi.mocked(listSettlementGroups).mockRejectedValue(new BackendError("unavailable", 503));
     renderScreen();
-    const dialog = await openReceipts();
-    expect(await dialog.findByRole("button", { name: "I sent it" })).toBeEnabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("returned an error (503)");
   });
 
   it("keeps an uncertain action and reuses its key after remount", async () => {
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
+    vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     vi.mocked(transitionGroup)
       .mockRejectedValueOnce(new TypeError("network disconnected"))
       .mockResolvedValueOnce();
     const first = renderScreen();
     const dialog = await openReceipts();
     fireEvent.click(await dialog.findByRole("button", { name: "Mark group sent" }));
-    expect(await dialog.findByText(/outcome is unknown/)).toBeInTheDocument();
+    expect(await dialog.findByText(/may not have been saved/)).toBeInTheDocument();
     const key = vi.mocked(transitionGroup).mock.calls[0]?.[3];
     expect(key).toBeTruthy();
     first.unmount();
@@ -168,8 +175,7 @@ describe("gated settlement preview", () => {
         createdAt: Date.now() - 23 * 60 * 60 * 1000,
       }),
     );
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
+    vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Retry same action" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("too old to retry safely");
@@ -179,8 +185,7 @@ describe("gated settlement preview", () => {
   });
 
   it("does not send a mutation when retry storage cannot be written", async () => {
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
+    vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     vi.stubGlobal("localStorage", {
       getItem: () => null,
       setItem: () => {
@@ -196,26 +201,14 @@ describe("gated settlement preview", () => {
     expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
   });
 
-  it("blocks sending when reviews cannot be checked", async () => {
-    vi.mocked(listPendingReviews).mockRejectedValue(new BackendError("unavailable", 503));
-    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
-    renderScreen();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Cannot check balance-change reviews",
-    );
-    const dialog = await openReceipts();
-    expect(await dialog.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
-  });
-
   it("expires the session when a settlement read returns 401", async () => {
-    vi.mocked(listPendingReviews).mockRejectedValue(new BackendError("expired", 401));
+    vi.mocked(listSettlementGroups).mockRejectedValue(new BackendError("expired", 401));
     renderScreen();
     await waitFor(() => expect(expire).toHaveBeenCalled());
   });
 
   it("preserves an uncertain action when a retry is rejected or the session expires", async () => {
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
-    vi.mocked(listSettlementGroups).mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
+    vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     vi.mocked(transitionGroup)
       .mockRejectedValueOnce(new TypeError("disconnected"))
       .mockRejectedValueOnce(new BackendError("forbidden", 403))
@@ -223,7 +216,7 @@ describe("gated settlement preview", () => {
     renderScreen();
     const dialog = await openReceipts();
     fireEvent.click(await dialog.findByRole("button", { name: "Mark group sent" }));
-    expect(await dialog.findByText(/outcome is unknown/)).toBeInTheDocument();
+    expect(await dialog.findByText(/may not have been saved/)).toBeInTheDocument();
     const stored = localStorage.getItem(`p2picks:settlement-action:${user.id}`);
     fireEvent.click(dialog.getByRole("button", { name: "Retry same action" }));
     expect(await dialog.findByRole("alert")).toHaveTextContent(
@@ -237,26 +230,33 @@ describe("gated settlement preview", () => {
 
   it("refreshes stale revisions without replaying with a new key", async () => {
     vi.mocked(acknowledgeReview).mockRejectedValue(new BackendError("stale", 409, "stale_review"));
-    vi.mocked(listPendingReviews)
-      .mockResolvedValueOnce([review])
-      .mockResolvedValue([{ ...review, pendingReviewRevision: lineId }]);
+    vi.mocked(listSettlementGroups)
+      .mockResolvedValueOnce([group])
+      .mockResolvedValue([{ ...group, pendingReviewRevision: lineId }]);
     renderScreen();
     const dialog = await openReceipts();
     fireEvent.click(await dialog.findByRole("button", { name: "I've reviewed this" }));
     expect(await dialog.findByRole("alert")).toHaveTextContent("changed");
-    await waitFor(() => expect(listPendingReviews).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listSettlementGroups).toHaveBeenCalledTimes(2));
     expect(acknowledgeReview).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
   });
 
   it("checks confirmation before forgiving an individual receipt", async () => {
-    const incoming = { ...line, payerId: other, payeeId: user.id };
-    vi.mocked(listPendingReviews).mockResolvedValue([]);
+    const incoming: SettlementLine = {
+      ...line,
+      payerId: other,
+      payeeId: user.id,
+      actions: [
+        { action: "confirm", blockedByReview: false },
+        { action: "forgive", blockedByReview: false },
+      ],
+    };
     vi.mocked(listSettlementGroups).mockResolvedValue([
-      { ...group, netCents: 125n, lines: [incoming], pendingReviewRevision: null },
+      { ...reviewed, netCents: 125n, lines: [incoming] },
     ]);
-    vi.mocked(transitionLine).mockResolvedValue();
     vi.mocked(receiptHistory).mockResolvedValue([incoming]);
+    vi.mocked(transitionLine).mockResolvedValue();
     renderScreen();
     const dialog = await openReceipts();
     fireEvent.click(await dialog.findByRole("button", { name: "Forgive" }));

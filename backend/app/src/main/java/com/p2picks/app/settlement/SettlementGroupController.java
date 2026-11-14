@@ -25,8 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class SettlementGroupController {
-    private record GroupView(UUID otherUserId, long netCents, String revision, List<SettlementReceiptService.Line> lines,
-                             @JsonInclude(JsonInclude.Include.ALWAYS) UUID pendingReviewRevision) {}
+    private record GroupView(UUID otherUserId, long netCents, String revision,
+                             List<SettlementReceiptService.LineView> lines,
+                             @JsonInclude(JsonInclude.Include.ALWAYS) UUID pendingReviewRevision,
+                             List<ReceiptActions.Available> actions) {}
     private record ReviewView(@JsonInclude(JsonInclude.Include.ALWAYS) UUID pendingReviewRevision) {}
 
     private final SettlementGroupService groups;
@@ -66,7 +68,8 @@ class SettlementGroupController {
             } catch (ArithmeticException exception) {
                 return error(409, "group_net_out_of_range", "A receipt group total exceeds the supported range.");
             }
-            views.add(new GroupView(group.otherUserId(), net, group.revision(), group.lines(), group.pendingReviewRevision()));
+            views.add(new GroupView(group.otherUserId(), net, group.revision(), group.lines(),
+                    group.pendingReviewRevision(), group.actions()));
         }
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(List.copyOf(views));
     }

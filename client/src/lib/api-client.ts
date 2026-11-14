@@ -8,8 +8,10 @@ export class BackendError extends Error {
     message: string,
     readonly status?: number,
     readonly code?: string,
-    /** The server's explanation of a 409, for example "A table must retain an active host." */
+    /** The server's explanation of a 403 or 409, for example "A table must retain an active host." */
     readonly detail?: string,
+    /** The whole 403/409 body, for errors that carry more than a code (like deletion blockers). */
+    readonly body?: unknown,
   ) {
     super(message);
     this.name = "BackendError";
@@ -30,9 +32,11 @@ export async function request(path: string, init?: RequestInit): Promise<Respons
   if (!response.ok) {
     let code: string | undefined;
     let detail: string | undefined;
-    if (response.status === 409) {
+    let body: unknown;
+    // 403 and 409 carry a code saying why (frozen account, wrong password, conflicts).
+    if (response.status === 409 || response.status === 403) {
       try {
-        const body: unknown = await response.json();
+        body = await response.json();
         const parsed = z
           .object({ code: z.string(), message: z.string().optional() })
           .safeParse(body);
@@ -44,7 +48,7 @@ export async function request(path: string, init?: RequestInit): Promise<Respons
         if (!(error instanceof SyntaxError)) throw error;
       }
     }
-    throw new BackendError("Backend request failed.", response.status, code, detail);
+    throw new BackendError("Backend request failed.", response.status, code, detail, body);
   }
   return response;
 }

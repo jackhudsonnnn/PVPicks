@@ -2,8 +2,8 @@
 
 - Status: accepted; partly implemented (2026-11-14): raw recordings, saved
   provider specs with contract tests, game history, players and player stats.
-  Not yet: the per-league plan setting, per-game fixture slices and the replay
-  feed.
+  Dev replay (scenario files and recorded chunks, 2026-11-14) works too. Not
+  yet: the per-league plan setting.
 - Date: 2026-11-13
 
 ## Context
@@ -97,10 +97,21 @@ into one timeline per game for fixtures, for example `fixtures/nba/NBA-18447.jso
 recordings out of git for size and because the provider's terms on storing
 its data have not been checked.
 
-Add a replay feed: an opt-in `GameFeed` for the dev profile that plays back
-recorded games, optionally sped up. Everything after the feed (snapshots,
-history, outbox, realtime, ticker and bet resolution) then runs the real code.
-This amends ADR 0004, which allows a scripted feed only in automated tests.
+Add dev replay for the dev profile. It feeds games into the real game and
+stats sync, so everything after the feed (snapshots, history, outbox,
+realtime, ticker and bet resolution) runs the real code. This amends ADR 0004,
+which allows a scripted feed only in automated tests.
+
+As built (the `devdata` module, docs: Dev sports data), replay runs alongside
+the live feed as `DEV-` games rather than replacing it, from two kinds of
+source:
+
+- **Recorded chunks:** about 20 minutes cut from recordings by
+  `scripts/cut-sports-chunk.py`, parsed with the live mapping, at 0.5×–8×.
+- **Scenario files:** hand-written canonical games and player lines,
+  re-read on every tick so edits apply live, with optional timed steps.
+
+Chunks are provider data and stay out of git; scenario files are committed.
 Replay replaces the prototype's dev-only Simulate menu, which was removed with
 the prototype client (git tag `prototype-ui`).
 

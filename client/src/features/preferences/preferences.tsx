@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
+import { DeleteAccountSection } from "./delete-account";
 import { HUE_BG, type User } from "@/features/people";
 import { DisplaySettings } from "./display-settings";
 import { INVITE_MODES } from "@/features/social";
@@ -22,11 +23,9 @@ import {
   type InviteMode,
   type InvitePreferences,
 } from "./api";
-import { userKey } from "@/lib/query-keys";
+import { userKey, sessionKey } from "@/lib/query-keys";
 import { formatPoints } from "@/features/settlements";
 import { parseCap } from "./rules";
-
-const SESSION_KEY = ["backend-session"];
 
 const INVITE_ROWS = [
   {
@@ -44,14 +43,23 @@ const INVITE_ROWS = [
 ] as const;
 
 /** Preferences: who can add you to tables, and your account (username, color, debt cap). */
-export function PreferencesPage({ user, expire }: { user: User; expire: () => void }) {
+export function PreferencesPage({
+  user,
+  expire,
+  onAccountDeleted,
+}: {
+  user: User;
+  expire: () => void;
+  /** Signs out with a "deleted" notice once the account is gone. */
+  onAccountDeleted: () => void;
+}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"tables" | "account" | "display">("tables");
   const actions = usePreferencesActions(
     user.id,
     async () => {
       await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
-      await queryClient.invalidateQueries({ queryKey: SESSION_KEY });
+      await queryClient.invalidateQueries({ queryKey: sessionKey });
     },
     expire,
   );
@@ -80,7 +88,10 @@ export function PreferencesPage({ user, expire }: { user: User; expire: () => vo
         <DisplaySettings />
       ) : (
         // Keyed by username so the form resets to the saved name after a rename.
-        <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />
+        <div className="space-y-6">
+          <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />
+          <DeleteAccountSection onDeleted={onAccountDeleted} />
+        </div>
       )}
     </div>
   );

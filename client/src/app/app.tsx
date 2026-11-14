@@ -11,13 +11,12 @@ import { FriendsPage } from "@/features/social";
 import { GuidePage } from "@/features/guide";
 import { PreferencesPage } from "@/features/preferences";
 import { AppShell } from "./shell";
+import { DevPage } from "@/features/devdata";
 import { TicketsPage } from "@/features/bets";
 import { RealtimeProvider, useRealtimeFeed } from "@/lib/realtime";
 import { personalFeed } from "@/lib/realtime-connection";
-import { tablesKey } from "@/lib/query-keys";
+import { sessionKey, tablesKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-
-const sessionKey = ["backend-session"] as const;
 
 export function App() {
   const queryClient = useQueryClient();
@@ -81,6 +80,7 @@ export function App() {
       user={session.data}
       logout={logout}
       expire={() => void clearSession("Your session expired. Please sign in again.")}
+      endSession={(message) => void clearSession(message)}
     />
   );
 }
@@ -89,10 +89,13 @@ function TableWorkspace({
   user,
   logout,
   expire,
+  endSession,
 }: {
   user: User;
   logout: () => Promise<void>;
   expire: () => void;
+  /** Signs out with a notice (account deleted). */
+  endSession: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -159,9 +162,15 @@ function TableWorkspace({
             ) : pathname === "/how-to-play" ? (
               <GuidePage user={user} expire={expire} />
             ) : pathname === "/preferences" ? (
-              <PreferencesPage user={user} expire={expire} />
+              <PreferencesPage
+                user={user}
+                expire={expire}
+                onAccountDeleted={() => endSession("Your account was deleted.")}
+              />
             ) : archiveId ? (
               <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
+            ) : pathname === "/dev" ? (
+              <DevPage user={user} />
             ) : pathname === "/tickets" ? (
               <TicketsPage user={user} expire={expire} />
             ) : (

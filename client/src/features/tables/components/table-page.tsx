@@ -10,11 +10,11 @@ import { backendErrorMessage } from "@/lib/api-client";
 import { getTable, type Table, listTableBalances } from "@/features/tables/api";
 import {
   listTableBets,
-  BetMutationStatus,
   ProposeBetSheet,
   BetTicket,
   useBetActions,
   proposeBlock,
+  useBet,
 } from "@/features/bets";
 import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
@@ -175,7 +175,8 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const block = proposeBlock(table, user.id);
   const deck = openBets(bets.data ?? []);
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
-  const opened = bets.data?.find((bet) => bet.id === openId);
+  // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
+  const opened = useBet(user.id, table.id, openId, bets.data, expire);
   const { seated } = arrangeSeats(table.memberIds, user.id, focused);
   const unreadCount = unread.data?.unreadCount ?? 0;
   const tabs = TABS.filter((t) =>
@@ -237,7 +238,11 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
           )}
         >
           <div className="absolute inset-x-2 top-2 z-20 md:inset-x-8">
-            <BetMutationStatus actions={betActions} />
+            <ActionStatus
+              actions={betActions}
+              pendingText="A bet action may not have been saved."
+              checkText="Check the table's bets and your pick first."
+            />
             <ActionStatus
               actions={socialActions}
               pendingText="A report or block may not have been saved."
@@ -323,8 +328,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
               table={table}
               expire={expire}
               fill
-              betQuestion={(betId) => bets.data?.find((bet) => bet.id === betId)?.question}
-              bet={(betId) => bets.data?.find((bet) => bet.id === betId)}
               onOpenBet={openBet}
               onSelectUser={setProfileId}
               social={socialActions}
@@ -346,7 +349,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
       <ProfileDialog
         userId={profileId}
         table={table}
-        bets={bets.data}
         user={user}
         expire={expire}
         peopleKey={peopleKey}

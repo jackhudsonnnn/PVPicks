@@ -28,7 +28,11 @@ class SettlementGroupService {
     enum Action { SENT, PAID, UNPAID, FORGIVEN, ASK, DECLINE }
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }
     record Group(UUID otherUserId, BigInteger netCents, String revision, List<Line> lines, UUID pendingReviewRevision) {}
-    record Groups(boolean authenticated, boolean player, List<Group> groups) {}
+    /** A group as the API returns it, with each receipt's and the whole group's actions for the viewer. */
+    record GroupRead(UUID otherUserId, BigInteger netCents, String revision,
+                     List<SettlementReceiptService.LineView> lines, UUID pendingReviewRevision,
+                     List<ReceiptActions.Available> actions) {}
+    record Groups(boolean authenticated, boolean player, List<GroupRead> groups) {}
     static class StaleRevision extends RuntimeException {}
     static class InvalidTransition extends RuntimeException {}
     static class NoOpenReceipts extends RuntimeException {}
@@ -57,7 +61,8 @@ class SettlementGroupService {
                     WHERE u.id = ? AND s.id = ? AND u.status = 'ACTIVE'
                       AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
                 )
-                SELECT viewer.role AS viewer_role, review.revision AS review_revision, l.* FROM viewer LEFT JOIN settlement_lines l
+                SELECT viewer.role AS viewer_role, clock_timestamp() AS read_at, review.revision AS review_revision,
+                       l.* FROM viewer LEFT JOIN settlement_lines l
                     ON (l.payer_id = viewer.id OR l.payee_id = viewer.id)
                     AND (? OR l.status NOT IN ('paid', 'forgiven')) AND viewer.role = 'PLAYER'
                 LEFT JOIN settlement_pair_reviews review ON review.user_id = viewer.id
@@ -67,6 +72,7 @@ class SettlementGroupService {
                 """, rs -> {
                     if (!rs.next()) return new Groups(false, false, List.of());
                     boolean player = "PLAYER".equals(rs.getString("viewer_role"));
+                    OffsetDateTime now = rs.getObject("read_at", OffsetDateTime.class);
                     Map<UUID, List<Line>> byPerson = new LinkedHashMap<>();
                     Map<UUID, UUID> pendingReviews = new LinkedHashMap<>();
                     do {
@@ -77,8 +83,17 @@ class SettlementGroupService {
                         UUID review = rs.getObject("review_revision", UUID.class);
                         if (review != null) pendingReviews.put(other, review);
                     } while (rs.next());
-                    List<Group> groups = new ArrayList<>();
-                    byPerson.forEach((other, lines) -> groups.add(group(actor, other, lines, pendingReviews.get(other))));
+                    List<GroupRead> groups = new ArrayList<>();
+                    byPerson.forEach((other, lines) -> {
+                        Group group = group(actor, other, lines, pendingReviews.get(other));
+                        boolean reviewPending = group.pendingReviewRevision() != null;
+                        List<Line> open = lines.stream().filter(ReceiptActions::open).toList();
+                        groups.add(new GroupRead(other, group.netCents(), group.revision(),
+                                lines.stream().map(line -> SettlementReceiptService.LineView.of(line,
+                                        ReceiptActions.forLine(line, actor, now, reviewPending))).toList(),
+                                group.pendingReviewRevision(),
+                                ReceiptActions.forGroup(open, actor, other, now, reviewPending)));
+                    });
                     return new Groups(true, player, List.copyOf(groups));
                 }, actor, UUID.fromString(jwt.getId()), includeHistory);
     }
@@ -120,40 +135,17 @@ class SettlementGroupService {
         OffsetDateTime now = jdbc.queryForObject("SELECT clock_timestamp()", OffsetDateTime.class);
         if (now == null) throw new IllegalStateException("Database clock is unavailable");
 
-        if (group.netCents().signum() == 0) {
-            if (action != Action.PAID) throw new InvalidTransition();
-        } else {
+        if (group.netCents().signum() != 0) {
             UUID payer = group.netCents().signum() < 0 ? actor : other;
             UUID payee = payer.equals(actor) ? other : actor;
-            boolean payerAction = action == Action.SENT || action == Action.ASK;
+            boolean payerAction = ReceiptActions.groupPayerAction(action);
             if (!(payerAction ? payer : payee).equals(actor)) {
                 idempotency.discardNewClaim(actor, key);
                 return Outcome.FORBIDDEN;
             }
             if (payerAction) reviews.requireReviewed(actor, other);
-            List<Line> directional = lines.stream().filter(line -> line.payerId().equals(payer)).toList();
-            boolean sent = directional.stream().anyMatch(line -> line.status().equals("sent"));
-            boolean asked = directional.stream().anyMatch(Line::hasOpenRequest);
-            OffsetDateTime declined = directional.stream().map(Line::forgiveDeclinedAt)
-                    .filter(value -> value != null).max(Comparator.naturalOrder()).orElse(null);
-            switch (action) {
-                case SENT, FORGIVEN -> {
-                    if (sent) throw new InvalidTransition();
-                }
-                case UNPAID -> {
-                    if (!sent) throw new InvalidTransition();
-                }
-                case ASK -> {
-                    if (sent || asked || (declined != null && now.isBefore(declined.plusHours(24)))) {
-                        throw new InvalidTransition();
-                    }
-                }
-                case DECLINE -> {
-                    if (sent || !asked) throw new InvalidTransition();
-                }
-                case PAID -> { }
-            }
         }
+        if (!ReceiptActions.groupAllowed(lines, actor, other, action, now)) throw new InvalidTransition();
         for (Line line : lines) {
             String nextStatus = switch (action) {
                 case SENT -> "sent";
@@ -178,13 +170,8 @@ class SettlementGroupService {
     }
 
     private static Group group(UUID actor, UUID other, List<Line> lines, UUID pendingReviewRevision) {
-        List<Line> open = lines.stream().filter(line -> !line.status().equals("paid")
-                && !line.status().equals("forgiven")).toList();
-        BigInteger net = BigInteger.ZERO;
-        for (Line line : open) {
-            BigInteger amount = BigInteger.valueOf(line.amountCents());
-            net = net.add(line.payerId().equals(actor) ? amount.negate() : amount);
-        }
+        List<Line> open = lines.stream().filter(ReceiptActions::open).toList();
+        BigInteger net = ReceiptActions.net(open, actor);
         String identity = open.stream().sorted(Comparator.comparing(line -> line.id().toString()))
                 .map(line -> line.id() + ":" + line.revision() + ";").collect(Collectors.joining());
         String revision;

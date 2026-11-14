@@ -1,0 +1,277 @@
+{
+  "categories": [
+    {
+      "id": "hype",
+      "label": "Hype"
+    },
+    {
+      "id": "money",
+      "label": "Money"
+    },
+    {
+      "id": "pain",
+      "label": "Pain"
+    },
+    {
+      "id": "react",
+      "label": "React"
+    }
+  ],
+  "gifs": [
+    {
+      "id": "g1",
+      "url": "https://media.tenor.com/5lPd211l4iUAAAAM/cowboys-touchdown.gif",
+      "alt": "Touchdown celebration",
+      "category": "hype",
+      "tags": [
+        "touchdown",
+        "score",
+        "td"
+      ]
+    },
+    {
+      "id": "g2",
+      "url": "https://media.tenor.com/q89NzmL_UoAAAAAM/spike-touchdown.gif",
+      "alt": "Touchdown spike",
+      "category": "hype",
+      "tags": [
+        "touchdown",
+        "spike"
+      ]
+    },
+    {
+      "id": "g3",
+      "url": "https://media.tenor.com/-d9dW8v-M7IAAAAM/ufl-xfl.gif",
+      "alt": "Football celebration",
+      "category": "hype",
+      "tags": [
+        "touchdown",
+        "celebrate"
+      ]
+    },
+    {
+      "id": "g4",
+      "url": "https://media.tenor.com/TPXMriXwLD4AAAAM/lets-go-the-rock.gif",
+      "alt": "The Rock: let's go",
+      "category": "hype",
+      "tags": [
+        "lets go",
+        "hype",
+        "rock"
+      ]
+    },
+    {
+      "id": "g5",
+      "url": "https://media.tenor.com/ovaTnYdCFFUAAAAM/wolf-of-wall-street-lets-goo.gif",
+      "alt": "Wolf of Wall Street: let's go",
+      "category": "hype",
+      "tags": [
+        "lets go",
+        "hype"
+      ]
+    },
+    {
+      "id": "g6",
+      "url": "https://media.tenor.com/OOMl9O8GdYUAAAAM/spongebob-patrick-star.gif",
+      "alt": "SpongeBob and Patrick celebrating",
+      "category": "hype",
+      "tags": [
+        "celebrate",
+        "party",
+        "spongebob"
+      ]
+    },
+    {
+      "id": "g7",
+      "url": "https://media.tenor.com/e2Abg24uiv4AAAAM/make-it-rain-money-money-make-it-rain.gif",
+      "alt": "Make it rain",
+      "category": "money",
+      "tags": [
+        "money",
+        "rain",
+        "rich"
+      ]
+    },
+    {
+      "id": "g8",
+      "url": "https://media.tenor.com/TSLCnBKrt8oAAAAM/money-show-me-the-money.gif",
+      "alt": "Show me the money",
+      "category": "money",
+      "tags": [
+        "money",
+        "show me"
+      ]
+    },
+    {
+      "id": "g9",
+      "url": "https://media.tenor.com/hXarrACgFwMAAAAM/pay-me-the-simpsons.gif",
+      "alt": "Simpsons: pay me",
+      "category": "money",
+      "tags": [
+        "pay me",
+        "pay up",
+        "simpsons"
+      ]
+    },
+    {
+      "id": "g10",
+      "url": "https://media.tenor.com/mPSu1gWReVAAAAAM/pay-me-my-money-payday.gif",
+      "alt": "Pay me my money",
+      "category": "money",
+      "tags": [
+        "pay me",
+        "pay up"
+      ]
+    },
+    {
+      "id": "g11",
+      "url": "https://media.tenor.com/WLrC9VcfwpgAAAAM/cat-orange-cat.gif",
+      "alt": "Cat with money",
+      "category": "money",
+      "tags": [
+        "money",
+        "cat"
+      ]
+    },
+    {
+      "id": "g12",
+      "url": "https://media.tenor.com/ZFc20z8DItkAAAAM/facepalm-really.gif",
+      "alt": "Facepalm: really?",
+      "category": "pain",
+      "tags": [
+        "facepalm",
+        "really",
+        "ugh"
+      ]
+    },
+    {
+      "id": "g13",
+      "url": "https://media.tenor.com/gDH3gN7zM1AAAAAM/facepalm-homer-simpson.gif",
+      "alt": "Homer facepalm",
+      "category": "pain",
+      "tags": [
+        "facepalm",
+        "homer",
+        "doh"
+      ]
+    },
+    {
+      "id": "g14",
+      "url": "https://media.tenor.com/dUFSMab-AH4AAAAM/dog-meme-meme-dog.gif",
+      "alt": "Crying dog",
+      "category": "pain",
+      "tags": [
+        "crying",
+        "sad",
+        "dog"
+      ]
+    },
+    {
+      "id": "g15",
+      "url": "https://media.tenor.com/TrGze9JX0bgAAAAM/fumble-lebron.gif",
+      "alt": "Fumble",
+      "category": "pain",
+      "tags": [
+        "fumble",
+        "drop"
+      ]
+    },
+    {
+      "id": "g16",
+      "url": "https://media.tenor.com/8IBznsxApkwAAAAM/dak-fumble.gif",
+      "alt": "Dak fumble",
+      "category": "pain",
+      "tags": [
+        "fumble",
+        "cowboys",
+        "dak"
+      ]
+    },
+    {
+      "id": "g17",
+      "url": "https://media.tenor.com/zkXSl00kD_8AAAAM/catch-fumble.gif",
+      "alt": "Dropped catch",
+      "category": "pain",
+      "tags": [
+        "fumble",
+        "drop",
+        "catch"
+      ]
+    },
+    {
+      "id": "g18",
+      "url": "https://media.tenor.com/N0BcIlIQ-TQAAAAM/sweating-gif-nervous.gif",
+      "alt": "Nervous sweating",
+      "category": "react",
+      "tags": [
+        "nervous",
+        "sweating"
+      ]
+    },
+    {
+      "id": "g19",
+      "url": "https://media.tenor.com/mFS--WKbbnYAAAAM/nervous-mouse.gif",
+      "alt": "Nervous mouse",
+      "category": "react",
+      "tags": [
+        "nervous",
+        "scared"
+      ]
+    },
+    {
+      "id": "g20",
+      "url": "https://media.tenor.com/3eIvVsG3yPYAAAAM/the-universe-tim-and-eric-mind-blown.gif",
+      "alt": "Mind blown",
+      "category": "react",
+      "tags": [
+        "mind blown",
+        "wow",
+        "shocked"
+      ]
+    },
+    {
+      "id": "g21",
+      "url": "https://media.tenor.com/IklKDJCAZHgAAAAM/confused-cat.gif",
+      "alt": "Confused cat",
+      "category": "react",
+      "tags": [
+        "confused",
+        "what",
+        "cat"
+      ]
+    },
+    {
+      "id": "g22",
+      "url": "https://media.tenor.com/rL4hulhuEIYAAAAM/funny-laughing.gif",
+      "alt": "Laughing",
+      "category": "react",
+      "tags": [
+        "laughing",
+        "lol",
+        "funny"
+      ]
+    },
+    {
+      "id": "g23",
+      "url": "https://media.tenor.com/gL9l218k-xQAAAAM/flag.gif",
+      "alt": "Penalty flag",
+      "category": "react",
+      "tags": [
+        "referee",
+        "flag",
+        "penalty",
+        "ref"
+      ]
+    },
+    {
+      "id": "g24",
+      "url": "https://media.tenor.com/breKZClwN9kAAAAM/referee-sassy.gif",
+      "alt": "Sassy referee",
+      "category": "react",
+      "tags": [
+        "referee",
+        "ref"
+      ]
+    }
+  ]
+}

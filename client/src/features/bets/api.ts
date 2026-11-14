@@ -32,6 +32,9 @@ const betSchema = z
     pickCount: z.number().int().safe().nonnegative(),
     myPick: z.string().nullable(),
     myParticipation: z.enum(["picked", "no_guess", "not_joined"]),
+    /** The server's verdict on what the viewer may do; the client never re-derives these rules. */
+    viewerCanCall: z.boolean(),
+    viewerCanOverride: z.boolean(),
     settledBy: z.enum(["anyone", "non_participants", "hosts", "me"]).optional(),
     gameId: z.string().optional(),
     includesOvertime: z.boolean().optional(),
@@ -118,4 +121,68 @@ export async function readProposedBet(
   if (bet.tableId !== tableId || bet.proposerId !== userId || bet.modeId !== modeId)
     throw new BackendError("The backend returned an unexpected response.");
   return bet;
+}
+
+/** One bet, for tickets opened outside the table's live set (chat cards, profiles). */
+export async function getBet(tableId: string, betId: string, signal?: AbortSignal): Promise<Bet> {
+  if (!uuid.safeParse(tableId).success || !uuid.safeParse(betId).success)
+    throw new BackendError("Bet not found.", 404);
+  const bet = await read(
+    await request(`/bets/${encodeURIComponent(betId)}`, signal ? { signal } : undefined),
+    betSchema,
+  );
+  if (bet.id !== betId || bet.tableId !== tableId)
+    throw new BackendError("The backend returned an unexpected response.");
+  return bet;
+}
+
+const memberPath = (tableId: string, userId: string) => {
+  if (!uuid.safeParse(tableId).success || !uuid.safeParse(userId).success)
+    throw new BackendError("Member not found.", 404);
+  return `/tables/${encodeURIComponent(tableId)}/members/${encodeURIComponent(userId)}`;
+};
+
+/** Bets at a table that involve a member, newest first, a page at a time. */
+export async function listMemberBets(
+  tableId: string,
+  userId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<BetPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const page = await read(
+    await request(`${memberPath(tableId, userId)}/bets${query}`, signal ? { signal } : undefined),
+    betPageSchema,
+  );
+  if (page.items.some((bet) => bet.tableId !== tableId))
+    throw new BackendError("The backend returned an unexpected response.");
+  return page;
+}
+
+const recordSchema = z.object({
+  played: z.number().int().nonnegative(),
+  won: z.number().int().nonnegative(),
+  lost: z.number().int().nonnegative(),
+  netCents: z.number().int().safe(),
+});
+export type MemberRecord = z.infer<typeof recordSchema>;
+
+/** A member's record at a table, computed by the server from resolved, non-4fun bets they picked in. */
+export async function getMemberRecord(
+  tableId: string,
+  userId: string,
+  signal?: AbortSignal,
+): Promise<MemberRecord> {
+  return read(
+    await request(`${memberPath(tableId, userId)}/record`, signal ? { signal } : undefined),
+    recordSchema,
+  );
+}
+
+const modesSchema = z.array(z.object({ id: betSchema.shape.modeId, available: z.boolean() }));
+
+/** Which modes the server accepts proposals for now. */
+export async function listModes(signal?: AbortSignal): Promise<Map<Bet["modeId"], boolean>> {
+  const modes = await read(await request("/modes", signal ? { signal } : undefined), modesSchema);
+  return new Map(modes.map((mode) => [mode.id, mode.available]));
 }

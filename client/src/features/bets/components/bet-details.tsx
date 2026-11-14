@@ -1,3 +1,4 @@
+import { STATUSES } from "@/features/bets/statuses";
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
@@ -130,7 +131,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
       reached: status !== "active",
     },
     {
-      label: status === "washed" ? "Washed" : "Resolved",
+      label: STATUSES[bet.status].label,
       at: bet.closedAt ? dateTimeLabel(bet.closedAt) : undefined,
       reached: done,
     },

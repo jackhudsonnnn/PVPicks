@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
-import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
+import { BackendError, backendErrorMessage, isUnauthorized } from "@/lib/api-client";
 
 /** The sign-in form; accounts are provisioned, so there is no sign-up. */
 export function SignIn({
@@ -28,9 +28,11 @@ export function SignIn({
       setPassword("");
     } catch (failure) {
       setError(
-        isUnauthorized(failure)
-          ? "That username and password don't match an active account."
-          : backendErrorMessage(failure),
+        failure instanceof BackendError && failure.code === "account_frozen"
+          ? "This account is frozen. Contact an admin if you think that's a mistake."
+          : isUnauthorized(failure)
+            ? "That username and password don't match an active account."
+            : backendErrorMessage(failure),
       );
     } finally {
       setBusy(false);

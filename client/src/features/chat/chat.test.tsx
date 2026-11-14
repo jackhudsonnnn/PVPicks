@@ -20,6 +20,7 @@ vi.mock("@/features/people/api", async (importOriginal) => ({
 }));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
+  listGifs: vi.fn(async () => (await import("@/test/api-fixtures")).gifCatalog),
   getChatWindow: vi.fn(),
   getChatUnread: vi.fn(),
   markRead: vi.fn(),
@@ -68,13 +69,7 @@ const expire = vi.fn();
 function renderChat(override: Partial<Table> = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <TableChat
-        user={me}
-        table={{ ...table, ...override }}
-        expire={expire}
-        betQuestion={() => "Who wins?"}
-        onRead={() => {}}
-      />
+      <TableChat user={me} table={{ ...table, ...override }} expire={expire} onRead={() => {}} />
     </QueryClientProvider>,
   );
 }
@@ -163,7 +158,7 @@ describe("table chat", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText(/may not have been sent/)).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry same action" }));
     await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
     const keys = vi.mocked(sendChatMessage).mock.calls.map((call) => call[2]);
     expect(keys[1]).toBe(keys[0]);
@@ -202,7 +197,12 @@ describe("table chat", () => {
     vi.mocked(getChatWindow).mockResolvedValue({
       items: [
         message(1, { kind: "system", text: "Table created", authorId: undefined } as never),
-        message(2, { kind: "bet", betId: table.id, text: undefined } as never),
+        message(2, {
+          kind: "bet",
+          betId: table.id,
+          text: undefined,
+          bet: { question: "Who wins?", modeId: "u2pick", status: "ACTIVE" },
+        } as never),
         {
           id: message(3).id,
           tableId: table.id,

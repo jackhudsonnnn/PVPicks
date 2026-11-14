@@ -296,7 +296,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 SELECT participation_order FROM bet_participants WHERE bet_id = ? AND user_id = ?
                 """, Long.class, betId, userId)).isEqualTo(order);
         assertThatThrownBy(() -> jdbc.update(
-                        "INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, '__no_guess__')", betId, userId))
+                        "INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, ' No Guess ')", betId, userId))
                 .isInstanceOf(DataIntegrityViolationException.class);
         jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Run')", betId, userId);
         assertThat(jdbc.queryForObject("""
@@ -662,7 +662,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 .target(MigrationVersion.fromVersion("22")).load();
         assertThat(hostAttribution.migrate().migrationsExecuted).isEqualTo(1);
         Flyway updated = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword()).load();
-        assertThat(updated.migrate().migrationsExecuted).isEqualTo(10); // V23 through V32
+        assertThat(updated.migrate().migrationsExecuted).isEqualTo(11); // V23 through V33
         assertThatThrownBy(() -> upgradedJdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", userId))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(upgradedJdbc.queryForObject("""

@@ -8,9 +8,10 @@ import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { backendErrorMessage } from "@/lib/api-client";
 import { listMyBets, type Bet } from "@/features/bets/api";
+import { STATUS_ORDER, STATUSES } from "@/features/bets/statuses";
 import { listTables } from "@/features/tables";
 import type { User } from "@/features/people";
-import { BetMutationStatus } from "./bet-controls";
+import { ActionStatus } from "@/components/action-status";
 import { BetTicket } from "./ticket";
 import { useBetActions } from "@/features/bets/actions";
 import { userKey } from "@/lib/query-keys";
@@ -20,12 +21,7 @@ import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 type Status = Bet["status"];
 
-const TABS: { id: Status; label: string; hint: string }[] = [
-  { id: "ACTIVE", label: "Active", hint: "Timer running, you can still change your pick." },
-  { id: "PENDING", label: "Pending", hint: "Wagers are in the pot. Waiting on the result." },
-  { id: "SETTLED", label: "Resolved", hint: "A winning choice emerged and winners got paid." },
-  { id: "WASHED", label: "Washed", hint: "No contest, everyone got their points back." },
-];
+const TABS = STATUS_ORDER.map((id) => ({ ...STATUSES[id], id }));
 
 /** Refreshes the ticket list when a table's bets change. One listener per table you're at. */
 function TableBetsListener({ tableId, onChange }: { tableId: string; onChange: () => void }) {
@@ -118,7 +114,11 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
         />
         <p className="text-sm text-muted-foreground">{TABS.find((t) => t.id === tab)!.hint}</p>
       </div>
-      <BetMutationStatus actions={actions} />
+      <ActionStatus
+        actions={actions}
+        pendingText="A bet action may not have been saved."
+        checkText="Check the table's bets and your pick first."
+      />
       {bets.isPending ? (
         <p>Loading tickets…</p>
       ) : bets.isError ? (

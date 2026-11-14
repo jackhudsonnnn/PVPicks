@@ -125,8 +125,16 @@ class AuthIntegrationTest extends IntegrationTestSupport {
                         .header("X-CSRF-TOKEN", frozenCsrf.token()).cookie(frozenCsrf.cookie())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"frozen_user\",\"password\":\"a secure test password\"}"))
+                .andExpect(status().isForbidden()).andReturn();
+        // Only the right password reveals the freeze; a wrong one looks like any unknown account.
+        assertThat(json.readTree(frozen.getResponse().getContentAsString()).path("code").asText())
+                .isEqualTo("account_frozen");
+        MvcResult guessed = mvc.perform(post("/auth/login").header("Origin", origin)
+                        .header("X-CSRF-TOKEN", frozenCsrf.token()).cookie(frozenCsrf.cookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"frozen_user\",\"password\":\"not the password\"}"))
                 .andExpect(status().isUnauthorized()).andReturn();
-        assertThat(frozen.getResponse().getContentAsString()).isEqualTo(unknown.getResponse().getContentAsString());
+        assertThat(guessed.getResponse().getContentAsString()).isEqualTo(unknown.getResponse().getContentAsString());
         jdbc.update("UPDATE users SET status = 'ACTIVE' WHERE id = ?", userId);
         jdbc.update("""
                 UPDATE auth_sessions SET created_at = now() - interval '1 minute', expires_at = now() - interval '1 second'

@@ -47,3 +47,11 @@ export async function updateProfile(
 ): Promise<User> {
   return read(await mutationRequest("/me/profile", "PATCH", key, change), userSchema);
 }
+
+/**
+ * Deletes your account (`POST /me/delete`). Not retried with a saved key: once it succeeds the session is gone.
+ * Throws a BackendError: 403 `wrong_password`, or 409 `account_not_square` with the blockers in its body.
+ */
+export async function deleteAccount(password: string): Promise<void> {
+  await mutationRequest("/me/delete", "POST", crypto.randomUUID(), { password });
+}

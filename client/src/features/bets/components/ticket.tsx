@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, EyeOff, Gavel, Lock, ShieldAlert, Trophy, Undo2 } from "lucide-react";
+import { Check, EyeOff, Lock, ShieldAlert, Trophy, Undo2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,18 +11,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { MODES } from "@/features/bets/modes";
 import { StatusBadge } from "./status-badge";
-import { settlerRule } from "@/features/bets/u2pick";
 import { formatCents } from "@/lib/money";
 import { timeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -31,7 +21,6 @@ import type { Table } from "@/features/tables";
 import { type User, AvatarStack, usePerson } from "@/features/people";
 import { BetDetailsDialog } from "./bet-details";
 import type { BetActions } from "./bet-controls";
-import { canCallResult } from "@/features/bets/bet-results";
 import { useNow } from "@/lib/use-now";
 import { useTicker, tickerStatus } from "@/features/sports";
 import { isScoreMode, scoreLine } from "@/features/bets/sports-model";
@@ -45,6 +34,7 @@ import {
   secondsLeft,
   ticketStatus,
 } from "@/features/bets/ticket-model";
+import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
 
 interface TicketProps {
   bet: Bet;
@@ -86,8 +76,8 @@ export function BetTicket({
   const ticker = useTicker(user.id);
   const game = bet.gameId ? ticker.data?.find((g) => g.id === bet.gameId) : undefined;
   const sports = isScoreMode(bet.modeId);
-  // Hosts have the final say on sports results until the table's points are settled.
-  const canOverride = !!actions && sports && table.hostIds.includes(user.id) && !bet.pointsSettled;
+  // The server says who may override (hosts, sports bets, before points settle) or call a result.
+  const canOverride = !!actions && bet.viewerCanOverride;
   const wager = formatCents(bet.wagerCents);
   const [confirming, setConfirming] = useState<string | null>(null);
 
@@ -246,7 +236,7 @@ export function BetTicket({
               ) : (
                 <span className="text-right text-ticket-muted">Settles from the feed</span>
               )
-            ) : actions && canCallResult(bet, table, user.id) ? (
+            ) : actions && bet.viewerCanCall ? (
               <OutcomeMenu bet={bet} tableId={table.id} actions={actions} disabled={blocked} />
             ) : (
               <span className="text-right text-ticket-muted">
@@ -371,108 +361,5 @@ export function BetTicket({
         </AlertDialogContent>
       </AlertDialog>
     </article>
-  );
-}
-
-function SettlerLabel({ bet, proposer }: { bet: Bet; proposer: string | undefined }) {
-  const rule = bet.settledBy ?? "hosts";
-  if (rule === "me")
-    return <>{proposer === "You" ? "you call it" : `${proposer ?? "…"} calls it`}</>;
-  // "Anyone calls it", but "Hosts call it" and "Non-participants call it".
-  return (
-    <>
-      {settlerRule(rule).label} {rule === "anyone" ? "calls" : "call"} it
-    </>
-  );
-}
-
-function SettlerWho({ bet, proposer }: { bet: Bet; proposer: string | undefined }) {
-  const rule = bet.settledBy ?? "hosts";
-  if (rule === "me") return <>{proposer ?? "the proposer"}</>;
-  return <>{settlerRule(rule).label.toLowerCase()}</>;
-}
-
-/**
- * "What happened?" menu: one of the bet's choices or a wash, confirmed before it's sent. U2Pick settlers call the
- * result once; with {@code override}, a host sets or corrects a sports result until points are settled.
- */
-function OutcomeMenu({
-  bet,
-  tableId,
-  actions,
-  disabled,
-  override = false,
-}: {
-  bet: Bet;
-  tableId: string;
-  actions: BetActions;
-  disabled: boolean;
-  override?: boolean;
-}) {
-  // undefined: nothing chosen; null: wash.
-  const [choice, setChoice] = useState<string | null | undefined>(undefined);
-  const resolved = bet.status === "SETTLED" || bet.status === "WASHED";
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="ticketGhost" className="h-7 gap-1.5 px-2" disabled={disabled}>
-            {override ? <ShieldAlert className="size-3.5" /> : <Gavel className="size-3.5" />}
-            {override ? (resolved ? "Change result" : "Override") : "Call it"}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>{override ? "Set the result" : "What happened?"}</DropdownMenuLabel>
-          {bet.choices.map((c) => (
-            <DropdownMenuItem key={c} onSelect={() => setChoice(c)}>
-              {c}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setChoice(null)}>
-            {override ? "Wash it" : "None of these (wash)"}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <AlertDialog open={choice !== undefined} onOpenChange={(o) => !o && setChoice(undefined)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {choice === null
-                ? "Wash this bet?"
-                : override
-                  ? `Set “${choice}” as the result?`
-                  : `Call “${choice}” as the result?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {override
-                ? choice === null
-                  ? "Everyone's wager comes back. The table sees that a host washed it. You can change it again until points are settled."
-                  : "This replaces the feed's result. The table sees that a host set it. You can change it again until points are settled."
-                : choice === null
-                  ? "Everyone's wager comes back. This can't be undone."
-                  : "Points move between players who picked. This can't be undone."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (choice !== undefined)
-                  actions.start({
-                    kind: override ? "override" : "resolve",
-                    tableId,
-                    betId: bet.id,
-                    winningChoice: choice,
-                  });
-                setChoice(undefined);
-              }}
-            >
-              Confirm
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
   );
 }

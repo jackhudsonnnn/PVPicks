@@ -92,7 +92,7 @@ class StatsPoller {
     private List<Candidate> candidates(Instant now) {
         return jdbc.query("""
                 SELECT id, league, provider_id, status FROM games
-                WHERE status = 'LIVE' OR (status = 'FINAL' AND starts_at > ?)
+                WHERE provider_id NOT LIKE 'DEV-%' AND (status = 'LIVE' OR (status = 'FINAL' AND starts_at > ?))
                 """, (rs, row) -> new Candidate(rs.getString("id"), League.valueOf(rs.getString("league")),
                 rs.getString("provider_id"), rs.getString("status").equals("LIVE")),
                 java.sql.Timestamp.from(now.minus(FINAL_WINDOW)));

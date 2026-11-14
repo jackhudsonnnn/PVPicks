@@ -9,9 +9,14 @@ import {
   Wand2,
   type LucideIcon,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { listModes } from "./api";
 import type { ModeId } from "./types";
 
-/** A bet mode as the guide describes it. The server owns each mode's fields, questions and resolution. */
+/**
+ * A bet mode as the guide and proposal sheet describe it. The server owns each mode's fields, questions,
+ * resolution and whether it can be proposed (`useModeAvailability`).
+ */
 export interface ModeDef {
   id: ModeId;
   name: string;
@@ -89,3 +94,16 @@ export const MODES: ModeDef[] = [
     custom: true,
   },
 ];
+
+/**
+ * Which modes can be proposed, from `GET /modes`. Undefined while loading, so the sheet shows modes as unavailable
+ * until the server says otherwise.
+ */
+export function useModeAvailability() {
+  return useQuery({
+    queryKey: ["modes"],
+    queryFn: ({ signal }) => listModes(signal),
+    staleTime: 5 * 60_000,
+    retry: false,
+  }).data;
+}

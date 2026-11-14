@@ -59,10 +59,7 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
         String first = reviewRevision(payerCookie, host);
         assertThat(reviewRevision(hostCookie, payer)).isEqualTo(first);
         mvc.perform(get("/people/settlement-reviews")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/people/settlement-counterparties")).andExpect(status().isUnauthorized());
         assertThat(pendingReviews(outsiderCookie)).isEmpty();
-        assertThat(json.readTree(mvc.perform(get("/people/settlement-counterparties").cookie(outsiderCookie))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())).isEmpty();
         JsonNode pending = pendingReviews(payerCookie);
         assertThat(pending.size()).isEqualTo(1);
         assertThat(pending.get(0).path("otherUserId").asText()).isEqualTo(host.toString());
@@ -117,10 +114,6 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
                 .getResponse().getStatus()).isEqualTo(204);
         assertThat(reviewRevision(hostCookie, payer)).isEqualTo(third);
         assertThat(pendingReviews(hostCookie).get(0).path("pendingReviewRevision").asText()).isEqualTo(third);
-        JsonNode closedParties = json.readTree(mvc.perform(get("/people/settlement-counterparties").cookie(hostCookie))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        assertThat(closedParties.size()).isEqualTo(1);
-        assertThat(closedParties.get(0).asText()).isEqualTo(payer.toString());
         JsonNode history = json.readTree(mvc.perform(get("/people/settle-groups").cookie(hostCookie)
                         .param("includeHistory", "true")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString()).get(0);
@@ -322,10 +315,10 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
         var history = settlementReceipts.history(payerJwt, host, null);
         assertThat(history.authenticated()).isTrue();
         assertThat(history.player()).isTrue();
-        assertThat(history.lines()).extracting(SettlementReceiptService.Line::id)
+        assertThat(history.lines()).extracting(SettlementReceiptService.LineView::id)
                 .containsExactly(other, line, paid);
         assertThat(settlementReceipts.history(payerJwt, host, table).lines())
-                .extracting(SettlementReceiptService.Line::id).containsExactly(line, paid);
+                .extracting(SettlementReceiptService.LineView::id).containsExactly(line, paid);
         assertThat(settlementReceipts.history(outsiderJwt, host, null).lines()).isEmpty();
         assertThat(settlementReceipts.transition(outsiderJwt, line, SettlementReceiptService.Action.CONFIRM, 0, "rc-out")
                 .outcome()).isEqualTo(SettlementReceiptService.Outcome.NOT_FOUND);
@@ -553,12 +546,6 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
         assertThat(json.readTree(overflow.getResponse().getContentAsString()).path("code").asText())
                 .isEqualTo("group_net_out_of_range");
         assertThat(overflow.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
-        MvcResult counterparties = mvc.perform(get("/people/settlement-counterparties").cookie(hostCookie))
-                .andExpect(status().isOk()).andReturn();
-        assertThat(counterparties.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
-        JsonNode counterpartyIds = json.readTree(counterparties.getResponse().getContentAsString());
-        assertThat(counterpartyIds.size()).isEqualTo(1);
-        assertThat(counterpartyIds.get(0).asText()).isEqualTo(peer.toString());
         UUID reviewRevision = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO settlement_pair_reviews (user_id, other_user_id, revision)

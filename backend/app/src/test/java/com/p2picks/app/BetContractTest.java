@@ -137,7 +137,7 @@ class BetContractTest {
         assertThat(proposalSchema.validate(proposal)).isEmpty();
         proposal.putArray("choices").add(" NO GUESS ").add("Run");
         assertThat(proposalSchema.validate(proposal)).isNotEmpty();
-        proposal.putArray("choices").add("__no_guess__").add("Run");
+        proposal.putArray("choices").add("No guess").add("Run");
         assertThat(proposalSchema.validate(proposal)).isNotEmpty();
     }
 
@@ -174,6 +174,8 @@ class BetContractTest {
         bet.putObject("config");
         bet.put("question", "Who wins?");
         bet.putArray("choices").add("Home").add("Away");
+        bet.put("viewerCanCall", false);
+        bet.put("viewerCanOverride", false);
         bet.put("wagerCents", 100);
         bet.put("forFun", false);
         bet.put("status", status);

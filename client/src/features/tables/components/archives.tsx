@@ -88,7 +88,6 @@ export function ArchivedTable({
             user={user}
             table={{ id: archive.id, disabledPermissions: {} }}
             expire={expire}
-            betQuestion={() => "details are no longer available"}
             onRead={() => {}}
             readOnly
           />

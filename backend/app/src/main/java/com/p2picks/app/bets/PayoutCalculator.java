@@ -58,8 +58,7 @@ final class PayoutCalculator {
         Set<String> available = new HashSet<>();
         for (String choice : choices) {
             if (choice == null || choice.isBlank() || !available.add(choice)
-                    || choice.strip().equalsIgnoreCase("no guess")
-                    || choice.strip().equalsIgnoreCase("__no_guess__")) {
+                    || choice.strip().equalsIgnoreCase("no guess")) {
                 throw new IllegalArgumentException("Invalid choices");
             }
         }

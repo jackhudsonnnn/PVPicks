@@ -19,7 +19,7 @@ class U2PickDefinitionTest {
     void rejectsBlankDuplicateReservedAndInvalidChoices() {
         for (List<String> choices : List.of(
                 List.of("Yes"), List.of("Yes", ""), List.of("Yes", " yes "),
-                List.of("Yes", " NO GUESS "), List.of("Yes", "__no_guess__"),
+                List.of("Yes", " NO GUESS "),
                 List.of("Yes", "\u0000"), List.of("1", "2", "3", "4", "5", "6", "7"))) {
             assertThatThrownBy(() -> new U2PickDefinition("Question?", choices))
                     .isInstanceOf(IllegalArgumentException.class);

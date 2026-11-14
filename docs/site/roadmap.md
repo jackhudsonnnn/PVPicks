@@ -15,7 +15,8 @@ current code, not an estimated delivery date.
 - **Available:** table creation, profile updates and reads, member additions, removal and invitations,
   deletion and read-only chat archives, host/permission/remainder and betting-setting changes, Quick Pick controls, relationships,
   invitation responses, personal profile updates, user search and lookup, preferences and chat basics.
-- **Later:** Quick Pick subscriptions and copying, archive data cleanup policy, and host recovery.
+- **Available (2026-11-14):** an admin moderation queue (dismiss, or strike; three strikes freeze, which blocks sign-in), account deletion once you're square, and host recovery (the oldest active member takes over, or the table is archived).
+- **Later:** Quick Pick subscriptions and copying, and an archive data cleanup policy.
 
 ## 3. Betting & settlement — in progress
 
@@ -45,9 +46,10 @@ current code, not an estimated delivery date.
   dev replay feed (ADR 0005). All-Star is chosen for both leagues; raw player
   box scores are already recorded during games.
 - **Next:** the player modes (Either Or, Prop Hunt, King Of The Hill) on the
-  stored player stats, and the replay feed. Done: saved specs and contract
-  tests, sports data storage, the shared sports-bet lifecycle, the host
-  override, Total Disaster and Give And Take.
+  stored player stats. Done: saved specs and contract tests, sports data
+  storage, the shared sports-bet lifecycle, the host override, Total Disaster
+  and Give And Take, and dev sports data (scenario files and recorded chunks
+  as DEV games, with a Dev page).
 
 ## 5. Frontend integration — in progress
 
@@ -72,8 +74,8 @@ current code, not an estimated delivery date.
 
 ## 6. Security, operations & launch — planned
 
-- Complete account deletion, legacy system-message cleanup, moderation,
-  session revocation and host recovery.
+- Legacy system-message cleanup, and revoking a single session (sign out of
+  other devices). Freezing and deleting accounts already end every session.
 - Design retention and rotation for retry records and audit data.
 - Add rate limits, secure cookies, TLS and operational protections before LAN.
   Validate backup/recovery and observability before production or AWS.

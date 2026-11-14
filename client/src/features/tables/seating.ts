@@ -1,5 +1,5 @@
 import { formatCents } from "@/lib/money";
-import type { Bet } from "@/features/bets";
+import { STATUSES, type Bet } from "@/features/bets";
 
 /** Seats around the felt. With more people than seats, the last seat becomes an "N others" spot. */
 export const SEAT_CAP = 8;
@@ -52,7 +52,7 @@ export function seatStatus(
   if (!pick)
     return bet.noGuessUserIds?.includes(userId) ? { label: "No guess", tone: "pass" } : null;
   if (bet.status === "PENDING") return { label: pick.choice, tone: "pick" };
-  if (bet.status === "WASHED") return { label: "Washed", tone: "washed" };
+  if (bet.status === "WASHED") return { label: STATUSES.WASHED.label, tone: "washed" };
   if (bet.forFun)
     return pick.choice === bet.winningChoice
       ? { label: "Won", tone: "win" }

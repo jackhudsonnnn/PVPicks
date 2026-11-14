@@ -31,6 +31,8 @@ const config = withMermaid({
         items: [
           { text: "Architecture", link: "/architecture" },
           { text: "Domain & privacy", link: "/domain" },
+          { text: "Player stats", link: "/player-stats" },
+          { text: "Dev sports data", link: "/dev-sports-data" },
           { text: "Roadmap", link: "/roadmap" }
         ]
       },

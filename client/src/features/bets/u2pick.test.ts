@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { cleanOptions, customBetProblem } from "./u2pick";
-import { PASS } from "./types";
 
 describe("custom bet options", () => {
   it("trims, drops blanks and duplicates", () => {
@@ -17,7 +16,6 @@ describe("custom bet options", () => {
   it("allows sports pass choices but reserves the no-guess state", () => {
     expect(customBetProblem("Next play?", ["Pass", "Run"])).toBeNull();
     expect(customBetProblem("Q?", ["Yes", "no guess"])).not.toBeNull();
-    expect(customBetProblem("Q?", ["Yes", PASS])).not.toBeNull();
   });
 
   it("allows at most 6 options", () => {

@@ -115,6 +115,27 @@ class ChatPreviewIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void gifsComeFromTheServerAndBetCardsCarryASummary() throws Exception {
+        seedUsers("cg");
+        UUID table = table("Cards", viewer, friend);
+        Cookie session = loginAs("cgv");
+        JsonNode catalog = json.readTree(mvc.perform(get("/gifs").cookie(session)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(OpenApiSchemas.load("GifCatalog").validate(catalog)).isEmpty();
+        assertThat(catalog.path("gifs").size()).isEqualTo(24);
+        assertThat(catalog.path("gifs").get(0).path("id").asText()).isEqualTo("g1");
+
+        UUID bet = insertDebtBet(table, viewer, friend, "PENDING", false, false, false, 100, 0);
+        jdbc.update("INSERT INTO chat_messages (id, table_id, kind, author_id, bet_id) VALUES (?, ?, 'bet', ?, ?)",
+                UUID.randomUUID(), table, viewer, bet);
+        JsonNode card = chatWindow(table, session, null, null).path("items").get(0);
+        assertThat(OpenApiSchemas.load("ChatMessage").validate(card)).isEmpty();
+        assertThat(card.path("bet").path("status").asText()).isEqualTo("PENDING");
+        assertThat(card.path("bet").path("modeId").asText()).isEqualTo("u2pick");
+        assertThat(card.path("bet").path("question").asText()).isNotBlank();
+    }
+
+    @Test
     void theDatabaseKeepsTableNamesToFourteenCharacters() {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, ?, 'T', ?)",

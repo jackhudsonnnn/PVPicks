@@ -8,7 +8,8 @@ import { listInvites } from "@/features/social/api";
 import { listTableBalances, getTable, listTables } from "@/features/tables/api";
 import { getTicker, type TickerGame } from "@/features/sports/api";
 import { currentUser } from "@/features/auth/api";
-import { listMyBets, listTableBets, type Bet } from "./api";
+import { listModes, listMyBets, listTableBets, type Bet } from "./api";
+import { modeAvailability } from "@/test/api-fixtures";
 import { mutationRequest } from "@/lib/api-client";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
@@ -32,6 +33,7 @@ vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   listTableBets: vi.fn(),
   listMyBets: vi.fn(),
+  listModes: vi.fn(),
 }));
 vi.mock("@/lib/api-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api-client")>()),
@@ -91,6 +93,8 @@ const bet: Bet = {
   pickCount: 0,
   myPick: null,
   myParticipation: "not_joined",
+  viewerCanCall: false,
+  viewerCanOverride: false,
 };
 
 const locked: Bet = {
@@ -146,6 +150,7 @@ beforeEach(() => {
   vi.mocked(getTicker).mockResolvedValue([liveGame]);
   vi.mocked(listLatestMessages).mockResolvedValue([{ tableId: table.id, message: null }]);
   vi.mocked(listInvites).mockResolvedValue([]);
+  vi.mocked(listModes).mockResolvedValue(modeAvailability as Map<Bet["modeId"], boolean>);
 });
 
 const liveGame: TickerGame = {
@@ -158,6 +163,7 @@ const liveGame: TickerGame = {
   home: { abbreviation: "BOS", score: 80 },
   away: { abbreviation: "NYK", score: 77 },
   observedAt: "2026-11-14T01:30:00Z",
+  dev: false,
 };
 
 /** Opens the front bet on the felt and returns the ticket dialog. */
@@ -263,6 +269,7 @@ describe("U2Pick betting", () => {
         question: "Who wins?",
         choices: ["Over 224.5", "Under 224.5"],
         picks: [{ userId: user.id, choice: "Over 224.5" }],
+        viewerCanOverride: true,
       },
     ]);
     renderApp();
@@ -365,7 +372,7 @@ describe("U2Pick betting", () => {
 
   it("lets an eligible member call the result or wash a locked bet", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 204 }));
-    vi.mocked(listTableBets).mockResolvedValue([locked]);
+    vi.mocked(listTableBets).mockResolvedValue([{ ...locked, viewerCanCall: true }]);
     renderApp();
     const ticket = await openTicket();
     expect(ticket.getByText("1 · 100%")).toBeInTheDocument();

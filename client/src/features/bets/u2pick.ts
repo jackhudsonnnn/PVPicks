@@ -1,4 +1,4 @@
-import { PASS, type SettlerRule } from "./types";
+import type { SettlerRule } from "./types";
 
 /** Rules for U2Pick, the custom mode where the proposer writes the question and options. */
 
@@ -45,7 +45,7 @@ export function customBetProblem(question: string, options: string[]): string | 
   if (clean.length > MAX_OPTIONS) return `Use ${MAX_OPTIONS} options or fewer.`;
   if (clean.some((o) => [...o].length > MAX_OPTION))
     return `Keep options to ${MAX_OPTION} characters or fewer.`;
-  if (clean.some((o) => o.toLowerCase() === PASS || o.toLowerCase() === "no guess"))
+  if (clean.some((o) => o.toLowerCase() === "no guess"))
     return `"No guess" means sitting out, so it can't be an option.`;
   return null;
 }

@@ -94,7 +94,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            Origin or CSRF rejected, or, after a correct password, the account
+            is frozen (code `account_frozen`). Frozen accounts can't sign in;
+            freezing also ends their sessions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '429':
           $ref: '#/components/responses/RateLimited'
   /auth/logout:
@@ -254,7 +261,12 @@ paths:
       - $ref: '#/components/parameters/TableId'
     get:
       operationId: listTableBets
-      summary: List bets visible to the requesting table member
+      summary: List the table's live bets
+      description: >-
+        The live set, oldest first: Active and Pending bets, and resolved
+        non-4fun bets whose points aren't settled yet (the same set that
+        blocks deleting the table). Older bets are read one at a time
+        (getBet) or per member (listMemberBets).
       responses:
         '200':
           description: Each bet contains only the caller's own pick while Active.
@@ -1582,26 +1594,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
-  /people/settlement-counterparties:
-    get:
-      operationId: listSettlementCounterparties
-      summary: List the caller's direct receipt counterparties
-      description: >-
-        Dev implementation.
-        Returns only IDs of people with direct receipt history, including closed
-        and archived-table receipts. It does not calculate group nets and remains
-        available when a group total is out of range.
-      responses:
-        '200':
-          description: The caller's distinct receipt counterparty IDs.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UuidList'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
   /people/settlement-reviews:
     get:
       operationId: listPendingSettlementReviews
@@ -1898,6 +1890,96 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TableInvite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tables/{tableId}/members/{userId}/bets:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: listMemberBets
+      summary: Bets at a table that involve a member, newest first
+      description: >-
+        Ones they proposed and ones they joined once picks are public (after
+        lock); the caller's own Active participation counts too. Same
+        projection as listTableBets. For the profile popup.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        '200':
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /tables/{tableId}/members/{userId}/record:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getMemberRecord
+      summary: A member's record at a table
+      description: >-
+        Resolved, non-4fun bets they had a pick in, how many they won and lost,
+        and their net result in cents. Washed and 4fun bets don't count.
+      responses:
+        '200':
+          description: The record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /modes:
+    get:
+      operationId: listModes
+      summary: Which bet modes accept proposals
+      description: >-
+        Every mode the product knows, and whether it can be proposed now. The
+        client describes modes; the server decides availability (later per
+        league data plan, ADR 0005). A table can still turn U2Pick off.
+      responses:
+        '200':
+          description: The modes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModeAvailability'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /gifs:
+    get:
+      operationId: listGifs
+      summary: The chat GIF library
+      description: >-
+        The curated library the GIF picker shows; sending a GIF accepts only
+        these ids. Cacheable for an hour.
+      responses:
+        '200':
+          description: Categories and GIFs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GifCatalog'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /me/chat/latest:
@@ -2292,37 +2374,107 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-  /admin/users/{userId}/actions:
-    parameters:
-      - $ref: '#/components/parameters/UserId'
+  /me/delete:
     post:
-      operationId: applyAdminUserAction
-      summary: Apply an admin action to a user
+      operationId: deleteMyAccount
+      summary: Delete your own account
       description: >-
-        Only an authenticated, active administrator may perform this operation.
-        Serialize actions per target, and record the actor and action atomically
-        with the change. Adding a third strike freezes the account; strikes cap
-        at three. Clearing strikes does not unfreeze it. An explicit unfreeze
-        remains possible at three strikes; a later strike freezes it again.
-        Freezing revokes all target sessions and terminates realtime access;
-        unfreezing does not restore those sessions. A flag is for review only.
-        Retrying the same action with the same idempotency key must not repeat
-        a strike or note; a different payload with that key is a conflict.
-        Rules for actions on admins and deleted users remain under review.
+        Requires your password. Blocked (409 account_not_square, with
+        `blockers`) while you're in an Active or Pending bet, have unsettled
+        table points, or have open receipts. Deletion removes personal data
+        (profile, relationships, invite preferences, chat text and GIFs,
+        reactions, read positions, feedback, debt cap, memberships and
+        invitations, tomatoes) and turns the account into "Deleted user", which
+        bets, the ledger and receipts keep referencing. Moderation records are
+        kept. Tables you hosted pass to their earliest-joined active member, or
+        are archived if nobody active is left. Ends every session and clears the
+        session cookie. Not idempotency-keyed: after success a retry can only
+        fail authentication.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminUserAction'
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: {type: string}
       responses:
         '204':
-          description: Action recorded and applied.
+          description: Deleted.
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The password doesn't match (code `wrong_password`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Not square yet (code `account_not_square`).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [code, message, blockers]
+                properties:
+                  code: {type: string, const: account_not_square}
+                  message: {type: string}
+                  blockers:
+                    type: array
+                    items:
+                      type: string
+                      enum: [open_bets, unsettled_points, open_receipts]
+  /admin/reports:
+    get:
+      operationId: listReports
+      summary: The moderation queue
+      description: >-
+        Admin only. Reports newest first (at most 200), open ones unless
+        status=all, with both people's current status and strikes and the
+        reported message as it was when reported.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, all]
+            default: open
+      responses:
+        '200':
+          description: Reports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModerationReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/reports/{reportId}/dismiss:
+    parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: dismissReport
+      summary: Dismiss an open report
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Dismissed.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2330,7 +2482,187 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: Already handled (code `already_handled`) or a reused key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/reports/{reportId}/strike:
+    parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    post:
+      operationId: strikeReport
+      summary: Resolve a report with a strike against the reported player
+      description: >-
+        Strikes stop at three. Reaching three (again, after an unfreeze)
+        freezes the account: its sessions end, sign-in reports it frozen, and
+        tables it hosted pass to their earliest-joined active member (or are
+        archived if nobody active is left). A replayed key returns 204.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The player's strikes now, and whether this strike froze them.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [strikes, frozen]
+                properties:
+                  strikes: {type: integer, minimum: 1, maximum: 3}
+                  frozen: {type: boolean}
+        '204':
+          description: Replayed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already handled (code `already_handled`) or a reused key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/users/flagged:
+    get:
+      operationId: listFlaggedUsers
+      summary: Players with strikes or a frozen account
+      responses:
+        '200':
+          description: People, frozen first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModerationPerson'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/users/{userId}/unfreeze:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: unfreezeUser
+      summary: Let a frozen player sign in again
+      description: Restores sign-in only; strikes and hosting are unchanged.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Unfrozen.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not frozen (code `already_handled`) or a reused key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/users/{userId}/clear-strikes:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: clearStrikes
+      summary: Reset a player's strikes to zero
+      description: Doesn't unfreeze a frozen account.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/sports:
+    get:
+      operationId: listDevSports
+      summary: Dev sports data sources (dev profile only)
+      description: >-
+        Registered only when PVPICKS_DEV_SPORTS_DIR is set; 404 otherwise.
+        Lists scenario files and recorded chunks with what's running. Running
+        sources feed DEV- games through the real game and stats sync. See
+        docs/site/dev-sports-data.md.
+      responses:
+        '200':
+          description: Sources.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [speeds, scenarios, chunks]
+                properties:
+                  speeds:
+                    type: array
+                    items: {type: number}
+                  scenarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DevSource'
+                  chunks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DevSource'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/sports/{kind}/{name}/{action}:
+    parameters:
+      - name: kind
+        in: path
+        required: true
+        schema: {type: string, enum: [scenarios, chunks]}
+      - name: name
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,40}$'}
+      - name: action
+        in: path
+        required: true
+        schema: {type: string, enum: [start, stop, pause, resume, speed]}
+    post:
+      operationId: controlDevSource
+      summary: Start (or restart), stop, pause, resume, or set a chunk's speed
+      description: >-
+        Dev profile only. pause, resume and speed apply to chunks; speed takes
+        {"speed": n} with n one of the listed speeds.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                speed: {type: number}
+      responses:
+        '204':
+          description: Done.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /admin/health:
     get:
       operationId: getAdminHealth
@@ -2465,34 +2797,6 @@ components:
     DependencyCheckStatus:
       type: string
       enum: [UP, DOWN, OUT_OF_SERVICE, UNKNOWN]
-    AdminUserAction:
-      oneOf:
-        - type: object
-          additionalProperties: false
-          required: [type, 'on']
-          properties:
-            type:
-              type: string
-              enum: [freeze, flag]
-            'on':
-              type: boolean
-        - type: object
-          additionalProperties: false
-          required: [type]
-          properties:
-            type:
-              type: string
-              enum: [strike, clearStrikes]
-        - type: object
-          additionalProperties: false
-          required: [type, text]
-          properties:
-            type:
-              const: note
-            text:
-              type: string
-              pattern: '\S'
-              description: Trim surrounding whitespace; blank notes are rejected.
     FeedbackSubmission:
       type: object
       additionalProperties: false
@@ -2531,8 +2835,14 @@ components:
     TickerGame:
       type: object
       additionalProperties: false
-      required: [id, league, status, startsAt, home, away, observedAt]
+      required: [id, league, status, startsAt, home, away, observedAt, dev]
       properties:
+        dev:
+          type: boolean
+          description: >-
+            A dev data game (a dev scenario or recorded chunk, dev profile
+            only), not a real one. Dev games show even when the real feed is
+            stale.
         id:
           type: string
           minLength: 1
@@ -2708,6 +3018,15 @@ components:
       additionalProperties: false
       required: [id, settlementId, tableId, payerId, payeeId, amountCents, status, revision, createdAt, updatedAt]
       properties:
+        actions:
+          type: array
+          description: >-
+            The caller's available actions (sent, confirm, dispute, forgive,
+            ask-forgive, decline-forgive). Always present on the caller's receipt
+            reads (history, groups, line actions); absent from a host's new
+            settlement, which isn't one viewer's receipt.
+          items:
+            $ref: '#/components/schemas/ReceiptAction'
         id:
           type: string
           format: uuid
@@ -2792,8 +3111,13 @@ components:
     SettlementGroup:
       type: object
       additionalProperties: false
-      required: [otherUserId, netCents, revision, lines, pendingReviewRevision]
+      required: [otherUserId, netCents, revision, lines, pendingReviewRevision, actions]
       properties:
+        actions:
+          type: array
+          description: The caller's available group actions (sent, paid, unpaid, forgiven, ask, decline).
+          items:
+            $ref: '#/components/schemas/ReceiptAction'
         otherUserId:
           type: string
           format: uuid
@@ -2892,11 +3216,81 @@ components:
         text:
           type: string
           minLength: 1
+    MemberRecord:
+      type: object
+      additionalProperties: false
+      required: [played, won, lost, netCents]
+      properties:
+        played: {type: integer, minimum: 0}
+        won: {type: integer, minimum: 0}
+        lost: {type: integer, minimum: 0}
+        netCents: {type: integer}
+    ModeAvailability:
+      type: object
+      additionalProperties: false
+      required: [id, available]
+      properties:
+        id:
+          $ref: '#/components/schemas/BetMode'
+        available:
+          type: boolean
+    GifCatalog:
+      type: object
+      additionalProperties: false
+      required: [categories, gifs]
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, label]
+            properties:
+              id: {type: string, minLength: 1}
+              label: {type: string, minLength: 1}
+        gifs:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, url, alt, category, tags]
+            properties:
+              id: {type: string, minLength: 1}
+              url: {type: string, format: uri}
+              alt: {type: string, minLength: 1}
+              category: {type: string, minLength: 1}
+              tags:
+                type: array
+                items: {type: string}
+    ReceiptAction:
+      type: object
+      additionalProperties: false
+      required: [action, blockedByReview]
+      description: >-
+        An action the caller may take now. blockedByReview means sending or
+        asking to forgive waits until the balance-change warning with this
+        person is reviewed.
+      properties:
+        action:
+          type: string
+        blockedByReview:
+          type: boolean
     ChatMessage:
       type: object
       additionalProperties: false
       required: [id, tableId, kind, createdAt]
       properties:
+        bet:
+          type: object
+          additionalProperties: false
+          required: [question, modeId, status]
+          description: For bet messages, what the card shows without loading the bet.
+          properties:
+            question: {type: string}
+            modeId: {type: string}
+            status:
+              type: string
+              enum: [ACTIVE, PENDING, SETTLED, WASHED]
         id:
           type: string
           format: uuid
@@ -3191,11 +3585,11 @@ components:
                   type: string
                   minLength: 1
                   maxLength: 40
-                  pattern: '^(?!\s*[Nn][Oo] [Gg][Uu][Ee][Ss][Ss]\s*$)(?!\s*__[Nn][Oo]_[Gg][Uu][Ee][Ss][Ss]__\s*$).+'
+                  pattern: '^(?!\s*[Nn][Oo] [Gg][Uu][Ee][Ss][Ss]\s*$).+'
                   description: >-
                     Trimmed, case-insensitively unique, and not "No guess"
-                    or the prototype's reserved "__no_guess__" marker.
-                    "Pass" is allowed as a sports choice.
+                    (reserved for joining without a pick). "Pass" is allowed
+                    as a sports choice.
           else:
             required: [gameId]
             properties:
@@ -3246,8 +3640,18 @@ components:
     Bet:
       type: object
       additionalProperties: false
-      required: [id, tableId, proposerId, modeId, config, question, choices, wagerCents, forFun, status, locksAt, myPick, myParticipation, pickCount, pointsSettled]
+      required: [id, tableId, proposerId, modeId, config, question, choices, wagerCents, forFun, status, locksAt, myPick, myParticipation, pickCount, pointsSettled, viewerCanCall, viewerCanOverride]
       properties:
+        viewerCanCall:
+          type: boolean
+          description: >-
+            The caller may call this Pending U2Pick's result now, by its settler
+            rule. Computed with the rule the result call enforces.
+        viewerCanOverride:
+          type: boolean
+          description: >-
+            The caller is a host and this sports bet's points aren't settled, so
+            they may wash it or set its result.
         id:
           type: string
           format: uuid
@@ -3495,6 +3899,55 @@ components:
           type: integer
           minimum: 1
           maximum: 5
+    ModerationPerson:
+      type: object
+      additionalProperties: false
+      required: [id, username, status, strikes]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: [string, 'null']}
+        status:
+          type: string
+          enum: [ACTIVE, FROZEN, DELETED]
+        strikes: {type: integer, minimum: 0, maximum: 3}
+    ModerationReport:
+      type: object
+      additionalProperties: false
+      required: [id, reason, note, status, createdAt, reporter, target]
+      properties:
+        id: {type: string, format: uuid}
+        reason:
+          type: string
+          enum: [harassment, settlement, spam, offensive, other]
+        note: {type: string}
+        status:
+          type: string
+          enum: [OPEN, RESOLVED, DISMISSED]
+        createdAt: {type: string, format: date-time}
+        reporter:
+          $ref: '#/components/schemas/ModerationPerson'
+        target:
+          $ref: '#/components/schemas/ModerationPerson'
+        tableId: {type: [string, 'null'], format: uuid}
+        tableName: {type: [string, 'null']}
+        messageSnapshot: {type: [string, 'null']}
+    DevSource:
+      type: object
+      required: [name, title, description, league, running]
+      properties:
+        name: {type: string}
+        title: {type: string}
+        description: {type: string}
+        league: {type: [string, 'null'], enum: [NBA, NFL, null]}
+        running: {type: boolean}
+        error: {type: string, description: "Why the file can't be used now; the last good state stays."}
+        startedAt: {type: string, format: date-time}
+        games: {type: integer}
+        players: {type: integer}
+        lengthSeconds: {type: integer}
+        positionSeconds: {type: integer}
+        speed: {type: number}
+        paused: {type: boolean}
     Error:
       type: object
       additionalProperties: false

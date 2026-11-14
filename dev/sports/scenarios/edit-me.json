@@ -1,0 +1,36 @@
+{
+  "title": "Edit me: one NFL game",
+  "description": "A live NFL game with two players and no script. Change any score, status or stat in this file and save; the next tick (every 2 s) picks it up. Set \"status\": \"FINAL\" to end it (score bets settle 20 minutes after Final).",
+  "league": "NFL",
+  "games": [
+    {
+      "id": "g1",
+      "startsInMinutes": -60,
+      "status": "LIVE",
+      "period": 3,
+      "clock": "8:42",
+      "home": { "abbreviation": "DET", "name": "Lions", "city": "Detroit", "score": 17, "periods": [7, 3, 7] },
+      "away": { "abbreviation": "GB", "name": "Packers", "city": "Green Bay", "score": 14, "periods": [0, 14, 0] }
+    }
+  ],
+  "players": [
+    {
+      "id": "wr1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Receiver",
+      "position": "WR",
+      "stats": { "receiving_yards": 64, "receptions": 5, "touchdowns": 0 }
+    },
+    {
+      "id": "rb1",
+      "game": "g1",
+      "team": "GB",
+      "firstName": "Dev",
+      "lastName": "Runner",
+      "position": "RB",
+      "stats": { "rushing_yards": 48, "receptions": 1, "receiving_yards": 9, "touchdowns": 1 }
+    }
+  ]
+}

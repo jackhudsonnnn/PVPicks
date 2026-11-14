@@ -16,7 +16,20 @@ const base = {
 const messageSchema = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("text"), authorId: uuid, text: z.string().min(1) }),
   z.object({ ...base, kind: z.literal("gif"), authorId: uuid, gifId: z.string().min(1) }),
-  z.object({ ...base, kind: z.literal("bet"), authorId: uuid, betId: uuid }),
+  z.object({
+    ...base,
+    kind: z.literal("bet"),
+    authorId: uuid,
+    betId: uuid,
+    /** What the card shows without loading the bet; absent only if the bet is gone. */
+    bet: z
+      .object({
+        question: z.string(),
+        modeId: z.string(),
+        status: z.enum(["ACTIVE", "PENDING", "SETTLED", "WASHED"]),
+      })
+      .optional(),
+  }),
   z.object({ ...base, kind: z.literal("system"), text: z.string().min(1) }),
   z.object({
     ...base,
@@ -122,4 +135,25 @@ export async function setReaction(messageId: string, emoji: string | null, key: 
 
 export async function markRead(tableId: string, messageId: string, key: string) {
   await mutationRequest(`/tables/${tablePath(tableId)}/last-read`, "PUT", key, { messageId });
+}
+
+/** The chat GIF library the server accepts (`GET /gifs`). */
+const catalogSchema = z.object({
+  categories: z.array(z.object({ id: z.string().min(1), label: z.string().min(1) })),
+  gifs: z.array(
+    z.object({
+      id: z.string().min(1),
+      url: z.string().url(),
+      alt: z.string().min(1),
+      category: z.string().min(1),
+      tags: z.array(z.string()),
+    }),
+  ),
+});
+
+export type GifCatalog = z.infer<typeof catalogSchema>;
+export type Gif = GifCatalog["gifs"][number];
+
+export async function listGifs(signal?: AbortSignal): Promise<GifCatalog> {
+  return read(await request("/gifs", signal ? { signal } : undefined), catalogSchema);
 }

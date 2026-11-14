@@ -10,13 +10,12 @@ import {
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
-import { MODES, StatusBadge } from "@/features/bets";
+import { MODES, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 
 import {
   FILTERS,
-  LIFECYCLE,
   SECTIONS,
   MONEY_POINTS,
   SOCIAL_POINTS,
@@ -107,13 +106,15 @@ export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
       <section id="lifecycle" className="scroll-mt-20 space-y-5">
         <h2 className="text-4xl font-black uppercase">Bet lifecycle</h2>
         <ol className="grid gap-3 md:grid-cols-4">
-          {LIFECYCLE.map((s, i) => (
-            <li key={s.status} className="rounded-xl border bg-surface p-5">
+          {STATUS_ORDER.map((id, i) => (
+            <li key={id} className="rounded-xl border bg-surface p-5">
               <div className="flex items-center justify-between">
-                <StatusBadge status={s.status} />
+                <StatusBadge status={STATUSES[id].id} />
                 <span className="scoreboard text-3xl text-muted-foreground/40">0{i + 1}</span>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                {STATUSES[id].explainer}
+              </p>
             </li>
           ))}
         </ol>

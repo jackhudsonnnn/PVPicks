@@ -47,8 +47,10 @@ Game Night) should settle tonight as the first live check. Nothing from
       app.
 - [x] Preferences: who can add you, username, color and debt cap.
 
-- [ ] Replay saved games as the dev data stream, and keep a few trimmed games
-      as test fixtures.
+- [x] Dev sports data: live-edited scenario files and recorded chunks
+      replayed as DEV games, with a Dev page (docs: Dev sports data).
+  - [ ] Cut chunks with player stats from tonight's NBA and Sunday's NFL
+        recordings (`scripts/cut-sports-chunk.py`).
 - [x] Try the whole app in a real browser on an isolated stack: WebSocket
       proxy, chat, ticker and live updates. (Repeat once a key is set, to see
       the ticker with real games.)

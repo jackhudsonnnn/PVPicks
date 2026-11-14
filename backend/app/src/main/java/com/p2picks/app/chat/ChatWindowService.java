@@ -24,10 +24,12 @@ public class ChatWindowService {
     record Reaction(UUID userId, String emoji) {}
     record SettlementLine(UUID payerId, UUID payeeId, long amountCents) {}
     public record SettlementSummary(UUID hostId, List<SettlementLine> lines) {}
+    /** What a bet card shows without loading the bet: its question, mode and status now. */
+    public record BetSummary(String question, String modeId, String status) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Message(UUID id, UUID tableId, String kind, OffsetDateTime createdAt, UUID authorId,
-            String text, String gifId, UUID betId, UUID settlementId,
+            String text, String gifId, UUID betId, UUID settlementId, BetSummary bet,
             SettlementSummary settlementSummary, List<Reaction> reactions) {}
 
     private final JdbcTemplate jdbc;
@@ -85,6 +87,7 @@ public class ChatWindowService {
                        m.id, m.table_id, m.kind, m.created_at, m.author_id,
                        %s AS text, m.gif_id, m.bet_id,
                        m.settlement_id, m.message_order, s.host_id,
+                       bet.question AS bet_question, bet.mode AS bet_mode, bet.status AS bet_status,
                        COALESCE((SELECT jsonb_agg(jsonb_build_object('userId', r.user_id, 'emoji', r.emoji)
                                                   ORDER BY r.user_id)
                                  FROM reactions r JOIN users reactor ON reactor.id = r.user_id
@@ -99,6 +102,7 @@ public class ChatWindowService {
                 LEFT JOIN chosen m ON true
                 LEFT JOIN users subject ON subject.id = m.system_subject_id
                 LEFT JOIN settlements s ON s.id = m.settlement_id AND s.table_id = m.table_id
+                LEFT JOIN bets bet ON bet.id = m.bet_id AND bet.table_id = m.table_id
                 ORDER BY m.message_order
                 """).formatted(ChatVisibility.VISIBLE, selection, ChatVisibility.TEXT);
         List<Object> parameters = new ArrayList<>(List.of(UUID.fromString(jwt.getId()), userId, tableId));
@@ -129,10 +133,14 @@ public class ChatWindowService {
             last = order;
             UUID host = rs.getObject("host_id", UUID.class);
             SettlementSummary summary = host == null ? null : new SettlementSummary(host, parseLines(rs.getString("lines")));
+            String question = rs.getString("bet_question");
+            BetSummary bet = question == null ? null
+                    : new BetSummary(question, rs.getString("bet_mode"), rs.getString("bet_status"));
             messages.add(new Message(id, tableId, rs.getString("kind"),
                     rs.getObject("created_at", OffsetDateTime.class), rs.getObject("author_id", UUID.class),
                     rs.getString("text"), rs.getString("gif_id"), rs.getObject("bet_id", UUID.class),
-                    rs.getObject("settlement_id", UUID.class), summary, parseReactions(rs.getString("reactions"))));
+                    rs.getObject("settlement_id", UUID.class), bet, summary,
+                    parseReactions(rs.getString("reactions"))));
         } while (rs.next());
         return new Result(true, true, true, new Window(List.copyOf(messages),
                 hasOlder ? cursors.encode(userId, tableId, first) : null,

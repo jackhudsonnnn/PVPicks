@@ -24,6 +24,14 @@ const lineSchema = z.object({
   forgiveDeclinedAt: timestamp.nullable().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
+  /** What the viewer may do with this receipt, from the server's transition rules. */
+  actions: z.array(
+    z.object({
+      action: z.enum(["sent", "confirm", "dispute", "forgive", "ask-forgive", "decline-forgive"]),
+      /** Sending or asking to forgive waits until the balance-change warning is reviewed. */
+      blockedByReview: z.boolean(),
+    }),
+  ),
 });
 const groupSchema = z.object({
   otherUserId: uuid,
@@ -31,15 +39,19 @@ const groupSchema = z.object({
   revision: z.string().min(1),
   lines: z.array(lineSchema),
   pendingReviewRevision: uuid.nullable(),
+  /** What the viewer may do with every open receipt with this person at once. */
+  actions: z.array(
+    z.object({
+      action: z.enum(["sent", "paid", "unpaid", "forgiven", "ask", "decline"]),
+      blockedByReview: z.boolean(),
+    }),
+  ),
 });
-const reviewSchema = z.object({ otherUserId: uuid, pendingReviewRevision: uuid });
 
 export type SettlementLine = z.infer<typeof lineSchema>;
 export type SettlementGroup = z.infer<typeof groupSchema>;
-export type PendingReview = z.infer<typeof reviewSchema>;
-export type LineAction =
-  "sent" | "confirm" | "dispute" | "forgive" | "ask-forgive" | "decline-forgive";
-export type GroupAction = "sent" | "paid" | "unpaid" | "forgiven" | "ask" | "decline";
+export type LineAction = SettlementLine["actions"][number]["action"];
+export type GroupAction = SettlementGroup["actions"][number]["action"];
 
 /** Parses a JSON response without losing precision in 64-bit integers, then validates it. */
 export async function readExact<T>(response: Response, schema: z.ZodType<T, unknown>): Promise<T> {
@@ -74,37 +86,6 @@ function directLine(line: SettlementLine, actor: string, other: string): boolean
     (line.payerId === actor && line.payeeId === other) ||
     (line.payeeId === actor && line.payerId === other)
   );
-}
-
-export async function listPendingReviews(
-  actor: string,
-  signal?: AbortSignal,
-): Promise<PendingReview[]> {
-  validId(actor);
-  const reviews = await readExact(
-    await request("/people/settlement-reviews", signal ? { signal } : undefined),
-    z.array(reviewSchema),
-  );
-  if (
-    reviews.some((review) => review.otherUserId === actor) ||
-    new Set(reviews.map((review) => review.otherUserId)).size !== reviews.length
-  )
-    throw new BackendError("The backend returned an unexpected response.");
-  return reviews;
-}
-
-export async function listSettlementCounterparties(
-  actor: string,
-  signal?: AbortSignal,
-): Promise<string[]> {
-  validId(actor);
-  const ids = await readExact(
-    await request("/people/settlement-counterparties", signal ? { signal } : undefined),
-    z.array(uuid),
-  );
-  if (ids.includes(actor) || new Set(ids).size !== ids.length)
-    throw new BackendError("The backend returned an unexpected response.");
-  return ids;
 }
 
 export async function listSettlementGroups(

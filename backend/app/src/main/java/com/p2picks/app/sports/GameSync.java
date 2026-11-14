@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Stores feed snapshots and feed health, and records one outbox event per poll that changed a game. */
 @Component
-class GameSync {
+public class GameSync {
     static final String NEW_YORK = "America/New_York";
 
     private final JdbcTemplate jdbc;
@@ -32,6 +32,37 @@ class GameSync {
      */
     @Transactional
     public int record(League league, List<FeedGame> games, Instant observedAt) {
+        int changed = upsert(league, games, observedAt);
+        jdbc.update("""
+                INSERT INTO sports_feed_status (league, last_success_at) VALUES (?, ?)
+                ON CONFLICT (league) DO UPDATE SET last_success_at = EXCLUDED.last_success_at
+                """, league.name(), Timestamp.from(observedAt));
+        announce(league, changed);
+        return changed;
+    }
+
+    /**
+     * Records dev games (provider ids starting {@code DEV-}) the same way, without marking the real feed healthy:
+     * a dev scenario must not hide a real outage.
+     */
+    @Transactional
+    public int recordDev(League league, List<FeedGame> games, Instant observedAt) {
+        if (games.stream().anyMatch(game -> !game.providerId().startsWith("DEV-"))) {
+            throw new IllegalArgumentException("Dev games need a DEV- provider id");
+        }
+        int changed = upsert(league, games, observedAt);
+        announce(league, changed);
+        return changed;
+    }
+
+    private void announce(League league, int changed) {
+        if (changed > 0) {
+            outbox.append(OutboxEvent.SPORTS_GAMES_CHANGED, league.name(),
+                    Map.of("league", league.name(), "changed", changed));
+        }
+    }
+
+    private int upsert(League league, List<FeedGame> games, Instant observedAt) {
         Map<String, FeedGame> previous = previous(games);
         int changed = 0;
         for (FeedGame game : games) {
@@ -101,14 +132,6 @@ class GameSync {
                     return statement;
                 });
             }
-        }
-        jdbc.update("""
-                INSERT INTO sports_feed_status (league, last_success_at) VALUES (?, ?)
-                ON CONFLICT (league) DO UPDATE SET last_success_at = EXCLUDED.last_success_at
-                """, league.name(), Timestamp.from(observedAt));
-        if (changed > 0) {
-            outbox.append(OutboxEvent.SPORTS_GAMES_CHANGED, league.name(),
-                    Map.of("league", league.name(), "changed", changed));
         }
         return changed;
     }

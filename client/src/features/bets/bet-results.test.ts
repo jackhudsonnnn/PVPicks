@@ -1,29 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Bet } from "./api";
-import type { Table } from "@/features/tables/api";
-import { awaitingPointsSettlement, canCallResult } from "./bet-results";
+import { awaitingPointsSettlement } from "./bet-results";
 
-const host = "123e4567-e89b-42d3-a456-426614174000";
-const player = "123e4567-e89b-42d3-a456-426614174001";
-const outsider = "123e4567-e89b-42d3-a456-426614174002";
-const table: Table = {
-  id: "123e4567-e89b-42d3-a456-426614174010",
-  name: "Table",
-  emoji: "T",
-  memberIds: [host, player, outsider],
-  hostIds: [host],
-  remainderRule: "host",
-  hostsOnlyBets: false,
-  u2pickEnabled: true,
-  quickPicksEnabled: false,
-  quickPickSharing: false,
-  subscribedTo: [],
-  disabledPermissions: {},
-};
 const locked: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174020",
-  tableId: table.id,
-  proposerId: player,
+  tableId: "123e4567-e89b-42d3-a456-426614174010",
+  proposerId: "123e4567-e89b-42d3-a456-426614174001",
   modeId: "u2pick",
   config: {},
   question: "Who wins?",
@@ -37,42 +19,12 @@ const locked: Bet = {
   pickCount: 2,
   myPick: null,
   myParticipation: "not_joined",
-  picks: [
-    { userId: host, choice: "Yes" },
-    { userId: player, choice: "No" },
-  ],
+  viewerCanCall: false,
+  viewerCanOverride: false,
+  picks: [],
   noGuessUserIds: [],
   remainderRule: "host",
 };
-
-describe("canCallResult", () => {
-  it("follows each settler rule", () => {
-    const callers = (bet: Bet) =>
-      [host, player, outsider].filter((id) => canCallResult(bet, table, id));
-    expect(callers({ ...locked, settledBy: "anyone" })).toEqual([host, player, outsider]);
-    expect(callers({ ...locked, settledBy: "hosts" })).toEqual([host]);
-    expect(callers(locked)).toEqual([host]);
-    expect(callers({ ...locked, settledBy: "me" })).toEqual([player]);
-    expect(callers({ ...locked, settledBy: "non_participants" })).toEqual([outsider]);
-  });
-
-  it("lets hosts call a non-participant bet when everyone is in the pot", () => {
-    const everyone = {
-      ...locked,
-      settledBy: "non_participants" as const,
-      picks: [...locked.picks!, { userId: outsider, choice: "Yes" }],
-    };
-    expect(canCallResult(everyone, table, host)).toBe(true);
-    expect(canCallResult(everyone, table, player)).toBe(false);
-  });
-
-  it("offers nothing for active or resolved bets, or to non-members", () => {
-    expect(canCallResult({ ...locked, status: "SETTLED" }, table, host)).toBe(false);
-    expect(
-      canCallResult({ ...locked, settledBy: "anyone" }, { ...table, memberIds: [host] }, player),
-    ).toBe(false);
-  });
-});
 
 describe("awaitingPointsSettlement", () => {
   it("counts only resolved, unsettled, non-4fun bets", () => {

@@ -1,2 +1,4 @@
 # Raw sports feed recordings (audit and replay data); never committed.
 /recordings/
+# Dev chunks are cut from recordings, so they're provider data too; scenario files are committed.
+/dev/sports/chunks/

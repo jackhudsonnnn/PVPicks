@@ -60,9 +60,7 @@ vi.mock("./api", async (importOriginal) => ({
 }));
 vi.mock("@/features/settlements/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/settlements/api")>()),
-  listPendingReviews: vi.fn(async () => []),
   listSettlementGroups: vi.fn(async () => []),
-  listSettlementCounterparties: vi.fn(async () => []),
 }));
 vi.mock("@/features/chat/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/chat/api")>()),

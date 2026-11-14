@@ -51,7 +51,12 @@ class AuthenticationController {
         String previousToken = cookies == null ? null : Arrays.stream(cookies)
                 .filter(cookie -> cookie.getName().equals("session"))
                 .map(Cookie::getValue).findFirst().orElse(null);
-        String token = sessions.login(input.path("username").textValue(), input.path("password").textValue(), previousToken);
+        String token;
+        try {
+            token = sessions.login(input.path("username").textValue(), input.path("password").textValue(), previousToken);
+        } catch (DevelopmentSessions.Frozen frozen) {
+            return error(403, "account_frozen", "This account is frozen.");
+        }
         if (token == null) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
@@ -85,7 +90,6 @@ class AuthenticationController {
     }
 
     private static String sessionCookie(String value, Duration maxAge) {
-        return ResponseCookie.from("session", value).httpOnly(true).secure(false)
-                .sameSite("Strict").path("/").maxAge(maxAge).build().toString();
+        return SessionCookies.session(value, maxAge);
     }
 }

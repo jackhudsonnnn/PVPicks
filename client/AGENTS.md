@@ -47,14 +47,21 @@
   - Friends: `social/friends.tsx`.
   - The table page: `tables/components/table-page.tsx`.
     - The felt is in `felt.tsx`, with seats and the open-bet deck.
-    - A side panel holds Chat, Peers (`peers.tsx`) and Host-or-About (`host-panel.tsx`); on phones it becomes tabs.
-    - People open `social/profile.tsx`.
+    - A side panel holds Chat, Peers (`peers.tsx`) and Host-or-About (`host-panel.tsx`); on phones it becomes tabs. The Host panel's sections live beside it: `host-settle.tsx`, `host-table-settings.tsx` and `host-members.tsx`, with shared types and settings in `host-shared.ts`.
+    - The table page loads only the live bets (`GET /tables/{id}/bets`: Active, Pending, and resolved bets awaiting points settlement). A ticket opened for an older bet (from chat or a profile) is fetched by `bets/history.ts` `useBet`.
+    - People open `social/profile.tsx`. It shows the server's record for them at the table (`useMemberRecord`) and their bets there, newest first and paged (`useMemberBets`).
     - Report and Block live in `social/safety.tsx`, with rules in `report-rules.ts`.
     - Live tomatoes play from `tables/components/tomatoes.tsx`.
-  - Receipts: `settlements/settlements.tsx` (Settle-ups on Friends: a card per person, including people with only an unreviewed warning, so a warning stays reachable) and `settlements/receipts-dialog.tsx` (warning review, group actions, dated receipts with per-receipt actions). Which actions each side gets, and which wait for a review, live in tested `settlements/receipt-rules.ts`. The unknown-outcome retry block also renders inside the dialog, because the dialog covers the page's copy. Receipt rows name tables through `tables` `useTableNames` (current tables, plus deleted ones for 90 days).
+  - Receipts: `settlements/settlements.tsx` (Settle-ups on Friends) and `settlements/receipts-dialog.tsx` (the warning review, group actions, and dated receipts with per-receipt actions).
+    - One request feeds both: `GET /people/settle-groups?includeHistory=true`. Each group carries its receipts, any unreviewed warning (`pendingReviewRevision`), and the viewer's `actions`.
+    - Each group and receipt lists the actions the server allows the viewer (`actions: [{action, blockedByReview}]`). The client only labels them (`settlements/receipt-rules.ts`) and disables the ones waiting on a review.
+    - The unknown-outcome retry box also renders inside the dialog, because the dialog covers the page's copy.
+    - Receipt rows name tables through `tables` `useTableNames`: current tables, plus deleted ones for 90 days.
   - Preferences: `preferences/preferences.tsx`, with Tables, Account and Display tabs.
   - How to play, with feedback: `guide/guide.tsx`.
-  - The admin view: `admin/admin.tsx`.
+  - Dev data: `devdata/dev-page.tsx` at `/dev`. The nav item shows only when `GET /dev/sports` answers (it 404s unless the backend has dev data on). Ticker games carry `dev`, and DEV games are marked in the ticker and the game picker.
+  - The admin view: `admin/admin.tsx`, with tabs for Moderation (`admin/moderation.tsx`: the report queue and frozen or struck players) and Site health. Admin actions are plain requests, not retryable mutations: each is one-shot on the server, so a repeat answers "already handled".
+  - Account deletion: `preferences/delete-account.tsx` (blocker wording in tested `preferences/delete-rules.ts`). `BackendError` keeps the raw 403/409 body for errors that carry more than a code.
 
   `/me` returns `role`. An `ADMIN` session renders only the admin view, never player screens.
 - Bets render as tickets (`bets/components/ticket.tsx`, with details in `bet-details.tsx`). Tap a choice to pick (confirmed), tap it again to clear, and use "Call it" from a locked ticket. New bets go through the proposal sheet (`bets/components/propose-sheet.tsx`):
@@ -65,9 +72,10 @@
 
   What a ticket shows comes from pure, tested `bets/ticket-model.ts`. Who sits at the felt, and the seat chips, come from `tables/seating.ts`. Active bets reveal only your own pick and the pick count; tallies, players and pots appear after lock.
 - The server owns every bet rule: modes, locking, picks, results, washes, payouts and the leftover-cent rule. The client only describes and drafts bets.
-  - `bets/modes.ts` is the catalog the guide and sheet show. Add a mode there when the server supports it.
+  - `bets/modes.ts` describes each mode (name, tagline, icon) for the guide and sheet. Which modes can be proposed comes from `GET /modes` (`useModeAvailability`). The sheet's first step is `bets/components/mode-grid.tsx`.
   - `bets/u2pick.ts` validates U2Pick drafts and lists the settler rules.
-  - `bets/bet-results.ts` decides who may call a result; the server rechecks.
+  - What the viewer may do with a bet comes from the server: `viewerCanCall` (call a U2Pick result) and `viewerCanOverride` (a host on a sports bet). Never re-derive these permissions on the client. The call and override menu is `bets/components/outcome-menu.tsx`.
+  - Status names and wording (badge, Tickets tabs, details, seat chips, chat cards, guide) come from `bets/statuses.ts`.
 - Score-mode bets settle from the sports feed. Their tickets show the game's live score (`sports/use-ticker.ts`, shared with the score strip). For hosts, they also show an Override menu (wash or set the result) until points are settled. U2Pick results are called by their settler rule instead.
 
 ## Data
@@ -78,18 +86,18 @@
   - `idSchema` for every id (don't redeclare `z.guid()`).
 
   Each feature's `api.ts` validates its responses with zod. API tests share valid payloads from `src/test/api-fixtures.ts`.
-- Every signed-in view that reads data calls `useExpireOnUnauthorized([query.error, …], expire)` (`lib/use-session-expiry.ts`), so a 401 returns to sign-in. Don't hand-write the effect. Every query key comes from `lib/query-keys.ts` (`["backend-tables", userId, ...]`) so sign-out clears it.
+- Every signed-in view that reads data calls `useExpireOnUnauthorized([query.error, …], expire)` (`lib/use-session-expiry.ts`), so a 401 returns to sign-in. Don't hand-write the effect. Every query key comes from `lib/query-keys.ts`: `userKey(userId, ...)` builds `["backend-tables", userId, ...]` so sign-out clears it, and `sessionKey` is the signed-in account.
 - Names and avatars come from `people/use-person.ts` (`[...peopleKey, "profile", id]`), cached until a `profile.changed` event invalidates it. Per-table points come from `GET /tables/{id}/balances`, cached under the table's bets key so every bet change refreshes them.
 - Mutations go through `useRetryableMutation` (`lib/mutation.ts`), via one action hook per area (each feature's `actions.ts`).
   - An uncertain action's idempotency key is saved per user in localStorage until it is retried or cleared.
-  - `ActionStatus` (`components/action-status.tsx`) renders retry and discard.
+  - `ActionStatus` (`components/action-status.tsx`) is the one "outcome unknown" box: retry the same action, or clear it after checking. Every area passes its own wording; don't write another.
   - Use one action hook instance per page: two instances with the same storage key in one tab do not sync.
 
   Why: retries reuse one key across tabs, so an uncertain action can't be applied twice.
 - Pure rules for screens live in tested modules, not component files:
-  - `bets/ticket-model.ts`, `bets/sports-model.ts`, `bets/bet-results.ts`, `bets/u2pick.ts`;
+  - `bets/ticket-model.ts`, `bets/sports-model.ts`, `bets/bet-results.ts`, `bets/u2pick.ts`, `bets/ticket-feed.ts`;
   - `tables/seating.ts`, `tables/rules.ts` (table names up to 14 characters, addable followers);
-  - `social/rules.ts` (people lists, search), `social/profile-model.ts`;
+  - `social/rules.ts` (people lists, search);
   - `preferences/rules.ts` (debt cap input), `preferences/profile-rules.ts` (usernames, hues);
   - `chat/model.ts` (window merges, reactions), `chat/previews.ts` (card preview lines);
   - `guide/feedback.ts`.
@@ -97,8 +105,9 @@
   The server enforces every rule; client copies only give early feedback.
 - Live updates go through `lib/realtime-connection.ts` (one STOMP connection, tested) and `lib/realtime.tsx` (`RealtimeProvider`, and `useRealtimeFeed(destination | null, ...)`, where `null` subscribes to nothing). A feed handler only invalidates queries; it never applies message data. Why: invalidations carry no private data, so HTTP stays the source of truth.
 - Table chat:
-  - `chat/chat.tsx` with `chat/use-chat.ts`: contiguous server windows, one operation at a time. `readOnly` (archives) skips the live feed, the read position, sending and reactions.
-  - `chat/gifs.ts` is the GIF catalog, keyed by the IDs the server accepts.
+  - `chat/chat.tsx` with `chat/use-chat.ts`: contiguous server windows, one operation at a time. `readOnly` (archives) skips the live feed, the read position, sending and reactions. Message rows are in `chat/messages.tsx`, and the input and GIF picker in `chat/composer.tsx`.
+  - Bet cards render from the summary the server embeds in each bet message (`bet: {question, modeId, status}`), so chat never needs the table's bet list, including in archives.
+  - The GIF library comes from the server (`GET /gifs`, `chat/gifs.ts` `useGifs`). Sending accepts only its ids.
   - `chat/reactions.ts` holds the quick reactions; the server toggles them.
 - The score strip is `sports/ticker.tsx` over `sports/api.ts`. `sports/ticker-strip.ts` repeats games in whole cycles so the loop seam stays continuous. A null ticker means unavailable and must never render as "no games".
 

@@ -16,6 +16,8 @@ const gameSchema = z.object({
   home: team,
   away: team,
   observedAt: z.string().datetime({ offset: true }),
+  /** A dev data game (dev backend only), not a real one. */
+  dev: z.boolean().default(false),
 });
 const snapshotSchema = z.object({ games: z.array(gameSchema) });
 

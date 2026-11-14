@@ -100,6 +100,7 @@ describe("admin accounts", () => {
       ),
     );
     wrap(<App />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Site health" }));
     expect(await screen.findByRole("heading", { name: "Site health" })).toBeInTheDocument();
     expect(await screen.findByText("Up")).toBeInTheDocument();
     expect(screen.getByText("DOWN")).toBeInTheDocument();
@@ -165,7 +166,7 @@ describe("display settings", () => {
     vi.mocked(getInvitePreferences).mockResolvedValue({ friends: "open", following: "request" });
     vi.mocked(getDebtCap).mockResolvedValue(null);
     vi.mocked(getDebt).mockResolvedValue(0);
-    wrap(<PreferencesPage user={player} expire={() => {}} />);
+    wrap(<PreferencesPage user={player} expire={() => {}} onAccountDeleted={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Display" }));
     fireEvent.click(await screen.findByRole("tab", { name: "Light" }));
     await waitFor(() => expect(document.documentElement.classList.contains("light")).toBe(true));

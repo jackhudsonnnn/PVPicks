@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 class DevelopmentSessions {
+    /** The password was right but the account is frozen; reported only after a correct password. */
+    static class Frozen extends RuntimeException {}
+
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwords;
     private final JwtEncoder encoder;
@@ -44,13 +47,16 @@ class DevelopmentSessions {
             return null;
         }
         List<Account> accounts = jdbc.query("""
-                SELECT id, password_hash FROM users WHERE username = ?::citext AND status = 'ACTIVE' FOR UPDATE
-                """, (rs, row) -> new Account(rs.getObject("id", UUID.class), rs.getString("password_hash")), normalized);
+                SELECT id, password_hash, status FROM users
+                WHERE username = ?::citext AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                """, (rs, row) -> new Account(rs.getObject("id", UUID.class), rs.getString("password_hash"),
+                        rs.getString("status")), normalized);
         Account account = accounts.isEmpty() ? null : accounts.getFirst();
         boolean matches = passwords.matches(password, account == null ? dummyHash : account.passwordHash());
         if (!matches || account == null) {
             return null;
         }
+        if (account.status().equals("FROZEN")) throw new Frozen();
 
         if (previousToken != null) {
             try {
@@ -77,5 +83,5 @@ class DevelopmentSessions {
         jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE id = ? AND revoked_at IS NULL", sessionId);
     }
 
-    record Account(UUID id, String passwordHash) {}
+    record Account(UUID id, String passwordHash, String status) {}
 }

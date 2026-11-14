@@ -1,7 +1,15 @@
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Home, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
+import {
+  BookOpen,
+  FlaskConical,
+  Home,
+  LogOut,
+  SlidersHorizontal,
+  Ticket,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ScrollContainer } from "@/components/scroll-container";
@@ -16,6 +24,7 @@ import { settlementsFeed } from "@/lib/realtime-connection";
 import { listSettlementGroups } from "@/features/settlements";
 import { useInvites } from "@/features/social";
 import { userKey } from "@/lib/query-keys";
+import { useDevSports } from "@/features/devdata";
 
 const NAV = [
   { to: "/", label: "Home", short: "Home", icon: Home },
@@ -23,7 +32,10 @@ const NAV = [
   { to: "/friends", label: "Friends", short: "Friends", icon: Users },
   { to: "/how-to-play", label: "How to play", short: "Guide", icon: BookOpen },
   { to: "/preferences", label: "Preferences", short: "Prefs", icon: SlidersHorizontal },
-] as const;
+];
+
+/** Shown only when the backend has dev sports data on (dev only). */
+const DEV_NAV = { to: "/dev", label: "Dev data", short: "Dev", icon: FlaskConical };
 
 const isActive = (pathname: string, to: string) =>
   to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -169,6 +181,8 @@ export function AppShell({
   children: ReactNode;
 }) {
   const isTable = pathname.startsWith("/tables/");
+  const dev = useDevSports(user.id);
+  const nav = dev.data ? [...NAV, DEV_NAV] : NAV;
   return (
     <div
       className={cn(
@@ -184,7 +198,7 @@ export function AppShell({
           <SignOutButton onSignOut={onSignOut} busy={signingOut} />
         </div>
         <nav aria-label="Main" className="flex flex-col gap-1 px-3 py-2">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {nav.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}
@@ -234,7 +248,7 @@ export function AppShell({
         aria-label="Main (phone)"
         className="glass-bar fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t md:hidden"
       >
-        {NAV.map(({ to, short, icon: Icon }) => (
+        {nav.map(({ to, short, icon: Icon }) => (
           <Link
             key={to}
             to={to}

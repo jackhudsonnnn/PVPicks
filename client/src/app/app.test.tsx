@@ -8,7 +8,7 @@ import { currentUser, signIn, signOut } from "@/features/auth/api";
 import { getProfile } from "@/features/people/api";
 import { getTable, listTables, listTableBalances } from "@/features/tables/api";
 import { listMyBets, listTableBets, type Bet } from "@/features/bets/api";
-import { listPendingReviews, listSettlementGroups } from "@/features/settlements/api";
+import { listSettlementGroups } from "@/features/settlements/api";
 import { getRelationships, listInvites } from "@/features/social/api";
 import type { Invalidation } from "@/lib/realtime-connection";
 import { getChatUnread, getChatWindow } from "@/features/chat/api";
@@ -91,8 +91,6 @@ vi.mock("@/features/social/api", async (importOriginal) => ({
 }));
 vi.mock("@/features/settlements/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/settlements/api")>()),
-  listPendingReviews: vi.fn(),
-  listSettlementCounterparties: vi.fn(),
   listSettlementGroups: vi.fn(),
   receiptHistory: vi.fn(),
   acknowledgeReview: vi.fn(),
@@ -137,6 +135,8 @@ const bet: Bet = {
   pickCount: 2,
   myPick: "Yes",
   myParticipation: "picked",
+  viewerCanCall: false,
+  viewerCanOverride: false,
 };
 
 function renderApp() {
@@ -154,7 +154,6 @@ beforeEach(() => {
   route.pathname = "/";
   vi.mocked(listTableBets).mockResolvedValue([]);
   vi.mocked(listMyBets).mockResolvedValue({ items: [], nextCursor: null });
-  vi.mocked(listPendingReviews).mockResolvedValue([]);
   vi.mocked(getRelationships).mockResolvedValue({
     followingIds: [],
     followerIds: [],

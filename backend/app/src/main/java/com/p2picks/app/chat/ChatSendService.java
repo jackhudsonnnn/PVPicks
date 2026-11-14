@@ -96,6 +96,6 @@ public class ChatSendService {
         authentication.requireUnexpired(jwt);
         return new Result(outcome, new ChatWindowService.Message(messageId, tableId, submission.kind(), createdAt,
                 userId, submission.kind().equals("text") ? submission.content() : null,
-                submission.kind().equals("gif") ? submission.content() : null, null, null, null, List.of()));
+                submission.kind().equals("gif") ? submission.content() : null, null, null, null, null, List.of()));
     }
 }

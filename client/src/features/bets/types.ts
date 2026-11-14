@@ -1,8 +1,3 @@
-export type BetStatus = "active" | "pending" | "washed" | "resolved";
-
-/** The selection the server stores for someone sitting a bet out. */
-export const PASS = "__no_guess__";
-
 export type ModeId =
   | "either_or"
   | "king_of_the_hill"

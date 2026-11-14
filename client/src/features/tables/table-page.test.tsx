@@ -50,6 +50,11 @@ vi.mock("./api", async (importOriginal) => ({
   rotateQuickPickCode: vi.fn(),
 }));
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
+vi.mock("@/features/bets/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/bets/api")>()),
+  getMemberRecord: vi.fn(async () => ({ played: 0, won: 0, lost: 0, netCents: 0 })),
+  listMemberBets: vi.fn(async () => ({ items: [], nextCursor: null })),
+}));
 vi.mock("@/lib/realtime", () => ({
   useRealtimeStatus: () => "live",
   useRealtimeFeed: (destination: string | null, listener: (event: Invalidation) => void) => {
@@ -89,16 +94,7 @@ function wrap(children: ReactNode) {
 
 function Chat() {
   const social = useSocialActions(me.id, async () => {}, expire);
-  return (
-    <TableChat
-      user={me}
-      table={table}
-      expire={expire}
-      betQuestion={() => undefined}
-      social={social}
-      onRead={() => {}}
-    />
-  );
+  return <TableChat user={me} table={table} expire={expire} social={social} onRead={() => {}} />;
 }
 
 function Profile({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
@@ -107,7 +103,6 @@ function Profile({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
     <ProfileDialog
       userId={friend}
       table={table}
-      bets={[]}
       user={me}
       expire={expire}
       peopleKey={peopleKey}
@@ -220,7 +215,6 @@ describe("tomatoes", () => {
         <ProfileDialog
           userId={friend}
           table={{ ...table, disabledPermissions: { [me.id]: ["react"] } }}
-          bets={[]}
           user={me}
           expire={expire}
           peopleKey={peopleKey}

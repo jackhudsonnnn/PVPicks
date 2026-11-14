@@ -39,7 +39,7 @@ type Props = { user: User; expire: () => void };
 
 /**
  * Your invitations and tables as cards. On phones they sit in one row that scrolls sideways, snapping card by card;
- * on desktop they stack as rows in a scrolling box. Invitations come first, and opening one asks to accept or
+ * on desktop they stack as rows in a scrolling box, the same height as Home's Tickets box. Invitations come first, and opening one asks to accept or
  * decline. A table where you have a live pick shows green.
  */
 export function TableCards({ user, expire }: Props) {
@@ -92,7 +92,7 @@ export function TableCards({ user, expire }: Props) {
           isHorizontal="mobile"
           isVisible={false}
           aria-label="Your tables and invitations"
-          className="snap-x snap-mandatory gap-3 py-1 md:scrollbar-thin lg:max-h-[27rem] lg:snap-none lg:gap-2 lg:rounded-2xl lg:border lg:bg-sidebar/60 lg:p-2"
+          className="snap-x snap-mandatory gap-3 py-1 md:scrollbar-thin lg:h-[27rem] lg:snap-none lg:gap-2 lg:rounded-2xl lg:border lg:p-2"
         >
           <AnimatedList>
             {pending.map((invite) => (

@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { userKey } from "@/lib/query-keys";
 import { listMyBets, type Bet } from "./api";
+import { useFetchAll } from "./history";
 
 /** Tables where you have a real pick (not No guess) in an Active bet: their cards show green. */
 export function inPlayTableIds(bets: Bet[]): ReadonlySet<string> {
@@ -25,12 +26,7 @@ export function useInPlayTables(userId: string): ReadonlySet<string> {
     getNextPageParam: (page) => page.nextCursor,
     retry: false,
   });
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
-  // Keyed on the page count too: a page that arrives at once leaves the flags unchanged.
-  const pages = query.data?.pages.length ?? 0;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [pages, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  useFetchAll(query);
   return useMemo(
     () => inPlayTableIds(query.data?.pages.flatMap((page) => page.items) ?? []),
     [query.data],

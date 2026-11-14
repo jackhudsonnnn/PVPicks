@@ -183,6 +183,12 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   league's active-player list, at most once a day. A rate-limited response
   pauses this for a minute. Scores and player data share the plan's request
   budget (the GOAT trial allows 5 a minute: 2 for scores, 3 for player data).
+- Dev sports data (dev profile): with `PVPICKS_DEV_SPORTS_DIR` set (Compose
+  mounts `dev/sports` there), the `devdata` module plays scenario files and
+  recorded chunks as `DEV-` games through the same game and stats sync, and the
+  app shows a Dev page to control them. `PVPICKS_DEV_SPORTS_TICK` sets how often
+  (default `PT2S`). The stats poller skips dev games. See
+  `docs/site/dev-sports-data.md`; cut chunks with `scripts/cut-sports-chunk.py`.
 - Dated copies of the provider's OpenAPI specs live in `api/providers/`;
   `ProviderContractTest` checks trimmed real responses against them. When it
   fails, re-download the spec and re-check the mapping in `BallDontLieFeed`.

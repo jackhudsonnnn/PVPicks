@@ -13,7 +13,8 @@ import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Section, Stepper } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
-import { MODES, type ModeDef } from "@/features/bets/modes";
+import { type ModeDef, useModeAvailability } from "@/features/bets/modes";
+import { ModeGrid } from "./mode-grid";
 import type { SettlerRule } from "@/features/bets/types";
 import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
 import {
@@ -47,18 +48,9 @@ import {
 } from "@/features/bets/sports-model";
 import { tickerStatus, type TickerGame, useTicker } from "@/features/sports";
 
-const LEAGUE_BADGES = [
-  { id: "nfl", label: "NFL", className: "border-primary/30 bg-primary/10 text-primary" },
-  {
-    id: "nba",
-    label: "NBA",
-    className: "border-status-pending/30 bg-status-pending/10 text-status-pending",
-  },
-];
-
 /**
- * Propose a bet: choose a mode, set it up, preview the ticket, send. U2Pick and the score modes (Total Disaster,
- * Give And Take) are available; the player and play-by-play modes are "Coming soon".
+ * Propose a bet: choose a mode (`ModeGrid`), set it up, preview the ticket, send. The server says which modes can
+ * be proposed; the rest show "Coming soon".
  */
 export function ProposeBetSheet({
   open,
@@ -94,6 +86,7 @@ export function ProposeBetSheet({
   const game = games.find((g) => g.id === gameId);
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
   const block = proposeBlock(table, user.id);
+  const availability = useModeAvailability();
   const busy = actions.busy || !!actions.pending || !!actions.storageError;
   const problem = !mode
     ? null
@@ -149,6 +142,8 @@ export function ProposeBetSheet({
       pickCount: 0,
       myPick: null,
       myParticipation: "not_joined",
+      viewerCanCall: false,
+      viewerCanOverride: false,
       settledBy,
     };
     // Rebuilt whenever the preview opens, so its clock starts fresh.
@@ -273,52 +268,7 @@ export function ProposeBetSheet({
               />
             </div>
           ) : !mode ? (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {MODES.map((m) => {
-                const Icon = m.icon;
-                const available = m.custom || isScoreMode(m.id);
-                const modeBlock = block ?? (m.custom ? u2pickBlock(table) : null);
-                const off = !available || !!modeBlock;
-                return (
-                  <Button
-                    variant="outline"
-                    key={m.id}
-                    disabled={off}
-                    onClick={() => pickMode(m)}
-                    className="group flex h-auto flex-col items-start gap-3 whitespace-normal rounded-xl border bg-surface p-4 text-left transition-all enabled:hover:border-primary enabled:hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                        <Icon className="size-5" />
-                      </span>
-                      {!m.custom && (
-                        <span className="flex flex-wrap justify-end gap-1">
-                          {LEAGUE_BADGES.map((l) => (
-                            <span
-                              key={l.id}
-                              className={cn(
-                                "rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold",
-                                l.className,
-                              )}
-                            >
-                              {l.label}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </span>
-                    <span>
-                      <span className="block font-display text-lg font-bold uppercase leading-none">
-                        {m.name}
-                      </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {!available ? "Coming soon" : (modeBlock ?? m.tagline)}
-                      </span>
-                    </span>
-                  </Button>
-                );
-              })}
-            </div>
+            <ModeGrid table={table} availability={availability} block={block} onPick={pickMode} />
           ) : (
             <div className="space-y-6">
               {scoreMode ? (
@@ -368,6 +318,11 @@ export function ProposeBetSheet({
                               <span className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
                                 {g.status === "LIVE" && (
                                   <span className="size-1.5 animate-pulse-dot rounded-full bg-loss" />
+                                )}
+                                {g.dev && (
+                                  <span className="rounded bg-status-pending/20 px-1 font-bold text-status-pending">
+                                    DEV
+                                  </span>
                                 )}
                                 {tickerStatus(g)}
                               </span>

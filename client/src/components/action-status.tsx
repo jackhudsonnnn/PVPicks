@@ -11,8 +11,9 @@ type Actions = {
 };
 
 /**
- * The outcome of the last action, and, when its result is unknown, a way to retry it with the same key or
- * discard it after checking. While an action is unresolved, others of the same kind stay blocked.
+ * The outcome of the last action, and, when its result is unknown, a way to retry it with the same key or clear
+ * it after checking. While an action is unresolved, others of the same kind stay blocked. Every action area uses
+ * this one box, so retries look and read the same everywhere.
  */
 export function ActionStatus({
   actions,
@@ -22,25 +23,29 @@ export function ActionStatus({
   actions: Actions;
   /** Shown while an action's outcome is unknown, e.g. "A table change may not have been saved." */
   pendingText: string;
-  /** What to check before discarding, e.g. "Check your tables first." */
+  /** What to check before clearing, e.g. "Check your tables first." */
   checkText: string;
 }) {
   if (!actions.storageError && !actions.message && !actions.pending) return null;
+  const blocked = actions.busy || !!actions.storageError;
   return (
     <div className="space-y-2">
       {actions.storageError && <p role="alert">{actions.storageError} Actions are disabled.</p>}
       {actions.message && <p role="alert">{actions.message}</p>}
       {actions.pending ? (
         <div className="space-y-2 rounded-lg border bg-surface p-3">
-          <p>{pendingText} Retry it before making other changes.</p>
-          <Button size="sm" disabled={actions.busy} onClick={actions.retry}>
-            Retry
+          <p>
+            {pendingText} Retry the same action before making other changes; it may have been
+            started in another tab.
+          </p>
+          <Button size="sm" disabled={blocked} onClick={actions.retry}>
+            Retry same action
           </Button>{" "}
           <ConfirmAction
-            label="Discard"
-            title="Discard the saved action?"
+            label="Clear saved action"
+            title="Clear the saved action?"
             description={`${checkText} It may already have gone through.`}
-            disabled={actions.busy}
+            disabled={blocked}
             onConfirm={actions.clearAfterReview}
           />
         </div>

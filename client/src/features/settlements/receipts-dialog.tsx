@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
+import { ActionStatus } from "@/components/action-status";
 import { ConfirmAction } from "@/components/confirm-action";
 import { ScrollContainer } from "@/components/scroll-container";
 import { Button } from "@/components/ui/button";
@@ -29,20 +30,8 @@ import { cn } from "@/lib/utils";
 import { PersonAvatar, PersonName, type User, usePerson } from "@/features/people";
 import { type TableName, useTableNames } from "@/features/tables";
 import type { SettlementIntent, useSettlementActions } from "./actions";
-import {
-  formatPoints,
-  receiptHistory,
-  type PendingReview,
-  type SettlementGroup,
-  type SettlementLine,
-} from "./api";
-import {
-  groupOptions,
-  isClosed,
-  lineOptions,
-  needsReview,
-  type ActionOption,
-} from "./receipt-rules";
+import { formatPoints, receiptHistory, type SettlementGroup, type SettlementLine } from "./api";
+import { GROUP_ACTIONS, isClosed, LINE_ACTIONS } from "./receipt-rules";
 
 export type Actions = ReturnType<typeof useSettlementActions>;
 
@@ -52,13 +41,8 @@ const PAGE = 30;
 export interface ReceiptsProps {
   user: User;
   expire: () => void;
-  other: string;
-  /** Open receipts and their net; absent when totals overflow or only a warning remains. */
-  group?: SettlementGroup;
-  /** An unreviewed balance-change warning with this person. */
-  review?: PendingReview;
-  /** True until the review state is known to be clear; blocks sending and asking. */
-  reviewRequired: boolean;
+  /** Everything with this person: open net, receipts, any unreviewed warning, and the viewer's group actions. */
+  group: SettlementGroup;
   actions: Actions;
   queryKey: readonly string[];
 }
@@ -68,8 +52,8 @@ export interface ReceiptsProps {
  * once, then each dated receipt with who sent and who received, and the viewer's actions on it.
  */
 export function ReceiptsDialog(props: ReceiptsProps) {
-  const { user, expire, other, group, queryKey } = props;
-  const person = usePerson(other, user, expire, queryKey);
+  const { user, expire, group, queryKey } = props;
+  const person = usePerson(group.otherUserId, user, expire, queryKey);
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -81,13 +65,7 @@ export function ReceiptsDialog(props: ReceiptsProps) {
         <DialogHeader className="pr-6 text-left">
           <DialogTitle>Settle-up with {person?.name ?? "this person"}</DialogTitle>
           <DialogDescription>
-            {group ? (
-              <>
-                Outstanding net <Net cents={group.netCents} />
-              </>
-            ) : (
-              "These actions track payments between players; they don't move money."
-            )}
+            Outstanding net <Net cents={group.netCents} />
           </DialogDescription>
         </DialogHeader>
         <ReceiptsBody {...props} />
@@ -96,16 +74,9 @@ export function ReceiptsDialog(props: ReceiptsProps) {
   );
 }
 
-function ReceiptsBody({
-  user,
-  expire,
-  other,
-  group,
-  review,
-  reviewRequired,
-  actions,
-  queryKey,
-}: ReceiptsProps) {
+function ReceiptsBody({ user, expire, group, actions, queryKey }: ReceiptsProps) {
+  const other = group.otherUserId;
+  const review = group.pendingReviewRevision;
   const [visible, setVisible] = useState(PAGE);
   const tableName = useTableNames(user.id);
   // Mounted only while the dialog is open, so history loads on demand.
@@ -121,7 +92,11 @@ function ReceiptsBody({
   return (
     <div className="flex min-h-0 flex-col gap-3">
       {/* Also shown here: the dialog covers the copy on the page. */}
-      <PendingAction actions={actions} />
+      <ActionStatus
+        actions={actions}
+        pendingText="A settlement action may not have been saved."
+        checkText="Check the receipt history first."
+      />
       {review && (
         <div
           role="status"
@@ -140,28 +115,20 @@ function ReceiptsBody({
             size="sm"
             variant="outline"
             disabled={disabled}
-            onClick={() =>
-              actions.start({ kind: "review", other, revision: review.pendingReviewRevision })
-            }
+            onClick={() => actions.start({ kind: "review", other, revision: review })}
           >
             I've reviewed this
           </Button>
         </div>
       )}
-      {reviewRequired && !review && (
-        <p className="text-xs text-muted-foreground">
-          Review status must be current before sending or requesting forgiveness.
-        </p>
-      )}
-      {group && (
-        <Options
-          options={groupOptions(group, user.id)}
-          actions={actions}
-          blocked={(action) => disabled || (reviewRequired && needsReview(action))}
-          intent={(action) => ({ kind: "group", other, action, revision: group.revision })}
-          description="This updates every open receipt with them. Verify the balance before continuing."
-        />
-      )}
+      <Options
+        available={group.actions}
+        labels={GROUP_ACTIONS}
+        actions={actions}
+        disabled={disabled}
+        intent={(action) => ({ kind: "group", other, action, revision: group.revision })}
+        description="This updates every open receipt with them. Verify the balance before continuing."
+      />
       <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-2 border-b pb-2 text-center text-xs font-semibold sm:grid-cols-[minmax(0,1fr)_6rem_6rem]">
         <span className="text-left text-muted-foreground">Table / amount</span>
         <span className="flex items-center justify-center gap-1">
@@ -199,9 +166,10 @@ function ReceiptsBody({
                   queryKey={queryKey}
                 />
                 <Options
-                  options={lineOptions(line, user.id)}
+                  available={line.actions}
+                  labels={LINE_ACTIONS}
                   actions={actions}
-                  blocked={(action) => disabled || (reviewRequired && needsReview(action))}
+                  disabled={disabled}
                   intent={(action) => ({
                     kind: "line",
                     other,
@@ -303,46 +271,56 @@ function ReceiptRow({
   );
 }
 
+/**
+ * The server's available actions as buttons. Ones that close receipts confirm first; ones waiting on a review
+ * stay visible but disabled.
+ */
 function Options<A extends string>({
-  options,
+  available,
+  labels,
   actions,
-  blocked,
+  disabled,
   intent,
   description,
   className,
 }: {
-  options: ActionOption<A>[];
+  available: { action: A; blockedByReview: boolean }[];
+  labels: Record<A, { label: string; confirm?: boolean }>;
   actions: Actions;
-  blocked: (action: A) => boolean;
+  disabled: boolean;
   intent: (action: A) => SettlementIntent;
   description: string;
   className?: string;
 }) {
-  if (options.length === 0) return null;
+  if (available.length === 0) return null;
+  const blocked = (action: A) =>
+    disabled || available.some((a) => a.action === action && a.blockedByReview);
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
-      {options.map(({ action, label, confirm }) =>
-        confirm ? (
-          <ConfirmAction
-            key={action}
-            label={label}
-            title={`${label}?`}
-            description={description}
-            disabled={blocked(action)}
-            onConfirm={() => actions.start(intent(action))}
-          />
-        ) : (
-          <Button
-            key={action}
-            size="sm"
-            variant="outline"
-            disabled={blocked(action)}
-            onClick={() => actions.start(intent(action))}
-          >
-            {label}
-          </Button>
-        ),
-      )}
+      {available
+        .map(({ action }) => ({ action, ...labels[action] }))
+        .map(({ action, label, confirm }) =>
+          confirm ? (
+            <ConfirmAction
+              key={action}
+              label={label}
+              title={`${label}?`}
+              description={description}
+              disabled={blocked(action)}
+              onConfirm={() => actions.start(intent(action))}
+            />
+          ) : (
+            <Button
+              key={action}
+              size="sm"
+              variant="outline"
+              disabled={blocked(action)}
+              onClick={() => actions.start(intent(action))}
+            >
+              {label}
+            </Button>
+          ),
+        )}
     </div>
   );
 }
@@ -360,34 +338,5 @@ export function Net({ cents, className }: { cents: bigint; className?: string })
       {cents < 0n ? "−" : cents > 0n ? "+" : ""}
       {formatPoints(cents < 0n ? -cents : cents)} pts
     </span>
-  );
-}
-
-/** An action whose outcome is unknown blocks the rest until it's retried with the same key or cleared. */
-export function PendingAction({ actions }: { actions: Actions }) {
-  return (
-    <>
-      {actions.storageError && <p role="alert">{actions.storageError} Actions are disabled.</p>}
-      {actions.message && <p role="alert">{actions.message}</p>}
-      {actions.pending && (
-        <div className="space-y-2 rounded-lg border bg-surface p-3">
-          <p>One settlement action has an unknown outcome. Retry it before making other changes.</p>
-          <Button
-            size="sm"
-            disabled={actions.busy || !!actions.storageError}
-            onClick={actions.retry}
-          >
-            Retry same action
-          </Button>{" "}
-          <ConfirmAction
-            label="Clear saved action"
-            title="Clear the saved action?"
-            description="Only clear it after checking the receipt history. The original action may have succeeded."
-            disabled={actions.busy || !!actions.storageError}
-            onConfirm={actions.clearAfterReview}
-          />
-        </div>
-      )}
-    </>
   );
 }

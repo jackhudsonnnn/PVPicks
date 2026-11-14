@@ -11,6 +11,7 @@ import {
   putDebtCap,
   putInvitePreferences,
   updateProfile,
+  deleteAccount,
 } from "./api";
 
 vi.mock("./api", async (importOriginal) => ({
@@ -21,7 +22,9 @@ vi.mock("./api", async (importOriginal) => ({
   putDebtCap: vi.fn(),
   getDebt: vi.fn(),
   updateProfile: vi.fn(),
+  deleteAccount: vi.fn(),
 }));
+const onAccountDeleted = vi.fn();
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me_one", hue: 2 };
 
@@ -30,7 +33,7 @@ function renderPage() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <PreferencesPage user={me} expire={() => {}} />
+      <PreferencesPage user={me} expire={() => {}} onAccountDeleted={onAccountDeleted} />
     </QueryClientProvider>,
   );
 }
@@ -126,5 +129,28 @@ describe("preferences page", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Account" }));
     fireEvent.click(await screen.findByRole("switch"));
     await waitFor(() => expect(putDebtCap).toHaveBeenCalledWith(null, expect.any(String)));
+  });
+
+  it("deletes the account once you're square, after your password", async () => {
+    vi.mocked(deleteAccount)
+      .mockRejectedValueOnce(
+        new BackendError("x", 409, "account_not_square", "Settle up", {
+          blockers: ["open_receipts"],
+        }),
+      )
+      .mockResolvedValueOnce();
+    renderPage();
+    fireEvent.click(screen.getByRole("tab", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete my account" }));
+    fireEvent.change(await screen.findByLabelText("Your password"), {
+      target: { value: "secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete forever" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("receipts that aren't paid");
+    expect(onAccountDeleted).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Your password"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete forever" }));
+    await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
+    expect(deleteAccount).toHaveBeenLastCalledWith("secret");
   });
 });

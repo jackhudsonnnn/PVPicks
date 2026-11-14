@@ -21,9 +21,8 @@ planned operations; it is not an implementation inventory.
   and washes, host points settlement, and individual/group receipt history,
   actions and private balance-change reviews. Review acknowledgments are
   durable per person and revision; pending warnings remain discoverable after
-  receipts close and independently of group-net overflow through the private
-  review list, and a counterparty list supports individual receipt histories
-  during overflow.
+  receipts close (groups with history carry them). Every receipt and group
+  lists the caller's available actions, marking ones that wait for a review.
 - The U2Pick lock worker, on by default in the dev profile
   (`PVPICKS_BET_LOCK_WORKER_ENABLED=false` turns it off). It does not lock
   sports bets.
@@ -77,8 +76,10 @@ planned operations; it is not an implementation inventory.
   points, table details, members and hosts with a per-member dialog, adding
   players, Quick Pick sharing, delete) or a read-only About panel. Tapping a
   person opens a profile with their record at the table, your receipts with
-  them, Report, Block and a live tomato throw. Reports are stored for a future
-  moderation queue (`POST /reports`); tomatoes are short-lived and
+  them, Report, Block and a live tomato throw. Reports reach the admin moderation
+  queue, where admins dismiss them or give strikes (three freeze the
+  account). Players can delete their account from Preferences once they're
+  square; tomatoes are short-lived and
   block-filtered (`/tables/{id}/tomatoes`). Subscribing to another table's
   Quick Picks is not yet connected. The mock-store
   prototype was removed from the client (git tag `prototype-ui`). The client
@@ -95,8 +96,8 @@ planned operations; it is not an implementation inventory.
 
 - Quick Pick copy propagation and end-to-end cap enforcement.
 - The player modes (Either Or, Prop Hunt, King Of The Hill) and the play-by-play modes (Choose Their Fate, Scorcerer, which need GOAT). The feed's NFL mapping still needs checking against live data.
-- The dev replay feed and per-game fixture slices (ADR 0005). Game history, players and player stats are stored.
-- Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
+- Chunks with player stats (stats recording began 2026-11-14). Dev scenario files and score-only chunks work now (see Dev sports data).
+- The remaining frontend integrations.
 - LAN/production security and deployment.
 
 The existing picks schema stores plaintext. The [roadmap](/roadmap) tracks the

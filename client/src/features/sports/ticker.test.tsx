@@ -23,6 +23,7 @@ const live: TickerGame = {
   home: { abbreviation: "BOS", score: 71 },
   away: { abbreviation: "NYK", score: 68 },
   observedAt: "2026-11-13T01:00:00Z",
+  dev: false,
 };
 
 function respond(status: number, body?: unknown) {

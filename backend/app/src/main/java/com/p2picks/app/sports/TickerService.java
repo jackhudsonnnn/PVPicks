@@ -36,14 +36,18 @@ class TickerService {
         Integer fresh = jdbc.queryForObject(
                 "SELECT count(*) FROM sports_feed_status WHERE last_success_at >= ?",
                 Integer.class, Timestamp.from(now.minus(freshness)));
-        if (fresh == null || fresh < League.values().length) return Optional.empty();
+        boolean live = fresh != null && fresh >= League.values().length;
         LocalDate today = LocalDate.ofInstant(now, ZoneId.of(GameSync.NEW_YORK));
-        return Optional.of(jdbc.query("""
+        // Dev games (dev scenarios and chunks) don't depend on the real feed, so they show even when it's stale;
+        // with no dev games, a stale feed still reads as unavailable rather than "no games".
+        List<TickerGame> games = jdbc.query("""
                 SELECT * FROM games
-                WHERE (starts_at AT TIME ZONE '%1$s')::date = ?
-                   OR (status = 'LIVE' AND (starts_at AT TIME ZONE '%1$s')::date < ?)
+                WHERE ((starts_at AT TIME ZONE '%1$s')::date = ?
+                       OR (status = 'LIVE' AND (starts_at AT TIME ZONE '%1$s')::date < ?))
+                  AND (? OR provider_id LIKE 'DEV-%%')
                 ORDER BY status = 'LIVE' DESC, starts_at, id
-                """.formatted(GameSync.NEW_YORK), (rs, row) -> game(rs), today, today));
+                """.formatted(GameSync.NEW_YORK), (rs, row) -> game(rs), today, today, live);
+        return live || !games.isEmpty() ? Optional.of(games) : Optional.empty();
     }
 
     private static TickerGame game(ResultSet rs) throws SQLException {
@@ -52,12 +56,13 @@ class TickerService {
                 rs.getString("clock"),
                 new TickerGame.Team(rs.getString("home_abbreviation"), (Integer) rs.getObject("home_score")),
                 new TickerGame.Team(rs.getString("away_abbreviation"), (Integer) rs.getObject("away_score")),
-                rs.getTimestamp("observed_at").toInstant().toString());
+                rs.getTimestamp("observed_at").toInstant().toString(),
+                rs.getString("provider_id").startsWith("DEV-"));
     }
 
-    /** The OpenAPI TickerGame: no bet, table, participant or financial data. */
+    /** The OpenAPI TickerGame: no bet, table, participant or financial data. `dev` marks dev data games. */
     record TickerGame(String id, String league, String status, String startsAt, Integer period, String clock,
-                      Team home, Team away, String observedAt) {
+                      Team home, Team away, String observedAt, boolean dev) {
         record Team(String abbreviation, Integer score) {}
     }
 }

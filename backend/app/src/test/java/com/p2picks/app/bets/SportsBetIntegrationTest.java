@@ -103,6 +103,10 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         assertThat(Instant.parse(bet.path("locksAt").asText())).as("locks at the start, before the window ends")
                 .isBeforeOrEqualTo(start.plusMillis(1));
         UUID betId = UUID.fromString(bet.path("id").asText());
+        assertThat(json.readTree(mvc.perform(get("/bets/" + betId).cookie(hostSession)).andReturn().getResponse()
+                .getContentAsString()).path("viewerCanOverride").asBoolean()).as("hosts may override").isTrue();
+        assertThat(json.readTree(mvc.perform(get("/bets/" + betId).cookie(aliceSession)).andReturn().getResponse()
+                .getContentAsString()).path("viewerCanOverride").asBoolean()).as("members may not").isFalse();
 
         mvc.perform(send(put("/bets/" + betId + "/pick"), aliceSession, csrf, "{\"choice\":\"Over 224.5\"}"))
                 .andExpect(status().isNoContent());

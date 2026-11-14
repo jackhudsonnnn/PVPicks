@@ -70,7 +70,10 @@ describe.runIf(phase === "pick")("isolated U2Pick integration: proposal and pick
     renderTable();
     await signIn("betuihost");
     fireEvent.click(screen.getByRole("button", { name: "Bet" }));
-    fireEvent.click(await screen.findByRole("button", { name: /U2Pick/ }));
+    // Mode availability (GET /modes) arrives with the table page; wait until U2Pick can be picked.
+    const u2pick = await screen.findByRole("button", { name: /U2Pick/ });
+    await waitFor(() => expect(u2pick).toBeEnabled());
+    fireEvent.click(u2pick);
     fireEvent.change(screen.getByLabelText("Bet question"), { target: { value: "Cats or dogs?" } });
     fireEvent.change(screen.getByLabelText("Option 1"), { target: { value: "Cats" } });
     fireEvent.change(screen.getByLabelText("Option 2"), { target: { value: "Dogs" } });

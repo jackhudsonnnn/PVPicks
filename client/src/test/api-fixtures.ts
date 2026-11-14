@@ -37,6 +37,39 @@ export const bet = {
   pickCount: 1,
   myPick: "Yes",
   myParticipation: "picked",
+  viewerCanCall: false,
+  viewerCanOverride: false,
 };
 /** A 200 JSON response. */
 export const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
+
+/** A small GIF library like `GET /gifs` returns. */
+export const gifCatalog = {
+  categories: [
+    { id: "hype", label: "Hype" },
+    { id: "money", label: "Money" },
+  ],
+  gifs: [
+    {
+      id: "g1",
+      url: "https://media.tenor.com/5lPd211l4iUAAAAM/cowboys-touchdown.gif",
+      alt: "Touchdown celebration",
+      category: "hype",
+      tags: ["touchdown"],
+    },
+    {
+      id: "g7",
+      url: "https://media.tenor.com/example/money.gif",
+      alt: "Making it rain",
+      category: "money",
+      tags: ["money"],
+    },
+  ],
+};
+
+/** Mode availability like `GET /modes` returns today: U2Pick and the two score modes. */
+export const modeAvailability = new Map<string, boolean>([
+  ["u2pick", true],
+  ["total_disaster", true],
+  ["give_and_take", true],
+]);

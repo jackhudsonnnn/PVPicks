@@ -15,7 +15,8 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
     pick in an open bet shows green ("in play", from
     `GET /me/bets?status=ACTIVE`).
   - On desktop the cards stack as rows in a scrolling box, and a Tickets
-    column sits beside them. It lists every bet at your tables: live first,
+    column sits beside them in a scrolling box of the same height. Both
+    boxes have transparent backgrounds. It lists every bet at your tables: live first,
     then pending, resolved and washed, newest first within each. It loads
     more as you scroll, and "All tickets" opens the Tickets page. Phones use
     the Tickets page instead.
@@ -42,7 +43,10 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   the open bets fanned as cards in the middle; tap the front card to open its
   ticket. A side panel (tabs on phones) holds Chat, Peers (everyone's Settle
   and True points at the table) and Host (or About for members): points
-  settlement, members, roles, permissions and table settings.
+  settlement, members, roles, permissions and table settings. The page loads
+  only the table's live bets; older ones load when opened. Tapping a person
+  shows their record at the table (computed by the server) and their bets
+  there, newest first, a page at a time.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
   dropdown), paged. A ticket says which table it's from and links to it; its
@@ -62,9 +66,18 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
 
 - **Chat:** each table has a Bets/Chat tab pair. Chat loads at your first
   unread message (marked "New"), pages older history, sends text (1–2000
-  characters) and catalog GIFs, toggles one reaction per message, and moves
-  your read position forward as new messages reach the bottom. Your text, GIF
-  and reaction permissions apply.
+  characters) and GIFs from the server's library, toggles one reaction per
+  message, and moves your read position forward as new messages reach the
+  bottom. Your text, GIF and reaction permissions apply. Bet cards show each
+  bet's question, mode and current status, also in deleted tables' archives.
+
+- **Dev data** (dev backend only): a Dev page in the navigation starts
+  scenario files and recorded chunks that add DEV games, marked DEV in the
+  ticker and game picker. See `docs/site/dev-sports-data.md`.
+
+- **Permissions come from the server.** Which bets you may call or override,
+  which receipt actions you may take, and which modes can be proposed are all
+  sent by the backend; the client only renders them.
 
 - **Ticker:** a strip under the header (games sized to their content on phones) shows today's NBA and NFL games from
   `GET /ticker`, live first, and says when live scores are unavailable rather
@@ -77,9 +90,16 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   clock) saved on this device.
 - **How to play:** the game modes, bet lifecycle and payout rules, and a
   feedback form that sends to the backend.
-- **Admin:** an admin account sees only a site-health view (database and
-  cache status); it can't join tables, bet or chat. User audit, moderation and
-  reports are not built yet.
+- **Admin:** an admin account sees only admin tools; it can't join tables,
+  bet or chat.
+  - **Moderation:** open reports, with the reported message, to dismiss or
+    strike (the third strike freezes the account and signs it out), plus
+    players with strikes or frozen accounts, to unfreeze or clear strikes.
+  - **Site health:** database and cache status.
+- **Account deletion:** Preferences → Account → "Delete my account", with
+  your password. It's refused, with the reason, until you're square (no open
+  bets, unsettled table points or open receipts). A frozen account sees
+  "This account is frozen" at sign-in.
 
 Quick Pick subscriptions, the player-stat bet modes and registration are not
 connected. The earlier

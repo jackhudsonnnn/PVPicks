@@ -35,6 +35,8 @@ const active: Bet = {
   pickCount: 2,
   myPick: "Yes",
   myParticipation: "picked",
+  viewerCanCall: false,
+  viewerCanOverride: false,
 };
 
 const locked: Bet = {

@@ -21,6 +21,8 @@ const bet = {
   pickCount: 0,
   myPick: null,
   myParticipation: "not_joined",
+  viewerCanCall: false,
+  viewerCanOverride: false,
 };
 const json = (value: unknown) => new Response(JSON.stringify(value));
 

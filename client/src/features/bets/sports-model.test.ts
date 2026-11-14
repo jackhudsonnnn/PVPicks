@@ -5,6 +5,7 @@ import type { TickerGame } from "@/features/sports/api";
 const game = (id: string, status: TickerGame["status"], startsAt: string): TickerGame => ({
   id,
   league: "NBA",
+  dev: false,
   status,
   startsAt,
   home: { abbreviation: "BOS", score: status === "SCHEDULED" ? null : 101 },

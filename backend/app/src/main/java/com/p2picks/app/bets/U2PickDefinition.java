@@ -28,7 +28,7 @@ record U2PickDefinition(String question, List<String> choices) {
             String key = choice.toLowerCase(Locale.ROOT);
             if (choice.isEmpty() || !PostgresText.valid(choice)
                     || choice.codePointCount(0, choice.length()) > 40
-                    || key.equals("no guess") || key.equals("__no_guess__") || !seen.add(key)) {
+                    || key.equals("no guess") || !seen.add(key)) {
                 throw new IllegalArgumentException("Invalid U2Pick choice");
             }
             normalized.add(choice);

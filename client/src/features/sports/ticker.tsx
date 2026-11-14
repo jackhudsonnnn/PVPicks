@@ -57,6 +57,7 @@ function TickerItems({ games, sourceCount }: { games: TickerGame[]; sourceCount:
           >
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold">
               {game.league}
+              {game.dev && " · DEV"}
             </span>
             <span className="scoreboard text-base">
               {game.away.abbreviation} {started ? (game.away.score ?? "") : ""}

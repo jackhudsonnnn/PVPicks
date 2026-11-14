@@ -80,6 +80,7 @@ services:
       PVPICKS_OUTBOX_RETENTION: ${PVPICKS_OUTBOX_RETENTION:-P7D}
       PVPICKS_BALLDONTLIE_API_KEY: ${PVPICKS_BALLDONTLIE_API_KEY:-}
       PVPICKS_SPORTS_RECORDING_DIR: /recordings
+      PVPICKS_DEV_SPORTS_DIR: /dev-sports
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,6 +91,8 @@ services:
     volumes:
       # Raw sports feed responses, one timestamped file each (git-ignored); see backend/README.md.
       - ../../recordings/sports:/recordings
+      # Dev scenario files (committed) and recorded chunks (git-ignored); see docs/site/dev-sports-data.md.
+      - ../../dev/sports:/dev-sports:ro
     ports:
       - "127.0.0.1:${PVPICKS_PORT:-8080}:8080"
     healthcheck:

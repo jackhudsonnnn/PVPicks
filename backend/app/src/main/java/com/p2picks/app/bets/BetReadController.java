@@ -5,10 +5,14 @@ import static com.p2picks.app.common.ApiErrors.error;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,12 +38,78 @@ class BetReadController {
         this.json = json;
     }
 
+    /**
+     * The table's live bets, oldest first: Active, Pending, and resolved non-4fun bets whose points aren't settled
+     * yet (the same set that blocks deleting the table). Older bets are read one at a time or per member.
+     */
     @GetMapping("/tables/{tableId}/bets")
     ResponseEntity<?> list(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tableId) {
-        ReadResult result = read(jwt, tableId, null);
+        ReadResult result = read(jwt, new Filter(tableId, null, null, true, null, null, null, null));
         if (!result.authenticated()) return unauthorized();
         if (!result.tableAccessible()) return notFound();
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.bets());
+    }
+
+    /**
+     * Bets at a table that involve a member, newest first and paged: ones they proposed, and ones they joined once
+     * picks are public (after lock). The viewer's own Active participation counts too.
+     */
+    @GetMapping("/tables/{tableId}/members/{userId}/bets")
+    ResponseEntity<?> memberBets(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tableId,
+                                 @PathVariable UUID userId,
+                                 @RequestParam(required = false) String cursor,
+                                 @RequestParam(required = false) Integer limit) {
+        int size = limit == null ? DEFAULT_PAGE : limit;
+        if (size < 1 || size > MAX_PAGE) return badRequest("limit must be between 1 and " + MAX_PAGE + ".");
+        Cursor after;
+        try {
+            after = cursor == null ? null : Cursor.decode(cursor);
+        } catch (IllegalArgumentException invalid) {
+            return badRequest("Invalid cursor.");
+        }
+        ReadResult result = read(jwt, new Filter(tableId, null, null, false, userId,
+                after == null ? null : after.createdAt(), after == null ? null : after.id(), size + 1));
+        if (!result.authenticated()) return unauthorized();
+        if (!result.tableAccessible()) return notFound();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(page(result.bets(), size));
+    }
+
+    /** A member's record at a table: resolved, non-4fun bets they picked in, how many they won or lost, and the net. */
+    @GetMapping("/tables/{tableId}/members/{userId}/record")
+    ResponseEntity<?> record(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tableId,
+                             @PathVariable UUID userId) {
+        List<Map<String, Object>> rows = jdbc.query("""
+                WITH viewer AS (
+                    SELECT u.id FROM auth_sessions s JOIN users u ON u.id = s.user_id
+                    WHERE s.id = ? AND u.id = ? AND s.revoked_at IS NULL
+                      AND s.expires_at > now() AND u.status = 'ACTIVE' AND u.role = 'PLAYER'
+                ), results AS (
+                    SELECT COALESCE((SELECT sum(le.delta_cents) FROM ledger_entries le
+                                     WHERE le.bet_id = b.id AND le.user_id = ?), 0) AS delta
+                    FROM bets b JOIN picks p ON p.bet_id = b.id AND p.user_id = ?
+                    WHERE b.table_id = ? AND b.status = 'SETTLED' AND NOT b.is_4fun
+                )
+                SELECT EXISTS (SELECT 1 FROM table_members m JOIN tables t ON t.id = m.table_id
+                               WHERE m.user_id = viewer.id AND t.id = ? AND t.archived_at IS NULL) AS accessible,
+                       (SELECT count(*) FROM results) AS played,
+                       (SELECT count(*) FROM results WHERE delta > 0) AS won,
+                       (SELECT count(*) FROM results WHERE delta < 0) AS lost,
+                       (SELECT COALESCE(sum(delta), 0) FROM results) AS net
+                FROM viewer
+                """, (rs, row) -> {
+                    Map<String, Object> record = new LinkedHashMap<>();
+                    record.put("accessible", rs.getBoolean("accessible"));
+                    record.put("played", rs.getLong("played"));
+                    record.put("won", rs.getLong("won"));
+                    record.put("lost", rs.getLong("lost"));
+                    record.put("netCents", rs.getLong("net"));
+                    return record;
+                }, UUID.fromString(jwt.getId()), UUID.fromString(jwt.getSubject()), userId, userId, tableId,
+                tableId);
+        if (rows.isEmpty()) return unauthorized();
+        Map<String, Object> record = rows.getFirst();
+        if (!(Boolean) record.remove("accessible")) return notFound();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(record);
     }
 
     @GetMapping("/bets/{betId}")
@@ -73,16 +143,20 @@ class BetReadController {
         } catch (IllegalArgumentException invalid) {
             return badRequest("Invalid cursor.");
         }
-        ReadResult result = read(jwt, new Filter(tableId, null, status,
+        ReadResult result = read(jwt, new Filter(tableId, null, status, false, null,
                 after == null ? null : after.createdAt(), after == null ? null : after.id(), size + 1));
         if (!result.authenticated()) return unauthorized();
         if (tableId != null && !result.tableAccessible()) return notFound();
-        List<JsonNode> page = result.bets().size() > size ? result.bets().subList(0, size) : result.bets();
-        String next = result.bets().size() > size ? Cursor.of(page.getLast()).encode() : null;
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(page(result.bets(), size));
+    }
+
+    /** A BetPage from `size + 1` rows: the extra row only says there's more. */
+    private static Map<String, Object> page(List<JsonNode> rows, int size) {
+        List<JsonNode> items = rows.size() > size ? rows.subList(0, size) : rows;
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("items", page);
-        body.put("nextCursor", next);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+        body.put("items", items);
+        body.put("nextCursor", rows.size() > size ? Cursor.of(items.getLast()).encode() : null);
+        return body;
     }
 
     /** Opaque page position: the last bet's creation time and id, base64url-encoded. */
@@ -109,7 +183,7 @@ class BetReadController {
     }
 
     private ReadResult read(Jwt jwt, UUID tableId, UUID betId) {
-        return read(jwt, new Filter(tableId, betId, null, null, null, null));
+        return read(jwt, new Filter(tableId, betId, null, false, null, null, null, null));
     }
 
     /**
@@ -186,6 +260,12 @@ class BetReadController {
                     WHERE (?::uuid IS NULL OR bet.table_id = ?::uuid)
                       AND (?::uuid IS NULL OR bet.id = ?::uuid)
                       AND (?::text IS NULL OR bet.status = ?::text)
+                      AND (NOT ?::boolean OR bet.status IN ('ACTIVE', 'PENDING')
+                           OR (bet.status = 'SETTLED' AND NOT bet.is_4fun AND bet.points_settled_at IS NULL))
+                      AND (?::uuid IS NULL OR bet.proposer_id = ?::uuid OR EXISTS (
+                           SELECT 1 FROM bet_participants involved
+                           WHERE involved.bet_id = bet.id AND involved.user_id = ?::uuid
+                             AND (bet.status <> 'ACTIVE' OR involved.user_id = viewer.id)))
                       AND (?::timestamptz IS NULL OR (bet.created_at, bet.id) < (?::timestamptz, ?::uuid))
                     ORDER BY %s
                     LIMIT ?::int
@@ -199,9 +279,10 @@ class BetReadController {
                         String value = rs.getString("bet");
                         if (value != null) bets.add(parseBet(value));
                     } while (rs.next());
-                    return new ReadResult(true, accessible, List.copyOf(bets));
+                    return new ReadResult(true, accessible, withCapabilities(userId, bets));
                 }, sessionId, userId, filter.tableId(), filter.tableId(), filter.tableId(), filter.betId(),
-                filter.betId(), filter.status(), filter.status(), filter.afterCreatedAt(), filter.afterCreatedAt(),
+                filter.betId(), filter.status(), filter.status(), filter.live(), filter.involving(),
+                filter.involving(), filter.involving(), filter.afterCreatedAt(), filter.afterCreatedAt(),
                 filter.afterId(), filter.limit());
     }
 
@@ -234,6 +315,60 @@ class BetReadController {
 
     private record ReadResult(boolean authenticated, boolean tableAccessible, List<JsonNode> bets) {}
 
-    private record Filter(UUID tableId, UUID betId, String status, OffsetDateTime afterCreatedAt, UUID afterId,
-                          Integer limit) {}
+    private record Filter(UUID tableId, UUID betId, String status, boolean live, UUID involving,
+                          OffsetDateTime afterCreatedAt, UUID afterId, Integer limit) {}
+
+    private record Member(UUID userId, boolean host, boolean eligible) {}
+
+    /**
+     * Adds what the viewer may do with each bet, using the same rules the mutations enforce: `viewerCanCall` (call
+     * a Pending U2Pick's result, per its settler rule) and `viewerCanOverride` (a host on a sports bet before points
+     * are settled). The client only renders these.
+     */
+    private List<JsonNode> withCapabilities(UUID viewer, List<JsonNode> bets) {
+        if (bets.isEmpty()) return List.of();
+        Set<String> tableIds = new HashSet<>();
+        bets.forEach(bet -> tableIds.add(bet.path("tableId").asText()));
+        Map<String, List<Member>> members = new HashMap<>();
+        jdbc.query("""
+                SELECT m.table_id, m.user_id, m.role, u.status, u.role AS account_role
+                FROM table_members m JOIN users u ON u.id = m.user_id
+                WHERE m.table_id = ANY (?::uuid[])
+                """, (org.springframework.jdbc.core.RowCallbackHandler) rs -> members
+                .computeIfAbsent(rs.getString("table_id"), ignored -> new ArrayList<>())
+                .add(new Member(rs.getObject("user_id", UUID.class), rs.getString("role").equals("HOST"),
+                        rs.getString("status").equals("ACTIVE") && rs.getString("account_role").equals("PLAYER"))),
+                (Object) tableIds.toArray(String[]::new));
+        List<JsonNode> result = new ArrayList<>();
+        for (JsonNode bet : bets) {
+            ObjectNode withFlags = ((ObjectNode) bet).deepCopy();
+            List<Member> atTable = members.getOrDefault(bet.path("tableId").asText(), List.of());
+            boolean host = atTable.stream().anyMatch(member -> member.userId().equals(viewer) && member.host());
+            withFlags.put("viewerCanCall", canCall(bet, viewer, atTable));
+            withFlags.put("viewerCanOverride", host
+                    && SportsProposalService.MODES.contains(bet.path("modeId").asText())
+                    && !bet.path("pointsSettled").asBoolean());
+            result.add(withFlags);
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean canCall(JsonNode bet, UUID viewer, List<Member> atTable) {
+        if (!bet.path("modeId").asText().equals("u2pick") || bet.has("sourceBetId")
+                || !bet.path("status").asText().equals("PENDING") || !bet.path("settledBy").isTextual()) {
+            return false;
+        }
+        Set<UUID> eligible = new HashSet<>();
+        Set<UUID> hosts = new HashSet<>();
+        for (Member member : atTable) {
+            if (!member.eligible()) continue;
+            eligible.add(member.userId());
+            if (member.host()) hosts.add(member.userId());
+        }
+        Set<UUID> inPot = new HashSet<>();
+        bet.path("picks").forEach(pick -> inPot.add(UUID.fromString(pick.path("userId").asText())));
+        U2PickSettler.Rule rule = U2PickSettler.Rule.valueOf(bet.path("settledBy").asText().toUpperCase(Locale.ROOT));
+        return U2PickSettler.canSettle(rule, viewer, UUID.fromString(bet.path("proposerId").asText()), eligible,
+                hosts, inPot);
+    }
 }

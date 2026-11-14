@@ -1,17 +1,10 @@
-import type { BetStatus } from "./types";
 import type { Bet } from "./api";
+import { statusOf, type BetStatus } from "./statuses";
 import type { Table } from "@/features/tables";
 
 /** What a bet ticket shows, derived only from the server's projection of the bet for this viewer. */
 
-const STATUS: Record<Bet["status"], BetStatus> = {
-  ACTIVE: "active",
-  PENDING: "pending",
-  SETTLED: "resolved",
-  WASHED: "washed",
-};
-
-export const ticketStatus = (bet: Bet): BetStatus => STATUS[bet.status];
+export const ticketStatus = (bet: Bet): BetStatus => statusOf(bet.status);
 
 /** Whole seconds until picks lock, never negative. The server locks the bet; the client only counts down. */
 export function secondsLeft(bet: Bet, nowMs: number) {

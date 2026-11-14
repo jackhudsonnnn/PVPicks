@@ -5,6 +5,8 @@ import { ArrowRight } from "lucide-react";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { EmptyState } from "@/components/empty-state";
 import { LoadMore } from "@/components/load-more";
+import { ScrollContainer } from "@/components/scroll-container";
+import { Button } from "@/components/ui/button";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
@@ -13,7 +15,7 @@ import { listTables } from "@/features/tables";
 import { useBetActions } from "@/features/bets/actions";
 import { listMyBets } from "@/features/bets/api";
 import { FIRST_TICKET_PAGE, nextTicketPage } from "@/features/bets/ticket-feed";
-import { BetMutationStatus } from "./bet-controls";
+import { ActionStatus } from "@/components/action-status";
 import { BetTicket } from "./ticket";
 
 /** Fill the column before waiting for a scroll: a status with few bets shouldn't leave it nearly empty. */
@@ -21,7 +23,7 @@ const MIN_SHOWN = 6;
 
 /**
  * Desktop Home's Tickets column: every bet at your tables, live first, then pending, resolved and washed (newest
- * first within each), loading more as you scroll. Table cards refresh it when a table's bets change.
+ * first within each), in a box as tall as the tables box that loads more as you scroll inside it. Table cards refresh it when a table's bets change.
  */
 export function HomeTickets({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
@@ -68,14 +70,18 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
         >
           Tickets
         </h2>
-        <Link
-          to="/tickets"
-          className="flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-semibold text-primary transition-colors hover:border-primary/60 hover:bg-surface-raised"
-        >
-          All tickets <ArrowRight className="size-3" />
-        </Link>
+        {/* Same button as "New table" beside it, so the two headers line up. */}
+        <Button asChild variant="outline" className="text-primary hover:text-primary">
+          <Link to="/tickets">
+            All tickets <ArrowRight />
+          </Link>
+        </Button>
       </div>
-      <BetMutationStatus actions={actions} />
+      <ActionStatus
+        actions={actions}
+        pendingText="A bet action may not have been saved."
+        checkText="Check the table's bets and your pick first."
+      />
       {bets.isPending ? (
         <p className="text-sm text-muted-foreground">Loading tickets…</p>
       ) : bets.isError ? (
@@ -85,7 +91,12 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
           No tickets yet. Head to a table and propose one.
         </EmptyState>
       ) : (
-        <div className="space-y-4">
+        // Same height as the tables box beside it (tables/components/table-cards.tsx); scrolls inside.
+        <ScrollContainer
+          isVisible={false}
+          aria-label="Tickets"
+          className="h-[27rem] space-y-4 rounded-2xl border p-2 md:scrollbar-thin"
+        >
           <AnimatedList>
             {shown.map((bet) => {
               const table = byId.get(bet.tableId);
@@ -107,7 +118,7 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
           {hasNextPage && shown.length >= MIN_SHOWN && (
             <LoadMore loading={isFetchingNextPage} onLoad={() => void fetchNextPage()} />
           )}
-        </div>
+        </ScrollContainer>
       )}
     </section>
   );

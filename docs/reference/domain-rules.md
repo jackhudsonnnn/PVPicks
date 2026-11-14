@@ -22,6 +22,61 @@ backend test guidance before declaring the contract complete.
 Some frontend tests exercise presentation rather than backend rules and should
 remain frontend tests rather than being artificially ported.
 
+## Moderation and account lifecycle
+
+Owner decisions, 2026-11-14:
+
+- **Moderation queue.** Admins see reports (`GET /admin/reports`) with the
+  reported message as it was when reported. They dismiss each one, or resolve
+  it with a strike against the reported player. Strikes stop at three, and
+  reaching three freezes the account (again after an unfreeze). Clearing
+  strikes doesn't unfreeze, and unfreezing doesn't clear strikes. Admin
+  actions are one-shot: repeating one answers `already_handled`.
+- **Frozen accounts can't sign in.** Freezing ends every session at once.
+  After a correct password, sign-in answers 403 `account_frozen`. Bets, picks
+  and receipts are untouched. Hosted tables follow host recovery.
+- **Account deletion** (`POST /me/delete`, with your password):
+  - It's blocked until you're square: no Active or Pending bet you proposed or
+    joined, no unsettled table points, and no open receipts.
+  - It then removes personal data: profile, relationships, invite
+    preferences, chat text and GIFs, reactions, read positions, feedback,
+    debt cap, memberships and archive access, invitations and tomatoes.
+  - The account becomes "Deleted user", which bets, the ledger and receipts
+    keep referencing. Moderation records (reports, strikes) are kept.
+  - Hosted tables follow host recovery. Every session ends.
+- `accounts` coordinates freezing and deletion. Each module removes its own
+  data through its own API (`TableAccountChanges`, `ChatAccountCleanup`,
+  `SocialAccountCleanup`, `FeedbackAccountCleanup`,
+  `SettlementAccountChanges`; the checks are in `BetAccountChecks`).
+
+## What the client may decide
+
+The server owns every rule, and it tells the client what the viewer may do, so
+the client never re-derives permissions:
+
+- Bets carry `viewerCanCall` (call a Pending U2Pick's result under its settler
+  rule, using the same `U2PickSettler` the result call enforces) and
+  `viewerCanOverride` (a host, a sports bet, points not yet settled).
+- Every receipt (history, groups, line actions) and every group lists the
+  caller's available `actions`, computed by the same `ReceiptActions` rules
+  the transitions enforce. Sending and asking to forgive are listed with
+  `blockedByReview` while a balance-change warning is unreviewed.
+- `GET /modes` says which bet modes accept proposals; the client only
+  describes modes.
+- `GET /gifs` serves the GIF library; sending accepts only its ids.
+
+Reads are bounded: `GET /tables/{id}/bets` returns the live set (Active,
+Pending, and resolved non-4fun bets whose points aren't settled), older bets
+are read one at a time, and a member's bets at a table are paged
+(`GET /tables/{id}/members/{userId}/bets`) with their record computed by the
+server (`.../record`: resolved, non-4fun bets with a pick; washed and 4fun
+bets don't count). Chat bet messages embed the bet's question, mode and status.
+A receipt group whose net exceeds the 64-bit range still fails with
+`group_net_out_of_range`; there is no separate fallback.
+
+"No guess" is the only reserved choice text. The prototype's `__no_guess__`
+marker was dropped (V33).
+
 ## Proposal, pick and lock
 
 U2Pick, the first bet mode, is available end to end over HTTP and in the
@@ -157,9 +212,17 @@ host does not satisfy this check, although a frozen member may be promoted.
 The table lock serializes host changes. Future freeze, unfreeze, deletion and
 membership writers must take their required user locks first and then lock all
 affected tables in a consistent order before changing relevant status or
-membership, with fresh READ COMMITTED checks. This protects the step-down
-decision but a later freeze can still leave no active host; recovery is not
-implemented and the schema does not enforce this coordination.
+membership, with fresh READ COMMITTED checks.
+
+**Host recovery** (owner decision, 2026-11-14). When a freeze or account deletion leaves a
+table with no `ACTIVE` host, the table goes to its **oldest member**: the
+earliest-joined member (`joined_at`, then user id) whose account is still
+active. They're promoted like any host, with the usual "is now a host" chat
+line. If no active member is left, the table is archived like a host deletion:
+former members keep read-only chat for 90 days. This happens even if bets are
+still open, since nobody could settle them. Unfreezing doesn't restore
+hosting. `tables.TableAccountChanges` implements this, locking each affected
+table after the account's user lock.
 
 Promotion clears all member restrictions; demotion leaves those permissions
 enabled and cancels that host's pending invitations for the table in the same

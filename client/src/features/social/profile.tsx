@@ -13,7 +13,8 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { StatusBadge, MODES, type Bet, ticketStatus } from "@/features/bets";
+import { MODES, StatusBadge, ticketStatus, useMemberBets, useMemberRecord } from "@/features/bets";
+import { LoadMore } from "@/components/load-more";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,6 @@ import { BackendError, backendErrorMessage } from "@/lib/api-client";
 import { type Table, throwTomato } from "@/features/tables";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { BlockDialog, ReportDialog, type SocialActions } from "./safety";
-import { betsInvolving, profileStats } from "./profile-model";
 import { userKey } from "@/lib/query-keys";
 import { listSettlementGroups, receiptHistory } from "@/features/settlements";
 import { useRelationships } from "./queries";
@@ -36,7 +36,6 @@ type Tab = "bets" | "settlements";
 export function ProfileDialog({
   userId,
   table,
-  bets,
   user,
   expire,
   peopleKey,
@@ -46,7 +45,6 @@ export function ProfileDialog({
 }: {
   userId: string | null;
   table: Table;
-  bets: Bet[] | undefined;
   user: User;
   expire: () => void;
   peopleKey: readonly string[];
@@ -59,8 +57,10 @@ export function ProfileDialog({
   const self = id === user.id;
   const person = usePerson(id, user, expire, peopleKey);
   const name = person?.name ?? "…";
-  const theirs = betsInvolving(bets ?? [], id, user.id);
-  const stats = profileStats(bets ?? [], id);
+  const record = useMemberRecord(user.id, table.id, id, expire);
+  const history = useMemberBets(user.id, table.id, id, expire);
+  const theirs = history.data?.pages.flatMap((page) => page.items) ?? [];
+  const stats = record.data ?? { played: 0, won: 0, lost: 0, netCents: 0 };
   const groups = useQuery({
     queryKey: [...userKey(user.id, "settlements"), "groups"],
     queryFn: ({ signal }) => listSettlementGroups(user.id, signal),
@@ -145,6 +145,10 @@ export function ProfileDialog({
         <ScrollContainer isVisible={false} className="-mx-1 min-h-0 flex-1 px-1">
           {tab === "settlements" && !self && userId ? (
             <Receipts otherId={id} tableId={table.id} user={user} expire={expire} />
+          ) : history.isPending ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading bets…</p>
+          ) : history.isError ? (
+            <p role="alert">{backendErrorMessage(history.error)}</p>
           ) : theirs.length === 0 ? (
             <EmptyState className="py-8">No bets here yet.</EmptyState>
           ) : (
@@ -193,6 +197,14 @@ export function ProfileDialog({
                   </li>
                 );
               })}
+              {history.hasNextPage && (
+                <li>
+                  <LoadMore
+                    loading={history.isFetchingNextPage}
+                    onLoad={() => void history.fetchNextPage()}
+                  />
+                </li>
+              )}
             </ul>
           )}
         </ScrollContainer>

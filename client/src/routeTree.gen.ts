@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DevRouteImport } from './routes/dev'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as PreferencesRouteImport } from './routes/preferences'
@@ -20,6 +21,11 @@ import { Route as TablesTableIdRouteImport } from './routes/tables.$tableId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevRoute = DevRouteImport.update({
+  id: '/dev',
+  path: '/dev',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FriendsRoute = FriendsRouteImport.update({
@@ -55,6 +61,7 @@ const TablesTableIdRoute = TablesTableIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dev': typeof DevRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dev': typeof DevRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dev': typeof DevRoute
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/dev'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/dev'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/dev'
     | '/friends'
     | '/how-to-play'
     | '/preferences'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevRoute: typeof DevRoute
   FriendsRoute: typeof FriendsRoute
   HowToPlayRoute: typeof HowToPlayRoute
   PreferencesRoute: typeof PreferencesRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev': {
+      id: '/dev'
+      path: '/dev'
+      fullPath: '/dev'
+      preLoaderRoute: typeof DevRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/friends': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevRoute: DevRoute,
   FriendsRoute: FriendsRoute,
   HowToPlayRoute: HowToPlayRoute,
   PreferencesRoute: PreferencesRoute,

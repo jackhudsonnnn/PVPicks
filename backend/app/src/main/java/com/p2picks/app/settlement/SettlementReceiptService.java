@@ -31,9 +31,18 @@ class SettlementReceiptService {
             return status.equals("unpaid") || status.equals("disputed") || status.equals("forgive_asked");
         }
     }
-    record Result(Outcome outcome, Line line) {}
-    record History(boolean authenticated, boolean player, List<Line> lines) {}
-    record Counterparties(boolean authenticated, boolean player, List<UUID> userIds) {}
+    /** A receipt as the API returns it: the line plus what the viewer may do with it. */
+    record LineView(UUID id, UUID settlementId, UUID tableId, UUID payerId, UUID payeeId, long amountCents,
+                    String status, int revision, OffsetDateTime forgiveRequestedAt, OffsetDateTime forgiveDeclinedAt,
+                    OffsetDateTime createdAt, OffsetDateTime updatedAt, List<ReceiptActions.Available> actions) {
+        static LineView of(Line line, List<ReceiptActions.Available> actions) {
+            return new LineView(line.id(), line.settlementId(), line.tableId(), line.payerId(), line.payeeId(),
+                    line.amountCents(), line.status(), line.revision(), line.forgiveRequestedAt(),
+                    line.forgiveDeclinedAt(), line.createdAt(), line.updatedAt(), actions);
+        }
+    }
+    record Result(Outcome outcome, LineView line) {}
+    record History(boolean authenticated, boolean player, List<LineView> lines) {}
 
     static class StaleRevision extends RuntimeException {}
     static class InvalidTransition extends RuntimeException {}
@@ -59,31 +68,6 @@ class SettlementReceiptService {
         this.outbox = outbox;
     }
 
-    Counterparties counterparties(Jwt jwt) {
-        UUID actor = UUID.fromString(jwt.getSubject());
-        return jdbc.query("""
-                WITH viewer AS (
-                    SELECT u.id, u.role FROM users u JOIN auth_sessions s ON s.user_id = u.id
-                    WHERE u.id = ? AND s.id = ? AND u.status = 'ACTIVE'
-                      AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
-                )
-                SELECT DISTINCT viewer.role AS viewer_role,
-                    CASE WHEN l.payer_id = viewer.id THEN l.payee_id ELSE l.payer_id END AS other_id
-                FROM viewer LEFT JOIN settlement_lines l
-                    ON (l.payer_id = viewer.id OR l.payee_id = viewer.id) AND viewer.role = 'PLAYER'
-                ORDER BY other_id
-                """, rs -> {
-                    if (!rs.next()) return new Counterparties(false, false, List.of());
-                    boolean player = "PLAYER".equals(rs.getString("viewer_role"));
-                    List<UUID> userIds = new ArrayList<>();
-                    do {
-                        UUID other = rs.getObject("other_id", UUID.class);
-                        if (other != null) userIds.add(other);
-                    } while (rs.next());
-                    return new Counterparties(true, player, List.copyOf(userIds));
-                }, actor, UUID.fromString(jwt.getId()));
-    }
-
     History history(Jwt jwt, UUID otherId, UUID tableId) {
         UUID actor = UUID.fromString(jwt.getSubject());
         return jdbc.query("""
@@ -92,7 +76,9 @@ class SettlementReceiptService {
                     WHERE u.id = ? AND s.id = ? AND u.status = 'ACTIVE'
                       AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
                 )
-                SELECT viewer.role AS viewer_role, l.*
+                SELECT viewer.role AS viewer_role, clock_timestamp() AS read_at,
+                    EXISTS (SELECT 1 FROM settlement_pair_reviews r WHERE r.user_id = viewer.id
+                            AND r.other_user_id = ? AND r.reviewed_at IS NULL) AS review_pending, l.*
                 FROM viewer LEFT JOIN settlement_lines l ON
                     ((l.payer_id = viewer.id AND l.payee_id = ?)
                       OR (l.payee_id = viewer.id AND l.payer_id = ?))
@@ -103,12 +89,16 @@ class SettlementReceiptService {
                 """, rs -> {
                     if (!rs.next()) return new History(false, false, List.of());
                     boolean player = "PLAYER".equals(rs.getString("viewer_role"));
-                    List<Line> lines = new ArrayList<>();
+                    OffsetDateTime now = rs.getObject("read_at", OffsetDateTime.class);
+                    boolean reviewPending = rs.getBoolean("review_pending");
+                    List<LineView> lines = new ArrayList<>();
                     do {
-                        if (rs.getObject("id", UUID.class) != null) lines.add(line(rs));
+                        if (rs.getObject("id", UUID.class) == null) continue;
+                        Line line = line(rs);
+                        lines.add(LineView.of(line, ReceiptActions.forLine(line, actor, now, reviewPending)));
                     } while (rs.next());
                     return new History(true, player, List.copyOf(lines));
-                }, actor, UUID.fromString(jwt.getId()), otherId, otherId, tableId, tableId);
+                }, actor, UUID.fromString(jwt.getId()), otherId, otherId, otherId, tableId, tableId);
     }
 
     @Transactional
@@ -135,7 +125,7 @@ class SettlementReceiptService {
         if (!lockedUsers.containsKey(current.payerId()) || !lockedUsers.containsKey(current.payeeId())) {
             throw new AffectedUsersChanged();
         }
-        boolean payerAction = action == Action.SENT || action == Action.ASK_FORGIVE;
+        boolean payerAction = ReceiptActions.payerAction(action);
         if (!(payerAction ? current.payerId() : current.payeeId()).equals(actor)) {
             return new Result(Outcome.FORBIDDEN, null);
         }
@@ -143,42 +133,26 @@ class SettlementReceiptService {
                 lineId + "|" + action.name() + "|" + expectedRevision, IdempotencyGuard.SuccessStatus.OK);
         authentication.requireUnexpired(jwt);
         if (claim == IdempotencyGuard.Claim.CONFLICT) return new Result(Outcome.CONFLICT, null);
-        if (claim == IdempotencyGuard.Claim.REPLAY) return new Result(Outcome.REPLAYED, current);
+        if (claim == IdempotencyGuard.Claim.REPLAY) return new Result(Outcome.REPLAYED, view(current, actor));
         if (current.revision() != expectedRevision) throw new StaleRevision();
         if (payerAction) reviews.requireReviewed(actor, current.payeeId());
 
         OffsetDateTime now = jdbc.queryForObject("SELECT clock_timestamp()", OffsetDateTime.class);
         if (now == null) throw new IllegalStateException("Database clock is unavailable");
+        if (!ReceiptActions.lineAllowed(current, action, actor, now)) throw new InvalidTransition();
         String status = current.status();
         OffsetDateTime requested = current.forgiveRequestedAt();
         OffsetDateTime declined = current.forgiveDeclinedAt();
         switch (action) {
-            case SENT -> {
-                if (!current.unpaid()) throw new InvalidTransition();
-                status = "sent";
-            }
-            case CONFIRM -> {
-                if (!current.unpaid() && !status.equals("sent")) throw new InvalidTransition();
-                status = "paid";
-            }
-            case DISPUTE -> {
-                if (!status.equals("sent")) throw new InvalidTransition();
-                status = requested == null ? "unpaid" : "forgive_asked";
-            }
-            case FORGIVE -> {
-                if (!current.unpaid()) throw new InvalidTransition();
-                status = "forgiven";
-            }
+            case SENT -> status = "sent";
+            case CONFIRM -> status = "paid";
+            case DISPUTE -> status = requested == null ? "unpaid" : "forgive_asked";
+            case FORGIVE -> status = "forgiven";
             case ASK_FORGIVE -> {
-                if (!current.unpaid() || current.hasOpenRequest()
-                        || (declined != null && now.isBefore(declined.plusHours(24)))) {
-                    throw new InvalidTransition();
-                }
                 status = "forgive_asked";
                 requested = now;
             }
             case DECLINE_FORGIVE -> {
-                if (!current.unpaid() || !current.hasOpenRequest()) throw new InvalidTransition();
                 status = "unpaid";
                 requested = null;
                 declined = now;
@@ -200,7 +174,18 @@ class SettlementReceiptService {
                 (rs, row) -> line(rs), lineId);
         if (result == null) throw new IllegalStateException("Updated receipt disappeared");
         authentication.requireUnexpired(jwt);
-        return new Result(Outcome.UPDATED, result);
+        return new Result(Outcome.UPDATED, view(result, actor));
+    }
+
+    /** A receipt with the actor's current actions, for transition responses. */
+    private LineView view(Line line, UUID actor) {
+        UUID other = line.payerId().equals(actor) ? line.payeeId() : line.payerId();
+        Boolean reviewPending = jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM settlement_pair_reviews
+                    WHERE user_id = ? AND other_user_id = ? AND reviewed_at IS NULL)
+                """, Boolean.class, actor, other);
+        OffsetDateTime now = jdbc.queryForObject("SELECT clock_timestamp()", OffsetDateTime.class);
+        return LineView.of(line, ReceiptActions.forLine(line, actor, now, Boolean.TRUE.equals(reviewPending)));
     }
 
     static Line line(ResultSet rs) throws SQLException {
