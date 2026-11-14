@@ -32,7 +32,7 @@
 
 - [x] Tables, members, invitations and Friends (follow, block, search) in the
       app.
-- [ ] Preferences: profile, debt cap and invite preferences.
+- [x] Preferences: who can add you, username, color and debt cap.
 
 - [ ] Replay saved games as the dev data stream, and keep a few trimmed games
       as test fixtures.
