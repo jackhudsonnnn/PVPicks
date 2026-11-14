@@ -30,7 +30,9 @@ without a key nothing is polled and the ticker reports itself unavailable.
 Every `PVPICKS_SPORTS_POLL_INTERVAL` (default 60 seconds) the poller makes one
 request per league for yesterday, today and tomorrow in America/New_York, so
 late games are found whether the provider dates them by UTC or local time, and
-places games by their own start time. That is two requests a minute, within the
+places games by their own start time. Verified on 2026-11-13: NBA lists a game
+under its Eastern date, NFL under its UTC date (a Thursday 8:15 pm ET kickoff is
+listed under Friday). That is two requests a minute, within the
 free tier's five. A failing league backs off exponentially, at least a minute
 when rate limited and at most ten minutes. Snapshots and per-league feed health
 are stored in `games` and `sports_feed_status` (V27).
