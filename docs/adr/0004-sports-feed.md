@@ -40,7 +40,11 @@ are stored in `games` and `sports_feed_status` (V27).
 The lifecycle comes from the provider's `status_state`; `delayed` counts as
 scheduled, `canceled`, `suspended` and `abandoned` as postponed, and `unknown`
 games are skipped. The free-text `status` is only a fallback and the live
-label. NBA games use `datetime`, `period` and `time`. NFL responses have no
+label. NBA games use `datetime`, `period` and `time`; observed live, `time`
+already includes the quarter (`"Q1 11:26"`), and a scheduled game's `status`
+is its start time, so `period` and `status_state`, not text parsing, decide
+the lifecycle. NBA's mapping was verified against live games on 2026-11-13.
+NFL responses have no
 clock or quarter field, so the period is the latest quarter with a score
 (overtime is period 5) and the label stands in for the clock; this still needs
 checking against live NFL games. Games without a readable start time or teams

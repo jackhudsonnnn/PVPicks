@@ -36,8 +36,9 @@ planned operations; it is not an implementation inventory.
   invitations, profiles of people they share a table or receipt with, minus
   blocks) and the ticker feed. Every delivery rechecks the session and
   membership. Published outbox rows are deleted after seven days.
-- The sports feed: BallDontLie NBA and NFL snapshots, polled only when
-  `PVPICKS_BALLDONTLIE_API_KEY` is set, and `GET /ticker`, which reports the
+- The sports feed: BallDontLie NBA and NFL snapshots (verified against live NBA
+  games), polled only when `PVPICKS_BALLDONTLIE_API_KEY` is set, with raw
+  responses recorded under `recordings/sports/`, and `GET /ticker`, which reports the
   feed as unavailable rather than empty when polling has failed.
 - The frontend entry point supports backend sign-in, session restoration,
   table and bet list/detail views, U2Pick creation, picking, result calling,
