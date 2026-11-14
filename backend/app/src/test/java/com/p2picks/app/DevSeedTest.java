@@ -57,12 +57,12 @@ class DevSeedTest {
                 JOIN users a ON a.id = f.follower_id JOIN users b ON b.id = f.followee_id ORDER BY 1
                 """, String.class)).containsExactly("intermediate>pro", "newbie>pro", "pro>intermediate");
 
-        jdbc.update("UPDATE tables SET name = 'Changed locally' WHERE quickpick_code = 'DEMA2A'");
+        jdbc.update("UPDATE tables SET name = 'Changed here' WHERE quickpick_code = 'DEMA2A'");
         jdbc.update("DELETE FROM picks WHERE choice = 'Pass'");
         jdbc.update("DELETE FROM follows WHERE follower_id = (SELECT id FROM users WHERE username = 'newbie')");
         seed(jdbc);
         assertThat(jdbc.queryForObject("SELECT name FROM tables WHERE quickpick_code = 'DEMA2A'", String.class))
-                .isEqualTo("Changed locally");
+                .isEqualTo("Changed here");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE choice = 'Pass'", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM follows", Integer.class)).as("removed follow").isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM p2picks_dev_seed.runs", Integer.class)).isEqualTo(2);

@@ -78,6 +78,7 @@ vi.mock("@/features/chat/api", async (importOriginal) => ({
   getChatUnread: vi.fn(),
   getChatWindow: vi.fn(),
   markRead: vi.fn(),
+  listLatestMessages: vi.fn(async () => []),
 }));
 vi.mock("@/features/social/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/social/api")>()),
@@ -152,6 +153,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   route.pathname = "/";
   vi.mocked(listTableBets).mockResolvedValue([]);
+  vi.mocked(listMyBets).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(listPendingReviews).mockResolvedValue([]);
   vi.mocked(getRelationships).mockResolvedValue({
     followingIds: [],
@@ -172,8 +174,6 @@ async function openTicket(question: string) {
   return within(await screen.findByRole("dialog"));
 }
 
-const counts = { ACTIVE: 0, PENDING: 0, SETTLED: 0, WASHED: 0 };
-
 /** The sidebar and the phone top bar each have a Sign out button; only one shows at a time. */
 const signOutButton = () => screen.getAllByRole("button", { name: /sign out/i })[0]!;
 
@@ -192,6 +192,7 @@ describe("backend app", () => {
         fromId: "123e4567-e89b-42d3-a456-426614174092",
         userId: user.id,
         createdAt: "2026-11-13T12:00:00Z",
+        memberIds: [],
       },
     ]);
     renderApp();
@@ -201,8 +202,10 @@ describe("backend app", () => {
     // Listed on Home and in the sidebar.
     expect(await screen.findAllByText("Test table")).toHaveLength(2);
     expect(signIn).toHaveBeenCalledWith("testuser", "password");
-    expect(await screen.findByRole("heading", { name: "Invitations" })).toBeInTheDocument();
-    expect(screen.getByText("Create a table")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Invitation to Invited table" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New table" })).toBeInTheDocument();
     fireEvent.click(signOutButton());
     expect(await screen.findByLabelText("Username")).toBeInTheDocument();
     expect(signOut).toHaveBeenCalledOnce();
@@ -229,12 +232,12 @@ describe("backend app", () => {
 
   it("surfaces table failures and returns to sign-in when a session expires", async () => {
     vi.mocked(currentUser).mockResolvedValue(user);
-    vi.mocked(listTables)
-      .mockRejectedValueOnce(new BackendError("forbidden", 403))
-      .mockRejectedValueOnce(new BackendError("expired", 401));
-    renderApp();
+    vi.mocked(listTables).mockRejectedValue(new BackendError("forbidden", 403));
+    const first = renderApp();
     expect(await screen.findByRole("alert")).toHaveTextContent("cannot access");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    first.unmount();
+    vi.mocked(listTables).mockRejectedValue(new BackendError("expired", 401));
+    renderApp();
     await waitFor(() => expect(screen.getByText(/session expired/i)).toBeInTheDocument());
   });
 
@@ -277,7 +280,6 @@ describe("backend app", () => {
     vi.mocked(listMyBets).mockImplementation(async ({ status }) => ({
       items: status === "SETTLED" ? [locked] : [],
       nextCursor: null,
-      counts: { ...counts, SETTLED: 1 },
     }));
     vi.mocked(getProfile).mockImplementation(async (id) =>
       id.endsWith("003")
@@ -285,6 +287,8 @@ describe("backend app", () => {
         : { id, username: "otherplayer", hue: 3 },
     );
     renderApp();
+    // Tickets opens on Active.
+    fireEvent.click(await screen.findByRole("tab", { name: "Resolved" }));
     expect(await screen.findByText("You won")).toBeInTheDocument();
     expect(screen.getByText("+1.25 pts")).toBeInTheDocument();
     expect(screen.getAllByText("1 · 50%")).toHaveLength(2);
@@ -454,6 +458,6 @@ describe("backend app", () => {
     renderApp();
     expect(await screen.findAllByText("Test table")).toHaveLength(2);
     deliver("/user/queue/me", { type: "tables.changed" });
-    expect(await screen.findByText("No tables yet.")).toBeInTheDocument();
+    expect(await screen.findByText(/No tables yet/)).toBeInTheDocument();
   });
 });

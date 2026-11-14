@@ -317,8 +317,7 @@ paths:
       description: >-
         Bets at every non-archived table the caller is a member of (or one of
         them with tableId), using the same projection as listTableBets: each
-        Active bet contains only the caller's own pick. Counts cover the same
-        tables for every status, ignoring the status filter and cursor.
+        Active bet contains only the caller's own pick.
       parameters:
         - name: status
           in: query
@@ -2751,7 +2750,7 @@ components:
     BetPage:
       type: object
       additionalProperties: false
-      required: [items, nextCursor, counts]
+      required: [items, nextCursor]
       properties:
         items:
           type: array
@@ -2759,15 +2758,6 @@ components:
             $ref: '#/components/schemas/Bet'
         nextCursor:
           type: [string, 'null']
-        counts:
-          type: object
-          additionalProperties: false
-          required: [ACTIVE, PENDING, SETTLED, WASHED]
-          properties:
-            ACTIVE: {type: integer, minimum: 0}
-            PENDING: {type: integer, minimum: 0}
-            SETTLED: {type: integer, minimum: 0}
-            WASHED: {type: integer, minimum: 0}
     TomatoThrow:
       type: object
       additionalProperties: false

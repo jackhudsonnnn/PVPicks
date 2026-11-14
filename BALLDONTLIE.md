@@ -52,7 +52,7 @@ Game Night) should settle tonight as the first live check. Nothing from
 - [x] Try the whole app in a real browser on an isolated stack: WebSocket
       proxy, chat, ticker and live updates. (Repeat once a key is set, to see
       the ticker with real games.)
-- [ ] Housekeeping: update `bun.lock`.
+- [x] Housekeeping: removed the stale `bun.lock`; npm is the package manager.
 - [x] Port the prototype design onto the real app: tickets, proposal sheet,
       app shell, felt table page, chat, Peers, Host/About, profiles, Tickets
       page, reports and live tomatoes.

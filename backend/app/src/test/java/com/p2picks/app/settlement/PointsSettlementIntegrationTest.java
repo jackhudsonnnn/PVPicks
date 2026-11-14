@@ -47,7 +47,7 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
                 """, host, hash, player, hash, outsider, hash);
         jdbc.update("""
                 INSERT INTO tables (id, name, emoji, quickpick_code) VALUES
-                (?, 'Points API', 'T', 'P3H4QA'), (?, 'Points API zero', 'T', 'P3H5QA')
+                (?, 'Points API', 'T', 'P3H4QA'), (?, 'Points zero', 'T', 'P3H5QA')
                 """, table, zeroTable);
         jdbc.update("""
                 INSERT INTO table_members (table_id, user_id, role) VALUES

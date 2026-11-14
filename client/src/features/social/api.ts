@@ -16,6 +16,8 @@ const inviteSchema = z.object({
   fromId: uuid,
   userId: uuid,
   createdAt: z.string().datetime({ offset: true }),
+  /** Members whose profiles you can read, in join order, for the invite card's avatars. */
+  memberIds: z.array(uuid),
 });
 
 export type Relationships = z.infer<typeof relationshipsSchema>;

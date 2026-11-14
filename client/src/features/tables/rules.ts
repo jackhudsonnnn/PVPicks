@@ -2,9 +2,10 @@ import type { Table } from "./api";
 
 /** Table rules that match what the server accepts. */
 
-export const TABLE_NAME_LIMIT = 40;
+/** Names fit a table card; the server and database enforce the same limit. */
+export const TABLE_NAME_LIMIT = 14;
 
-/** Why a table name can't be used, or null. Matches the server: 1–40 characters after trimming. */
+/** Why a table name can't be used, or null. Matches the server: 1–14 characters after trimming. */
 export function tableNameProblem(name: string): string | null {
   const trimmed = name.trim();
   if (!trimmed) return "Give the table a name.";

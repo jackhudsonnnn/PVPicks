@@ -127,6 +127,16 @@ to check the session, account, membership and role while retrieving the view;
 they return the same not-found response for absent, archived or inaccessible
 tables. They do not expose bet participation or picks.
 
+Table names are 1–14 Unicode code points after trimming, so they fit a table
+card. The API rejects longer names on creation and profile changes, and the
+database enforces the same limit (`tables_name_length`); the V32 migration
+shortened existing longer names.
+
+Pending invitation reads include the table's name, emoji and member ids (in
+join order) for the invite card. The member list leaves out deleted accounts
+and members who block the invitee, so every listed profile is readable. An
+invitation still grants no access to the table's code, chat or bets.
+
 For member-permission changes, lock actor and target user rows in PostgreSQL
 UUID order, then the actor's session, table and membership rows; check current
 host authorization and the target's current non-host membership before retry
@@ -351,6 +361,11 @@ order before locking the table, and rejects a concurrent membership change.
 Future bet, settlement, subscription and event writers must use compatible
 locking and preserve committed source-result propagation. Outbox delivery,
 public receipt actions and account deletion are not yet implemented.
+
+`GET /me/chat/latest` returns, for each current table, the newest message the
+viewer would see in its chat window (the same block and deleted-author
+filtering and system text), or null when there is none. Home's table cards
+show it and refetch when a table's chat feed reports a change.
 
 Chat order is assigned after locking the table, so concurrent committed
 messages have stable per-table order even if creation timestamps coincide or

@@ -208,7 +208,7 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
                 """, payer, hash, payee, hash, outsider, hash);
         jdbc.update("""
                 INSERT INTO tables (id, name, emoji, quickpick_code) VALUES
-                (?, 'Receipt API', 'T', 'R5A2QA'), (?, 'Receipt API other', 'T', 'R5A3QA')
+                (?, 'Receipt API', 'T', 'R5A2QA'), (?, 'Receipt other', 'T', 'R5A3QA')
                 """, table, otherTable);
         UUID line = insertDebtReceipt(table, payee, payer, payee, 300, "unpaid");
         UUID other = insertDebtReceipt(otherTable, payee, payer, payee, 50, "sent");

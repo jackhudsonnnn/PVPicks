@@ -183,7 +183,7 @@ class BetResolutionIntegrationTest extends IntegrationTestSupport {
                 (?, 'resraceuser', 1, ?, 'PLAYER', 'ACTIVE'),
                 (?, 'resracejoin', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, player, hash, joining, hash);
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Resolution race', 'T', 'Y8R7QA')", table);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Result race', 'T', 'Y8R7QA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
         UUID bet = insertDebtBet(table, player, host, "PENDING", false, true, false, 100, 0);
@@ -242,7 +242,7 @@ class BetResolutionIntegrationTest extends IntegrationTestSupport {
                 (?, 'resduelhost', 1, ?, 'PLAYER', 'ACTIVE'),
                 (?, 'resdueluser', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, player, hash);
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Resolution duel', 'T', 'Y8R8QA')", table);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Result duel', 'T', 'Y8R8QA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
         UUID bet = insertDebtBet(table, host, host, "PENDING", false, true, false, 100, 0);

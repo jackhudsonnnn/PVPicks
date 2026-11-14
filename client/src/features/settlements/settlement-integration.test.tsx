@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app/app";
@@ -34,17 +34,20 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
     });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("heading", { name: "Friends" })).toBeInTheDocument();
-    expect(await screen.findByText(/Balance changed with/)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "I've reviewed this" }));
+    expect(await screen.findByText("Balance changed: review")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Settle-up receipts" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(await dialog.findByText(/Balance changed with/)).toBeInTheDocument();
+    expect(await dialog.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    fireEvent.click(dialog.getByRole("button", { name: "I've reviewed this" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
+      expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Mark group sent" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Mark group sent" }));
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Mark group sent" })).toBeNull(),
+      expect(dialog.queryByRole("button", { name: "Mark group sent" })).toBeNull(),
     );
-    fireEvent.click(screen.getByText("Receipt history"));
-    expect(await screen.findByText(/1.00 points · sent/)).toBeInTheDocument();
+    // The payment now waits for the payee to confirm it.
+    expect(await screen.findByText("Awaiting receipt")).toBeInTheDocument();
   }, 30000);
 });

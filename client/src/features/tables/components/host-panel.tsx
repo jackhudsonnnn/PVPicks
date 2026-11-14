@@ -845,25 +845,12 @@ function OnOff({ on }: { on: boolean }) {
 }
 
 /** Read-only view of the table's host settings, your permissions and where settlement stands. */
-export function AboutPanel(props: PanelProps & { onOpenPeers: () => void }) {
-  const { table, user, expire, peopleKey, className, onOpenPeers } = props;
+export function AboutPanel(props: PanelProps) {
+  const { table, user, expire, peopleKey, className } = props;
   const rule = REMAINDER.find((r) => r.id === table.remainderRule)!;
   const off = table.disabledPermissions[user.id] ?? [];
   return (
     <ScrollContainer isVisible={false} className={cn("space-y-4 p-4", className)}>
-      <button
-        type="button"
-        onClick={onOpenPeers}
-        className="flex w-full items-center justify-between rounded-2xl border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/60"
-      >
-        <span>
-          <span className="block font-display text-xl font-black uppercase leading-none">
-            {table.memberIds.length} {table.memberIds.length === 1 ? "member" : "members"}
-          </span>
-          <span className="text-xs text-muted-foreground">See everyone's points</span>
-        </span>
-        <ChevronRight className="size-4 text-muted-foreground" />
-      </button>
       <SettingsSection title="Host settings" description="Only hosts can change these.">
         <div className="space-y-2 px-4 py-3.5 sm:px-5">
           {table.hostIds.map((id) => (

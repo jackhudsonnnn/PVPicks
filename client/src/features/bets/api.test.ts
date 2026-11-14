@@ -3,7 +3,6 @@ import { bet, json, table, user } from "@/test/api-fixtures";
 import { listMyBets, listTableBets } from "./api";
 
 const tableId = table.id;
-const counts = { ACTIVE: 1, PENDING: 0, SETTLED: 2, WASHED: 0 };
 
 function respond(body: unknown) {
   const fetch = vi.fn(
@@ -18,28 +17,27 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("my bets", () => {
   it("passes filters and the cursor as query parameters", async () => {
-    const fetch = respond({ items: [bet], nextCursor: "abc", counts });
+    const fetch = respond({ items: [bet], nextCursor: "abc" });
     const page = await listMyBets({ status: "ACTIVE", tableId, cursor: "xyz" });
     expect(fetch.mock.calls[0]?.[0]).toBe(
       `/api/me/bets?status=ACTIVE&tableId=${tableId}&cursor=xyz`,
     );
     expect(page.nextCursor).toBe("abc");
-    expect(page.counts.SETTLED).toBe(2);
   });
 
   it("asks for everything without filters", async () => {
-    const fetch = respond({ items: [], nextCursor: null, counts });
+    const fetch = respond({ items: [], nextCursor: null });
     await listMyBets({});
     expect(fetch.mock.calls[0]?.[0]).toBe("/api/me/bets");
   });
 
   it("rejects a page that doesn't match the requested status", async () => {
-    respond({ items: [bet], nextCursor: null, counts });
+    respond({ items: [bet], nextCursor: null });
     await expect(listMyBets({ status: "PENDING" })).rejects.toThrow("unexpected response");
   });
 
   it("rejects a malformed page", async () => {
-    respond({ items: [bet], counts });
+    respond({ items: [bet] });
     await expect(listMyBets({})).rejects.toThrow();
   });
 });

@@ -21,8 +21,6 @@ export interface SegmentedTab<T extends string> {
   id: T;
   label: string;
   icon?: ComponentType<{ className?: string }>;
-  /** Small number shown after the label (e.g. ticket counts). */
-  count?: number;
   /** Shown greyed out with a small "Soon" tag. */
   disabled?: boolean;
 }
@@ -112,14 +110,13 @@ export function SegmentedTabs<T extends string>({
           <SelectTrigger aria-label={ariaLabel} className={cn("h-11 w-full bg-surface", className)}>
             {/* Hidden copies of every label keep the box as wide as the longest one. */}
             <div className="grid min-w-0 text-left">
-              {tabs.map(({ id, label, count }) => (
+              {tabs.map(({ id, label }) => (
                 <span
                   key={id}
                   aria-hidden
                   className="invisible col-start-1 row-start-1 h-0 truncate"
                 >
                   {label}
-                  {count !== undefined && ` (${count})`}
                 </span>
               ))}
               <span className="col-start-1 row-start-1 min-w-0 truncate">
@@ -128,12 +125,11 @@ export function SegmentedTabs<T extends string>({
             </div>
           </SelectTrigger>
           <SelectContent>
-            {tabs.map(({ id, label, icon: Icon, count, disabled }) => (
+            {tabs.map(({ id, label, icon: Icon, disabled }) => (
               <SelectItem key={id} value={id} disabled={!!disabled}>
                 <span className="flex items-center gap-2">
                   {Icon && <Icon className="size-4 shrink-0" />}
                   {label}
-                  {count !== undefined && <span className="opacity-70">({count})</span>}
                   {disabled && <span className="text-xs text-muted-foreground">Soon</span>}
                 </span>
               </SelectItem>
@@ -158,7 +154,7 @@ export function SegmentedTabs<T extends string>({
           )}
           style={{ "--tabs-narrow": narrow, "--tabs-wide": wide } as CSSProperties}
         >
-          {tabs.map(({ id, label, icon: Icon, count, disabled }) => {
+          {tabs.map(({ id, label, icon: Icon, disabled }) => {
             const on = isActive ? isActive(id) : value === id;
             return (
               <button
@@ -195,9 +191,6 @@ export function SegmentedTabs<T extends string>({
                 <span data-tab-label className="truncate">
                   {label}
                 </span>
-                {count !== undefined && (
-                  <span className="shrink-0 font-mono text-[11px] opacity-70">{count}</span>
-                )}
                 {disabled && (
                   <span className="rounded bg-muted px-1 font-mono text-[8px] tracking-wider text-muted-foreground">
                     Soon

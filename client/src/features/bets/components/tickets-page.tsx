@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -46,10 +46,7 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
     retry: false,
   });
   const tableId = tables.data?.some((t) => t.id === requested) ? requested : undefined;
-  // null until you pick a tab: opens on the first non-empty status.
-  const [picked, setPicked] = useState<Status | null>(null);
-  const [counts, setCounts] = useState<Record<Status, number> | null>(null);
-  const tab = picked ?? TABS.find((t) => (counts?.[t.id] ?? 0) > 0)?.id ?? "ACTIVE";
+  const [tab, setTab] = useState<Status>("ACTIVE");
   const key = userKey(user.id, "my-bets", tableId ?? "all", tab);
   const bets = useInfiniteQuery({
     queryKey: key,
@@ -66,10 +63,6 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
     getNextPageParam: (page) => page.nextCursor,
     retry: false,
   });
-  const latest = bets.data?.pages[0]?.counts;
-  useEffect(() => {
-    if (latest) setCounts(latest);
-  }, [latest]);
   const actions = useBetActions(
     user.id,
     async () => {
@@ -110,8 +103,6 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
                     search: id === "all" ? {} : { table: id },
                     replace: true,
                   });
-                  setPicked(null);
-                  setCounts(null);
                 }}
               />
             )
@@ -121,9 +112,9 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
           ariaLabel="Ticket status"
           size="sm"
           fitContent
-          tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: counts?.[t.id] ?? 0 }))}
+          tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
           value={tab}
-          onChange={setPicked}
+          onChange={setTab}
         />
         <p className="text-sm text-muted-foreground">{TABS.find((t) => t.id === tab)!.hint}</p>
       </div>

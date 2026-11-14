@@ -1,27 +1,37 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
+import { EmptyState } from "@/components/empty-state";
+import { ScrollContainer } from "@/components/scroll-container";
 import { Button } from "@/components/ui/button";
 import { BackendError, backendErrorMessage } from "@/lib/api-client";
-import { type User, PersonName } from "@/features/people";
-import { ConfirmAction } from "@/components/confirm-action";
-import { useSettlementActions, type SettlementIntent } from "./actions";
+import { useRealtimeFeed } from "@/lib/realtime";
+import { settlementsFeed } from "@/lib/realtime-connection";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { cn } from "@/lib/utils";
+import { PersonAvatar, PersonName, type User } from "@/features/people";
+import { useSettlementActions } from "./actions";
 import {
   listPendingReviews,
   listSettlementCounterparties,
   listSettlementGroups,
-  receiptHistory,
-  type GroupAction,
+  type PendingReview,
   type SettlementGroup,
-  type SettlementLine,
-  formatPoints,
 } from "./api";
-import { useRealtimeFeed } from "@/lib/realtime";
-import { settlementsFeed } from "@/lib/realtime-connection";
-import { dateTimeLabel } from "@/lib/time";
-import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { groupSummary } from "./receipt-rules";
+import { Net, PendingAction, ReceiptsDialog, type Actions } from "./receipts-dialog";
 
-type Actions = ReturnType<typeof useSettlementActions>;
+/** One person you have settle-up receipts or an unreviewed warning with. */
+interface Counterparty {
+  other: string;
+  group?: SettlementGroup;
+  review?: PendingReview;
+}
 
+/**
+ * Settle-ups on the Friends page: a card per person showing the open net between you, sideways-scrolling. Each
+ * opens their receipts. A balance-change warning also gets a card, so it stays reachable after the receipts
+ * close. If a group's total overflows, cards list each person without a net and the receipts still work.
+ */
 export function SettlementReceipts({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const key = ["backend-tables", user.id, "settlements"] as const;
@@ -54,13 +64,33 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
     },
     expire,
   );
-  const disabled = actions.busy || !!actions.pending || !!actions.storageError;
+
+  const people = new Map<string, Counterparty>();
+  for (const group of groups.data ?? [])
+    people.set(group.otherUserId, { other: group.otherUserId, group });
+  if (overflow) for (const other of counterparties.data ?? []) people.set(other, { other });
+  for (const review of reviews.data ?? [])
+    people.set(review.otherUserId, {
+      ...people.get(review.otherUserId),
+      other: review.otherUserId,
+      review,
+    });
+  const reviewRequired = (person: Counterparty) =>
+    reviews.isPending ||
+    reviews.isError ||
+    reviews.isFetching ||
+    !!person.review ||
+    (person.group?.pendingReviewRevision ?? null) !== null;
+  const loading = groups.isPending || reviews.isPending || (overflow && counterparties.isPending);
 
   return (
     <section className="space-y-4" aria-labelledby="settlements-heading">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="settlements-heading" className="font-display text-2xl font-bold uppercase">
-          Settle-up receipts
+        <h2
+          id="settlements-heading"
+          className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground"
+        >
+          Settle-ups
         </h2>
         <Button
           variant="outline"
@@ -72,394 +102,132 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        These actions track payments between players; they do not transfer money.
+        Net of your open settle-ups with each person. These actions track payments between players;
+        they don't move money.
       </p>
-      {actions.storageError && <p role="alert">{actions.storageError} Actions are disabled.</p>}
-      {actions.message && <p role="alert">{actions.message}</p>}
-      {actions.pending && (
-        <div className="space-y-2 rounded-lg border bg-surface p-3">
-          <p>One settlement action has an unknown outcome. Retry it before making other changes.</p>
-          <Button
-            size="sm"
-            disabled={actions.busy || !!actions.storageError}
-            onClick={actions.retry}
-          >
-            Retry same action
-          </Button>{" "}
-          <ConfirmAction
-            label="Clear saved action"
-            title="Clear the saved action?"
-            description="Only clear it after checking the receipt history. The original action may have succeeded."
-            disabled={actions.busy || !!actions.storageError}
-            onConfirm={actions.clearAfterReview}
-          />
-        </div>
-      )}
-      {reviews.isPending ? (
-        <p>Loading balance-change reviews…</p>
-      ) : reviews.isError ? (
+      <PendingAction actions={actions} />
+      {reviews.isError && (
         <p role="alert">
           Cannot check balance-change reviews: {backendErrorMessage(reviews.error)} Sending and
           forgiveness requests are disabled.
         </p>
-      ) : (
-        <ul className="space-y-3">
-          <AnimatedList>
-            {reviews.data.map((review) => (
-              <AnimatedItem
-                key={review.otherUserId}
-                as="li"
-                className="rounded-lg border bg-surface p-3"
-              >
-                <p role="status">
-                  Balance changed with{" "}
-                  <PersonName id={review.otherUserId} user={user} expire={expire} queryKey={key} />.
-                  A pending payment or forgiveness request was reset. Check any money already sent
-                  before sending again.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  disabled={disabled || reviews.isFetching}
-                  onClick={() =>
-                    actions.start({
-                      kind: "review",
-                      other: review.otherUserId,
-                      revision: review.pendingReviewRevision,
-                    })
-                  }
-                >
-                  I've reviewed this
-                </Button>
-              </AnimatedItem>
-            ))}
-          </AnimatedList>
-        </ul>
       )}
-      {groups.isPending ? (
-        <p>Loading receipts…</p>
-      ) : groups.isError ? (
+      {groups.isError && (
         <p role="alert">
           {overflow
-            ? "A receipt group total is outside the supported range. Group actions are unavailable; individual receipts are listed below."
+            ? "A receipt group total is outside the supported range. Group actions are unavailable; each person's receipts still work."
             : backendErrorMessage(groups.error)}
         </p>
-      ) : groups.data.length === 0 ? (
-        <p>No settle-up receipts yet.</p>
+      )}
+      {overflow && counterparties.isError && (
+        <p role="alert">{backendErrorMessage(counterparties.error)}</p>
+      )}
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading receipts…</p>
+      ) : people.size === 0 ? (
+        !groups.isError && (
+          <EmptyState boxed className="p-6">
+            No settle-ups. Points settled at a table show up here.
+          </EmptyState>
+        )
       ) : (
-        <ul className="space-y-3">
+        <ScrollContainer
+          isHorizontal
+          isVisible={false}
+          aria-label="Settle-ups by person"
+          className="snap-x gap-3 pb-2 md:scrollbar-thin"
+        >
           <AnimatedList>
-            {groups.data.map((group) => (
-              <AnimatedItem
-                key={group.otherUserId}
-                as="li"
-                className="rounded-lg border bg-surface p-4"
-              >
-                <Group
-                  group={group}
+            {[...people.values()].map((person) => (
+              <AnimatedItem key={person.other} isHorizontal className="shrink-0 snap-start">
+                <SettleCard
+                  person={person}
                   user={user}
                   expire={expire}
                   queryKey={key}
                   actions={actions}
-                  reviewRequired={
-                    reviews.isPending ||
-                    reviews.isError ||
-                    reviews.isFetching ||
-                    group.pendingReviewRevision !== null ||
-                    reviews.data.some((review) => review.otherUserId === group.otherUserId)
-                  }
+                  reviewRequired={reviewRequired(person)}
                 />
               </AnimatedItem>
             ))}
           </AnimatedList>
-        </ul>
+        </ScrollContainer>
       )}
-      {overflow &&
-        (counterparties.isPending ? (
-          <p>Loading receipt counterparties…</p>
-        ) : counterparties.isError ? (
-          <p role="alert">{backendErrorMessage(counterparties.error)}</p>
-        ) : (
-          <ul className="space-y-3">
-            <AnimatedList>
-              {counterparties.data.map((other) => (
-                <AnimatedItem key={other} as="li" className="rounded-lg border bg-surface p-4">
-                  <p className="font-semibold">
-                    <PersonName id={other} user={user} expire={expire} queryKey={key} />
-                  </p>
-                  <ReceiptHistory
-                    user={user}
-                    other={other}
-                    expire={expire}
-                    queryKey={key}
-                    actions={actions}
-                    reviewRequired={
-                      reviews.isPending ||
-                      reviews.isError ||
-                      reviews.isFetching ||
-                      reviews.data.some((review) => review.otherUserId === other)
-                    }
-                  />
-                </AnimatedItem>
-              ))}
-            </AnimatedList>
-          </ul>
-        ))}
     </section>
   );
 }
 
-function Group({
-  group,
+/** A person's net with you; actions live on the dated receipts and group actions in the popup. */
+function SettleCard({
+  person,
   user,
   expire,
   queryKey,
   actions,
   reviewRequired,
 }: {
-  group: SettlementGroup;
+  person: Counterparty;
   user: User;
   expire: () => void;
   queryKey: readonly string[];
   actions: Actions;
   reviewRequired: boolean;
 }) {
-  const open = group.lines.filter((line) => line.status !== "paid" && line.status !== "forgiven");
-  const payer = group.netCents < 0n ? user.id : group.otherUserId;
-  const directional = open.filter((line) => line.payerId === payer);
-  const sent = directional.some((line) => line.status === "sent");
-  const asked = directional.some(
-    (line) => line.status === "forgive_asked" || line.forgiveRequestedAt,
-  );
-  const declined = directional.some(
-    (line) =>
-      line.forgiveDeclinedAt && Date.now() - new Date(line.forgiveDeclinedAt).getTime() < 86400000,
-  );
-  const options: { action: GroupAction; label: string; confirm?: boolean }[] = [];
-  if (open.length && group.netCents === 0n)
-    options.push({ action: "paid", label: "Confirm zero net", confirm: true });
-  else if (open.length && payer === user.id) {
-    if (!sent) options.push({ action: "sent", label: "Mark group sent" });
-    if (!sent && !asked && !declined)
-      options.push({ action: "ask", label: "Ask to forgive group" });
-  } else if (open.length) {
-    options.push({ action: "paid", label: "Confirm group received", confirm: true });
-    if (!sent) options.push({ action: "forgiven", label: "Forgive group", confirm: true });
-    if (sent) options.push({ action: "unpaid", label: "Group not received" });
-    if (!sent && asked) options.push({ action: "decline", label: "Decline group forgiveness" });
-  }
-  const disabled = actions.busy || !!actions.pending || !!actions.storageError;
+  const { other, group, review } = person;
+  const net = group?.netCents;
+  const summary = groupSummary(group?.lines ?? []);
+  const owe = net !== undefined && net < 0n;
+  const owed = net !== undefined && net > 0n;
   return (
-    <div className="space-y-3">
-      <h3 className="font-semibold">
-        <PersonName id={group.otherUserId} user={user} expire={expire} queryKey={queryKey} />
-      </h3>
-      <p>
-        Open net: {formatPoints(group.netCents)} points{" "}
-        {group.netCents < 0n ? "(you owe)" : group.netCents > 0n ? "(owed to you)" : ""}
-      </p>
-      {reviewRequired && (
-        <p className="text-sm">
-          Review status must be current before sending or requesting forgiveness.
-        </p>
+    <div
+      className={cn(
+        "flex min-h-48 w-60 flex-col gap-2 rounded-lg border p-3",
+        owe ? "border-loss/50 bg-loss/10" : owed ? "border-primary/40 bg-primary/5" : "bg-surface",
       )}
-      <div className="flex flex-wrap gap-2">
-        {options.map(({ action, label, confirm }) => {
-          const blocked = disabled || (reviewRequired && (action === "sent" || action === "ask"));
-          const intent: SettlementIntent = {
-            kind: "group",
-            other: group.otherUserId,
-            action,
-            revision: group.revision,
-          };
-          return confirm ? (
-            <ConfirmAction
-              key={action}
-              label={label}
-              title={`${label}?`}
-              description="This updates every open receipt in the group. Verify the balance before continuing."
-              disabled={blocked}
-              onConfirm={() => actions.start(intent)}
-            />
-          ) : (
-            <Button
-              key={action}
-              size="sm"
-              variant="outline"
-              disabled={blocked}
-              onClick={() => actions.start(intent)}
-            >
-              {label}
-            </Button>
-          );
-        })}
-      </div>
-      <details>
-        <summary className="cursor-pointer text-sm font-semibold">Receipt history</summary>
-        <ReceiptLines
-          lines={group.lines}
-          user={user}
-          other={group.otherUserId}
-          actions={actions}
-          reviewRequired={reviewRequired}
-        />
-      </details>
-    </div>
-  );
-}
-
-function ReceiptHistory({
-  user,
-  other,
-  expire,
-  queryKey,
-  actions,
-  reviewRequired,
-}: {
-  user: User;
-  other: string;
-  expire: () => void;
-  queryKey: readonly string[];
-  actions: Actions;
-  reviewRequired: boolean;
-}) {
-  const query = useQuery({
-    queryKey: [...queryKey, "history", other],
-    queryFn: ({ signal }) => receiptHistory(user.id, other, signal),
-    retry: false,
-  });
-  useExpireOnUnauthorized([query.error], expire);
-  return (
-    <details className="mt-3">
-      <summary className="cursor-pointer text-sm font-semibold">Receipt history</summary>
-      {query.isPending ? (
-        <p>Loading receipts…</p>
-      ) : query.isError ? (
-        <div>
-          <p role="alert">{backendErrorMessage(query.error)}</p>
-          <Button size="sm" variant="outline" onClick={() => void query.refetch()}>
-            Retry history
-          </Button>
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <PersonAvatar id={other} size="md" user={user} expire={expire} queryKey={queryKey} />
+        <div className="min-w-0 flex-1">
+          <p className="break-words font-semibold leading-tight">
+            <PersonName id={other} user={user} expire={expire} queryKey={queryKey} />
+          </p>
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            {net === undefined
+              ? "Total unavailable"
+              : owe
+                ? "You pay them"
+                : owed
+                  ? "They pay you"
+                  : "You're square"}
+          </p>
+          {group && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {summary.tables} {summary.tables === 1 ? "table" : "tables"} · {summary.open} open
+            </p>
+          )}
         </div>
-      ) : (
-        <ReceiptLines
-          lines={query.data}
-          user={user}
-          other={other}
-          actions={actions}
-          reviewRequired={reviewRequired}
-        />
+      </div>
+      <div className="flex items-baseline justify-between gap-2">
+        {net !== undefined && <Net cents={net} className="scoreboard text-3xl leading-none" />}
+        {summary.awaitingReceipt && (
+          <span className="text-[10px] text-status-pending">Awaiting receipt</span>
+        )}
+      </div>
+      {review && (
+        <p className="text-[11px] font-semibold text-status-pending">Balance changed: review</p>
       )}
-    </details>
-  );
-}
-
-function ReceiptLines({
-  lines,
-  user,
-  other,
-  actions,
-  reviewRequired,
-}: {
-  lines: SettlementLine[];
-  user: User;
-  other: string;
-  actions: Actions;
-  reviewRequired: boolean;
-}) {
-  return (
-    <ul className="mt-3 space-y-3">
-      <AnimatedList>
-        {lines.map((line) => (
-          <AnimatedItem as="li" key={line.id} className="space-y-2 border-t pt-3 text-sm">
-            <p>
-              {line.payerId === user.id ? "You owe" : "Owed to you"}{" "}
-              {formatPoints(line.amountCents)} points · {line.status.replaceAll("_", " ")}
-            </p>
-            <p className="break-all text-muted-foreground">
-              Table {line.tableId} · {dateTimeLabel(line.createdAt)}
-            </p>
-            <LineActions
-              line={line}
-              user={user}
-              other={other}
-              actions={actions}
-              reviewRequired={reviewRequired}
-            />
-          </AnimatedItem>
-        ))}
-      </AnimatedList>
-    </ul>
-  );
-}
-
-function LineActions({
-  line,
-  user,
-  other,
-  actions,
-  reviewRequired,
-}: {
-  line: SettlementLine;
-  user: User;
-  other: string;
-  actions: Actions;
-  reviewRequired: boolean;
-}) {
-  const unpaid = ["unpaid", "disputed", "forgive_asked"].includes(line.status);
-  const asked = line.status === "forgive_asked" || !!line.forgiveRequestedAt;
-  const cooldown =
-    !!line.forgiveDeclinedAt && Date.now() - new Date(line.forgiveDeclinedAt).getTime() < 86400000;
-  const options: {
-    action: "sent" | "confirm" | "dispute" | "forgive" | "ask-forgive" | "decline-forgive";
-    label: string;
-    confirm?: boolean;
-  }[] = [];
-  if (line.payerId === user.id && unpaid) {
-    options.push({ action: "sent", label: "I sent it" });
-    if (!asked && !cooldown) options.push({ action: "ask-forgive", label: "Ask to forgive" });
-  } else if (line.payeeId === user.id) {
-    if (unpaid || line.status === "sent")
-      options.push({ action: "confirm", label: "I received it", confirm: true });
-    if (unpaid) options.push({ action: "forgive", label: "Forgive", confirm: true });
-    if (unpaid && asked) options.push({ action: "decline-forgive", label: "Decline forgiveness" });
-    if (line.status === "sent") options.push({ action: "dispute", label: "Didn't receive it" });
-  }
-  const disabled = actions.busy || !!actions.pending || !!actions.storageError;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map(({ action, label, confirm }) => {
-        const blocked =
-          disabled || (reviewRequired && (action === "sent" || action === "ask-forgive"));
-        const intent: SettlementIntent = {
-          kind: "line",
-          other,
-          lineId: line.id,
-          action,
-          revision: line.revision,
-        };
-        return confirm ? (
-          <ConfirmAction
-            key={action}
-            label={label}
-            title={`${label}?`}
-            description={`This closes the receipt for ${formatPoints(line.amountCents)} points. Verify before continuing.`}
-            disabled={blocked}
-            onConfirm={() => actions.start(intent)}
-          />
-        ) : (
-          <Button
-            key={action}
-            size="sm"
-            variant="outline"
-            disabled={blocked}
-            onClick={() => actions.start(intent)}
-          >
-            {label}
-          </Button>
-        );
-      })}
+      <div className="mt-auto">
+        <ReceiptsDialog
+          user={user}
+          expire={expire}
+          other={other}
+          {...(group ? { group } : {})}
+          {...(review ? { review } : {})}
+          reviewRequired={reviewRequired}
+          actions={actions}
+          queryKey={queryKey}
+        />
+      </div>
     </div>
   );
 }

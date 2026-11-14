@@ -1,193 +1,28 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { SegmentedTabs } from "@/components/segmented-tabs";
-import { TABLE_EMOJIS } from "@/features/tables/emojis";
-import { backendErrorMessage } from "@/lib/api-client";
-import { type User, PersonName } from "@/features/people";
-import { ActionStatus } from "@/components/action-status";
-import { userKey } from "@/lib/query-keys";
-import { useSocialActions, useInvites, useRelationships } from "@/features/social";
-import { useTableActions } from "@/features/tables/actions";
-import { tableNameProblem } from "@/features/tables/rules";
+import { PageHeader } from "@/components/page-header";
+import type { User } from "@/features/people";
+import { HomeTickets } from "@/features/bets";
+import { DESKTOP, useMediaQuery } from "@/lib/use-media-query";
+import { ArchivedTables } from "./archives";
+import { TableCards } from "./table-cards";
 
-/** Create a table, optionally asking people who follow you to join. */
-export function CreateTable({ user, expire }: { user: User; expire: () => void }) {
-  const queryClient = useQueryClient();
-  const relationships = useRelationships(user.id);
-  const actions = useTableActions(
-    user.id,
-    async () => {
-      await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
-    },
-    expire,
-  );
-  const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState(TABLE_EMOJIS[0]!);
-  const [members, setMembers] = useState<string[]>([]);
-  const [problem, setProblem] = useState<string | null>(null);
-  const blocked = actions.busy || !!actions.pending || !!actions.storageError;
-  const candidates = relationships.data?.followerIds ?? [];
+const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
-    const invalid = tableNameProblem(name);
-    setProblem(invalid);
-    if (invalid) return;
-    actions.start({ kind: "create", name: name.trim(), emoji, memberIds: members });
-    setName("");
-    setMembers([]);
-  }
-
+/**
+ * Home: a greeting, your tables and invitations as cards, and deleted tables you can still read. Desktop adds a
+ * Tickets column beside the tables (phones use the Tickets page), mounted only there so phones don't fetch it.
+ */
+export function HomePage({ user, expire }: { user: User; expire: () => void }) {
+  const desktop = useMediaQuery(DESKTOP);
   return (
-    <div className="space-y-2">
-      <ActionStatus
-        actions={actions}
-        pendingText="A table change may not have been saved."
-        checkText="Check your tables first."
-      />
-      <details className="rounded-lg border bg-surface p-4">
-        <summary className="cursor-pointer font-semibold">Create a table</summary>
-        <form className="mt-4 space-y-4" onSubmit={submit}>
-          <fieldset disabled={blocked} className="space-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="table-name">Table name</Label>
-              <Input
-                id="table-name"
-                value={name}
-                maxLength={80}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Icon</p>
-              <SegmentedTabs
-                size="sm"
-                ariaLabel="Table icon"
-                tabs={TABLE_EMOJIS.map((option) => ({ id: option, label: option }))}
-                value={emoji}
-                onChange={setEmoji}
-              />
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Invite people who follow you</p>
-              {relationships.isError ? (
-                <p role="alert">{backendErrorMessage(relationships.error)}</p>
-              ) : candidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nobody follows you yet. You can add members later from the table.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {candidates.map((id) => (
-                    <li key={id} className="flex items-center gap-2">
-                      <Switch
-                        id={`invite-${id}`}
-                        checked={members.includes(id)}
-                        onCheckedChange={(on) =>
-                          setMembers(on ? [...members, id] : members.filter((m) => m !== id))
-                        }
-                      />
-                      <Label htmlFor={`invite-${id}`}>
-                        <PersonName
-                          id={id}
-                          user={user}
-                          expire={expire}
-                          queryKey={userKey(user.id, "people")}
-                        />
-                      </Label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Each person's invite settings decide whether they join right away or get an
-                invitation.
-              </p>
-            </div>
-            {problem && <p role="alert">{problem}</p>}
-            <Button type="submit">Create table</Button>
-          </fieldset>
-        </form>
-      </details>
+    <div className="space-y-10">
+      <PageHeader eyebrow={`${weekday.format(new Date())} slate`} title={`Hey, ${user.username}`} />
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
+        <div className="min-w-0 space-y-10">
+          <TableCards user={user} expire={expire} />
+          <ArchivedTables user={user} />
+        </div>
+        {desktop && <HomeTickets user={user} expire={expire} />}
+      </div>
     </div>
-  );
-}
-
-/** Pending invitations to join tables, with accept and decline. */
-export function Invitations({ user, expire }: { user: User; expire: () => void }) {
-  const queryClient = useQueryClient();
-  const invites = useInvites(user.id);
-  const actions = useSocialActions(
-    user.id,
-    async () => {
-      await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
-    },
-    expire,
-  );
-  const blocked = actions.busy || !!actions.pending || !!actions.storageError;
-  if (invites.isPending || (invites.data?.length === 0 && !actions.message && !actions.pending))
-    return null;
-  return (
-    <section className="space-y-3" aria-labelledby="invites-heading">
-      <h2 id="invites-heading" className="font-display text-2xl font-bold uppercase">
-        Invitations
-      </h2>
-      <ActionStatus
-        actions={actions}
-        pendingText="An invitation response may not have been saved."
-        checkText="Check your tables and invitations first."
-      />
-      {invites.isError ? (
-        <p role="alert">{backendErrorMessage(invites.error)}</p>
-      ) : (
-        <ul className="space-y-2">
-          {invites.data.map((invite) => (
-            <li
-              key={invite.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-surface p-4"
-            >
-              <span>
-                <span className="text-2xl">{invite.tableEmoji}</span>{" "}
-                <span className="font-semibold">{invite.tableName}</span>
-                <span className="block text-sm text-muted-foreground">
-                  From{" "}
-                  <PersonName
-                    id={invite.fromId}
-                    user={user}
-                    expire={expire}
-                    queryKey={userKey(user.id, "people")}
-                  />
-                </span>
-              </span>
-              <span className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={blocked}
-                  onClick={() =>
-                    actions.start({ kind: "invite", inviteId: invite.id, accept: true })
-                  }
-                >
-                  Join
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={blocked}
-                  onClick={() =>
-                    actions.start({ kind: "invite", inviteId: invite.id, accept: false })
-                  }
-                >
-                  Decline
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }

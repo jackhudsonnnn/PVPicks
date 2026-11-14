@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app/app";
-import { getChatUnread, getChatWindow } from "@/features/chat/api";
+import { getChatUnread, getChatWindow, listLatestMessages } from "@/features/chat/api";
+import { listInvites } from "@/features/social/api";
 import { listTableBalances, getTable, listTables } from "@/features/tables/api";
 import { getTicker, type TickerGame } from "@/features/sports/api";
 import { currentUser } from "@/features/auth/api";
@@ -45,6 +46,11 @@ vi.mock("@/features/chat/api", async (importOriginal) => ({
   getChatUnread: vi.fn(),
   getChatWindow: vi.fn(),
   markRead: vi.fn(),
+  listLatestMessages: vi.fn(),
+}));
+vi.mock("@/features/social/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/social/api")>()),
+  listInvites: vi.fn(),
 }));
 
 const user = {
@@ -138,6 +144,8 @@ beforeEach(() => {
   vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
   vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
   vi.mocked(getTicker).mockResolvedValue([liveGame]);
+  vi.mocked(listLatestMessages).mockResolvedValue([{ tableId: table.id, message: null }]);
+  vi.mocked(listInvites).mockResolvedValue([]);
 });
 
 const liveGame: TickerGame = {
@@ -405,9 +413,10 @@ describe("U2Pick betting", () => {
     vi.mocked(listMyBets).mockImplementation(async ({ status }) => ({
       items: status === "SETTLED" ? [resolved] : [],
       nextCursor: null,
-      counts: { ACTIVE: 0, PENDING: 0, SETTLED: 1, WASHED: 0 },
     }));
     renderApp();
+    // Tickets opens on Active.
+    fireEvent.click(await screen.findByRole("tab", { name: "Resolved" }));
     expect(await screen.findByText("You won")).toBeInTheDocument();
     expect(screen.getByText("+1.50 pts")).toBeInTheDocument();
   });
@@ -464,5 +473,48 @@ describe("U2Pick betting", () => {
       window.dispatchEvent(new StorageEvent("storage", { key: storageKey, newValue: null }));
     });
     await waitFor(() => expect(ticket.getByRole("button", { name: "Yes" })).toBeEnabled());
+  });
+});
+
+describe("desktop home", () => {
+  it("lists tickets live first and marks tables where you picked", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query) =>
+        ({
+          matches: query === "(min-width: 1024px)",
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    );
+    route.pathname = "/";
+    const picked: Bet = { ...bet, pickCount: 1, myPick: "Yes", myParticipation: "picked" };
+    const waiting: Bet = {
+      ...locked,
+      id: "123e4567-e89b-42d3-a456-426614174003",
+      question: "Rain?",
+    };
+    vi.mocked(listMyBets).mockImplementation(async ({ status }) => ({
+      items: status === "ACTIVE" ? [picked] : status === "PENDING" ? [waiting] : [],
+      nextCursor: null,
+    }));
+    renderApp();
+    const column = (await screen.findByRole("heading", { name: "Tickets" })).closest("section")!;
+    await waitFor(() =>
+      expect(
+        within(column)
+          .getAllByRole("heading", { level: 3 })
+          .map((heading) => heading.textContent),
+      ).toEqual(["Who wins?", "Rain?"]),
+    );
+    await waitFor(() =>
+      expect(listMyBets).toHaveBeenCalledWith({ status: "WASHED" }, expect.any(AbortSignal)),
+    );
+    expect(await screen.findByText("In play")).toBeInTheDocument();
+    vi.mocked(window.matchMedia).mockRestore();
   });
 });

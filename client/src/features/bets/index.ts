@@ -11,3 +11,5 @@ export { BetTicket } from "./components/ticket";
 export { TicketsPage } from "./components/tickets-page";
 export { MODES } from "./modes";
 export { formatClock, potCents, proposeBlock, secondsLeft, ticketStatus } from "./ticket-model";
+export { HomeTickets } from "./components/home-tickets";
+export { useInPlayTables } from "./in-play";

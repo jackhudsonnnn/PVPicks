@@ -75,7 +75,14 @@ beforeEach(() => {
   vi.mocked(getProfile).mockResolvedValue({ id: other, username: "player", hue: 1 });
   vi.mocked(listPendingReviews).mockResolvedValue([review]);
   vi.mocked(listSettlementGroups).mockResolvedValue([group]);
+  vi.mocked(receiptHistory).mockResolvedValue([line]);
 });
+
+/** Opens the person's receipts, where the group and receipt actions live. */
+async function openReceipts() {
+  fireEvent.click(await screen.findByRole("button", { name: "Settle-up receipts" }));
+  return within(await screen.findByRole("dialog"));
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -90,16 +97,17 @@ describe("gated settlement preview", () => {
       .mockResolvedValueOnce([group])
       .mockResolvedValue([{ ...group, pendingReviewRevision: null }]);
     renderScreen();
-    expect(await screen.findByText(/Balance changed with/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
-    fireEvent.click(screen.getByText("Receipt history"));
-    expect(screen.getByRole("button", { name: "I sent it" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "I've reviewed this" }));
+    expect(await screen.findByText("Balance changed: review")).toBeInTheDocument();
+    const dialog = await openReceipts();
+    expect(await dialog.findByText(/Balance changed with/)).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    expect(await dialog.findByRole("button", { name: "I sent it" })).toBeDisabled();
+    fireEvent.click(dialog.getByRole("button", { name: "I've reviewed this" }));
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
+      expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
     );
     expect(acknowledgeReview).toHaveBeenCalledWith(other, revision, expect.any(String));
-    expect(screen.getByRole("button", { name: "I sent it" })).toBeEnabled();
+    expect(dialog.getByRole("button", { name: "I sent it" })).toBeEnabled();
   });
 
   it("keeps a closed warning discoverable when group totals overflow", async () => {
@@ -110,9 +118,12 @@ describe("gated settlement preview", () => {
     vi.mocked(receiptHistory).mockResolvedValue([{ ...line, status: "paid" }]);
     renderScreen();
     expect(await screen.findByRole("alert")).toHaveTextContent("outside the supported range");
-    fireEvent.click(await screen.findByText("Receipt history"));
-    expect(await screen.findByText(/1.25 points · paid/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "I've reviewed this" })).toBeEnabled();
+    expect(await screen.findByText("Total unavailable")).toBeInTheDocument();
+    const dialog = await openReceipts();
+    expect(await dialog.findByText("Completed")).toBeInTheDocument();
+    expect(dialog.getByText("−1.25")).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "I've reviewed this" })).toBeEnabled();
+    expect(dialog.queryByRole("button", { name: "Mark group sent" })).toBeNull();
   });
 
   it("finds receipt history on overflow even without a pending warning", async () => {
@@ -123,8 +134,8 @@ describe("gated settlement preview", () => {
     vi.mocked(listSettlementCounterparties).mockResolvedValue([other]);
     vi.mocked(receiptHistory).mockResolvedValue([line]);
     renderScreen();
-    fireEvent.click(await screen.findByText("Receipt history"));
-    expect(await screen.findByRole("button", { name: "I sent it" })).toBeEnabled();
+    const dialog = await openReceipts();
+    expect(await dialog.findByRole("button", { name: "I sent it" })).toBeEnabled();
   });
 
   it("keeps an uncertain action and reuses its key after remount", async () => {
@@ -134,8 +145,9 @@ describe("gated settlement preview", () => {
       .mockRejectedValueOnce(new TypeError("network disconnected"))
       .mockResolvedValueOnce();
     const first = renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Mark group sent" }));
-    expect(await screen.findByText(/outcome is unknown/)).toBeInTheDocument();
+    const dialog = await openReceipts();
+    fireEvent.click(await dialog.findByRole("button", { name: "Mark group sent" }));
+    expect(await dialog.findByText(/outcome is unknown/)).toBeInTheDocument();
     const key = vi.mocked(transitionGroup).mock.calls[0]?.[3];
     expect(key).toBeTruthy();
     first.unmount();
@@ -161,7 +173,8 @@ describe("gated settlement preview", () => {
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Retry same action" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("too old to retry safely");
-    expect(screen.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    const dialog = await openReceipts();
+    expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
     expect(transitionGroup).not.toHaveBeenCalled();
   });
 
@@ -176,10 +189,11 @@ describe("gated settlement preview", () => {
       removeItem: () => {},
     });
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Mark group sent" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("storage is unavailable");
+    const dialog = await openReceipts();
+    fireEvent.click(await dialog.findByRole("button", { name: "Mark group sent" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("storage is unavailable");
     expect(transitionGroup).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeDisabled();
   });
 
   it("blocks sending when reviews cannot be checked", async () => {
@@ -189,7 +203,8 @@ describe("gated settlement preview", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Cannot check balance-change reviews",
     );
-    expect(await screen.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
+    const dialog = await openReceipts();
+    expect(await dialog.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
   });
 
   it("expires the session when a settlement read returns 401", async () => {
@@ -206,15 +221,16 @@ describe("gated settlement preview", () => {
       .mockRejectedValueOnce(new BackendError("forbidden", 403))
       .mockRejectedValueOnce(new BackendError("expired", 401));
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Mark group sent" }));
-    expect(await screen.findByText(/outcome is unknown/)).toBeInTheDocument();
+    const dialog = await openReceipts();
+    fireEvent.click(await dialog.findByRole("button", { name: "Mark group sent" }));
+    expect(await dialog.findByText(/outcome is unknown/)).toBeInTheDocument();
     const stored = localStorage.getItem(`p2picks:settlement-action:${user.id}`);
-    fireEvent.click(screen.getByRole("button", { name: "Retry same action" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    fireEvent.click(dialog.getByRole("button", { name: "Retry same action" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent(
       "original action may have succeeded",
     );
     expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
-    fireEvent.click(screen.getByRole("button", { name: "Retry same action" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Retry same action" }));
     await waitFor(() => expect(expire).toHaveBeenCalled());
     expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBe(stored);
   });
@@ -225,8 +241,9 @@ describe("gated settlement preview", () => {
       .mockResolvedValueOnce([review])
       .mockResolvedValue([{ ...review, pendingReviewRevision: lineId }]);
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "I've reviewed this" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("changed");
+    const dialog = await openReceipts();
+    fireEvent.click(await dialog.findByRole("button", { name: "I've reviewed this" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("changed");
     await waitFor(() => expect(listPendingReviews).toHaveBeenCalledTimes(2));
     expect(acknowledgeReview).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
@@ -239,9 +256,10 @@ describe("gated settlement preview", () => {
       { ...group, netCents: 125n, lines: [incoming], pendingReviewRevision: null },
     ]);
     vi.mocked(transitionLine).mockResolvedValue();
+    vi.mocked(receiptHistory).mockResolvedValue([incoming]);
     renderScreen();
-    fireEvent.click(await screen.findByText("Receipt history"));
-    fireEvent.click(screen.getByRole("button", { name: "Forgive" }));
+    const dialog = await openReceipts();
+    fireEvent.click(await dialog.findByRole("button", { name: "Forgive" }));
     expect(transitionLine).not.toHaveBeenCalled();
     fireEvent.click(
       within(screen.getByRole("alertdialog")).getByRole("button", { name: "Confirm" }),

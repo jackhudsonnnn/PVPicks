@@ -42,7 +42,7 @@
 
 - The app is backend-backed only. `__root.tsx` renders `SettingsProvider` → `App` (`app/app.tsx`) → `ErrorToasts` for every path; `App` routes by pathname. Route files under `src/routes` are stubs that only provide the path and page metadata (`component: () => null`). Never add mock or sample data as a substitute for unavailable server data. The earlier mock-store prototype is preserved at the git tag `prototype-ui` as the design reference. Port its components as prop-driven views and don't restore its rules, because the server owns them. Why: HTTP is the only source of truth.
 - Screens render inside the app shell (`app/shell.tsx`). On desktop it has a sidebar with navigation, your tables and net settle-up points. On phones it has a top bar and tab bar. The ticker shows everywhere except table pages.
-  - Home: `tables/components/home.tsx` and `table-list.tsx`, plus deleted tables in `archives.tsx`.
+  - Home: `tables/components/home.tsx`. Invitation and table cards are in `table-cards.tsx`: one horizontal snap-scrolling row, with the invitation "Accept?" dialog and one social action hook for every card. "New table" is `create-table-dialog.tsx`. Deleted tables are in `archives.tsx`. A card's last-message line comes from `chat/previews.ts`: `useChatPreview` (one shared `GET /me/chat/latest` query, refetched on each card's table chat feed) and `previewText`. Green "in play" cards come from `bets/in-play.ts` (every page of `GET /me/bets?status=ACTIVE`). Each table card watches its table's bets feed and refreshes everything under the "my-bets" key. Desktop Home adds `bets/components/home-tickets.tsx` (live-first order in tested `bets/ticket-feed.ts`). It is mounted only at the `lg` breakpoint (`lib/use-media-query.ts`), so phones don't fetch it. Paged lists use `components/load-more.tsx`, which also loads on scroll.
   - Tickets: `bets/components/tickets-page.tsx`. It pages through `GET /me/bets` with status tabs and `?table=`.
   - Friends: `social/friends.tsx`.
   - The table page: `tables/components/table-page.tsx`.
@@ -51,7 +51,7 @@
     - People open `social/profile.tsx`.
     - Report and Block live in `social/safety.tsx`, with rules in `report-rules.ts`.
     - Live tomatoes play from `tables/components/tomatoes.tsx`.
-  - Receipts: `settlements/settlements.tsx`.
+  - Receipts: `settlements/settlements.tsx` (Settle-ups on Friends: a card per person, including people with only an unreviewed warning, so a warning stays reachable) and `settlements/receipts-dialog.tsx` (warning review, group actions, dated receipts with per-receipt actions). Which actions each side gets, and which wait for a review, live in tested `settlements/receipt-rules.ts`. The unknown-outcome retry block also renders inside the dialog, because the dialog covers the page's copy. Receipt rows name tables through `tables` `useTableNames` (current tables, plus deleted ones for 90 days).
   - Preferences: `preferences/preferences.tsx`, with Tables, Account and Display tabs.
   - How to play, with feedback: `guide/guide.tsx`.
   - The admin view: `admin/admin.tsx`.
@@ -88,10 +88,10 @@
   Why: retries reuse one key across tabs, so an uncertain action can't be applied twice.
 - Pure rules for screens live in tested modules, not component files:
   - `bets/ticket-model.ts`, `bets/sports-model.ts`, `bets/bet-results.ts`, `bets/u2pick.ts`;
-  - `tables/seating.ts`, `tables/rules.ts` (table names, addable followers);
+  - `tables/seating.ts`, `tables/rules.ts` (table names up to 14 characters, addable followers);
   - `social/rules.ts` (people lists, search), `social/profile-model.ts`;
   - `preferences/rules.ts` (debt cap input), `preferences/profile-rules.ts` (usernames, hues);
-  - `chat/model.ts` (window merges, reactions);
+  - `chat/model.ts` (window merges, reactions), `chat/previews.ts` (card preview lines);
   - `guide/feedback.ts`.
 
   The server enforces every rule; client copies only give early feedback.

@@ -6,10 +6,33 @@ and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The look follows the
 original prototype (git tag `prototype-ui`), adapted to the server's data.
 
-- **Home:** pending table invitations (join or decline), your tables,
-  "Create a table" (name, icon, and people who follow you), and deleted tables
-  whose chat you can still read for 90 days (read-only, at `/archives/<id>`).
-- **Friends:** settle-up receipts, new followers, and lists of friends,
+- **Home:** a greeting ("Sunday slate / Hey, name") and one sideways-scrolling
+  row of cards that snaps card by card.
+  - Invitations come first, in yellow: "theo_r wants you at this table.
+    Accept?" opens a dialog to accept or decline.
+  - Then your tables, each with its icon, a Host badge if you host, the
+    latest chat message (live), and member avatars. A table where you have a
+    pick in an open bet shows green ("in play", from
+    `GET /me/bets?status=ACTIVE`).
+  - On desktop the cards stack as rows in a scrolling box, and a Tickets
+    column sits beside them. It lists every bet at your tables: live first,
+    then pending, resolved and washed, newest first within each. It loads
+    more as you scroll, and "All tickets" opens the Tickets page. Phones use
+    the Tickets page instead.
+  - "New table" opens a dialog: a name of up to 14 characters, an icon, and
+    people who follow you.
+  - Below the row are deleted tables whose chat you can still read for 90
+    days (read-only, at `/archives/<id>`).
+- **Friends:** settle-ups first, as a sideways-scrolling row with one card
+  per person.
+  - A card shows your open net with that person: red when you pay them, green
+    when they pay you. It also says how many tables and open receipts that
+    covers, and whether a payment awaits confirmation.
+  - "Settle-up receipts" opens a dialog with any balance-change warning to
+    review, group actions (mark everything sent or received, forgive or ask
+    to forgive), and each dated receipt. A receipt shows its table, the
+    amount, and who has sent and who has received, with your actions on it.
+- Friends also lists new followers, and lists of friends,
   following, followers and blocked people, with username search, follow,
   follow back, block and unblock. A host can only add people who follow them,
   and each person's invite preferences decide whether they join right away or
@@ -21,7 +44,7 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   and True points at the table) and Host (or About for members): points
   settlement, members, roles, permissions and table settings.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
-  Pending, Resolved, Washed) with counts, optionally for one table (a
+  Pending, Resolved, Washed; it opens on Active), optionally for one table (a
   dropdown), paged. A ticket says which table it's from and links to it; its
   player avatars open that table's Peers tab, and Details links to the table.
 
@@ -127,7 +150,8 @@ loopback origin, in the shell or in a git-ignored `client/.env.local`
 Starting the backend applies pending migrations automatically. Do not expose
 the dev backend or proxy to a network.
 
-Run `npm test`, `npm run lint` and `npx tsc --noEmit` for client checks.
+Run `npm test`, `npm run lint` and `npx tsc --noEmit` for client checks. npm is
+the package manager (`package-lock.json` is the only lockfile).
 The lint toolchain temporarily overrides its transitive minimatch dependency
 to a patched major version; recheck the override when upgrading typescript-eslint.
 The opt-in frontend/backend integration tests require installed client

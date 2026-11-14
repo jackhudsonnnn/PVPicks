@@ -315,7 +315,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
               user={user}
               expire={expire}
               peopleKey={peopleKey}
-              onOpenPeers={() => chooseTab("peers")}
               className="min-h-0 flex-1"
             />
           ) : (

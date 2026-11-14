@@ -21,7 +21,11 @@ class InviteContractTest {
         invite.put("createdAt", "2026-11-11T12:00:00Z");
         invite.put("tableName", "Friends");
         invite.put("tableEmoji", "\uD83C\uDFB2");
+        invite.putArray("memberIds").add("52a73783-b3cf-438a-8174-ac235c54eb6e");
         assertThat(schema.validate(invite)).isEmpty();
+        invite.remove("memberIds");
+        assertThat(schema.validate(invite)).as("members are required for the invite card").isNotEmpty();
+        invite.putArray("memberIds").add("52a73783-b3cf-438a-8174-ac235c54eb6e");
         invite.remove("tableName");
         assertThat(schema.validate(invite)).isNotEmpty();
         invite.put("tableName", "Friends");

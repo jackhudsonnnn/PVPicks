@@ -102,10 +102,7 @@ class MyBetsAndBalancesIntegrationTest extends IntegrationTestSupport {
         all.path("items").forEach(bet -> ids.add(bet.path("id").asText()));
         assertThat(ids).containsExactly(pendingB.toString(), activeA.toString(), oldA.toString());
         assertThat(all.path("nextCursor").isNull()).isTrue();
-        assertThat(all.path("counts").path("ACTIVE").asLong()).isEqualTo(1);
-        assertThat(all.path("counts").path("PENDING").asLong()).isEqualTo(1);
-        assertThat(all.path("counts").path("SETTLED").asLong()).isEqualTo(1);
-        assertThat(all.path("counts").path("WASHED").asLong()).isZero();
+        assertThat(all.has("counts")).isFalse();
         JsonNode active = all.path("items").get(1);
         assertThat(active.path("myPick").asText()).isEqualTo("No");
         assertThat(active.has("picks")).isFalse();
@@ -122,11 +119,9 @@ class MyBetsAndBalancesIntegrationTest extends IntegrationTestSupport {
         JsonNode pending = read("/me/bets?status=PENDING", memberSession);
         assertThat(pending.path("items").size()).isEqualTo(1);
         assertThat(pending.path("items").get(0).path("id").asText()).isEqualTo(pendingB.toString());
-        assertThat(pending.path("counts").path("ACTIVE").asLong()).isEqualTo(1);
 
         JsonNode onlyA = read("/me/bets?tableId=" + tableA, memberSession);
         assertThat(onlyA.path("items").size()).isEqualTo(2);
-        assertThat(onlyA.path("counts").path("PENDING").asLong()).isZero();
     }
 
     @Test

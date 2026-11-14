@@ -4,14 +4,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
 import { currentUser, signIn, signOut, SignIn } from "@/features/auth";
-import {
-  ArchivedTable,
-  ArchivedTables,
-  CreateTable,
-  Invitations,
-  TablePage,
-  TableList,
-} from "@/features/tables";
+import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
 import type { User } from "@/features/people";
 import { AdminWorkspace } from "@/features/admin";
 import { FriendsPage } from "@/features/social";
@@ -22,6 +15,7 @@ import { TicketsPage } from "@/features/bets";
 import { RealtimeProvider, useRealtimeFeed } from "@/lib/realtime";
 import { personalFeed } from "@/lib/realtime-connection";
 import { tablesKey } from "@/lib/query-keys";
+import { cn } from "@/lib/utils";
 
 const sessionKey = ["backend-session"] as const;
 
@@ -151,14 +145,15 @@ function TableWorkspace({
           // The table page fills the screen, like the felt in a card room.
           <TablePage key={tableId} user={user} tableId={tableId} expire={expire} />
         ) : (
-          <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
+          // Home is wider on desktop for its Tickets column.
+          <div
+            className={cn(
+              "mx-auto space-y-6 px-4 py-8 md:px-8",
+              pathname === "/" ? "max-w-6xl" : "max-w-4xl",
+            )}
+          >
             {pathname === "/" ? (
-              <>
-                <Invitations user={user} expire={expire} />
-                <TableList user={user} expire={expire} />
-                <CreateTable user={user} expire={expire} />
-                <ArchivedTables user={user} />
-              </>
+              <HomePage user={user} expire={expire} />
             ) : pathname === "/friends" ? (
               <FriendsPage user={user} expire={expire} />
             ) : pathname === "/how-to-play" ? (

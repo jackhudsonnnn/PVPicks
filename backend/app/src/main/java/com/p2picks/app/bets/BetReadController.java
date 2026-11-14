@@ -55,8 +55,8 @@ class BetReadController {
     private static final Set<String> STATUSES = Set.of("ACTIVE", "PENDING", "SETTLED", "WASHED");
 
     /**
-     * The caller's bets across their current tables (or one of them), newest first, with per-status counts for
-     * the same scope. Uses the same projection as the table list, so active picks stay private.
+     * The caller's bets across their current tables (or one of them), newest first. Uses the same projection as the
+     * table list, so active picks stay private.
      */
     @GetMapping("/me/bets")
     ResponseEntity<?> mine(@AuthenticationPrincipal Jwt jwt,
@@ -82,23 +82,7 @@ class BetReadController {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("items", page);
         body.put("nextCursor", next);
-        body.put("counts", counts(UUID.fromString(jwt.getSubject()), tableId));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
-    }
-
-    private Map<String, Long> counts(UUID userId, UUID tableId) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (String status : List.of("ACTIVE", "PENDING", "SETTLED", "WASHED")) counts.put(status, 0L);
-        jdbc.query("""
-                SELECT bet.status, count(*) AS total FROM bets bet
-                JOIN tables t ON t.id = bet.table_id AND t.archived_at IS NULL
-                JOIN table_members m ON m.table_id = t.id AND m.user_id = ?
-                WHERE ?::uuid IS NULL OR bet.table_id = ?::uuid
-                GROUP BY bet.status
-                """, rs -> {
-            counts.put(rs.getString("status"), rs.getLong("total"));
-        }, userId, tableId, tableId);
-        return counts;
     }
 
     /** Opaque page position: the last bet's creation time and id, base64url-encoded. */

@@ -86,16 +86,10 @@ export async function listTableBets(tableId: string, signal?: AbortSignal): Prom
 const betPageSchema = z.object({
   items: z.array(betSchema),
   nextCursor: z.string().min(1).nullable(),
-  counts: z.object({
-    ACTIVE: z.number().int().safe().nonnegative(),
-    PENDING: z.number().int().safe().nonnegative(),
-    SETTLED: z.number().int().safe().nonnegative(),
-    WASHED: z.number().int().safe().nonnegative(),
-  }),
 });
 export type BetPage = z.infer<typeof betPageSchema>;
 
-/** Your bets across your current tables (or one), newest first, with per-status counts for the Tickets tabs. */
+/** Your bets across your current tables (or one), newest first. */
 export async function listMyBets(
   filter: { status?: Bet["status"]; tableId?: string; cursor?: string },
   signal?: AbortSignal,

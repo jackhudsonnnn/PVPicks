@@ -212,7 +212,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
         UUID eventId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO tables (id, name, emoji, quickpick_code)
-                VALUES (?, 'Outbox source', 'T', 'S4R7QX'), (?, 'Outbox subscriber', 'T', 'T4R7QX')
+                VALUES (?, 'Outbox source', 'T', 'S4R7QX'), (?, 'Outbox sub', 'T', 'T4R7QX')
                 """, source, subscriber);
         TransactionTemplate transaction = new TransactionTemplate(transactions);
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {

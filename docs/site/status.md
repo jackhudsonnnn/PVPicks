@@ -66,7 +66,12 @@ planned operations; it is not an implementation inventory.
   of player screens. The UI follows the original prototype design: bets are
   tickets proposed from a slide-in sheet, the table page is a felt with seats
   showing each member's points (`GET /tables/{id}/balances`) and a deck of open
-  bets, and a Tickets page lists bets across tables (`GET /me/bets`). The
+  bets, and a Tickets page lists bets across tables (`GET /me/bets`). Home
+  shows invitation and table cards with the latest message
+  (`GET /me/chat/latest`), green when you're in play, plus a live-first
+  Tickets column on desktop. Friends opens with settle-up cards per person and
+  a receipts dialog. Table names are limited to 14 characters. There are no
+  notifications in the MVP. The
   table's side panel has the prototype's chat (bubbles, bet cards, reaction and
   GIF pickers, a ⋯ menu to report or block), Peers, and a Host panel (settle
   points, table details, members and hosts with a per-member dialog, adding

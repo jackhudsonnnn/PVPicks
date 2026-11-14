@@ -8,6 +8,7 @@ import {
   addMembers,
   createTable,
   deleteTable,
+  listTables,
   removeMember,
   setHost,
   setPermission,
@@ -15,7 +16,8 @@ import {
   updateTableSettings,
 } from "./api";
 import { FriendsPage } from "@/features/social/friends";
-import { CreateTable, Invitations } from "@/features/tables/components/home";
+import { CreateTableDialog } from "@/features/tables/components/create-table-dialog";
+import { TableCards } from "@/features/tables/components/table-cards";
 import { AboutPanel, HostPanel } from "@/features/tables/components/host-panel";
 import { useBetActions } from "@/features/bets/actions";
 import { addableFollowers, tableNameProblem } from "./rules";
@@ -54,6 +56,7 @@ vi.mock("./api", async (importOriginal) => ({
   removeMember: vi.fn(),
   setHost: vi.fn(),
   setPermission: vi.fn(),
+  listTables: vi.fn(),
 }));
 vi.mock("@/features/settlements/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/settlements/api")>()),
@@ -61,7 +64,14 @@ vi.mock("@/features/settlements/api", async (importOriginal) => ({
   listSettlementGroups: vi.fn(async () => []),
   listSettlementCounterparties: vi.fn(async () => []),
 }));
+vi.mock("@/features/chat/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat/api")>()),
+  listLatestMessages: vi.fn(async () => []),
+}));
 vi.mock("@/lib/realtime", () => ({ useRealtimeFeed: () => {} }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+}));
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me", hue: 1 };
 const friend = "123e4567-e89b-42d3-a456-426614174001";
@@ -107,11 +117,7 @@ function Members({ value }: { value: Table }) {
     expire,
     peopleKey: ["backend-tables", me.id, "people"],
   };
-  return value.hostIds.includes(me.id) ? (
-    <HostPanel {...props} />
-  ) : (
-    <AboutPanel {...props} onOpenPeers={() => {}} />
-  );
+  return value.hostIds.includes(me.id) ? <HostPanel {...props} /> : <AboutPanel {...props} />;
 }
 
 beforeEach(() => {
@@ -133,7 +139,8 @@ beforeEach(() => {
 describe("rules", () => {
   it("validates table names and usernames like the server", () => {
     expect(tableNameProblem("  ")).toMatch(/name/);
-    expect(tableNameProblem("x".repeat(41))).toMatch(/40/);
+    expect(tableNameProblem("x".repeat(15))).toMatch(/14/);
+    expect(tableNameProblem("🙂".repeat(14))).toBeNull();
     expect(tableNameProblem(" Game night ")).toBeNull();
     expect(searchTerm(" Pro ")).toBe("pro");
     expect(searchTerm("no spaces")).toBeNull();
@@ -168,9 +175,9 @@ describe("home", () => {
         { userId: fan, outcome: "invited" },
       ],
     });
-    wrap(<CreateTable user={me} expire={expire} />);
-    fireEvent.click(screen.getByText("Create a table"));
-    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    wrap(<CreateTableDialog user={me} expire={expire} />);
+    fireEvent.click(screen.getByRole("button", { name: "New table" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create table" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Give the table a name");
     fireEvent.change(screen.getByLabelText("Table name"), { target: { value: "  Game Night " } });
     fireEvent.click(screen.getByRole("tab", { name: "🔥" }));
@@ -186,7 +193,20 @@ describe("home", () => {
     expect(await screen.findByText("Table created: 1 added, 1 invited.")).toBeInTheDocument();
   });
 
-  it("joins or declines invitations", async () => {
+  it("rejects names longer than a table card fits", async () => {
+    wrap(<CreateTableDialog user={me} expire={expire} />);
+    fireEvent.click(screen.getByRole("button", { name: "New table" }));
+    fireEvent.change(await screen.findByLabelText("Table name"), {
+      target: { value: "Fifteen chars!!" },
+    });
+    expect(screen.getByText("15/14")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create table" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("14 characters or fewer");
+    expect(createTable).not.toHaveBeenCalled();
+  });
+
+  it("shows invitations and tables as cards, and accepts an invitation", async () => {
+    vi.mocked(listTables).mockResolvedValue([{ ...table, name: "Sunday Squad" }]);
     vi.mocked(listInvites).mockResolvedValue([
       {
         id: "123e4567-e89b-42d3-a456-426614174020",
@@ -196,13 +216,16 @@ describe("home", () => {
         fromId: friend,
         userId: me.id,
         createdAt: "2026-11-13T12:00:00Z",
+        memberIds: [friend],
       },
     ]);
     vi.mocked(respondToInvite).mockResolvedValue();
-    wrap(<Invitations user={me} expire={expire} />);
-    expect(await screen.findByText("Game Night")).toBeInTheDocument();
-    expect(await screen.findByText(/From friend/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    wrap(<TableCards user={me} expire={expire} />);
+    expect(await screen.findByText("Sunday Squad")).toBeInTheDocument();
+    expect(await screen.findByText("No messages yet")).toBeInTheDocument();
+    expect(await screen.findByText("friend wants you at this table. Accept?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Invitation to Game Night" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() =>
       expect(respondToInvite).toHaveBeenCalledWith(
         "123e4567-e89b-42d3-a456-426614174020",

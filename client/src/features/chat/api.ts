@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BackendError, mutationRequest, request, idSchema } from "@/lib/api-client";
+import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/api-client";
 import { exactCents, readExact } from "@/features/settlements";
 
 const uuid = idSchema;
@@ -28,6 +28,30 @@ const messageSchema = z.discriminatedUnion("kind", [
     }),
   }),
 ]);
+
+/** The latest visible message at one of your tables (backend/api/openapi.yaml ChatPreview). */
+const previewSchema = z.object({
+  tableId: uuid,
+  message: z
+    .object({
+      id: uuid,
+      kind: z.enum(["text", "gif", "bet", "system", "settlement"]),
+      createdAt: timestamp,
+      authorId: uuid.optional(),
+      text: z.string().min(1).optional(),
+    })
+    .nullable(),
+});
+
+export type ChatPreview = z.infer<typeof previewSchema>;
+
+/** One preview per current table, for the table cards on Home. */
+export async function listLatestMessages(signal?: AbortSignal): Promise<ChatPreview[]> {
+  return read(
+    await request("/me/chat/latest", signal ? { signal } : undefined),
+    z.array(previewSchema),
+  );
+}
 
 const windowSchema = z.object({
   items: z.array(messageSchema),

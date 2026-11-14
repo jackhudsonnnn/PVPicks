@@ -185,7 +185,8 @@ class SocialIntegrationTest extends IntegrationTestSupport {
         for (JsonNode invitation : invitations) {
             assertThat(OpenApiSchemas.load("TableInvite").validate(invitation)).isEmpty();
             assertThat(invitation.has("quickPickCode")).isFalse();
-            assertThat(invitation.has("memberIds")).isFalse();
+            // Members are listed for the card's avatars; the code, chat and bets stay private.
+            assertThat(invitation.path("memberIds").isArray()).isTrue();
         }
         mvc.perform(get("/tables/" + newer).cookie(viewerSession)).andExpect(status().isNotFound());
         JsonNode otherInvites = json.readTree(mvc.perform(get("/me/invites").cookie(otherSession))

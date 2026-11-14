@@ -58,6 +58,13 @@ current code, not an estimated delivery date.
   removed (git tag `prototype-ui`).
 - Uncertain actions are saved per user in local storage and shared across
   tabs; other devices reconcile from server reads.
+- Home matches the prototype: table and invitation cards (green when you're
+  in play), and on desktop a live-first Tickets column.
+- Settle-ups follow the prototype: a card per person on Friends and a
+  receipts dialog with per-receipt and group actions.
+- Out of scope for the MVP (owner decision, 2026-11-14): notifications. The
+  prototype's bell is not coming back; live updates and Home's cards cover
+  what changed.
 - Integrate one real workflow at a time; validate recovery, permissions, mobile
   layout and accessibility. Prototype completion is not backend completion.
 - See the <a href="/docs/source/frontend-roadmap.md" download>frontend roadmap</a>
