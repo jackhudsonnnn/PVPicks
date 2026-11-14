@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,13 +64,34 @@ interface Props {
 }
 
 /** The "Bet" facts, shared by the Details dialog and the proposal preview. */
-export function BetFacts({ bet, table, user, expire, peopleKey }: Props) {
+/** `onNavigate` makes the table a link (closing the dialog first); the proposal preview leaves it plain. */
+export function BetFacts({
+  bet,
+  table,
+  user,
+  expire,
+  peopleKey,
+  onNavigate,
+}: Props & { onNavigate?: () => void }) {
   const pot = potCents(bet);
   const windowSec = Math.round((Date.parse(bet.locksAt) - Date.parse(bet.createdAt)) / 1000);
   return (
     <FactSection title="Bet">
       <FactRow label="Table">
-        {table.emoji} {table.name}
+        {onNavigate ? (
+          <Link
+            to="/tables/$tableId"
+            params={{ tableId: table.id }}
+            onClick={onNavigate}
+            className="text-primary underline underline-offset-2"
+          >
+            {table.emoji} {table.name}
+          </Link>
+        ) : (
+          <>
+            {table.emoji} {table.name}
+          </>
+        )}
       </FactRow>
       <FactRow label="Proposed by">
         <PersonName id={bet.proposerId} user={user} expire={expire} queryKey={peopleKey} />
@@ -181,7 +203,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
             </ol>
           </FactSection>
 
-          <BetFacts {...props} />
+          <BetFacts {...props} onNavigate={() => setOpen(false)} />
 
           <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
             {rows ? (

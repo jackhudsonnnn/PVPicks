@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Check, EyeOff, Gavel, Lock, Trophy, Undo2 } from "lucide-react";
 import {
   AlertDialog,
@@ -119,7 +120,19 @@ export function BetTicket({
         </h3>
         <div className="-mt-2 flex items-center justify-between gap-2">
           <p className="min-w-0 text-xs text-ticket-muted">
-            Proposed by {proposer?.name ?? "…"} at {timeLabel(bet.createdAt)}
+            Proposed by {proposer?.name ?? "…"} in{" "}
+            {preview ? (
+              <span className="font-semibold text-ticket-foreground">{table.name}</span>
+            ) : (
+              <Link
+                to="/tables/$tableId"
+                params={{ tableId: table.id }}
+                className="font-semibold text-ticket-foreground underline underline-offset-2"
+              >
+                {table.name}
+              </Link>
+            )}{" "}
+            at {timeLabel(bet.createdAt)}
           </p>
           <BetDetailsDialog
             bet={bet}
@@ -240,7 +253,20 @@ export function BetTicket({
 
         <div className="flex items-center justify-between border-t border-ticket-foreground/10 pt-3">
           {players && players.length > 0 ? (
-            <AvatarStack ids={players} user={user} expire={expire} queryKey={peopleKey} />
+            preview ? (
+              <AvatarStack ids={players} user={user} expire={expire} queryKey={peopleKey} />
+            ) : (
+              <Link
+                to="/tables/$tableId"
+                params={{ tableId: table.id }}
+                search={{ tab: "peers" }}
+                aria-label="See peers at this table"
+                title="See peers at this table"
+                className="rounded-full transition-opacity hover:opacity-80"
+              >
+                <AvatarStack ids={players} user={user} expire={expire} queryKey={peopleKey} />
+              </Link>
+            )
           ) : (
             <span className="text-xs text-ticket-muted">
               {status === "active" ? "Picks stay private until lock" : "Nobody joined"}

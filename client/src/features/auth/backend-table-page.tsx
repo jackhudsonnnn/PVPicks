@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Crown, Info, MessageCircle, Plus, Spade, Ticket, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -105,11 +105,26 @@ function TableLayout({
   const navigate = useNavigate();
   const peopleKey = userKey(user.id, "people");
   const betsKey = userKey(user.id, table.id, "bets");
-  const [tab, setTab] = useState<TabId>("table");
+  const requestedTab = useRouterState({
+    select: (state) => (state.location.search as { tab?: string } | undefined)?.tab,
+  });
+  const [tab, setTab] = useState<TabId>(requestedTab === "peers" ? "peers" : "table");
   const [focusId, setFocusId] = useState<string | undefined>();
   const [openId, setOpenId] = useState<string | null>(null);
   const [proposing, setProposing] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  // A ticket's player avatars link here with ?tab=peers, even from this page's own ticket dialog.
+  useEffect(() => {
+    if (requestedTab !== "peers") return;
+    setTab("peers");
+    setOpenId(null);
+  }, [requestedTab]);
+  // Switching tabs yourself drops ?tab, so the same link opens Peers again next time.
+  const chooseTab = (next: TabId) => {
+    setTab(next);
+    if (requestedTab)
+      void navigate({ to: "/tables/$tableId", params: { tableId: table.id }, replace: true });
+  };
 
   const bets = useQuery({
     queryKey: betsKey,
@@ -229,7 +244,7 @@ function TableLayout({
         className="shrink-0 rounded-none border-b md:hidden"
         tabs={tabs}
         value={view}
-        onChange={setTab}
+        onChange={chooseTab}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -264,7 +279,7 @@ function TableLayout({
             balances={balances.data}
             onFocus={setFocusId}
             onOpenBet={openBet}
-            onOpenPeers={() => setTab("peers")}
+            onOpenPeers={() => chooseTab("peers")}
             onSelectUser={setProfileId}
             onPropose={block ? undefined : () => setProposing(true)}
             user={user}
@@ -285,7 +300,7 @@ function TableLayout({
             className="hidden rounded-none border-b bg-transparent md:grid"
             tabs={sideTabs}
             value={view === "table" ? "chat" : view}
-            onChange={setTab}
+            onChange={chooseTab}
           />
           {view === "peers" ? (
             <PeersPanel
@@ -320,7 +335,7 @@ function TableLayout({
               user={user}
               expire={expire}
               peopleKey={peopleKey}
-              onOpenPeers={() => setTab("peers")}
+              onOpenPeers={() => chooseTab("peers")}
               className="min-h-0 flex-1"
             />
           ) : (

@@ -105,9 +105,8 @@ export function TicketsPage({ user, expire }: { user: BackendUser; expire: () =>
             (tables.data?.length ?? 0) > 1 && (
               <SegmentedTabs
                 ariaLabel="Filter by table"
-                className="overflow-hidden"
                 size="sm"
-                fitContent
+                dropdownOnly
                 tabs={[
                   { id: "all", label: "All" },
                   ...(tables.data ?? []).map((t) => ({ id: t.id, label: t.name })),
@@ -156,9 +155,6 @@ export function TicketsPage({ user, expire }: { user: BackendUser; expire: () =>
                 const table = byId.get(bet.tableId);
                 return table ? (
                   <AnimatedItem key={bet.id} className="mb-4 min-w-0 break-inside-avoid">
-                    <p className="mb-1 truncate font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                      {table.emoji} {table.name}
-                    </p>
                     <BetTicket
                       bet={bet}
                       table={table}

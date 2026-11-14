@@ -129,7 +129,7 @@ function Points({ cents }: { cents: bigint | undefined }) {
             : "text-loss",
       )}
     >
-      {cents === undefined ? "–" : formatCents(cents, true)}
+      {cents === undefined ? "-" : formatCents(cents, true)}
     </span>
   );
 }

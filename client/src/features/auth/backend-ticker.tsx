@@ -65,7 +65,7 @@ function TickerItems({ games, sourceCount }: { games: TickerGame[]; sourceCount:
             key={`${game.id}:${index}`}
             data-ticker-repeat={index >= sourceCount ? "true" : undefined}
             aria-hidden={index >= sourceCount || undefined}
-            className="flex h-full w-[22rem] shrink-0 items-center gap-2.5 border-r px-4 font-mono text-xs"
+            className="flex h-full w-auto shrink-0 items-center gap-2.5 border-r px-4 font-mono text-xs md:w-[22rem]"
           >
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold">
               {game.league}
@@ -77,7 +77,7 @@ function TickerItems({ games, sourceCount }: { games: TickerGame[]; sourceCount:
             <span className="scoreboard text-base">
               {game.home.abbreviation} {started ? (game.home.score ?? "") : ""}
             </span>
-            <span className="ml-auto flex min-w-0 items-center gap-1.5 truncate text-muted-foreground">
+            <span className="ml-2 flex min-w-0 items-center gap-1.5 truncate text-muted-foreground md:ml-auto">
               {game.status === "LIVE" && (
                 <span className="size-1.5 animate-pulse-dot rounded-full bg-loss" />
               )}

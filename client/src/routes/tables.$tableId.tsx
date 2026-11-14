@@ -17,6 +17,9 @@ export const Route = createFileRoute("/tables/$tableId")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  // ?tab=peers opens the Peers (members) tab, e.g. from a ticket's player avatars.
+  validateSearch: (search: Record<string, unknown>): { tab?: "peers" } =>
+    search["tab"] === "peers" ? { tab: "peers" } : {},
   // The root renders BackendApp for every path; this route only provides the path and page metadata.
   component: () => null,
 });
