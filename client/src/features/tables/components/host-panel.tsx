@@ -50,31 +50,28 @@ import { Switch } from "@/components/ui/switch";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SettingRow, SettingsSection } from "@/components/settings";
-import { TABLE_EMOJIS } from "@/features/table/emojis";
+import { TABLE_EMOJIS } from "@/features/tables/emojis";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
-import { PersonAvatar } from "./backend-avatar";
-import type { BetActions } from "./backend-bet-controls";
-import { awaitingPointsSettlement } from "./bet-results";
-import { addableFollowers, tableNameProblem } from "./management-rules";
-import { useRelationships } from "./social-queries";
-import type { useTableActions } from "./table-actions";
-import type { Permission, RemainderRule, TableBalance } from "./tables-api";
-import { usePerson } from "./use-person";
+import { type Bet, type BetActions, awaitingPointsSettlement } from "@/features/bets";
+import type { Table, Permission, RemainderRule, TableBalance } from "@/features/tables/api";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
+import { ActionStatus } from "@/components/action-status";
+import { addableFollowers, tableNameProblem } from "@/features/tables/rules";
+import { useRelationships } from "@/features/social";
+import type { useTableActions } from "@/features/tables/actions";
 
 type TableActions = ReturnType<typeof useTableActions>;
 
 interface People {
-  user: BackendUser;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }
 
 interface PanelProps extends People {
-  table: BackendTable;
-  bets: BackendBet[] | undefined;
+  table: Table;
+  bets: Bet[] | undefined;
   balances: TableBalance[] | undefined;
   tableActions: TableActions;
   betActions: BetActions;
@@ -115,14 +112,14 @@ const SWITCHES = [
     label: "Only hosts start bets",
     description: "Members can still pick on any bet.",
     icon: Lock,
-    isOn: (t: BackendTable) => t.hostsOnlyBets,
+    isOn: (t: Table) => t.hostsOnlyBets,
   },
   {
     id: "u2pickEnabled",
     label: "Allow U2Pick bets",
     description: "Custom bets with your own question and options.",
     icon: PenLine,
-    isOn: (t: BackendTable) => t.u2pickEnabled,
+    isOn: (t: Table) => t.u2pickEnabled,
   },
 ] as const;
 
@@ -130,7 +127,7 @@ const busy = (actions: { busy: boolean; pending: unknown; storageError: unknown 
   actions.busy || !!actions.pending || !!actions.storageError;
 
 /** Whether the table has bets that block deleting it or removing members. */
-function hasOpenBets(bets: BackendBet[] | undefined) {
+function hasOpenBets(bets: Bet[] | undefined) {
   return (bets ?? []).some(
     (bet) =>
       bet.status === "ACTIVE" ||

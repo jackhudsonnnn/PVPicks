@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { BackendError, backendErrorMessage } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
-import { putDebtCap, putInvitePreferences, updateProfile } from "./preferences-api";
+import { BackendError, backendErrorMessage } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
+import { putDebtCap, putInvitePreferences, updateProfile } from "./api";
 
 const mode = z.enum(["open", "request", "closed"]);
 const intentSchema = z.discriminatedUnion("kind", [

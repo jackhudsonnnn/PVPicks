@@ -6,22 +6,19 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
-import {
-  backendErrorMessage,
-  BackendError,
-  listMyBets,
-  listTables,
-  type BackendBet,
-  type BackendUser,
-} from "./backend-api";
-import { BetMutationStatus } from "./backend-bet-controls";
-import { BetTicket } from "./backend-ticket";
-import { useBetActions } from "./bet-actions";
-import { userKey } from "./query-keys";
-import { useRealtimeFeed } from "./realtime";
-import { tableBetsFeed } from "./realtime-connection";
+import { backendErrorMessage } from "@/lib/api-client";
+import { listMyBets, type Bet } from "@/features/bets/api";
+import { listTables } from "@/features/tables";
+import type { User } from "@/features/people";
+import { BetMutationStatus } from "./bet-controls";
+import { BetTicket } from "./ticket";
+import { useBetActions } from "@/features/bets/actions";
+import { userKey } from "@/lib/query-keys";
+import { useRealtimeFeed } from "@/lib/realtime";
+import { tableBetsFeed } from "@/lib/realtime-connection";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
-type Status = BackendBet["status"];
+type Status = Bet["status"];
 
 const TABS: { id: Status; label: string; hint: string }[] = [
   { id: "ACTIVE", label: "Active", hint: "Timer running, you can still change your pick." },
@@ -37,7 +34,7 @@ function TableBetsListener({ tableId, onChange }: { tableId: string; onChange: (
 }
 
 /** Every bet at your tables by status, newest first; `?table=` narrows it to one table. */
-export function TicketsPage({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function TicketsPage({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const requested = useRouterState({
@@ -80,12 +77,7 @@ export function TicketsPage({ user, expire }: { user: BackendUser; expire: () =>
     },
     expire,
   );
-  const unauthorized = [tables.error, bets.error].some(
-    (error) => error instanceof BackendError && error.status === 401,
-  );
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([tables.error, bets.error], expire);
   const refresh = () =>
     void queryClient.invalidateQueries({ queryKey: userKey(user.id, "my-bets") });
   const peopleKey = userKey(user.id, "people");

@@ -32,7 +32,7 @@ class BettingFrontendIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Bet UI', 'T', 'BP8X3A')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
-        String file = "src/features/auth/betting-integration.test.tsx";
+        String file = "src/features/bets/betting-integration.test.tsx";
 
         runFrontendTest(file, Map.of("PVPICKS_TEST_TABLE_ID", table.toString(), "PVPICKS_TEST_PHASE", "pick"));
         UUID bet = jdbc.queryForObject("SELECT id FROM bets WHERE table_id = ?", UUID.class, table);

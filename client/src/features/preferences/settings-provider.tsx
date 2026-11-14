@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { MotionConfig } from "motion/react";
-import { SHARED_KEYS } from "@/features/auth/storage-keys";
+import { SHARED_KEYS } from "@/lib/storage-keys";
 import { isRecord, readJson, writeJson } from "@/lib/storage";
 import { setClock24h } from "@/lib/time";
 import { DEFAULT_DISPLAY, MOTION_CONFIG, TEXT_SIZE_PX, type DisplayPrefs } from "./display";

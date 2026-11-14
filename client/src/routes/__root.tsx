@@ -10,10 +10,10 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
+import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { ErrorToasts } from "@/components/error-toasts";
-import { BackendApp } from "@/features/auth/backend-app";
-import { SettingsProvider } from "@/features/settings/settings-provider";
+import { App } from "@/app/app";
+import { SettingsProvider } from "@/features/preferences";
 
 function NotFoundComponent() {
   return (
@@ -132,7 +132,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <SettingsProvider>
-        <BackendApp />
+        <App />
         <ErrorToasts />
       </SettingsProvider>
     </QueryClientProvider>

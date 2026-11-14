@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, Flag } from "lucide-react";
 import { toast } from "sonner";
@@ -13,27 +13,19 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { StatusBadge } from "@/features/bets/components/status-badge";
-import { MODES } from "@/features/bets/modes";
+import { StatusBadge, MODES, type Bet, ticketStatus } from "@/features/bets";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import {
-  BackendError,
-  backendErrorMessage,
-  type BackendBet,
-  type BackendTable,
-  type BackendUser,
-} from "./backend-api";
-import { PersonAvatar } from "./backend-avatar";
-import { BlockDialog, ReportDialog, type SocialActions } from "./backend-safety";
+import { BackendError, backendErrorMessage } from "@/lib/api-client";
+import { type Table, throwTomato } from "@/features/tables";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
+import { BlockDialog, ReportDialog, type SocialActions } from "./safety";
 import { betsInvolving, profileStats } from "./profile-model";
-import { userKey } from "./query-keys";
-import { listSettlementGroups, receiptHistory } from "./settlement-api";
-import { useRelationships } from "./social-queries";
-import { throwTomato } from "./tables-api";
-import { ticketStatus } from "./ticket-model";
-import { usePerson } from "./use-person";
+import { userKey } from "@/lib/query-keys";
+import { listSettlementGroups, receiptHistory } from "@/features/settlements";
+import { useRelationships } from "./queries";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 type Tab = "bets" | "settlements";
 
@@ -53,9 +45,9 @@ export function ProfileDialog({
   onOpenChange,
 }: {
   userId: string | null;
-  table: BackendTable;
-  bets: BackendBet[] | undefined;
-  user: BackendUser;
+  table: Table;
+  bets: Bet[] | undefined;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
   social: SocialActions;
@@ -219,8 +211,8 @@ function SafetyButtons({
 }: {
   userId: string;
   name: string;
-  table: BackendTable;
-  user: BackendUser;
+  table: Table;
+  user: User;
   social: SocialActions;
   onThrown: () => void;
 }) {
@@ -299,7 +291,7 @@ function Receipts({
 }: {
   otherId: string;
   tableId: string;
-  user: BackendUser;
+  user: User;
   expire: () => void;
 }) {
   const query = useQuery({
@@ -307,10 +299,7 @@ function Receipts({
     queryFn: ({ signal }) => receiptHistory(user.id, otherId, signal),
     retry: false,
   });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([query.error], expire);
   if (query.isPending) return <p className="py-4 text-sm text-muted-foreground">Loading…</p>;
   if (query.isError) return <p role="alert">{backendErrorMessage(query.error)}</p>;
   const lines = query.data.filter((line) => line.tableId === tableId);

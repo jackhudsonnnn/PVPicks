@@ -9,45 +9,30 @@ import {
   SmilePlus,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { StatusBadge } from "@/features/bets/components/status-badge";
-import { MODES } from "@/features/bets/modes";
+import { StatusBadge, MODES, type Bet, ticketStatus } from "@/features/bets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { GIF_CATEGORIES, getGif, searchGifs, type GifCategory } from "@/features/table/gifs";
+import { GIF_CATEGORIES, getGif, searchGifs, type GifCategory } from "./gifs";
 import { cn } from "@/lib/utils";
-import {
-  BackendError,
-  backendErrorMessage,
-  type BackendBet,
-  type BackendTable,
-  type BackendUser,
-} from "./backend-api";
-import { PersonAvatar } from "./backend-avatar";
-import { SafetyMenu, type SocialActions } from "./backend-safety";
-import { ticketStatus } from "./ticket-model";
-import { usePerson } from "./use-person";
-import { ConfirmAction } from "./backend-confirm-action";
-import { PersonName } from "./backend-person-name";
-import { markRead, type ChatMessage } from "./chat-api";
-import { useChatActions } from "./chat-actions";
-import {
-  QUICK_REACTIONS,
-  canReactTo,
-  nextReaction,
-  reactionChips,
-  textProblem,
-} from "./chat-model";
-import { useRealtimeFeed, useRealtimeStatus } from "./realtime";
-import { tableChatFeed } from "./realtime-connection";
-import { formatPoints } from "./settlement-api";
-import { useBackendChat } from "./use-backend-chat";
+import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
+import type { Table } from "@/features/tables";
+import { type User, PersonAvatar, usePerson, PersonName } from "@/features/people";
+import { SafetyMenu, type SocialActions } from "@/features/social";
+import { ConfirmAction } from "@/components/confirm-action";
+import { markRead, type ChatMessage } from "./api";
+import { useChatActions } from "./actions";
+import { QUICK_REACTIONS, canReactTo, nextReaction, reactionChips, textProblem } from "./model";
+import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
+import { tableChatFeed } from "@/lib/realtime-connection";
+import { formatPoints } from "@/features/settlements";
+import { useBackendChat } from "./use-chat";
 import { timeLabel } from "@/lib/time";
 
 /** A table's chat: paged history, text and GIF sending, reactions and read position, updated live. */
-export function BackendChat({
+export function TableChat({
   user,
   table,
   expire,
@@ -60,13 +45,13 @@ export function BackendChat({
   readOnly = false,
   fill = false,
 }: {
-  user: BackendUser;
-  table: Pick<BackendTable, "id" | "disabledPermissions">;
+  user: User;
+  table: Pick<Table, "id" | "disabledPermissions">;
   expire: () => void;
   /** The question of a bet at this table, for bet cards; undefined while unknown. */
   betQuestion: (betId: string) => string | undefined;
   /** The full bet, when loaded, so bet cards show their mode and status. */
-  bet?: (betId: string) => BackendBet | undefined;
+  bet?: (betId: string) => Bet | undefined;
   /** Opens a bet's ticket from its card. */
   onOpenBet?: (betId: string) => void;
   /** Opens someone's profile from their avatar. */
@@ -215,12 +200,12 @@ export function BackendChat({
 }
 
 interface RowProps {
-  user: BackendUser;
+  user: User;
   expire: () => void;
   names: readonly string[];
   tableId: string;
   betQuestion: (betId: string) => string | undefined;
-  bet?: ((betId: string) => BackendBet | undefined) | undefined;
+  bet?: ((betId: string) => Bet | undefined) | undefined;
   onOpenBet?: ((betId: string) => void) | undefined;
   onSelectUser?: ((userId: string) => void) | undefined;
   social?: SocialActions | undefined;
@@ -440,7 +425,7 @@ function ReactButton({
   onReact,
 }: {
   message: ChatMessage;
-  user: BackendUser;
+  user: User;
   onReact: (emoji: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -489,7 +474,7 @@ function ReactionChips({
   className,
 }: {
   message: ChatMessage;
-  user: BackendUser;
+  user: User;
   names: readonly string[];
   expire: () => void;
   canReact: boolean;
@@ -709,7 +694,7 @@ function useMarkRead(
       .then(() => callbacks.current.onRead())
       .catch((error: unknown) => {
         // The position only moves forward and the next message retries it; only a lost session matters.
-        if (error instanceof BackendError && error.status === 401) callbacks.current.expire();
+        if (isUnauthorized(error)) callbacks.current.expire();
         else marked.current = null;
       });
   }, [tableId, latestId]);

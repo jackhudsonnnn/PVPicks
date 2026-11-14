@@ -330,7 +330,7 @@ class TableSettingsIntegrationTest extends IntegrationTestSupport {
                         .contentType(MediaType.APPLICATION_JSON).content(both)).andExpect(status().isBadRequest());
         for (String invalid : List.of("{}", "{\"name\":null}", "{\"emoji\":false}", "{\"name\":\"   \"}",
                 "{\"name\":\"x\\u0000y\"}", "{\"name\":\"\\uD800\"}",
-                "{\"name\":\"" + "🙂".repeat(41) + "\"}", "{\"emoji\":\"not emoji\"}",
+                "{\"name\":\"" + "🙂".repeat(15) + "\"}", "{\"emoji\":\"not emoji\"}",
                 "{\"name\":\"valid\",\"other\":true}")) {
             mvc.perform(profilePatch(table, hostSession, csrf, "bad", invalid)).andExpect(status().isBadRequest());
         }
@@ -369,7 +369,7 @@ class TableSettingsIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_messages WHERE table_id = ?", Integer.class, table))
                 .isEqualTo(2);
-        mvc.perform(profilePatch(table, hostSession, csrf, "max", "{\"name\":\"" + "🙂".repeat(40) + "\"}"))
+        mvc.perform(profilePatch(table, hostSession, csrf, "max", "{\"name\":\"" + "🙂".repeat(14) + "\"}"))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_messages WHERE table_id = ? AND text <> 'Table details changed'",
                 Integer.class, table)).isZero();

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { BackendError, backendErrorMessage } from "./backend-api";
+import { BackendError, backendErrorMessage } from "./api-client";
 
 const safeRetryMs = 23 * 60 * 60 * 1000;
 

@@ -5,8 +5,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from "react";
-import type { ReactNode } from "react";
 import { RealtimeConnection, type Invalidation, type RealtimeStatus } from "./realtime-connection";
 
 type Listener = (event: Invalidation) => void;

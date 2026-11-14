@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BackendError } from "./backend-api";
-import { getChatUnread, getChatWindow, type ChatMessage } from "./chat-api";
-import { appendNewer, mergeRange, prependOlder } from "./chat-model";
+import { isUnauthorized } from "@/lib/api-client";
+import { getChatUnread, getChatWindow, type ChatMessage } from "./api";
+import { appendNewer, mergeRange, prependOlder } from "./model";
 
 const pageSize = 25;
 
@@ -61,7 +61,7 @@ export function useBackendChat(
         try {
           await operation();
         } catch (error) {
-          if (error instanceof BackendError && error.status === 401) expire();
+          if (isUnauthorized(error)) expire();
           else if (current.current.status === "loading") update({ status: "error", error });
         } finally {
           update({ busy: false });

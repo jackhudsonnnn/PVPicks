@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { BackendBet, BackendTable } from "./backend-api";
+import type { Bet } from "./api";
+import type { Table } from "@/features/tables/api";
 import {
   activeHint,
   choiceTallies,
@@ -8,6 +9,7 @@ import {
   participantIds,
   potCents,
   proposeBlock,
+  u2pickBlock,
   secondsLeft,
   ticketStatus,
 } from "./ticket-model";
@@ -16,7 +18,7 @@ const me = "123e4567-e89b-42d3-a456-426614174000";
 const a = "123e4567-e89b-42d3-a456-426614174001";
 const b = "123e4567-e89b-42d3-a456-426614174002";
 
-const active: BackendBet = {
+const active: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174010",
   tableId: "123e4567-e89b-42d3-a456-426614174020",
   proposerId: a,
@@ -35,7 +37,7 @@ const active: BackendBet = {
   myParticipation: "picked",
 };
 
-const locked: BackendBet = {
+const locked: Bet = {
   ...active,
   status: "PENDING",
   picks: [
@@ -102,7 +104,7 @@ describe("ticket model", () => {
 });
 
 describe("who can propose", () => {
-  const table: BackendTable = {
+  const table: Table = {
     id: active.tableId,
     name: "T",
     emoji: "🍺",
@@ -127,6 +129,8 @@ describe("who can propose", () => {
     );
     expect(proposeBlock({ ...table, hostsOnlyBets: true }, me)).toMatch(/Only hosts/);
     expect(proposeBlock({ ...table, hostsOnlyBets: true }, a)).toBeNull();
-    expect(proposeBlock({ ...table, u2pickEnabled: false }, a)).toMatch(/U2Pick/);
+    expect(proposeBlock({ ...table, u2pickEnabled: false }, a)).toBeNull();
+    expect(u2pickBlock({ ...table, u2pickEnabled: false })).toMatch(/U2Pick/);
+    expect(u2pickBlock(table)).toBeNull();
   });
 });

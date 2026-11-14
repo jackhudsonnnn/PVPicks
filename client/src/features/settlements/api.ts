@@ -1,9 +1,9 @@
 import { formatCents } from "@/lib/money";
 import { parse, parseNumberAndBigInt } from "lossless-json";
 import { z } from "zod";
-import { BackendError, mutationRequest, request } from "./backend-api";
+import { BackendError, mutationRequest, request, idSchema } from "@/lib/api-client";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const integer = z.union([z.number().int().safe(), z.bigint()]).transform((value) => BigInt(value));
 export const exactCents = integer.refine((value) => value >= 1n && value <= 9223372036854775807n);
 const netCents = integer.refine(

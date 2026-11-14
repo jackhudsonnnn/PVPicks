@@ -8,13 +8,14 @@ import { ScrollContainer } from "@/components/scroll-container";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { listTables, type BackendUser } from "./backend-api";
-import { BackendTicker } from "./backend-ticker";
-import { useRealtimeFeed, useRealtimeStatus } from "./realtime";
-import { settlementsFeed } from "./realtime-connection";
-import { listSettlementGroups } from "./settlement-api";
-import { useInvites } from "./social-queries";
-import { userKey } from "./query-keys";
+import { listTables } from "@/features/tables";
+import type { User } from "@/features/people";
+import { ScoreTicker } from "@/features/sports";
+import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
+import { settlementsFeed } from "@/lib/realtime-connection";
+import { listSettlementGroups } from "@/features/settlements";
+import { useInvites } from "@/features/social";
+import { userKey } from "@/lib/query-keys";
 
 const NAV = [
   { to: "/", label: "Home", short: "Home", icon: Home },
@@ -31,7 +32,7 @@ const isActive = (pathname: string, to: string) =>
  * Net of your open settle-ups: positive means you're owed. Same query and key as the Friends page's settle-ups,
  * so both stay in step; the settlements feed refreshes it.
  */
-function PointsPill({ user }: { user: BackendUser }) {
+function PointsPill({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const key = userKey(user.id, "settlements");
   useRealtimeFeed(settlementsFeed, () => void queryClient.invalidateQueries({ queryKey: key }));
@@ -97,7 +98,7 @@ function SignOutButton({ onSignOut, busy }: { onSignOut: () => void; busy: boole
 }
 
 /** Your tables and pending invitations for the sidebar; invitations open Home, where you answer them. */
-function SidebarTables({ user, pathname }: { user: BackendUser; pathname: string }) {
+function SidebarTables({ user, pathname }: { user: User; pathname: string }) {
   const tables = useQuery({
     queryKey: userKey(user.id, "list"),
     queryFn: ({ signal }) => listTables(signal),
@@ -160,7 +161,7 @@ export function AppShell({
   signingOut,
   children,
 }: {
-  user: BackendUser;
+  user: User;
   pathname: string;
   expire: () => void;
   onSignOut: () => void;
@@ -224,7 +225,7 @@ export function AppShell({
             <SignOutButton onSignOut={onSignOut} busy={signingOut} />
           </div>
         </header>
-        {!isTable && <BackendTicker user={user} expire={expire} />}
+        {!isTable && <ScoreTicker user={user} expire={expire} />}
       </div>
 
       <main className={cn("md:pl-64", !isTable && "pb-20 md:pb-0")}>{children}</main>

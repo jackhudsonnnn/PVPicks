@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getProfile, type BackendTable } from "./backend-api";
-import { BackendChat } from "./backend-chat";
+import { getProfile } from "@/features/people/api";
+import type { Table } from "@/features/tables/api";
+import { TableChat } from "./chat";
 import {
   getChatUnread,
   getChatWindow,
@@ -10,15 +11,15 @@ import {
   sendChatMessage,
   setReaction,
   type ChatMessage,
-} from "./chat-api";
-import type { Invalidation } from "./realtime-connection";
+} from "./api";
+import type { Invalidation } from "@/lib/realtime-connection";
 
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/people/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/people/api")>()),
   getProfile: vi.fn(),
 }));
-vi.mock("./chat-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./chat-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   getChatWindow: vi.fn(),
   getChatUnread: vi.fn(),
   markRead: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock("./chat-api", async (importOriginal) => ({
   setReaction: vi.fn(),
 }));
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
-vi.mock("./realtime", () => ({
+vi.mock("@/lib/realtime", () => ({
   useRealtimeStatus: () => null,
   useRealtimeFeed: (destination: string, listener: (event: Invalidation) => void) => {
     feeds.set(destination, listener);
@@ -35,7 +36,7 @@ vi.mock("./realtime", () => ({
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me", hue: 1 };
 const friend = "123e4567-e89b-42d3-a456-426614174001";
-const table: BackendTable = {
+const table: Table = {
   id: "123e4567-e89b-42d3-a456-426614174002",
   name: "Table",
   emoji: "T",
@@ -64,10 +65,10 @@ function message(n: number, extra: Partial<ChatMessage> = {}): ChatMessage {
 
 const expire = vi.fn();
 
-function renderChat(override: Partial<BackendTable> = {}) {
+function renderChat(override: Partial<Table> = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <BackendChat
+      <TableChat
         user={me}
         table={{ ...table, ...override }}
         expire={expire}

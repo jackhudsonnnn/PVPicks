@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUsername, usernameError } from "./profile";
+import { normalizeUsername, usernameError } from "./profile-rules";
 
 describe("username rules", () => {
   it("usernames are 3–15 characters", () => {

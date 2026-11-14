@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendError, getProfile } from "./backend-api";
-import { BackendSettlements } from "./backend-settlements";
+import { BackendError } from "@/lib/api-client";
+import { getProfile } from "@/features/people/api";
+import { SettlementReceipts } from "./settlements";
 import {
   acknowledgeReview,
   listPendingReviews,
@@ -13,14 +14,14 @@ import {
   transitionLine,
   type SettlementGroup,
   type SettlementLine,
-} from "./settlement-api";
+} from "./api";
 
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/people/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/people/api")>()),
   getProfile: vi.fn(),
 }));
-vi.mock("./settlement-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./settlement-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   listPendingReviews: vi.fn(),
   listSettlementCounterparties: vi.fn(),
   listSettlementGroups: vi.fn(),
@@ -63,7 +64,7 @@ function renderScreen() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <BackendSettlements user={user} expire={expire} />
+      <SettlementReceipts user={user} expire={expire} />
     </QueryClientProvider>,
   );
 }

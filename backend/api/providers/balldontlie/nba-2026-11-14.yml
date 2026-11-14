@@ -1,0 +1,6075 @@
+openapi: 3.1.0
+info:
+  title: BALLDONTLIE - NBA API
+  version: 1.0.0
+  description: NBA endpoints for the BallDontLie API.
+servers:
+  - url: https://api.balldontlie.io
+    description: Production server
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+  schemas:
+    NBAShotChart:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - season
+        - season_type
+        - period
+        - clock
+        - made
+        - shot_value
+        - shot_type
+        - shot_distance
+        - coordinate_x
+        - coordinate_y
+        - shot_zone_basic
+        - shot_zone_area
+        - shot_zone_range
+      properties:
+        id:
+          type: integer
+          description: Shot ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        season:
+          type: integer
+          description: Season start year; 2026 means 2026–27.
+        season_type:
+          type: string
+          enum:
+            - regular
+            - playoffs
+            - playin
+            - ist
+        period:
+          type: integer
+          minimum: 1
+          description: Overtime starts at 5.
+        clock:
+          type: string
+          description: Time remaining in the period, as M:SS.
+        made:
+          type: boolean
+        shot_value:
+          type: integer
+          enum:
+            - 2
+            - 3
+        shot_type:
+          type: string
+        shot_distance:
+          type:
+            - number
+            - 'null'
+          description: Distance from the basket in feet.
+        coordinate_x:
+          type:
+            - number
+            - 'null'
+          description: Horizontal position in feet; the basket is at x = 25.
+        coordinate_y:
+          type:
+            - number
+            - 'null'
+          description: Position along the court in feet; the basket is at y = 0.
+        shot_zone_basic:
+          type:
+            - string
+            - 'null'
+        shot_zone_area:
+          type:
+            - string
+            - 'null'
+        shot_zone_range:
+          type:
+            - string
+            - 'null'
+    OddsLink:
+      type: object
+      additionalProperties: false
+      required: [url, url_template]
+      description: Exactly one of url and url_template is non-null. Templates may contain {state}, {pickType}, or {wagerAmount}; the consuming application supplies these values before navigation.
+      properties:
+        url:
+          type: [string, "null"]
+          description: A complete HTTPS sportsbook URL.
+        url_template:
+          type: [string, "null"]
+          description: An HTTPS sportsbook URL requiring placeholder substitution. Use the sportsbook state code for {state}; BetRivers coupon links also require its pick type and wager amount.
+      oneOf:
+        - properties:
+            url: {type: string}
+            url_template: {type: "null"}
+        - properties:
+            url: {type: "null"}
+            url_template: {type: string}
+    OddsDeeplinks:
+      type: [object, "null"]
+      additionalProperties: false
+      required: [event, selections]
+      description: Available event and selection links, or null when unavailable. Coverage varies by sportsbook, event, and selection. Opening links do not preserve the historical price.
+      properties:
+        event:
+          oneOf:
+            - $ref: "#/components/schemas/OddsLink"
+            - type: "null"
+        selections:
+          type: object
+          description: Available links keyed by the corresponding selection. Missing links are omitted.
+          additionalProperties:
+            $ref: "#/components/schemas/OddsLink"
+      example:
+        event:
+          url: null
+          url_template: https://{state}.betrivers.com/?page=sportsbook#event/1028589932
+        selections: {}
+    CompetitionStatusState:
+      type: string
+      description: Normalized lifecycle state for cross-sport integrations. Classification may use the sport-specific lifecycle field and other available lifecycle context. `unknown` means the available lifecycle data cannot be safely classified.
+      enum:
+        - scheduled
+        - in_progress
+        - final
+        - postponed
+        - canceled
+        - delayed
+        - suspended
+        - abandoned
+        - unknown
+    DfsSlate:
+      type: object
+      description: A DFS lineup pool with included games and roster slots. Supports DraftKings and FanDuel.
+      required:
+        - id
+        - sport
+        - provider
+        - format
+        - scope
+        - style
+        - salary_cap
+        - event_count
+        - starts_at
+        - last_event_starts_at
+        - status
+        - allow_late_swap
+        - active
+        - updated_at
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        sport:
+          type: string
+        provider:
+          type: string
+        format:
+          type: string
+          enum: [salary_cap, tiers, snake_draft]
+        scope:
+          type: string
+          enum: [single_event, multi_event]
+        style:
+          type: string
+        salary_cap:
+          type: integer
+          minimum: 0
+          nullable: true
+        event_count:
+          type: integer
+          minimum: 1
+        starts_at:
+          type: string
+          format: date-time
+        last_event_starts_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+        allow_late_swap:
+          type: boolean
+          nullable: true
+        active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    DfsSlateEvent:
+      type: object
+      description: A real game included in a DFS slate.
+      required:
+        - id
+        - game_id
+        - name
+        - starts_at
+        - away_team_abbreviation
+        - home_team_abbreviation
+        - active
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        game_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: BALLDONTLIE game ID when a reference is available.
+        name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        away_team_abbreviation:
+          type: string
+          nullable: true
+        home_team_abbreviation:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+    DfsRosterSlot:
+      type: object
+      description: A lineup position required by a DFS slate.
+      required:
+        - id
+        - name
+        - description
+        - instructions
+        - required_count
+        - display_order
+        - active
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        instructions:
+          type: string
+          nullable: true
+        required_count:
+          type: integer
+          minimum: 1
+        display_order:
+          type: integer
+          minimum: 0
+        active:
+          type: boolean
+    DfsSlateDetail:
+      allOf:
+        - $ref: "#/components/schemas/DfsSlate"
+        - type: object
+          required:
+            - events
+            - roster_slots
+          properties:
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/DfsSlateEvent"
+            roster_slots:
+              type: array
+              items:
+                $ref: "#/components/schemas/DfsRosterSlot"
+    DfsDraftable:
+      type: object
+      description: A player or team that can be selected for a slate roster slot.
+      required:
+        - id
+        - slate_id
+        - slate_event_id
+        - roster_slot_id
+        - game_id
+        - player_id
+        - team_id
+        - entity_type
+        - first_name
+        - last_name
+        - display_name
+        - short_name
+        - position
+        - salary
+        - status
+        - is_swappable
+        - is_disabled
+        - team_abbreviation
+        - active
+        - updated_at
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        slate_id:
+          type: integer
+          minimum: 1
+        slate_event_id:
+          type: integer
+          minimum: 1
+        roster_slot_id:
+          type: integer
+          minimum: 1
+        game_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: BALLDONTLIE game ID when a reference is available.
+        player_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Player ID when available. Null for team entries and when a player relationship is unavailable.
+        team_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: BALLDONTLIE team ID when a reference is available.
+        entity_type:
+          type: string
+          enum: [player, team]
+        first_name:
+          type: string
+          nullable: true
+        last_name:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+        short_name:
+          type: string
+          nullable: true
+        position:
+          type: string
+          nullable: true
+        salary:
+          type: integer
+          minimum: 0
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        is_swappable:
+          type: boolean
+          nullable: true
+        is_disabled:
+          type: boolean
+          nullable: true
+        team_abbreviation:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    DfsPagination:
+      type: object
+      required:
+        - per_page
+      properties:
+        prev_cursor:
+          type: integer
+          minimum: 1
+          description: Present when the request supplied a cursor.
+        next_cursor:
+          type: integer
+          minimum: 1
+          description: Present when another page may be available.
+        per_page:
+          type: integer
+          minimum: 1
+          maximum: 100
+    DfsSlateListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DfsSlate"
+        meta:
+          $ref: "#/components/schemas/DfsPagination"
+    DfsSlateDetailResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/DfsSlateDetail"
+    DfsDraftableListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DfsDraftable"
+        meta:
+          $ref: "#/components/schemas/DfsPagination"
+    DfsValidationError:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - param
+              - error
+            properties:
+              param:
+                type: string
+              error:
+                type: string
+    DfsServerError:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          const: Internal Server Error
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+    NBAAdvancedStatsV2:
+      type: object
+      description: Comprehensive NBA advanced stats including tracking data, hustle stats, and defensive metrics
+      properties:
+        id:
+          type: integer
+        period:
+          type: integer
+          description: Game period (0 for full game)
+        player:
+          $ref: "#/components/schemas/NBAPlayer"
+        team:
+          $ref: "#/components/schemas/NBATeam"
+        game:
+          $ref: "#/components/schemas/NBAGame"
+        pie:
+          type: number
+          nullable: true
+          description: Player Impact Estimate
+        assist_percentage:
+          type: number
+          nullable: true
+        assist_ratio:
+          type: number
+          nullable: true
+        assist_to_turnover:
+          type: number
+          nullable: true
+        defensive_rating:
+          type: number
+          nullable: true
+        defensive_rebound_percentage:
+          type: number
+          nullable: true
+        effective_field_goal_percentage:
+          type: number
+          nullable: true
+        estimated_defensive_rating:
+          type: number
+          nullable: true
+        estimated_net_rating:
+          type: number
+          nullable: true
+        estimated_offensive_rating:
+          type: number
+          nullable: true
+        estimated_pace:
+          type: number
+          nullable: true
+        estimated_usage_percentage:
+          type: number
+          nullable: true
+        net_rating:
+          type: number
+          nullable: true
+        offensive_rating:
+          type: number
+          nullable: true
+        offensive_rebound_percentage:
+          type: number
+          nullable: true
+        pace:
+          type: number
+          nullable: true
+        pace_per_40:
+          type: number
+          nullable: true
+        possessions:
+          type: number
+          nullable: true
+        rebound_percentage:
+          type: number
+          nullable: true
+        true_shooting_percentage:
+          type: number
+          nullable: true
+        turnover_ratio:
+          type: number
+          nullable: true
+        usage_percentage:
+          type: number
+          nullable: true
+        blocks_against:
+          type: number
+          nullable: true
+        fouls_drawn:
+          type: number
+          nullable: true
+        points_fast_break:
+          type: number
+          nullable: true
+        points_off_turnovers:
+          type: number
+          nullable: true
+        points_paint:
+          type: number
+          nullable: true
+        points_second_chance:
+          type: number
+          nullable: true
+        opp_points_fast_break:
+          type: number
+          nullable: true
+        opp_points_off_turnovers:
+          type: number
+          nullable: true
+        opp_points_paint:
+          type: number
+          nullable: true
+        opp_points_second_chance:
+          type: number
+          nullable: true
+        pct_assisted_2pt:
+          type: number
+          nullable: true
+        pct_assisted_3pt:
+          type: number
+          nullable: true
+        pct_assisted_fgm:
+          type: number
+          nullable: true
+        pct_fga_2pt:
+          type: number
+          nullable: true
+        pct_fga_3pt:
+          type: number
+          nullable: true
+        pct_pts_2pt:
+          type: number
+          nullable: true
+        pct_pts_3pt:
+          type: number
+          nullable: true
+        pct_pts_fast_break:
+          type: number
+          nullable: true
+        pct_pts_free_throw:
+          type: number
+          nullable: true
+        pct_pts_midrange_2pt:
+          type: number
+          nullable: true
+        pct_pts_off_turnovers:
+          type: number
+          nullable: true
+        pct_pts_paint:
+          type: number
+          nullable: true
+        pct_unassisted_2pt:
+          type: number
+          nullable: true
+        pct_unassisted_3pt:
+          type: number
+          nullable: true
+        pct_unassisted_fgm:
+          type: number
+          nullable: true
+        four_factors_efg_pct:
+          type: number
+          nullable: true
+        free_throw_attempt_rate:
+          type: number
+          nullable: true
+        four_factors_oreb_pct:
+          type: number
+          nullable: true
+        opp_efg_pct:
+          type: number
+          nullable: true
+        opp_free_throw_attempt_rate:
+          type: number
+          nullable: true
+        opp_oreb_pct:
+          type: number
+          nullable: true
+        opp_turnover_pct:
+          type: number
+          nullable: true
+        team_turnover_pct:
+          type: number
+          nullable: true
+        box_outs:
+          type: number
+          nullable: true
+        box_out_player_rebounds:
+          type: number
+          nullable: true
+        box_out_player_team_rebounds:
+          type: number
+          nullable: true
+        defensive_box_outs:
+          type: number
+          nullable: true
+        offensive_box_outs:
+          type: number
+          nullable: true
+        charges_drawn:
+          type: number
+          nullable: true
+        contested_shots:
+          type: number
+          nullable: true
+        contested_shots_2pt:
+          type: number
+          nullable: true
+        contested_shots_3pt:
+          type: number
+          nullable: true
+        deflections:
+          type: number
+          nullable: true
+        loose_balls_recovered_def:
+          type: number
+          nullable: true
+        loose_balls_recovered_off:
+          type: number
+          nullable: true
+        loose_balls_recovered_total:
+          type: number
+          nullable: true
+        screen_assists:
+          type: number
+          nullable: true
+        screen_assist_points:
+          type: number
+          nullable: true
+        matchup_minutes:
+          type: string
+          nullable: true
+        matchup_fg_pct:
+          type: number
+          nullable: true
+        matchup_fga:
+          type: number
+          nullable: true
+        matchup_fgm:
+          type: number
+          nullable: true
+        matchup_3pt_pct:
+          type: number
+          nullable: true
+        matchup_3pa:
+          type: number
+          nullable: true
+        matchup_3pm:
+          type: number
+          nullable: true
+        matchup_assists:
+          type: number
+          nullable: true
+        matchup_turnovers:
+          type: number
+          nullable: true
+        partial_possessions:
+          type: number
+          nullable: true
+        matchup_player_points:
+          type: number
+          nullable: true
+        switches_on:
+          type: number
+          nullable: true
+        speed:
+          type: number
+          nullable: true
+        distance:
+          type: number
+          nullable: true
+        touches:
+          type: number
+          nullable: true
+        passes:
+          type: number
+          nullable: true
+        secondary_assists:
+          type: number
+          nullable: true
+        free_throw_assists:
+          type: number
+          nullable: true
+        contested_fga:
+          type: number
+          nullable: true
+        contested_fgm:
+          type: number
+          nullable: true
+        contested_fg_pct:
+          type: number
+          nullable: true
+        uncontested_fga:
+          type: number
+          nullable: true
+        uncontested_fgm:
+          type: number
+          nullable: true
+        uncontested_fg_pct:
+          type: number
+          nullable: true
+        defended_at_rim_fga:
+          type: number
+          nullable: true
+        defended_at_rim_fgm:
+          type: number
+          nullable: true
+        defended_at_rim_fg_pct:
+          type: number
+          nullable: true
+        rebound_chances_def:
+          type: number
+          nullable: true
+          description: "Number of defensive rebound chances for this player: occasions when the player is nearest to the ball at some point after it passes below the rim and before the rebound is secured, while on defense. Available only for full-game records (period=0); null means unavailable, while zero means no recorded chances. These individual-player counts are separate from contested rebounds and deferred rebound chances. When all three counts are available, offensive plus defensive chances should equal total chances; flag inconsistent records rather than replacing returned counts with calculated values."
+        rebound_chances_off:
+          type: number
+          nullable: true
+          description: "Number of offensive rebound chances for this player: occasions when the player is nearest to the ball at some point after it passes below the rim and before the rebound is secured, while on offense. Available only for full-game records (period=0); null means unavailable, while zero means no recorded chances. These individual-player counts are separate from contested rebounds and deferred rebound chances. When all three counts are available, offensive plus defensive chances should equal total chances; flag inconsistent records rather than replacing returned counts with calculated values."
+        rebound_chances_total:
+          type: number
+          nullable: true
+          description: "Total rebound chances for this player across offense and defense. Available only for full-game records (period=0); null means unavailable, while zero means no recorded chances. These individual-player counts are separate from contested rebounds and deferred rebound chances. When all three counts are available, offensive plus defensive chances should equal total chances; flag inconsistent records rather than replacing returned counts with calculated values."
+        pct_blocks:
+          type: number
+          nullable: true
+        pct_blocks_allowed:
+          type: number
+          nullable: true
+        pct_fga:
+          type: number
+          nullable: true
+        pct_fgm:
+          type: number
+          nullable: true
+        pct_fta:
+          type: number
+          nullable: true
+        pct_ftm:
+          type: number
+          nullable: true
+        pct_personal_fouls:
+          type: number
+          nullable: true
+        pct_personal_fouls_drawn:
+          type: number
+          nullable: true
+        pct_points:
+          type: number
+          nullable: true
+        pct_rebounds_def:
+          type: number
+          nullable: true
+        pct_rebounds_off:
+          type: number
+          nullable: true
+        pct_rebounds_total:
+          type: number
+          nullable: true
+        pct_steals:
+          type: number
+          nullable: true
+        pct_3pa:
+          type: number
+          nullable: true
+        pct_3pm:
+          type: number
+          nullable: true
+        pct_turnovers:
+          type: number
+          nullable: true
+    NBABettingOdd:
+      type: object
+      required: [deeplinks]
+      properties:
+        deeplinks:
+          $ref: "#/components/schemas/OddsDeeplinks"
+          description: "Available sportsbook links. Selection keys: moneyline_home, moneyline_away, spread_home, spread_away, total_over, total_under; only keys corresponding to returned prices and available links are included. Supported books: DraftKings, FanDuel, BetMGM, BetRivers, and Caesars."
+        id:
+          type: integer
+          description: Betting odd ID
+        game_id:
+          type: integer
+          description: Game ID
+        vendor:
+          type: string
+          description: Sportsbook vendor name
+        spread_home_value:
+          type: string
+          nullable: true
+          description: Home team spread value
+        spread_home_odds:
+          type: integer
+          nullable: true
+          description: Home team spread odds
+        spread_away_value:
+          type: string
+          nullable: true
+          description: Away team spread value
+        spread_away_odds:
+          type: integer
+          nullable: true
+          description: Away team spread odds
+        moneyline_home_odds:
+          type: integer
+          nullable: true
+          description: Home team moneyline odds
+        moneyline_away_odds:
+          type: integer
+          nullable: true
+          description: Away team moneyline odds
+        total_value:
+          type: string
+          nullable: true
+          description: Total points line value
+        total_over_odds:
+          type: integer
+          nullable: true
+          description: Over total odds
+        total_under_odds:
+          type: integer
+          nullable: true
+          description: Under total odds
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    NBAOpeningPlayerProp:
+      type: object
+      description: NBA player prop betting data
+      required:
+        - deeplinks
+        - id
+        - game_id
+        - player_id
+        - vendor
+        - prop_type
+        - line_value
+        - market
+        - opened_at
+      properties:
+        deeplinks:
+          $ref: "#/components/schemas/OddsDeeplinks"
+          description: "Available sportsbook links. Selection keys: over and under for over/under props; yes for milestone props; only keys corresponding to returned prices and available links are included. Supported books: BetMGM, BetRivers, and Caesars."
+        id:
+          type: integer
+          format: int64
+          description: Unique player prop ID
+        game_id:
+          type: integer
+          description: NBA game ID
+        player_id:
+          type: integer
+          description: NBA player ID
+        vendor:
+          type: string
+          description: Sportsbook vendor name
+          enum:
+            - caesars
+            - betmgm
+            - draftkings
+            - betway
+            - betrivers
+            - ballybet
+        prop_type:
+          type: string
+          description: Type of player prop
+          enum:
+            - points
+            - rebounds
+            - assists
+            - threes
+            - steals
+            - blocks
+            - points_1q
+            - rebounds_1q
+            - assists_1q
+            - points_first3min
+            - rebounds_first3min
+            - assists_first3min
+          example: points
+        line_value:
+          type: string
+          description: The line value for the prop
+          example: "25.5"
+        market:
+          oneOf:
+            - $ref: "#/components/schemas/NBAPlayerPropMarketOverUnder"
+            - $ref: "#/components/schemas/NBAPlayerPropMarketMilestone"
+          description: Market information - either over_under or milestone type
+        opened_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when this prop was last updated
+    NBAOpeningBettingOdd:
+      type: object
+      required: [deeplinks]
+      properties:
+        deeplinks:
+          $ref: "#/components/schemas/OddsDeeplinks"
+          description: "Available sportsbook links. Selection keys: moneyline_home, moneyline_away, spread_home, spread_away, total_over, total_under; only keys corresponding to returned prices and available links are included. Supported books: DraftKings, FanDuel, BetMGM, BetRivers, and Caesars."
+        id:
+          type: integer
+          description: Betting odd ID
+        game_id:
+          type: integer
+          description: Game ID
+        vendor:
+          type: string
+          description: Sportsbook vendor name
+        spread_home_value:
+          type: string
+          nullable: true
+          description: Home team spread value
+        spread_home_odds:
+          type: integer
+          nullable: true
+          description: Home team spread odds
+        spread_away_value:
+          type: string
+          nullable: true
+          description: Away team spread value
+        spread_away_odds:
+          type: integer
+          nullable: true
+          description: Away team spread odds
+        moneyline_home_odds:
+          type: integer
+          nullable: true
+          description: Home team moneyline odds
+        moneyline_away_odds:
+          type: integer
+          nullable: true
+          description: Away team moneyline odds
+        total_value:
+          type: string
+          nullable: true
+          description: Total points line value
+        total_over_odds:
+          type: integer
+          nullable: true
+          description: Over total odds
+        total_under_odds:
+          type: integer
+          nullable: true
+          description: Under total odds
+        opened_at:
+          type: string
+          format: date-time
+          description: Opening odds timestamp
+    NBABoxScore:
+      type: object
+      required:
+        - status_state
+      properties:
+        date:
+          type: string
+          format: date
+        season:
+          type: integer
+        status:
+          type: string
+        status_state:
+          allOf:
+            - $ref: "#/components/schemas/CompetitionStatusState"
+          description: Normalized lifecycle state derived from `status` and other available lifecycle context; `status` remains unchanged.
+        period:
+          type: integer
+        time:
+          type: string
+        postseason:
+          type: boolean
+        home_team_score:
+          type: integer
+        visitor_team_score:
+          type: integer
+        home_team:
+          type: object
+          properties:
+            team:
+              $ref: "#/components/schemas/NBATeam"
+            players:
+              type: array
+              items:
+                type: object
+                properties:
+                  min:
+                    type: string
+                    description: "The min field in player stats and box scores is a string. Available precision varies: some records contain whole minutes, while others include seconds (for example, 21:35). Exact seconds are not available for every record, and whole-minute values cannot recover them."
+                  fgm:
+                    type: integer
+                  fga:
+                    type: integer
+                  fg_pct:
+                    type: number
+                  fg3m:
+                    type: integer
+                  fg3a:
+                    type: integer
+                  fg3_pct:
+                    type: number
+                  ftm:
+                    type: integer
+                  fta:
+                    type: integer
+                  ft_pct:
+                    type: number
+                  oreb:
+                    type: integer
+                  dreb:
+                    type: integer
+                  reb:
+                    type: integer
+                  ast:
+                    type: integer
+                  stl:
+                    type: integer
+                  blk:
+                    type: integer
+                  turnover:
+                    type: integer
+                  pf:
+                    type: integer
+                  pts:
+                    type: integer
+                  plus_minus:
+                    type: integer
+                    nullable: true
+                    description: Plus/minus for the player in this game
+                  player:
+                    $ref: "#/components/schemas/NBAPlayer"
+        visitor_team:
+          type: object
+          properties:
+            team:
+              $ref: "#/components/schemas/NBATeam"
+            players:
+              type: array
+              items:
+                type: object
+                properties:
+                  min:
+                    type: string
+                    description: "The min field in player stats and box scores is a string. Available precision varies: some records contain whole minutes, while others include seconds (for example, 21:35). Exact seconds are not available for every record, and whole-minute values cannot recover them."
+                  fgm:
+                    type: integer
+                  fga:
+                    type: integer
+                  fg_pct:
+                    type: number
+                  fg3m:
+                    type: integer
+                  fg3a:
+                    type: integer
+                  fg3_pct:
+                    type: number
+                  ftm:
+                    type: integer
+                  fta:
+                    type: integer
+                  ft_pct:
+                    type: number
+                  oreb:
+                    type: integer
+                  dreb:
+                    type: integer
+                  reb:
+                    type: integer
+                  ast:
+                    type: integer
+                  stl:
+                    type: integer
+                  blk:
+                    type: integer
+                  turnover:
+                    type: integer
+                  pf:
+                    type: integer
+                  pts:
+                    type: integer
+                  plus_minus:
+                    type: integer
+                    nullable: true
+                    description: Plus/minus for the player in this game
+                  player:
+                    $ref: "#/components/schemas/NBAPlayer"
+    NBAContract:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Contract ID
+        player_id:
+          type: integer
+          description: Player ID
+        season:
+          type: integer
+          description: Contract season year
+        team_id:
+          type: integer
+          description: Team ID
+        cap_hit:
+          type: integer
+          nullable: true
+          description: Annual salary cap hit in dollars
+        total_cash:
+          type: integer
+          nullable: true
+          description: Total cash payment for the season in dollars
+        base_salary:
+          type: integer
+          nullable: true
+          description: Base salary in dollars
+        rank:
+          type: integer
+          nullable: true
+          description: Salary rank
+        player:
+          type: object
+          description: Player information
+          properties:
+            id:
+              type: integer
+            first_name:
+              type: string
+            last_name:
+              type: string
+            position:
+              type: string
+            height:
+              type: string
+            weight:
+              type: string
+            jersey_number:
+              type: string
+            college:
+              type: string
+            country:
+              type: string
+            draft_year:
+              type: integer
+            draft_round:
+              type: integer
+            draft_number:
+              type: integer
+            team_id:
+              type: integer
+        team:
+          $ref: "#/components/schemas/NBATeam"
+    NBAContractAggregate:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Contract aggregate ID
+        player_id:
+          type: integer
+          description: Player ID
+        start_year:
+          type: integer
+          description: First year of contract
+        end_year:
+          type: integer
+          description: Last year of contract
+        contract_type:
+          type: string
+          description: Contract type (e.g., Rookie, Free Agent, Extension)
+        contract_status:
+          type: string
+          nullable: true
+          description: Contract status (e.g., CURRENT, UPCOMING EXTENSION)
+        contract_years:
+          type: integer
+          nullable: true
+          description: Number of years in contract
+        total_value:
+          type: integer
+          nullable: true
+          description: Total contract value in dollars
+        average_salary:
+          type: integer
+          nullable: true
+          description: Average annual salary in dollars
+        guaranteed_at_signing:
+          type: integer
+          nullable: true
+          description: Guaranteed amount at signing in dollars
+        total_guaranteed:
+          type: integer
+          nullable: true
+          description: Total guaranteed amount in dollars
+        signed_using:
+          type: string
+          nullable: true
+          description: Exception or method used to sign (e.g., Bird Rights, Cap Space)
+        free_agent_year:
+          type: integer
+          nullable: true
+          description: Year player becomes a free agent
+        free_agent_status:
+          type: string
+          nullable: true
+          description: Free agent status (e.g., UFA, RFA)
+        contract_notes:
+          type: object
+          nullable: true
+          description: Additional contract notes (options, escalators, etc.)
+        team_id:
+          type: integer
+          nullable: true
+          description: Team ID that signed the contract
+        player:
+          type: object
+          description: Player information
+          properties:
+            id:
+              type: integer
+            first_name:
+              type: string
+            last_name:
+              type: string
+            position:
+              type: string
+            height:
+              type: string
+            weight:
+              type: string
+            jersey_number:
+              type: string
+            college:
+              type: string
+            country:
+              type: string
+            draft_year:
+              type: integer
+            draft_round:
+              type: integer
+            draft_number:
+              type: integer
+            team_id:
+              type: integer
+        team:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/NBATeam"
+    NBAGame:
+      type: object
+      required:
+        - status_state
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+          format: date
+        season:
+          type: integer
+        status:
+          type: string
+          nullable: true
+        status_state:
+          allOf:
+            - $ref: "#/components/schemas/CompetitionStatusState"
+          description: Normalized lifecycle state derived from `status` and other available lifecycle context; `status` remains unchanged.
+        period:
+          type: integer
+          nullable: true
+          description: "Recorded game period: 0 before play, 1–4 for regulation, and 5+ for overtime (5 is the first overtime, 6 the second). Some historical overtime finals return 4; use status to determine whether a game is complete."
+        time:
+          type: string
+          nullable: true
+        period_detail:
+          type: string
+          nullable: true
+          description: Detailed period information (e.g., 'Final', '1:00 - 2nd Half')
+        datetime:
+          type: string
+          format: date-time
+          nullable: true
+        postseason:
+          type: boolean
+        home_team_score:
+          type: integer
+        visitor_team_score:
+          type: integer
+        home_team:
+          $ref: "#/components/schemas/NBATeam"
+        visitor_team:
+          $ref: "#/components/schemas/NBATeam"
+        ist_stage:
+          type: string
+          nullable: true
+          description: NBA Cup stage (e.g., 'West Semifinal', 'Championship'). Only populated for NBA Cup games. Only available starting with the 2025 season.
+    NBALeader:
+      type: object
+      properties:
+        player:
+          $ref: "#/components/schemas/NBAPlayer"
+        value:
+          type: number
+        stat_type:
+          type: string
+          enum:
+            - reb
+            - dreb
+            - tov
+            - ast
+            - oreb
+            - min
+            - pts
+            - stl
+            - blk
+        rank:
+          type: integer
+        season:
+          type: integer
+        games_played:
+          type: integer
+    NBAProjectedLineup:
+      type: object
+      required: [id, game_id, team_id, status, lineup, updated_at]
+      properties:
+        id:
+          type: integer
+          description: Lineup ID. Revisions retain the same ID.
+        game_id:
+          type: integer
+        team_id:
+          type: integer
+        status:
+          type: string
+          enum: [expected, confirmed]
+          description: Latest pregame status. An expected lineup may remain expected after tip-off.
+        lineup:
+          type: array
+          minItems: 5
+          maxItems: 5
+          description: Five starters ordered PG, SG, SF, PF, C. Position identifies the lineup slot.
+          items:
+            type: object
+            required: [position, player]
+            properties:
+              position:
+                type: string
+                enum: [PG, SG, SF, PF, C]
+              player:
+                type: object
+                required: [id, first_name, last_name]
+                properties:
+                  id:
+                    type: integer
+                  first_name:
+                    type: string
+                  last_name:
+                    type: string
+        updated_at:
+          type: string
+          format: date-time
+          description: UTC time when the lineup or status last changed. Rechecks do not change this value.
+    NBALineup:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the lineup entry
+        game_id:
+          type: integer
+          description: ID of the game this lineup belongs to
+        starter:
+          type: boolean
+          description: Whether the player is a starter (true) or bench player (false)
+        position:
+          type: string
+          description: Position the player is listed at for this game
+        player:
+          type: object
+          description: Player information (slim version with team_id)
+          properties:
+            id:
+              type: integer
+            first_name:
+              type: string
+            last_name:
+              type: string
+            position:
+              type: string
+            height:
+              type: string
+            weight:
+              type: string
+            jersey_number:
+              type: string
+            college:
+              type: string
+            country:
+              type: string
+            draft_year:
+              type: integer
+            draft_round:
+              type: integer
+            draft_number:
+              type: integer
+            team_id:
+              type: integer
+              description: ID of the player's current team
+        team:
+          $ref: "#/components/schemas/NBATeam"
+    NBAPlay:
+      type: object
+      properties:
+        game_id:
+          type: integer
+          description: Game ID
+        order:
+          type: integer
+          description: Play order number (starts at 1 and increments sequentially)
+        type:
+          type: string
+          description: Play type (e.g., "Jump Shot", "Layup", "Dunk")
+        text:
+          type: string
+          description: Play description
+        home_score:
+          type: integer
+          description: Home team score after play
+        away_score:
+          type: integer
+          description: Away team score after play
+        period:
+          type: integer
+          description: Period number (1-4 for regulation, 5+ for overtime)
+        period_display:
+          type: string
+          description: Period display text (e.g., "1st Quarter", "OT1")
+        clock:
+          type: string
+          nullable: true
+          description: >-
+            Time remaining in the current period, or null when unavailable. M:SS gives minutes and seconds
+            ("4:45" means 4 minutes 45 seconds); decimal values give seconds ("53.4" means 53.4 seconds).
+            Decimals show displayed tenths, not guaranteed timing accuracy or fixed decimal width.
+            The same formats apply in regulation (periods 1-4) and overtime (periods 5+).
+        scoring_play:
+          type: boolean
+          description: Whether this is a scoring play
+        shooting_play:
+          type: boolean
+          description: Whether this is a shooting play
+        score_value:
+          type: integer
+          description: Points scored on this play
+        team:
+          $ref: "#/components/schemas/NBATeam"
+        coordinate_x:
+          type: number
+          nullable: true
+          description: X coordinate on court (if available)
+        coordinate_y:
+          type: number
+          nullable: true
+          description: Y coordinate on court (if available)
+        wallclock:
+          type: string
+          format: date-time
+          nullable: true
+          description: Real-world timestamp of play
+        participants:
+          type: array
+          items:
+            type: integer
+          description: Array of player IDs involved in this play
+    NBAPlayer:
+      type: object
+      properties:
+        id:
+          type: integer
+        first_name:
+          type: string
+        last_name:
+          type: string
+        position:
+          type: string
+        height:
+          type: string
+        weight:
+          type: string
+        jersey_number:
+          type: string
+        college:
+          type: string
+        country:
+          type: string
+        draft_year:
+          type: integer
+        draft_round:
+          type: integer
+        draft_number:
+          type: integer
+        team:
+          $ref: "#/components/schemas/NBATeam"
+    NBAPlayerInjury:
+      type: object
+      properties:
+        player:
+          $ref: "#/components/schemas/NBAPlayer"
+        return_date:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+    NBAPlayerProp:
+      type: object
+      description: NBA player prop betting data
+      required:
+        - deeplinks
+        - id
+        - game_id
+        - player_id
+        - vendor
+        - prop_type
+        - line_value
+        - market
+        - updated_at
+      properties:
+        deeplinks:
+          $ref: "#/components/schemas/OddsDeeplinks"
+          description: "Available sportsbook links. Selection keys: over and under for over/under props; yes for milestone props; only keys corresponding to returned prices and available links are included. Supported books: BetMGM, BetRivers, and Caesars."
+        id:
+          type: integer
+          description: Unique player prop ID
+        game_id:
+          type: integer
+          description: NBA game ID
+        player_id:
+          type: integer
+          description: NBA player ID
+        vendor:
+          type: string
+          description: Sportsbook vendor name
+          enum:
+            - caesars
+            - betmgm
+            - draftkings
+            - betway
+            - betrivers
+            - ballybet
+        prop_type:
+          type: string
+          description: Type of player prop
+          enum:
+            - points
+            - rebounds
+            - assists
+            - threes
+            - steals
+            - blocks
+            - points_1q
+            - rebounds_1q
+            - assists_1q
+            - points_first3min
+            - rebounds_first3min
+            - assists_first3min
+          example: points
+        line_value:
+          type: string
+          description: The line value for the prop
+          example: "25.5"
+        market:
+          oneOf:
+            - $ref: "#/components/schemas/NBAPlayerPropMarketOverUnder"
+            - $ref: "#/components/schemas/NBAPlayerPropMarketMilestone"
+          description: Market information - either over_under or milestone type
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when this prop was last updated
+    NBAPlayerPropMarketMilestone:
+      type: object
+      description: Milestone market type for player props
+      required:
+        - type
+        - odds
+      properties:
+        type:
+          type: string
+          enum:
+            - milestone
+          description: Market type identifier
+        odds:
+          type: integer
+          description: American odds for milestone bet
+    NBAPlayerPropMarketOverUnder:
+      type: object
+      description: Over/under market type for player props
+      required:
+        - type
+        - over_odds
+        - under_odds
+      properties:
+        type:
+          type: string
+          enum:
+            - over_under
+          description: Market type identifier
+        over_odds:
+          type: integer
+          description: American odds for over bet
+        under_odds:
+          type: integer
+          description: American odds for under bet
+    NBASeasonAverageV2:
+      type: object
+      properties:
+        player_id:
+          type: integer
+        season:
+          type: integer
+        season_type:
+          type: string
+        stats:
+          type: object
+          additionalProperties: true
+    NBASeasonAverages:
+      type: object
+      properties:
+        games_played:
+          type: integer
+        pts:
+          type: number
+        ast:
+          type: number
+        reb:
+          type: number
+        stl:
+          type: number
+        blk:
+          type: number
+        turnover:
+          type: number
+        min:
+          type: string
+        fgm:
+          type: number
+        fga:
+          type: number
+        fg_pct:
+          type: number
+        fg3m:
+          type: number
+        fg3a:
+          type: number
+        fg3_pct:
+          type: number
+        ftm:
+          type: number
+        fta:
+          type: number
+        ft_pct:
+          type: number
+        oreb:
+          type: number
+        dreb:
+          type: number
+        player_id:
+          type: integer
+        season:
+          type: integer
+    NBAStandings:
+      type: object
+      properties:
+        team:
+          $ref: "#/components/schemas/NBATeam"
+        conference_record:
+          type: string
+        conference_rank:
+          type: integer
+        division_record:
+          type: string
+        division_rank:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        home_record:
+          type: string
+        road_record:
+          type: string
+        season:
+          type: integer
+    NBAStats:
+      type: object
+      properties:
+        id:
+          type: integer
+        min:
+          type: string
+          description: "The min field in player stats and box scores is a string. Available precision varies: some records contain whole minutes, while others include seconds (for example, 21:35). Exact seconds are not available for every record, and whole-minute values cannot recover them."
+        fgm:
+          type: integer
+        fga:
+          type: integer
+        fg_pct:
+          type: number
+        fg3m:
+          type: integer
+        fg3a:
+          type: integer
+        fg3_pct:
+          type: number
+        ftm:
+          type: integer
+        fta:
+          type: integer
+        ft_pct:
+          type: number
+        oreb:
+          type: integer
+        dreb:
+          type: integer
+        reb:
+          type: integer
+        ast:
+          type: integer
+        stl:
+          type: integer
+        blk:
+          type: integer
+        turnover:
+          type: integer
+        pf:
+          type: integer
+        pts:
+          type: integer
+        plus_minus:
+          type: integer
+          nullable: true
+          description: Plus/minus for the player in this game
+        player:
+          $ref: "#/components/schemas/NBAPlayer"
+        team:
+          $ref: "#/components/schemas/NBATeam"
+        game:
+          $ref: "#/components/schemas/NBAGame"
+    NBATeam:
+      type: object
+      properties:
+        id:
+          type: integer
+        conference:
+          type: string
+          enum:
+            - East
+            - West
+        division:
+          type: string
+          enum:
+            - Atlantic
+            - Central
+            - Southeast
+            - Northwest
+            - Pacific
+            - Southwest
+        city:
+          type: string
+        name:
+          type: string
+        full_name:
+          type: string
+        abbreviation:
+          type: string
+    NBATeamSeasonStat:
+      type: object
+      properties:
+        team:
+          $ref: "#/components/schemas/NBATeam"
+        season:
+          type: integer
+          description: Season year
+        season_type:
+          type: string
+          enum:
+            - regular
+            - playoffs
+            - ist
+          description: Season type
+        stats:
+          type: object
+          additionalProperties: true
+          description: Dynamic stats object with stat names as keys and numeric values. Content varies by category/type combination.
+    Pagination:
+      type: object
+      properties:
+        next_cursor:
+          type: integer
+          description: Cursor for the next page of results
+        prev_cursor:
+          type: integer
+          nullable: true
+          description: Cursor for the previous page of results
+        per_page:
+          type: integer
+          description: Number of results per page
+    PlayerPropMeta:
+      type: object
+      description: Metadata for player prop responses (no pagination - all results returned in single response)
+      properties:
+        per_page:
+          type: integer
+          description: Total number of results returned
+    NBAGameTrackingPassing:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - passing
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            passes_made:
+              type: [number, "null"]
+            passes_received:
+              type: [number, "null"]
+            ast:
+              type: [number, "null"]
+            ft_ast:
+              type: [number, "null"]
+            secondary_ast:
+              type: [number, "null"]
+            potential_ast:
+              type: [number, "null"]
+              description: Passes leading to a teammate’s shot attempt.
+            ast_pts_created:
+              type: [number, "null"]
+              description: Points created through assists.
+            ast_adj:
+              type: [number, "null"]
+              description: Assists plus free-throw assists and secondary assists.
+            ast_to_pass_pct:
+              type: [number, "null"]
+            ast_to_pass_pct_adj:
+              type: [number, "null"]
+    NBAGameTrackingDrives:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - drives
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            drives:
+              type: [number, "null"]
+            drive_fgm:
+              type: [number, "null"]
+            drive_fga:
+              type: [number, "null"]
+            drive_fg_pct:
+              type: [number, "null"]
+            drive_ftm:
+              type: [number, "null"]
+            drive_fta:
+              type: [number, "null"]
+            drive_ft_pct:
+              type: [number, "null"]
+            drive_pts:
+              type: [number, "null"]
+            drive_pts_pct:
+              type: [number, "null"]
+            drive_passes:
+              type: [number, "null"]
+            drive_passes_pct:
+              type: [number, "null"]
+            drive_ast:
+              type: [number, "null"]
+            drive_ast_pct:
+              type: [number, "null"]
+            drive_tov:
+              type: [number, "null"]
+            drive_tov_pct:
+              type: [number, "null"]
+            drive_pf:
+              type: [number, "null"]
+            drive_pf_pct:
+              type: [number, "null"]
+    NBAGameTrackingPossessions:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - possessions
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            points:
+              type: [number, "null"]
+            touches:
+              type: [number, "null"]
+            front_ct_touches:
+              type: [number, "null"]
+            time_of_poss:
+              type: [number, "null"]
+            avg_sec_per_touch:
+              type: [number, "null"]
+            avg_drib_per_touch:
+              type: [number, "null"]
+            pts_per_touch:
+              type: [number, "null"]
+            elbow_touches:
+              type: [number, "null"]
+            post_touches:
+              type: [number, "null"]
+            paint_touches:
+              type: [number, "null"]
+            pts_per_elbow_touch:
+              type: [number, "null"]
+            pts_per_post_touch:
+              type: [number, "null"]
+            pts_per_paint_touch:
+              type: [number, "null"]
+    NBAGameTrackingRebounding:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - rebounding
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            oreb:
+              type: [number, "null"]
+            oreb_contest:
+              type: [number, "null"]
+            oreb_uncontest:
+              type: [number, "null"]
+            oreb_contest_pct:
+              type: [number, "null"]
+            oreb_chances:
+              type: [number, "null"]
+            oreb_chance_pct:
+              type: [number, "null"]
+            oreb_chance_defer:
+              type: [number, "null"]
+            oreb_chance_pct_adj:
+              type: [number, "null"]
+            avg_oreb_dist:
+              type: [number, "null"]
+            dreb:
+              type: [number, "null"]
+            dreb_contest:
+              type: [number, "null"]
+            dreb_uncontest:
+              type: [number, "null"]
+            dreb_contest_pct:
+              type: [number, "null"]
+            dreb_chances:
+              type: [number, "null"]
+            dreb_chance_pct:
+              type: [number, "null"]
+            dreb_chance_defer:
+              type: [number, "null"]
+            dreb_chance_pct_adj:
+              type: [number, "null"]
+            avg_dreb_dist:
+              type: [number, "null"]
+            reb:
+              type: [number, "null"]
+            reb_contest:
+              type: [number, "null"]
+            reb_uncontest:
+              type: [number, "null"]
+            reb_contest_pct:
+              type: [number, "null"]
+            reb_chances:
+              type: [number, "null"]
+            reb_chance_pct:
+              type: [number, "null"]
+            reb_chance_defer:
+              type: [number, "null"]
+            reb_chance_pct_adj:
+              type: [number, "null"]
+            avg_reb_dist:
+              type: [number, "null"]
+    NBAGameTrackingSpeeddistance:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - speeddistance
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            dist_feet:
+              type: [number, "null"]
+            dist_miles:
+              type: [number, "null"]
+            dist_miles_off:
+              type: [number, "null"]
+            dist_miles_def:
+              type: [number, "null"]
+            avg_speed:
+              type: [number, "null"]
+            avg_speed_off:
+              type: [number, "null"]
+            avg_speed_def:
+              type: [number, "null"]
+    NBAGameTrackingElbowtouch:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - elbowtouch
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            touches:
+              type: [number, "null"]
+            elbow_touches:
+              type: [number, "null"]
+            elbow_touch_fgm:
+              type: [number, "null"]
+            elbow_touch_fga:
+              type: [number, "null"]
+            elbow_touch_fg_pct:
+              type: [number, "null"]
+            elbow_touch_ftm:
+              type: [number, "null"]
+            elbow_touch_fta:
+              type: [number, "null"]
+            elbow_touch_ft_pct:
+              type: [number, "null"]
+            elbow_touch_pts:
+              type: [number, "null"]
+            elbow_touch_pts_pct:
+              type: [number, "null"]
+            elbow_touch_passes:
+              type: [number, "null"]
+            elbow_touch_passes_pct:
+              type: [number, "null"]
+            elbow_touch_ast:
+              type: [number, "null"]
+            elbow_touch_ast_pct:
+              type: [number, "null"]
+            elbow_touch_tov:
+              type: [number, "null"]
+            elbow_touch_tov_pct:
+              type: [number, "null"]
+            elbow_touch_fouls:
+              type: [number, "null"]
+            elbow_touch_fouls_pct:
+              type: [number, "null"]
+    NBAGameTrackingPosttouch:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - posttouch
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            touches:
+              type: [number, "null"]
+            post_touches:
+              type: [number, "null"]
+            post_touch_fgm:
+              type: [number, "null"]
+            post_touch_fga:
+              type: [number, "null"]
+            post_touch_fg_pct:
+              type: [number, "null"]
+            post_touch_ftm:
+              type: [number, "null"]
+            post_touch_fta:
+              type: [number, "null"]
+            post_touch_ft_pct:
+              type: [number, "null"]
+            post_touch_pts:
+              type: [number, "null"]
+            post_touch_pts_pct:
+              type: [number, "null"]
+            post_touch_passes:
+              type: [number, "null"]
+            post_touch_passes_pct:
+              type: [number, "null"]
+            post_touch_ast:
+              type: [number, "null"]
+            post_touch_ast_pct:
+              type: [number, "null"]
+            post_touch_tov:
+              type: [number, "null"]
+            post_touch_tov_pct:
+              type: [number, "null"]
+            post_touch_fouls:
+              type: [number, "null"]
+            post_touch_fouls_pct:
+              type: [number, "null"]
+    NBAGameTrackingPainttouch:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - painttouch
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            touches:
+              type: [number, "null"]
+            paint_touches:
+              type: [number, "null"]
+            paint_touch_fgm:
+              type: [number, "null"]
+            paint_touch_fga:
+              type: [number, "null"]
+            paint_touch_fg_pct:
+              type: [number, "null"]
+            paint_touch_ftm:
+              type: [number, "null"]
+            paint_touch_fta:
+              type: [number, "null"]
+            paint_touch_ft_pct:
+              type: [number, "null"]
+            paint_touch_pts:
+              type: [number, "null"]
+            paint_touch_pts_pct:
+              type: [number, "null"]
+            paint_touch_passes:
+              type: [number, "null"]
+            paint_touch_passes_pct:
+              type: [number, "null"]
+            paint_touch_ast:
+              type: [number, "null"]
+            paint_touch_ast_pct:
+              type: [number, "null"]
+            paint_touch_tov:
+              type: [number, "null"]
+            paint_touch_tov_pct:
+              type: [number, "null"]
+            paint_touch_fouls:
+              type: [number, "null"]
+            paint_touch_fouls_pct:
+              type: [number, "null"]
+    NBAGameTrackingCatchshoot:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - catchshoot
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            catch_shoot_fgm:
+              type: [number, "null"]
+            catch_shoot_fga:
+              type: [number, "null"]
+            catch_shoot_fg_pct:
+              type: [number, "null"]
+            catch_shoot_pts:
+              type: [number, "null"]
+            catch_shoot_fg3_m:
+              type: [number, "null"]
+            catch_shoot_fg3_a:
+              type: [number, "null"]
+            catch_shoot_fg3_pct:
+              type: [number, "null"]
+            catch_shoot_efg_pct:
+              type: [number, "null"]
+    NBAGameTrackingPullupshot:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - pullupshot
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+              description: Minutes played.
+            pull_up_fgm:
+              type: [number, "null"]
+            pull_up_fga:
+              type: [number, "null"]
+            pull_up_fg_pct:
+              type: [number, "null"]
+            pull_up_pts:
+              type: [number, "null"]
+            pull_up_fg3_m:
+              type: [number, "null"]
+            pull_up_fg3_a:
+              type: [number, "null"]
+            pull_up_fg3_pct:
+              type: [number, "null"]
+            pull_up_efg_pct:
+              type: [number, "null"]
+    NBAGameDefenseOverall:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - overall
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            d_fgm:
+              type: [number, "null"]
+            d_fga:
+              type: [number, "null"]
+            d_fg_pct:
+              type: [number, "null"]
+            normal_fg_pct:
+              type: [number, "null"]
+            pct_plusminus:
+              type: [number, "null"]
+    NBAGameDefenseThreePoint:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - 3_pointers
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            fg3_m:
+              type: [number, "null"]
+            fg3_a:
+              type: [number, "null"]
+            fg3_pct:
+              type: [number, "null"]
+            ns_fg3_pct:
+              type: [number, "null"]
+            plusminus:
+              type: [number, "null"]
+    NBAGameDefenseTwoPoint:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - 2_pointers
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            fg2_m:
+              type: [number, "null"]
+            fg2_a:
+              type: [number, "null"]
+            fg2_pct:
+              type: [number, "null"]
+            ns_fg2_pct:
+              type: [number, "null"]
+            plusminus:
+              type: [number, "null"]
+    NBAGameDefenseUnderSixFeet:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - less_than_6ft
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            fgm_lt_06:
+              type: [number, "null"]
+            fga_lt_06:
+              type: [number, "null"]
+            lt_06_pct:
+              type: [number, "null"]
+            ns_lt_06_pct:
+              type: [number, "null"]
+            plusminus:
+              type: [number, "null"]
+    NBAGameDefenseUnderTenFeet:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - less_than_10ft
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            fgm_lt_10:
+              type: [number, "null"]
+            fga_lt_10:
+              type: [number, "null"]
+            lt_10_pct:
+              type: [number, "null"]
+            ns_lt_10_pct:
+              type: [number, "null"]
+            plusminus:
+              type: [number, "null"]
+    NBAGameDefenseOverFifteenFeet:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - greater_than_15ft
+        stats:
+          type: object
+          properties:
+            freq:
+              type: [number, "null"]
+            fgm_gt_15:
+              type: [number, "null"]
+            fga_gt_15:
+              type: [number, "null"]
+            gt_15_pct:
+              type: [number, "null"]
+            ns_gt_15_pct:
+              type: [number, "null"]
+            plusminus:
+              type: [number, "null"]
+    NBAGameTracking:
+      oneOf:
+        - $ref: "#/components/schemas/NBAGameTrackingPassing"
+        - $ref: "#/components/schemas/NBAGameTrackingDrives"
+        - $ref: "#/components/schemas/NBAGameTrackingPossessions"
+        - $ref: "#/components/schemas/NBAGameTrackingRebounding"
+        - $ref: "#/components/schemas/NBAGameTrackingSpeeddistance"
+        - $ref: "#/components/schemas/NBAGameTrackingElbowtouch"
+        - $ref: "#/components/schemas/NBAGameTrackingPosttouch"
+        - $ref: "#/components/schemas/NBAGameTrackingPainttouch"
+        - $ref: "#/components/schemas/NBAGameTrackingCatchshoot"
+        - $ref: "#/components/schemas/NBAGameTrackingPullupshot"
+    NBAGameDefense:
+      oneOf:
+        - $ref: "#/components/schemas/NBAGameDefenseOverall"
+        - $ref: "#/components/schemas/NBAGameDefenseTwoPoint"
+        - $ref: "#/components/schemas/NBAGameDefenseThreePoint"
+        - $ref: "#/components/schemas/NBAGameDefenseUnderSixFeet"
+        - $ref: "#/components/schemas/NBAGameDefenseUnderTenFeet"
+        - $ref: "#/components/schemas/NBAGameDefenseOverFifteenFeet"
+    NBAGameShootingDefenderDistance:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - range
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - defender_distance
+        range:
+          type: string
+          enum:
+            - 0_2_ft
+            - 2_4_ft
+            - 4_6_ft
+            - 6_plus_ft
+        stats:
+          type: object
+          properties:
+            fga_frequency:
+              type: [number, "null"]
+            fgm:
+              type: [number, "null"]
+            fga:
+              type: [number, "null"]
+            fg_pct:
+              type: [number, "null"]
+            efg_pct:
+              type: [number, "null"]
+            fg2_a_frequency:
+              type: [number, "null"]
+            fg2_m:
+              type: [number, "null"]
+            fg2_a:
+              type: [number, "null"]
+            fg2_pct:
+              type: [number, "null"]
+            fg3_a_frequency:
+              type: [number, "null"]
+            fg3_m:
+              type: [number, "null"]
+            fg3_a:
+              type: [number, "null"]
+            fg3_pct:
+              type: [number, "null"]
+    NBAGameShootingDribbles:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - range
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - dribbles
+        range:
+          type: string
+          enum:
+            - "0"
+            - "1"
+            - "2"
+            - "3_6"
+            - 7_plus
+        stats:
+          type: object
+          properties:
+            fga_frequency:
+              type: [number, "null"]
+            fgm:
+              type: [number, "null"]
+            fga:
+              type: [number, "null"]
+            fg_pct:
+              type: [number, "null"]
+            efg_pct:
+              type: [number, "null"]
+            fg2_a_frequency:
+              type: [number, "null"]
+            fg2_m:
+              type: [number, "null"]
+            fg2_a:
+              type: [number, "null"]
+            fg2_pct:
+              type: [number, "null"]
+            fg3_a_frequency:
+              type: [number, "null"]
+            fg3_m:
+              type: [number, "null"]
+            fg3_a:
+              type: [number, "null"]
+            fg3_pct:
+              type: [number, "null"]
+    NBAGameShootingTouchTime:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - type
+        - range
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        type:
+          type: string
+          enum:
+            - touch_time
+        range:
+          type: string
+          enum:
+            - less_than_2_sec
+            - 2_6_sec
+            - 6_plus_sec
+        stats:
+          type: object
+          properties:
+            fga_frequency:
+              type: [number, "null"]
+            fgm:
+              type: [number, "null"]
+            fga:
+              type: [number, "null"]
+            fg_pct:
+              type: [number, "null"]
+            efg_pct:
+              type: [number, "null"]
+            fg2_a_frequency:
+              type: [number, "null"]
+            fg2_m:
+              type: [number, "null"]
+            fg2_a:
+              type: [number, "null"]
+            fg2_pct:
+              type: [number, "null"]
+            fg3_a_frequency:
+              type: [number, "null"]
+            fg3_m:
+              type: [number, "null"]
+            fg3_a:
+              type: [number, "null"]
+            fg3_pct:
+              type: [number, "null"]
+    NBAGameShooting:
+      oneOf:
+        - $ref: "#/components/schemas/NBAGameShootingDefenderDistance"
+        - $ref: "#/components/schemas/NBAGameShootingDribbles"
+        - $ref: "#/components/schemas/NBAGameShootingTouchTime"
+    NBAGameLineupStats:
+      type: object
+      required:
+        - id
+        - game_id
+        - team_id
+        - player_ids
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        player_ids:
+          type: array
+          minItems: 5
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: integer
+          description: The five players in ascending ID order.
+        stats:
+          type: object
+          properties:
+            min:
+              type: [number, "null"]
+            e_off_rating:
+              type: [number, "null"]
+            off_rating:
+              type: [number, "null"]
+            e_def_rating:
+              type: [number, "null"]
+            def_rating:
+              type: [number, "null"]
+            e_net_rating:
+              type: [number, "null"]
+            net_rating:
+              type: [number, "null"]
+            ast_pct:
+              type: [number, "null"]
+            ast_to:
+              type: [number, "null"]
+            ast_ratio:
+              type: [number, "null"]
+            oreb_pct:
+              type: [number, "null"]
+            dreb_pct:
+              type: [number, "null"]
+            reb_pct:
+              type: [number, "null"]
+            tm_tov_pct:
+              type: [number, "null"]
+            efg_pct:
+              type: [number, "null"]
+            ts_pct:
+              type: [number, "null"]
+            e_pace:
+              type: [number, "null"]
+            pace:
+              type: [number, "null"]
+            pace_per40:
+              type: [number, "null"]
+            poss:
+              type: [number, "null"]
+            pie:
+              type: [number, "null"]
+    NBAGameMatchup:
+      type: object
+      required:
+        - id
+        - game_id
+        - player_id
+        - team_id
+        - opponent_player_id
+        - stats
+      properties:
+        id:
+          type: integer
+          description: Record ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        player_id:
+          type: integer
+          description: Player ID.
+        team_id:
+          type: integer
+          description: Team ID.
+        opponent_player_id:
+          type: integer
+          description: Defender ID.
+        stats:
+          type: object
+          properties:
+            matchup_seconds:
+              type: [number, "null"]
+              description: Time matched in seconds.
+            partial_possessions:
+              type: [number, "null"]
+            percentage_defender_total_time:
+              type: [number, "null"]
+            percentage_offensive_total_time:
+              type: [number, "null"]
+            percentage_total_time_both_on:
+              type: [number, "null"]
+            switches_on:
+              type: [number, "null"]
+            player_points:
+              type: [number, "null"]
+            team_points:
+              type: [number, "null"]
+            matchup_assists:
+              type: [number, "null"]
+            matchup_turnovers:
+              type: [number, "null"]
+            matchup_blocks:
+              type: [number, "null"]
+            matchup_field_goals_made:
+              type: [number, "null"]
+            matchup_field_goals_attempted:
+              type: [number, "null"]
+            matchup_field_goals_percentage:
+              type: [number, "null"]
+            matchup_three_pointers_made:
+              type: [number, "null"]
+            matchup_three_pointers_attempted:
+              type: [number, "null"]
+            matchup_three_pointers_percentage:
+              type: [number, "null"]
+            help_blocks:
+              type: [number, "null"]
+            help_field_goals_made:
+              type: [number, "null"]
+            help_field_goals_attempted:
+              type: [number, "null"]
+            help_field_goals_percentage:
+              type: [number, "null"]
+            matchup_free_throws_made:
+              type: [number, "null"]
+            matchup_free_throws_attempted:
+              type: [number, "null"]
+            shooting_fouls:
+              type: [number, "null"]
+    NBAGameWinProbability:
+      type: object
+      required:
+        - id
+        - game_id
+        - play
+        - home_win_probability
+        - tie_probability
+      properties:
+        id:
+          type: integer
+          description: Probability point ID.
+        game_id:
+          type: integer
+          description: Game ID.
+        play:
+          type:
+            - object
+            - "null"
+          required:
+            - period
+            - clock
+            - home_score
+            - visitor_score
+          properties:
+            period:
+              type: integer
+            clock:
+              type: [string, "null"]
+            home_score:
+              type: integer
+            visitor_score:
+              type: integer
+        home_win_probability:
+          type: number
+          minimum: 0
+          maximum: 1
+        tie_probability:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+  parameters:
+    DfsSlateIdsParam:
+      name: slate_ids[]
+      in: query
+      required: false
+      description: Filter by DFS slate IDs.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+    DfsProvidersParam:
+      name: providers[]
+      in: query
+      required: false
+      description: Filter by provider. Supported values are draftkings and fanduel.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 100
+    DfsFormatsParam:
+      name: formats[]
+      in: query
+      required: false
+      description: Filter by lineup format.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum: [salary_cap, tiers, snake_draft]
+    DfsScopesParam:
+      name: scopes[]
+      in: query
+      required: false
+      description: Filter by single-game or multi-game scope.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum: [single_event, multi_event]
+    DfsActiveParam:
+      name: active
+      in: query
+      required: false
+      description: Return current records by default; set false for inactive history.
+      schema:
+        type: boolean
+        default: true
+    DfsStartDateParam:
+      name: start_date
+      in: query
+      required: false
+      description: Include slates whose event window overlaps this date or later.
+      schema:
+        type: string
+        format: date
+    DfsEndDateParam:
+      name: end_date
+      in: query
+      required: false
+      description: Include slates whose event window overlaps this date or earlier.
+      schema:
+        type: string
+        format: date
+    DfsCursorParam:
+      name: cursor
+      in: query
+      required: false
+      description: Cursor returned by the previous page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 9007199254740991
+    DfsPerPageParam:
+      name: per_page
+      in: query
+      required: false
+      description: Maximum records to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    DfsGameIdsParam:
+      name: game_ids[]
+      in: query
+      required: false
+      description: Filter by BALLDONTLIE game IDs.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+    DfsPlayerIdsParam:
+      name: player_ids[]
+      in: query
+      required: false
+      description: Filter by BALLDONTLIE player IDs.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+    DfsTeamIdsParam:
+      name: team_ids[]
+      in: query
+      required: false
+      description: Filter by BALLDONTLIE team IDs.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+    DfsPositionsParam:
+      name: positions[]
+      in: query
+      required: false
+      description: Filter by provider roster position.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 100
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: integer
+      description: The cursor for pagination
+    DatesParam:
+      name: dates[]
+      in: query
+      required: false
+      schema:
+        type: array
+        items:
+          type: string
+          format: date
+      style: form
+      explode: true
+      description: Filter by dates (YYYY-MM-DD)
+    PerPageParam:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 100
+        default: 25
+      description: Number of results per page
+    PlayerIdsParam:
+      name: player_ids[]
+      in: query
+      required: false
+      schema:
+        type: array
+        items:
+          type: integer
+      style: form
+      explode: true
+      description: Filter by player IDs
+    SeasonOptionalParam:
+      name: season
+      in: query
+      required: false
+      schema:
+        type: integer
+      description: The season year
+    SeasonParam:
+      name: season
+      in: query
+      required: true
+      schema:
+        type: integer
+      description: The season year
+    TeamIdsParam:
+      name: team_ids[]
+      in: query
+      required: false
+      schema:
+        type: array
+        items:
+          type: integer
+      style: form
+      explode: true
+      description: Filter by team IDs
+  responses:
+    DfsBadRequest:
+      description: Invalid DFS request parameters.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DfsValidationError"
+    DfsUnauthorized:
+      description: Missing API key or GOAT access.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: Unauthorized
+    DfsNotFound:
+      description: DFS slate not found.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: Not Found
+    DfsRateLimited:
+      description: Request limit exceeded.
+      content:
+        text/html:
+          schema:
+            type: string
+            const: Too many requests, please try again later.
+    DfsServerFailure:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DfsServerError"
+    UnauthorizedError:
+      description: Unauthorized - Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequestError:
+      description: Bad Request - Invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimitError:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+security:
+  - ApiKeyAuth: []
+paths:
+  /nba/v1/shot_charts:
+    get:
+      summary: Get NBA shot charts
+      description: >-
+        Returns one row per field-goal attempt after a game finishes. Requires NBA GOAT or ALL-ACCESS.
+        Preseason is excluded. Provide game_ids[], or seasons[] with player_ids[] or team_ids[].
+        Different filters intersect; values within arrays match any. Results are ordered by shot ID.
+        Coordinates and distance use feet, with the basket at (25, 0). Distance, coordinates, and
+        zones may be null.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          description: Game IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: seasons[]
+          in: query
+          description: Season start years; 2026 means 2026–27.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: player_ids[]
+          in: query
+          description: Player IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: team_ids[]
+          in: query
+          description: Team IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: season_type
+          in: query
+          description: Season type.
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+        - name: period
+          in: query
+          description: Period; overtime starts at 5.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: made
+          in: query
+          description: true for made shots or false for missed shots.
+          schema:
+            type: boolean
+        - name: shot_value
+          in: query
+          description: Shot value.
+          schema:
+            type: integer
+            enum:
+              - 2
+              - 3
+        - name: cursor
+          in: query
+          description: Use next_cursor from the previous response.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          description: Results per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Shot attempts with cursor pagination. No matches return an empty data array.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NBAShotChart'
+                  meta:
+                    $ref: '#/components/schemas/Pagination'
+              example:
+                data:
+                  - id: 10403170
+                    game_id: 21717855
+                    player_id: 101
+                    team_id: 9
+                    season: 2026
+                    season_type: regular
+                    period: 1
+                    clock: '11:32'
+                    made: false
+                    shot_value: 3
+                    shot_type: Jump Shot
+                    shot_distance: 24
+                    coordinate_x: 49.6
+                    coordinate_y: 1.5
+                    shot_zone_basic: Right Corner 3
+                    shot_zone_area: Right Side(R)
+                    shot_zone_range: 24+ ft.
+                meta:
+                  next_cursor: 10403170
+                  per_page: 1
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /nba/v1/teams:
+    get:
+      summary: Get NBA teams
+      tags:
+        - NBA
+      parameters:
+        - name: division
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by division
+        - name: conference
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by conference
+      responses:
+        "200":
+          description: List of NBA teams
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBATeam"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/teams/{id}:
+    get:
+      summary: Get specific NBA team
+      tags:
+        - NBA
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Team ID
+      responses:
+        "200":
+          description: Team details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NBATeam"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/players:
+    get:
+      summary: Get NBA players
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/TeamIdsParam"
+        - $ref: "#/components/parameters/PlayerIdsParam"
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by player name
+        - name: first_name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by first name
+        - name: last_name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by last name
+      responses:
+        "200":
+          description: List of NBA players
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAPlayer"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/players/{id}:
+    get:
+      summary: Get specific NBA player
+      tags:
+        - NBA
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Player ID
+      responses:
+        "200":
+          description: Player details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NBAPlayer"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/games:
+    get:
+      summary: Get NBA games
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/DatesParam"
+        - $ref: "#/components/parameters/TeamIdsParam"
+        - name: seasons[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by seasons
+        - name: season_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [preseason, regular, ist, playin, playoffs]
+          description: Filter by season type. When omitted, all non-preseason game types are returned.
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter games after this date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter games before this date
+      responses:
+        "200":
+          description: List of NBA games
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGame"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/games/{id}:
+    get:
+      summary: Get specific NBA game
+      tags:
+        - NBA
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Game ID
+      responses:
+        "200":
+          description: Game details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NBAGame"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/stats:
+    get:
+      summary: Get NBA stats
+      description: |
+        Successful responses include meta, including on empty pages. When fewer than per_page records are returned, meta.next_cursor is omitted, not null. A full page can return a cursor even if the next page is empty. Pass this endpoint’s returned next_cursor as cursor, keeping the same filters, until next_cursor is absent; do not use page numbers or cursors from another endpoint.
+        Player stats do not include participation-status classifications such as DNP, inactive, or did not dress, or a filter for those statuses. Zero minutes or zero statistics do not identify a participation reason. Missing stats do not establish that a player did not participate.
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/PlayerIdsParam"
+        - name: game_ids[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by game IDs
+        - $ref: "#/components/parameters/DatesParam"
+        - name: seasons[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by seasons
+        - name: season_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [preseason, regular, ist, playin, playoffs]
+          description: Filter by season type. When omitted, all non-preseason game types are returned unless game_ids[] is supplied.
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter stats after this date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Filter stats before this date
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Filter by period (quarter). Defaults to 0, which returns full game totals only.
+      responses:
+        "200":
+          description: List of NBA stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAStats"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/season_averages:
+    get:
+      summary: Get NBA season averages
+      tags:
+        - NBA
+      parameters:
+        - name: season
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Season year
+        - name: player_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Player ID
+      responses:
+        "200":
+          description: Season averages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBASeasonAverages"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/season_averages/{type}:
+    get:
+      summary: Get NBA season averages by type
+      tags:
+        - NBA
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - general
+              - clutch
+              - defense
+              - shooting
+          description: Season average type
+        - name: player_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Filter by player IDs
+        - name: season
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Season year
+        - name: season_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - ist
+              - playin
+          description: Season type
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Statistics type
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Season averages by type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBASeasonAverageV2"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/team_season_averages/{category}:
+    get:
+      summary: Get NBA team season averages by category
+      description: |
+        Retrieve team season averages for various statistical categories. Each category requires a specific type parameter
+        that determines the exact stats returned. The hustle category does not require a type parameter.
+
+        **Available category/type combinations:**
+        - general: base, advanced, scoring, misc, opponent, defense, violations
+        - clutch: base, advanced, misc, scoring
+        - shooting: by_zone_base, by_zone_opponent, 5ft_range_base, 5ft_range_opponent
+        - playtype: cut, handoff, isolation, offrebound, offscreen, postup, prballhandler, prrollman, spotup, transition, misc
+        - tracking: painttouch, efficiency, speeddistance, defense, elbowtouch, posttouch, passing, drives, rebounding, catchshoot, pullupshot, possessions
+        - hustle: (no type parameter required)
+        - shotdashboard: overall, pullups, catch_and_shoot, less_than_10_ft
+      tags:
+        - NBA
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - general
+              - clutch
+              - shooting
+              - playtype
+              - tracking
+              - hustle
+              - shotdashboard
+          description: Statistical category
+        - name: team_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Filter by team IDs
+        - name: season
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Season year
+        - name: season_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - ist
+          description: Season type
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Statistics type (required for all categories except hustle)
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: Team season averages by category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBATeamSeasonStat"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/standings:
+    get:
+      summary: Get NBA team standings
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/SeasonParam"
+      responses:
+        "200":
+          description: Team standings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAStandings"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/players/active:
+    get:
+      summary: Get active NBA players
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/TeamIdsParam"
+        - $ref: "#/components/parameters/PlayerIdsParam"
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search by player name
+        - name: first_name
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: last_name
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of active NBA players
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAPlayer"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/player_injuries:
+    get:
+      summary: Get NBA player injuries
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/TeamIdsParam"
+        - $ref: "#/components/parameters/PlayerIdsParam"
+      responses:
+        "200":
+          description: List of NBA player injuries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAPlayerInjury"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/box_scores/live:
+    get:
+      summary: Get live NBA box scores
+      description: Available player stat records, not a complete roster. Minute precision varies by record. Participation-status classifications are not included; zero values or missing players do not identify DNP, inactive, or did-not-dress status.
+      tags:
+        - NBA
+      parameters:
+        - name: season_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [preseason, regular, ist, playin, playoffs]
+          description: Filter by season type. When omitted, all non-preseason game types are returned.
+      responses:
+        "200":
+          description: Live NBA box scores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBABoxScore"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/box_scores:
+    get:
+      summary: Get NBA box scores for a specific date
+      description: Available player stat records, not a complete roster. Minute precision varies by record. Participation-status classifications are not included; zero values or missing players do not identify DNP, inactive, or did-not-dress status.
+      tags:
+        - NBA
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Date in YYYY-MM-DD format
+        - name: season_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [preseason, regular, ist, playin, playoffs]
+          description: Filter by season type. When omitted, all non-preseason game types are returned.
+      responses:
+        "200":
+          description: NBA box scores for date
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBABoxScore"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/projected_lineups:
+    get:
+      summary: Get NBA projected lineups
+      description: |
+        Requires the GOAT tier. Returns one record per game and team with five projected starters.
+        Updates stop at scheduled start or earlier live status. The last pregame snapshot remains available afterward.
+        Expected and confirmed describe the latest pregame information; reaching tip-off does not change the status to confirmed.
+        Teams without a projection are omitted. No matches returns an empty data array.
+        Filters combine, and multiple values within a filter match any listed value. Without filters, returns available projections across dates, ordered by lineup ID.
+        Also available at /v1/projected_lineups. Actual starters and bench players are available through /nba/v1/lineups.
+      tags: [NBA]
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Return these teams' projections.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: dates[]
+          in: query
+          required: false
+          description: Filter by game dates, YYYY-MM-DD.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+        - name: seasons[]
+          in: query
+          required: false
+          description: Filter by season start years, e.g. 2026 for 2026-27.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 2147483647
+        - name: cursor
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Projected lineups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAProjectedLineup"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              example: {"data": [{"id": 1, "game_id": 21718012, "team_id": 6, "status": "expected", "lineup": [{"position": "PG", "player": {"id": 192, "first_name": "James", "last_name": "Harden"}}, {"position": "SG", "player": {"id": 322, "first_name": "Donovan", "last_name": "Mitchell"}}, {"position": "SF", "player": {"id": 38017721, "first_name": "Peyton", "last_name": "Watson"}}, {"position": "PF", "player": {"id": 17896076, "first_name": "Evan", "last_name": "Mobley"}}, {"position": "C", "player": {"id": 9, "first_name": "Jarrett", "last_name": "Allen"}}], "updated_at": "2026-11-02T18:26:13.837Z"}], "meta": {"per_page": 25}}
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/lineups:
+    get:
+      summary: Get NBA game lineups
+      description: |
+        Retrieve starting lineups and bench players for NBA games. Also available at /v1/lineups.
+
+        **Important Notes:**
+        - Lineup data is only available from the 2025–26 NBA season onward
+        - Lineup data is only available once the game begins
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids
+          in: query
+          required: true
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: >-
+            Game IDs to get lineups for. Use game_ids=21718030 for one game or
+            game_ids=21718030&game_ids=21718033 for multiple games.
+            Bracketed parameters are also supported: game_ids[]=21718030&game_ids[]=21718033.
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: NBA lineups for specified games
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBALineup"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/leaders:
+    get:
+      summary: Get NBA stat leaders
+      tags:
+        - NBA
+      parameters:
+        - name: stat_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - ast
+              - blk
+              - dreb
+              - eff
+              - fg3a
+              - fg3m
+              - fg3_pct
+              - fga
+              - fgm
+              - fg_pct
+              - fta
+              - ftm
+              - ft_pct
+              - min
+              - oreb
+              - pts
+              - reb
+              - stl
+              - tov
+          description: Type of stat to get leaders for
+        - $ref: "#/components/parameters/SeasonParam"
+        - name: season_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+            default: regular
+          description: Season type (regular or playoffs). Defaults to regular.
+      responses:
+        "200":
+          description: NBA stat leaders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBALeader"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v2/odds:
+    get:
+      summary: Get NBA betting odds
+      description: Retrieve betting odds for NBA games, including preseason games when odds are available. Either dates or game_ids is required.
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/DatesParam"
+        - name: game_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by game IDs
+      responses:
+        "200":
+          description: NBA betting odds
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 1105
+                    game_id: 18446819
+                    vendor: betrivers
+                    deeplinks:
+                      event:
+                        url: https://pa.betrivers.com/?page=sportsbook#event/1028589932
+                        url_template: null
+                      selections:
+                        moneyline_home:
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195318|{wagerAmount}
+                        moneyline_away:
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195319|{wagerAmount}
+                    spread_home_value: '-7.5'
+                    spread_home_odds: -120
+                    spread_away_value: '7.5'
+                    spread_away_odds: -110
+                    moneyline_home_odds: -330
+                    moneyline_away_odds: 240
+                    total_value: '228.5'
+                    total_over_odds: -115
+                    total_under_odds: -115
+                    updated_at: '2025-10-21T23:46:11.875Z'
+                meta:
+                  per_page: 25
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBABettingOdd"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v2/odds/opening:
+    get:
+      summary: Get NBA opening betting odds
+      description: Retrieve historical opening betting odds. Coverage is limited to the most recently completed season and ongoing seasons where available. Requires GOAT tier.
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - name: game_ids
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by game IDs
+        - name: dates
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+          description: Filter by game dates
+      responses:
+        "200":
+          description: Opening odds
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 181
+                    game_id: 18447485
+                    vendor: betrivers
+                    deeplinks:
+                      event:
+                        url: https://pa.betrivers.com/?page=sportsbook#event/1028589932
+                        url_template: null
+                      selections:
+                        moneyline_home:
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195318|{wagerAmount}
+                        moneyline_away:
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195319|{wagerAmount}
+                    spread_home_value: '-14'
+                    spread_home_odds: -112
+                    spread_away_value: '14'
+                    spread_away_odds: -109
+                    moneyline_home_odds: -770
+                    moneyline_away_odds: 525
+                    total_value: null
+                    total_over_odds: null
+                    total_under_odds: null
+                    opened_at: '2026-01-27T18:58:49.535Z'
+                meta:
+                  next_cursor: 181
+                  per_page: 1
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAOpeningBettingOdd"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /nba/v2/odds/player_props:
+    get:
+      summary: Get NBA player prop betting odds
+      description: |
+        Retrieve live player prop betting data for NBA games. Player prop data is LIVE and updated in real-time.
+        We do not store historical data. As games near completion, many (or all) player props may be removed from sportsbooks.
+
+        **Note:** This endpoint returns all player props for the specified game in a single response. Pagination is not supported.
+
+        The API supports two market types:
+        - **over_under**: Traditional over/under markets where users can bet on whether a player will go over or under a specific line value
+        - **milestone**: Milestone markets where users bet on whether a player will reach a specific achievement
+
+        Available vendors: draftkings, betway, betrivers, ballybet, betparx, caesars, fanduel, rebet
+      tags:
+        - NBA
+      parameters:
+        - name: game_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: The game ID to retrieve player props for (required)
+        - name: player_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter props for a specific player
+        - name: prop_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - assists
+              - assists_1q
+              - assists_first3min
+              - blocks
+              - double_double
+              - points
+              - points_1q
+              - points_assists
+              - points_first3min
+              - points_rebounds
+              - points_rebounds_assists
+              - rebounds
+              - rebounds_1q
+              - rebounds_assists
+              - rebounds_first3min
+              - steals
+              - threes
+              - triple_double
+          description: Filter by prop type. Supported values include individual stats (points, rebounds, assists, threes, steals, blocks), combo stats (points_assists, points_rebounds, points_rebounds_assists, rebounds_assists), achievements (double_double, triple_double), and various quarter/time-specific props.
+      responses:
+        "200":
+          description: NBA player prop betting odds
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 15777190
+                    game_id: 18447073
+                    player_id: 246
+                    vendor: betrivers
+                    deeplinks:
+                      event:
+                        url: https://pa.betrivers.com/?page=sportsbook#event/1028589932
+                        url_template: null
+                      selections:
+                        'yes':
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195318|{wagerAmount}
+                    prop_type: points
+                    line_value: '18'
+                    market:
+                      type: milestone
+                      odds: -1960
+                    updated_at: '2025-11-24T23:46:46.653Z'
+                meta:
+                  per_page: 3
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAPlayerProp"
+                  meta:
+                    $ref: "#/components/schemas/PlayerPropMeta"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v2/odds/player_props/opening:
+    get:
+      summary: Get NBA opening player prop odds
+      description: Retrieve historical opening player prop betting odds. Coverage is limited to the most recently completed season and ongoing seasons where available. Requires GOAT tier.
+      tags:
+        - NBA
+      parameters:
+        - name: game_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: The game ID to retrieve opening player props for
+        - name: player_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter props for a specific player
+        - name: prop_type
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by prop type
+        - name: vendors
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by sportsbook vendors
+      responses:
+        "200":
+          description: Opening odds
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 13546
+                    game_id: 18447485
+                    player_id: 175
+                    vendor: betrivers
+                    deeplinks:
+                      event:
+                        url: https://pa.betrivers.com/?page=sportsbook#event/1028589932
+                        url_template: null
+                      selections:
+                        'yes':
+                          url: null
+                          url_template: >-
+                            https://{state}.betrivers.com/?page=sportsbook#event/1028589932?coupon={pickType}|4365195318|{wagerAmount}
+                    prop_type: assists
+                    line_value: '8'
+                    market:
+                      type: milestone
+                      odds: -106
+                    opened_at: '2026-01-27T13:58:27.346Z'
+                meta:
+                  per_page: 1
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAOpeningPlayerProp"
+                  meta:
+                    $ref: "#/components/schemas/PlayerPropMeta"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /nba/v2/stats/advanced:
+    get:
+      summary: Get NBA advanced stats (V2)
+      description: |
+        Retrieve comprehensive advanced statistics for NBA player performances. This V2 endpoint includes
+        additional metrics from tracking data, hustle stats, defensive matchups, and usage analytics.
+
+        Omitting period returns available records across periods; use period=0 for full-game records only.
+        Advanced stats do not expose total playing minutes or seconds. matchup_minutes measures time guarding a matchup, not total playing time.
+        No participation-status classification is included, and missing rows do not establish non-participation.
+        Successful responses include meta, including on empty pages. When fewer than per_page records are returned, meta.next_cursor is omitted, not null. A full page can return a cursor even if the next page is empty. Pass this endpoint’s returned next_cursor as cursor, keeping the same filters, until next_cursor is absent; do not use page numbers or cursors from another endpoint.
+
+        Includes data from:
+        - Box score advanced (PIE, ratings, efficiency metrics)
+        - Box score misc (fast break points, second chance points)
+        - Box score scoring (shot distribution percentages)
+        - Four factors (effective FG%, turnover rate)
+        - Hustle stats (deflections, contested shots, loose balls)
+        - Defensive matchups (matchup FG%, points allowed)
+        - Player tracking (speed, distance, touches)
+        - Usage stats (percentage of team stats)
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+        - $ref: "#/components/parameters/PlayerIdsParam"
+        - name: game_ids[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by game IDs
+        - $ref: "#/components/parameters/DatesParam"
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Start date for filtering (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: End date for filtering (YYYY-MM-DD)
+        - name: seasons[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by seasons
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by game period (0 for full game stats). When omitted, returns available records across periods.
+      responses:
+        "200":
+          description: NBA advanced stats V2
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAAdvancedStatsV2"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/contracts/teams:
+    get:
+      summary: Get NBA player contracts by team
+      description: Returns all player contracts for a specific team and season. Season defaults to current season if not specified.
+      tags:
+        - NBA
+      parameters:
+        - name: team_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Team ID (required)
+        - $ref: "#/components/parameters/SeasonOptionalParam"
+      responses:
+        "200":
+          description: List of player contracts for the team
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAContract"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/contracts/players:
+    get:
+      summary: Get NBA player contracts
+      description: Returns contracts for a specific player, optionally filtered by seasons. Supports pagination.
+      tags:
+        - NBA
+      parameters:
+        - name: player_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Player ID (required)
+        - name: seasons[]
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by specific seasons
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/PerPageParam"
+      responses:
+        "200":
+          description: List of player contracts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAContract"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/contracts/players/aggregate:
+    get:
+      summary: Get aggregated NBA player contract data
+      description: Returns multi-year contract aggregates for a specific player, including total value, guarantees, and contract metadata.
+      tags:
+        - NBA
+      parameters:
+        - name: player_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Player ID (required)
+      responses:
+        "200":
+          description: List of aggregated contract data for the player
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAContractAggregate"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/dfs/slates:
+    get:
+      summary: Get NBA DFS slates
+      description: |
+        Returns DraftKings and FanDuel daily fantasy lineup pools. A slate identifies
+        its format, event window, salary cap, and whether it covers one or multiple games.
+        Use the slate detail endpoint for included events and roster slots, then request
+        draftables for selectable players or teams and their slate-specific salaries.
+        Requires GOAT tier. Current slates are returned by default; use active=false for
+        inactive historical snapshots.
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/DfsSlateIdsParam"
+        - $ref: "#/components/parameters/DfsProvidersParam"
+        - $ref: "#/components/parameters/DfsFormatsParam"
+        - $ref: "#/components/parameters/DfsScopesParam"
+        - $ref: "#/components/parameters/DfsActiveParam"
+        - $ref: "#/components/parameters/DfsStartDateParam"
+        - $ref: "#/components/parameters/DfsEndDateParam"
+        - $ref: "#/components/parameters/DfsCursorParam"
+        - $ref: "#/components/parameters/DfsPerPageParam"
+      responses:
+        "200":
+          description: Paginated DFS slates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DfsSlateListResponse"
+        "400":
+          $ref: "#/components/responses/DfsBadRequest"
+        "401":
+          $ref: "#/components/responses/DfsUnauthorized"
+        "429":
+          $ref: "#/components/responses/DfsRateLimited"
+        "500":
+          $ref: "#/components/responses/DfsServerFailure"
+  /nba/v1/dfs/slates/{id}:
+    get:
+      summary: Get a NBA DFS slate
+      description: |
+        Returns one slate with its included real-game events and lineup roster slots.
+        Event game_id values use BALLDONTLIE game IDs when a reference is available.
+        The active flags preserve the state of historical slate members. Requires GOAT tier.
+      tags:
+        - NBA
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: DFS slate ID.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+      responses:
+        "200":
+          description: DFS slate detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DfsSlateDetailResponse"
+        "400":
+          $ref: "#/components/responses/DfsBadRequest"
+        "401":
+          $ref: "#/components/responses/DfsUnauthorized"
+        "404":
+          $ref: "#/components/responses/DfsNotFound"
+        "429":
+          $ref: "#/components/responses/DfsRateLimited"
+        "500":
+          $ref: "#/components/responses/DfsServerFailure"
+  /nba/v1/dfs/draftables:
+    get:
+      summary: Get NBA DFS draftables
+      description: |
+        Returns players or teams that can be selected for a slate roster slot, including
+        position, salary, availability, and linked BALLDONTLIE entities when available.
+        game_id, player_id, or team_id can be null when unavailable. Team entries have null player_id.
+        For provider selection, filter slates with providers[], then pass their IDs as slate_ids[].
+        A player can appear in multiple roster slots with different salaries. Salary can be null
+        for formats such as snake drafts. Status is the provider availability designation,
+        separate from is_disabled and is_swappable. Check updated_at for snapshot freshness.
+        These endpoints do not describe every contest restriction or scoring rule.
+        Current draftables are returned by default; use active=false for inactive history.
+        Requires GOAT tier.
+      tags:
+        - NBA
+      parameters:
+        - $ref: "#/components/parameters/DfsSlateIdsParam"
+        - $ref: "#/components/parameters/DfsGameIdsParam"
+        - $ref: "#/components/parameters/DfsPlayerIdsParam"
+        - $ref: "#/components/parameters/DfsTeamIdsParam"
+        - $ref: "#/components/parameters/DfsPositionsParam"
+        - $ref: "#/components/parameters/DfsActiveParam"
+        - $ref: "#/components/parameters/DfsCursorParam"
+        - $ref: "#/components/parameters/DfsPerPageParam"
+      responses:
+        "200":
+          description: Paginated DFS draftables.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DfsDraftableListResponse"
+        "400":
+          $ref: "#/components/responses/DfsBadRequest"
+        "401":
+          $ref: "#/components/responses/DfsUnauthorized"
+        "429":
+          $ref: "#/components/responses/DfsRateLimited"
+        "500":
+          $ref: "#/components/responses/DfsServerFailure"
+  /nba/v1/plays:
+    get:
+      summary: Get NBA play-by-play data
+      description: |
+        Retrieve play-by-play data for an NBA game.
+
+        Returns all plays for a game in chronological order, including shot attempts, turnovers, fouls, and other game events. Each play includes the game clock, score, and team information.
+      tags:
+        - NBA
+      parameters:
+        - name: game_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Game ID (required)
+      responses:
+        "200":
+          description: Play-by-play data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAPlay"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /nba/v1/stats/tracking:
+    get:
+      summary: Get NBA game tracking stats
+      description: >-
+        Get per-game player tracking stats, including potential assists with `type=passing`.
+        Full-game data only; quarter splits are unavailable. Requires GOAT or ALL-ACCESS. Available
+        from 2018–19; coverage varies. Data typically becomes available a few hours to a day after
+        game completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: dates[]
+          in: query
+          required: false
+          description: Game dates in `YYYY-MM-DD` format.
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+        - name: seasons[]
+          in: query
+          required: false
+          description: "Season start years: `2018` means 2018–19."
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: start_date
+          in: query
+          required: false
+          description: Include games on or after this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Include games on or before this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: season_type
+          in: query
+          required: false
+          description: "`regular`, `playoffs`, `playin`, `ist`, or `preseason`. Omit to exclude preseason."
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+              - preseason
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Filter by team IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          description: Use `meta.next_cursor` to request the next page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          required: false
+          description: Results per page. Default 25; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: type
+          in: query
+          required: true
+          description: Required statistics category.
+          schema:
+            type: string
+            enum:
+              - passing
+              - drives
+              - possessions
+              - rebounding
+              - speeddistance
+              - elbowtouch
+              - posttouch
+              - painttouch
+              - catchshoot
+              - pullupshot
+        - name: player_ids[]
+          in: query
+          required: false
+          description: Player IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Available game tracking stats.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameTracking"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              examples:
+                tracking:
+                  summary: November 6, 2026
+                  value:
+                    data:
+                      - id: 3095
+                        game_id: 21718043
+                        player_id: 38017677
+                        team_id: 1
+                        type: passing
+                        stats:
+                          min: 34.5
+                          passes_made: 65
+                          passes_received: 49
+                          ast: 12
+                          ft_ast: 0
+                          secondary_ast: 0
+                          potential_ast: 19
+                          ast_pts_created: 31
+                          ast_adj: 12
+                          ast_to_pass_pct: 0.185
+                          ast_to_pass_pct_adj: 0.185
+                    meta:
+                      next_cursor: 3095
+                      per_page: 1
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/stats/defense:
+    get:
+      summary: Get NBA game shot defense
+      description: >-
+        Get per-game player shot defense by shot category, including shooting percentages allowed.
+        Requires GOAT or ALL-ACCESS. Available from 2018–19; coverage varies. Data typically becomes
+        available a few hours to a day after game completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: dates[]
+          in: query
+          required: false
+          description: Game dates in `YYYY-MM-DD` format.
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+        - name: seasons[]
+          in: query
+          required: false
+          description: "Season start years: `2018` means 2018–19."
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: start_date
+          in: query
+          required: false
+          description: Include games on or after this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Include games on or before this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: season_type
+          in: query
+          required: false
+          description: "`regular`, `playoffs`, `playin`, `ist`, or `preseason`. Omit to exclude preseason."
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+              - preseason
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Filter by team IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          description: Use `meta.next_cursor` to request the next page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          required: false
+          description: Results per page. Default 25; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: type
+          in: query
+          required: true
+          description: Required statistics category.
+          schema:
+            type: string
+            enum:
+              - overall
+              - 2_pointers
+              - 3_pointers
+              - less_than_6ft
+              - less_than_10ft
+              - greater_than_15ft
+        - name: player_ids[]
+          in: query
+          required: false
+          description: Player IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Available game shot defense.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameDefense"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              examples:
+                defense:
+                  summary: November 6, 2026
+                  value:
+                    data:
+                      - id: 5012
+                        game_id: 21718043
+                        player_id: 3547244
+                        team_id: 1
+                        type: overall
+                        stats:
+                          freq: 1
+                          d_fgm: 8
+                          d_fga: 19
+                          d_fg_pct: 0.421
+                          normal_fg_pct: 0.465
+                          pct_plusminus: -0.044
+                    meta:
+                      next_cursor: 5012
+                      per_page: 1
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/stats/shooting:
+    get:
+      summary: Get NBA game shooting splits
+      description: >-
+        Get per-game player shooting splits by defender distance, dribble count, or touch time.
+        Select one split type per request. Requires GOAT or ALL-ACCESS. Available from 2018–19;
+        coverage varies. Data typically becomes available a few hours to a day after game
+        completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: dates[]
+          in: query
+          required: false
+          description: Game dates in `YYYY-MM-DD` format.
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+        - name: seasons[]
+          in: query
+          required: false
+          description: "Season start years: `2018` means 2018–19."
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: start_date
+          in: query
+          required: false
+          description: Include games on or after this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Include games on or before this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: season_type
+          in: query
+          required: false
+          description: "`regular`, `playoffs`, `playin`, `ist`, or `preseason`. Omit to exclude preseason."
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+              - preseason
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Filter by team IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          description: Use `meta.next_cursor` to request the next page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          required: false
+          description: Results per page. Default 25; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: type
+          in: query
+          required: true
+          description: Required statistics category.
+          schema:
+            type: string
+            enum:
+              - defender_distance
+              - dribbles
+              - touch_time
+        - name: range
+          in: query
+          required: false
+          description: >-
+            defender_distance: 0_2_ft, 2_4_ft, 4_6_ft, 6_plus_ft; dribbles: 0, 1, 2, 3_6, 7_plus;
+            touch_time: less_than_2_sec, 2_6_sec, 6_plus_sec. Omit to return all buckets for the
+            selected type.
+          schema:
+            type: string
+            enum:
+              - 0_2_ft
+              - 2_4_ft
+              - 4_6_ft
+              - 6_plus_ft
+              - "0"
+              - "1"
+              - "2"
+              - "3_6"
+              - 7_plus
+              - less_than_2_sec
+              - 2_6_sec
+              - 6_plus_sec
+        - name: player_ids[]
+          in: query
+          required: false
+          description: Player IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Available game shooting splits.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameShooting"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              examples:
+                shooting:
+                  summary: November 6, 2026
+                  value:
+                    data:
+                      - id: 6461
+                        game_id: 21718043
+                        player_id: 38017677
+                        team_id: 1
+                        type: defender_distance
+                        range: 4_6_ft
+                        stats:
+                          fga_frequency: 0.111
+                          fgm: 0
+                          fga: 1
+                          fg_pct: 0
+                          efg_pct: 0
+                          fg2_a_frequency: 0.111
+                          fg2_m: 0
+                          fg2_a: 1
+                          fg2_pct: 0
+                          fg3_a_frequency: 0
+                          fg3_m: 0
+                          fg3_a: 0
+                          fg3_pct: null
+                    meta:
+                      next_cursor: 6461
+                      per_page: 1
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/lineup_stats:
+    get:
+      summary: Get NBA lineup stats
+      description: >-
+        Get per-game performance for five-player lineups, including ratings, pace, and shooting
+        efficiency. Requires GOAT or ALL-ACCESS. Available from 2018–19; coverage varies. Data
+        typically becomes available a few hours to a day after game completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: dates[]
+          in: query
+          required: false
+          description: Game dates in `YYYY-MM-DD` format.
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+        - name: seasons[]
+          in: query
+          required: false
+          description: "Season start years: `2018` means 2018–19."
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: start_date
+          in: query
+          required: false
+          description: Include games on or after this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Include games on or before this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: season_type
+          in: query
+          required: false
+          description: "`regular`, `playoffs`, `playin`, `ist`, or `preseason`. Omit to exclude preseason."
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+              - preseason
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Filter by team IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          description: Use `meta.next_cursor` to request the next page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          required: false
+          description: Results per page. Default 25; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: player_ids[]
+          in: query
+          required: false
+          description: Every supplied player must belong to the combination.
+          schema:
+            type: array
+            items:
+              type: integer
+            maxItems: 5
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Available lineup stats.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameLineupStats"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              examples:
+                lineups:
+                  summary: November 6, 2026
+                  value:
+                    data:
+                      - id: 240
+                        game_id: 21718043
+                        team_id: 1
+                        player_ids:
+                          - 666400
+                          - 666541
+                          - 3547244
+                          - 38017677
+                          - 1091340263
+                        stats:
+                          min: 12
+                          e_off_rating: 126.5
+                          off_rating: 121.4
+                          e_def_rating: 96.2
+                          def_rating: 96.4
+                          e_net_rating: 30.3
+                          net_rating: 25
+                          ast_pct: 0.846
+                          ast_to: 2.75
+                          ast_ratio: 26.2
+                          oreb_pct: 0.25
+                          dreb_pct: 0.538
+                          reb_pct: 0.4
+                          tm_tov_pct: 0.143
+                          efg_pct: 0.64
+                          ts_pct: 0.657
+                          e_pace: 109.5
+                          pace: 111.54
+                          pace_per40: 92.95
+                          poss: 28
+                          pie: 0.647
+                    meta:
+                      next_cursor: 240
+                      per_page: 1
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/matchups:
+    get:
+      summary: Get NBA matchups
+      description: >-
+        Get an offensive player’s stats against an individual defender for a game. Requires GOAT or
+        ALL-ACCESS. Available from 2018–19; coverage varies. Data typically becomes available a few
+        hours to a day after game completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_ids[]
+          in: query
+          required: false
+          description: Filter by game IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: dates[]
+          in: query
+          required: false
+          description: Game dates in `YYYY-MM-DD` format.
+          schema:
+            type: array
+            items:
+              type: string
+              format: date
+          style: form
+          explode: true
+        - name: seasons[]
+          in: query
+          required: false
+          description: "Season start years: `2018` means 2018–19."
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: start_date
+          in: query
+          required: false
+          description: Include games on or after this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          description: Include games on or before this date (`YYYY-MM-DD`).
+          schema:
+            type: string
+            format: date
+        - name: season_type
+          in: query
+          required: false
+          description: "`regular`, `playoffs`, `playin`, `ist`, or `preseason`. Omit to exclude preseason."
+          schema:
+            type: string
+            enum:
+              - regular
+              - playoffs
+              - playin
+              - ist
+              - preseason
+        - name: team_ids[]
+          in: query
+          required: false
+          description: Filter by offensive team IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: cursor
+          in: query
+          required: false
+          description: Use `meta.next_cursor` to request the next page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+        - name: per_page
+          in: query
+          required: false
+          description: Results per page. Default 25; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: player_ids[]
+          in: query
+          required: false
+          description: Offensive player IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: opponent_player_ids[]
+          in: query
+          required: false
+          description: Defender IDs.
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: Available matchups.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameMatchup"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+              examples:
+                matchups:
+                  summary: November 6, 2026
+                  value:
+                    data:
+                      - id: 1187
+                        game_id: 21718043
+                        player_id: 38017677
+                        team_id: 1
+                        opponent_player_id: 22
+                        stats:
+                          partial_possessions: 4.6
+                          percentage_defender_total_time: 0.1002132
+                          percentage_offensive_total_time: 0.0360153
+                          percentage_total_time_both_on: 0.162
+                          switches_on: 0
+                          player_points: 2
+                          team_points: 6
+                          matchup_assists: 0
+                          matchup_turnovers: 0
+                          matchup_blocks: 0
+                          matchup_field_goals_made: 1
+                          matchup_field_goals_attempted: 1
+                          matchup_field_goals_percentage: 1
+                          matchup_three_pointers_made: 0
+                          matchup_three_pointers_attempted: 0
+                          matchup_three_pointers_percentage: 0
+                          help_blocks: 0
+                          help_field_goals_made: 0
+                          help_field_goals_attempted: 0
+                          help_field_goals_percentage: 0
+                          matchup_free_throws_made: 0
+                          matchup_free_throws_attempted: 0
+                          shooting_fouls: 0
+                          matchup_seconds: 47
+                    meta:
+                      next_cursor: 1187
+                      per_page: 1
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /nba/v1/win_probabilities:
+    get:
+      summary: Get NBA win probabilities
+      description: >-
+        Get a completed game’s win-probability timeline in one response. Points are chronological;
+        points with `play: null` appear last. Requires GOAT or ALL-ACCESS. Available from 2018–19;
+        coverage varies. Data typically becomes available a few hours to a day after game
+        completion. No live data.
+      tags:
+        - NBA
+      parameters:
+        - name: game_id
+          in: query
+          required: true
+          description: Game ID. Returns all available points without pagination.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Available win probabilities.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NBAGameWinProbability"
+              examples:
+                probabilities:
+                  summary: First two points of a longer timeline
+                  value:
+                    data:
+                      - id: 3482
+                        game_id: 21718043
+                        play:
+                          period: 1
+                          clock: "12:00"
+                          home_score: 0
+                          visitor_score: 0
+                        home_win_probability: 0.707
+                        tie_probability: 0
+                      - id: 3483
+                        game_id: 21718043
+                        play:
+                          period: 1
+                          clock: "11:41"
+                          home_score: 0
+                          visitor_score: 0
+                        home_win_probability: 0.718
+                        tie_probability: 0
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "429":
+          $ref: "#/components/responses/RateLimitError"
+        "500":
+          $ref: "#/components/responses/ServerError"

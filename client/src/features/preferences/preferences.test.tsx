@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendError } from "./backend-api";
-import { BackendPreferences } from "./backend-preferences";
-import { parseCap } from "./management-rules";
+import { BackendError } from "@/lib/api-client";
+import { PreferencesPage } from "./preferences";
+import { parseCap } from "./rules";
 import {
   getDebt,
   getDebtCap,
@@ -11,10 +11,10 @@ import {
   putDebtCap,
   putInvitePreferences,
   updateProfile,
-} from "./preferences-api";
+} from "./api";
 
-vi.mock("./preferences-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./preferences-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   getInvitePreferences: vi.fn(),
   putInvitePreferences: vi.fn(),
   getDebtCap: vi.fn(),
@@ -30,7 +30,7 @@ function renderPage() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <BackendPreferences user={me} expire={() => {}} />
+      <PreferencesPage user={me} expire={() => {}} />
     </QueryClientProvider>,
   );
 }

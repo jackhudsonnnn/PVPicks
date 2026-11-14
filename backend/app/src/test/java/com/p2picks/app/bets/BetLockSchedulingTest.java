@@ -28,6 +28,7 @@ class BetLockSchedulingTest {
         doThrow(new IllegalStateException("simulated scan failure")).doNothing().when(worker).poll();
         new ApplicationContextRunner().withUserConfiguration(BetLockScheduling.class)
                 .withBean(BetLockWorker.class, () -> worker)
+                .withBean(SportsResolutionWorker.class, () -> mock(SportsResolutionWorker.class))
                 .withPropertyValues("pvpicks.bet-lock-worker.enabled=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(BetLockScheduling.class);

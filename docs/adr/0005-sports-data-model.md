@@ -1,6 +1,9 @@
 # ADR 0005: Sports data model, ingestion and replay
 
-- Status: proposed (not yet implemented)
+- Status: accepted; partly implemented (2026-11-14): raw recordings, saved
+  provider specs with contract tests, game history, players and player stats.
+  Not yet: the per-league plan setting, per-game fixture slices and the replay
+  feed.
 - Date: 2026-11-13
 
 ## Context
@@ -64,11 +67,31 @@ showed when a bet locked. The history also serves disputes and replay.
 
 Keep a dated copy of the provider's OpenAPI specs and contract-test recordings
 and fixtures against their game schemas, so provider changes fail a test
-instead of silently skipping games.
+instead of silently skipping games. (Implemented: `backend/api/providers/
+balldontlie/<league>-<date>.yml` and `ProviderContractTest` over trimmed
+fixtures in `app/src/test/resources/fixtures/balldontlie/`. Known deviations
+found on 2026-11-14: NFL responses send null for fields the spec types as plain
+values, such as `passing_yards` for a player with no attempts, and per-attempt
+averages typed as integers are decimals. The NBA spec now lists `/nba/v1/...`
+paths; the `/v1/...` paths the app uses still work.)
+
+Implemented storage: `games` keeps the provider state, points per period and
+`final_at` (the first Final report, cleared if the feed leaves Final), and
+`game_snapshots` gets one row per change. `players` holds each league's active
+list, refreshed at most daily, plus anyone seen in a game. `player_game_stats`
+holds each player's whole-game line in canonical stats and
+`player_stat_snapshots` one row per change; King Of The Hill reads the history to
+find who crossed a target first. Canonical stats: NBA points, rebounds,
+assists, threes made, steals plus blocks; NFL passing, rushing and receiving
+yards, receptions, and touchdowns (the player's own rushing and receiving
+touchdowns). An NBA player played with any minutes; an NFL player played when
+the provider lists a row for them.
 
 Keep raw recordings exactly as received, one timestamped file per response,
 grouped by league and New York day (implemented: `PVPICKS_SPORTS_RECORDING_DIR`,
-`recordings/sports/<league>/<date>/<UTC timestamp>_<endpoint>.json`). Names sort
+`recordings/sports/<league>/<date>/<UTC timestamp>_<endpoint>.json`; player box
+scores are recorded during and shortly after games since 2026-11-14, before
+they are stored or parsed). Names sort
 in receive order, so replay reads them in name order. A small tool slices them
 into one timeline per game for fixtures, for example `fixtures/nba/NBA-18447.jsonl`. Commit only short, trimmed fixtures; keep full
 recordings out of git for size and because the provider's terms on storing

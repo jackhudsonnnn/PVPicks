@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
-import { FEEDBACK_KINDS, FEEDBACK_MAX, feedbackProblem, type FeedbackKind } from "../feedback";
+import { FEEDBACK_KINDS, FEEDBACK_MAX, feedbackProblem, type FeedbackKind } from "./feedback";
 
 /** Guide section: send game mode ideas, perk ideas, GIFs, bugs or anything else. */
 export interface FeedbackInput {

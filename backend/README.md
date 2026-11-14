@@ -176,6 +176,16 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   saved as its own file in the git-ignored `recordings/sports/`, as
   `<league>/<New York date>/<UTC timestamp>_<endpoint>.json`. Names sort in
   receive order, so replay can read them in name order.
+- With a key set, player data is polled too, one request every
+  `PVPICKS_SPORTS_STATS_INTERVAL` (default `PT20S`): player stats for the live
+  game that has waited longest, finished games every 15 minutes for six hours
+  after they start (to catch corrections), and otherwise the next page of a
+  league's active-player list, at most once a day. A rate-limited response
+  pauses this for a minute. Scores and player data share the plan's request
+  budget (the GOAT trial allows 5 a minute: 2 for scores, 3 for player data).
+- Dated copies of the provider's OpenAPI specs live in `api/providers/`;
+  `ProviderContractTest` checks trimmed real responses against them. When it
+  fails, re-download the spec and re-check the mapping in `BallDontLieFeed`.
 - Privileged database operators bypass application rules (including the V24
   role guard) and can read plaintext picks.
 

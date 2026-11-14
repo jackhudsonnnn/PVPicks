@@ -5,7 +5,7 @@ import {
   type StompSubscription,
 } from "@stomp/stompjs";
 import { z } from "zod";
-import { csrf } from "./backend-api";
+import { csrf } from "./api-client";
 
 /**
  * Realtime invalidations (backend/api/realtime.schema.json). They only say what changed; views refetch the

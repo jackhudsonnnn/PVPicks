@@ -1,4 +1,4 @@
-import type { ReportReason } from "./social-api";
+import type { ReportReason } from "./api";
 
 export const NOTE_MAX = 500;
 

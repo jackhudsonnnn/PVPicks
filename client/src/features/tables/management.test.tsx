@@ -2,22 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getProfile, type BackendTable } from "./backend-api";
-import { BackendFriends } from "./backend-friends";
-import { CreateTable, Invitations } from "./backend-home";
-import { AboutPanel, HostPanel } from "./backend-host-panel";
-import { useBetActions } from "./bet-actions";
-import { addableFollowers, peopleIn, searchTerm, tableNameProblem } from "./management-rules";
+import { getProfile } from "@/features/people/api";
 import {
-  getRelationships,
-  listInvites,
-  respondToInvite,
-  searchUsers,
-  setBlock,
-  setFollow,
-} from "./social-api";
-import { describeOutcomes, useTableActions } from "./table-actions";
-import {
+  type Table,
   addMembers,
   createTable,
   deleteTable,
@@ -26,14 +13,29 @@ import {
   setPermission,
   setRemainderRule,
   updateTableSettings,
-} from "./tables-api";
+} from "./api";
+import { FriendsPage } from "@/features/social/friends";
+import { CreateTable, Invitations } from "@/features/tables/components/home";
+import { AboutPanel, HostPanel } from "@/features/tables/components/host-panel";
+import { useBetActions } from "@/features/bets/actions";
+import { addableFollowers, tableNameProblem } from "./rules";
+import { peopleIn, searchTerm } from "@/features/social/rules";
+import {
+  getRelationships,
+  listInvites,
+  respondToInvite,
+  searchUsers,
+  setBlock,
+  setFollow,
+} from "@/features/social/api";
+import { describeOutcomes, useTableActions } from "./actions";
 
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/people/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/people/api")>()),
   getProfile: vi.fn(),
 }));
-vi.mock("./social-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./social-api")>()),
+vi.mock("@/features/social/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/social/api")>()),
   getRelationships: vi.fn(),
   listInvites: vi.fn(),
   searchUsers: vi.fn(),
@@ -41,8 +43,8 @@ vi.mock("./social-api", async (importOriginal) => ({
   setBlock: vi.fn(),
   respondToInvite: vi.fn(),
 }));
-vi.mock("./tables-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./tables-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   createTable: vi.fn(),
   updateTableProfile: vi.fn(),
   updateTableSettings: vi.fn(),
@@ -53,20 +55,20 @@ vi.mock("./tables-api", async (importOriginal) => ({
   setHost: vi.fn(),
   setPermission: vi.fn(),
 }));
-vi.mock("./settlement-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./settlement-api")>()),
+vi.mock("@/features/settlements/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/settlements/api")>()),
   listPendingReviews: vi.fn(async () => []),
   listSettlementGroups: vi.fn(async () => []),
   listSettlementCounterparties: vi.fn(async () => []),
 }));
-vi.mock("./realtime", () => ({ useRealtimeFeed: () => {} }));
+vi.mock("@/lib/realtime", () => ({ useRealtimeFeed: () => {} }));
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me", hue: 1 };
 const friend = "123e4567-e89b-42d3-a456-426614174001";
 const fan = "123e4567-e89b-42d3-a456-426614174002";
 const stranger = "123e4567-e89b-42d3-a456-426614174003";
 const names: Record<string, string> = { [friend]: "friend", [fan]: "fan", [stranger]: "stranger" };
-const table: BackendTable = {
+const table: Table = {
   id: "123e4567-e89b-42d3-a456-426614174010",
   name: "Game Night",
   emoji: "🎲",
@@ -92,7 +94,7 @@ function wrap(children: ReactNode) {
   );
 }
 
-function Members({ value }: { value: BackendTable }) {
+function Members({ value }: { value: Table }) {
   const tableActions = useTableActions(me.id, async () => {}, expire);
   const betActions = useBetActions(me.id, async () => {}, expire);
   const props = {
@@ -110,11 +112,6 @@ function Members({ value }: { value: BackendTable }) {
   ) : (
     <AboutPanel {...props} onOpenPeers={() => {}} />
   );
-}
-
-async function confirm(label: string) {
-  fireEvent.click(await screen.findByRole("button", { name: label }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
 }
 
 beforeEach(() => {
@@ -221,7 +218,7 @@ describe("friends", () => {
   it("lists friends and new followers, follows back and blocks", async () => {
     vi.mocked(setFollow).mockResolvedValue();
     vi.mocked(setBlock).mockResolvedValue();
-    wrap(<BackendFriends user={me} expire={expire} />);
+    wrap(<FriendsPage user={me} expire={expire} />);
     const newFollowers = (await screen.findByText("New followers")).parentElement!;
     expect(await within(newFollowers).findByText("fan")).toBeInTheDocument();
     fireEvent.click(within(newFollowers).getByRole("button", { name: "Follow back" }));
@@ -237,7 +234,7 @@ describe("friends", () => {
       items: [{ id: stranger, username: "stranger", hue: 2 }],
       nextCursor: null,
     });
-    wrap(<BackendFriends user={me} expire={expire} />);
+    wrap(<FriendsPage user={me} expire={expire} />);
     fireEvent.click(await screen.findByRole("tab", { name: "Find" }));
     fireEvent.change(screen.getByLabelText("Search usernames"), { target: { value: "bad name!" } });
     expect(screen.getByText(/up to 15 letters/)).toBeInTheDocument();
@@ -292,7 +289,7 @@ describe("table members", () => {
   it("changes settings and deletes the table, explaining blocked deletions", async () => {
     vi.mocked(updateTableSettings).mockResolvedValue();
     vi.mocked(setRemainderRule).mockResolvedValue();
-    const { BackendError } = await import("./backend-api");
+    const { BackendError } = await import("@/lib/api-client");
     vi.mocked(deleteTable).mockRejectedValue(new BackendError("x", 409, "table_archive_unsettled"));
     wrap(<Members value={table} />);
     fireEvent.click(screen.getByLabelText(/^Only hosts start bets/));

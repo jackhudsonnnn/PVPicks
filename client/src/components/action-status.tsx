@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ConfirmAction } from "./backend-confirm-action";
+import { ConfirmAction } from "./confirm-action";
 
 type Actions = {
   message: string | null;

@@ -72,12 +72,19 @@ class SocialReadController {
     ResponseEntity<?> invitations(@AuthenticationPrincipal Jwt jwt) {
         List<InvitationRow> rows = jdbc.query("""
                 SELECT invitation.id, invitation.table_id, invitation.table_name, invitation.table_emoji,
-                       invitation.from_id, invitation.user_id, invitation.created_at
+                       invitation.from_id, invitation.user_id, invitation.created_at, invitation.member_ids
                 FROM auth_sessions session
                 JOIN users viewer ON viewer.id = session.user_id
                 LEFT JOIN LATERAL (
                     SELECT i.id, i.table_id, t.name AS table_name, t.emoji AS table_emoji,
-                           i.from_id, i.user_id, i.created_at
+                           i.from_id, i.user_id, i.created_at,
+                           -- Who is at the table, for the invite card's avatars: members whose profiles the
+                           -- invitee can read (not deleted, and not blocking the invitee).
+                           ARRAY(SELECT m.user_id::text FROM table_members m JOIN users u ON u.id = m.user_id
+                                 WHERE m.table_id = i.table_id AND u.status <> 'DELETED'
+                                   AND NOT EXISTS (SELECT 1 FROM blocks b
+                                       WHERE b.blocker_id = m.user_id AND b.blocked_id = viewer.id)
+                                 ORDER BY m.joined_at, m.user_id) AS member_ids
                     FROM table_invites i
                     JOIN tables t ON t.id = i.table_id AND t.archived_at IS NULL
                     JOIN users sender ON sender.id = i.from_id AND sender.status <> 'DELETED'
@@ -107,7 +114,8 @@ class SocialReadController {
                     return new InvitationRow(id == null ? null : new TableInvite(
                             id, rs.getObject("table_id", UUID.class), rs.getString("table_name"),
                             rs.getString("table_emoji"), rs.getObject("from_id", UUID.class),
-                            rs.getObject("user_id", UUID.class), rs.getObject("created_at", OffsetDateTime.class)));
+                            rs.getObject("user_id", UUID.class), rs.getObject("created_at", OffsetDateTime.class),
+                            ids(rs.getArray("member_ids"))));
                 }, UUID.fromString(jwt.getId()), UUID.fromString(jwt.getSubject()));
         if (rows.isEmpty()) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
@@ -131,5 +139,5 @@ class SocialReadController {
 
     private record TableInvite(
             UUID id, UUID tableId, String tableName, String tableEmoji, UUID fromId, UUID userId,
-            OffsetDateTime createdAt) {}
+            OffsetDateTime createdAt, List<UUID> memberIds) {}
 }

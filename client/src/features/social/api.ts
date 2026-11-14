@@ -1,14 +1,8 @@
 import { z } from "zod";
-import {
-  BackendError,
-  mutationRequest,
-  read,
-  request,
-  userSchema,
-  type BackendUser,
-} from "./backend-api";
+import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/api-client";
+import { userSchema, type User } from "@/features/people";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const relationshipsSchema = z.object({
   followingIds: z.array(uuid),
   followerIds: z.array(uuid),
@@ -44,7 +38,7 @@ export async function searchUsers(
   query: string,
   cursor: string | null,
   signal?: AbortSignal,
-): Promise<{ items: BackendUser[]; nextCursor: string | null }> {
+): Promise<{ items: User[]; nextCursor: string | null }> {
   const params = new URLSearchParams({ query });
   if (cursor) params.set("cursor", cursor);
   return read(

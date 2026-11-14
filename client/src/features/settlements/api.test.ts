@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendError } from "./backend-api";
+import { BackendError } from "@/lib/api-client";
 import {
   acknowledgeReview,
   listPendingReviews,
@@ -8,7 +8,7 @@ import {
   receiptHistory,
   transitionGroup,
   transitionLine,
-} from "./settlement-api";
+} from "./api";
 
 const actor = "123e4567-e89b-42d3-a456-426614174000";
 const other = "123e4567-e89b-42d3-a456-426614174001";

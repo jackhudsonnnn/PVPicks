@@ -1,11 +1,10 @@
-import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { Button } from "@/components/ui/button";
-import { BackendError, backendErrorMessage, type BackendUser } from "./backend-api";
-import { ConfirmAction } from "./backend-confirm-action";
-import { PersonName } from "./backend-person-name";
-import { useSettlementActions, type SettlementIntent } from "./settlement-actions";
+import { BackendError, backendErrorMessage } from "@/lib/api-client";
+import { type User, PersonName } from "@/features/people";
+import { ConfirmAction } from "@/components/confirm-action";
+import { useSettlementActions, type SettlementIntent } from "./actions";
 import {
   listPendingReviews,
   listSettlementCounterparties,
@@ -15,14 +14,15 @@ import {
   type SettlementGroup,
   type SettlementLine,
   formatPoints,
-} from "./settlement-api";
-import { useRealtimeFeed } from "./realtime";
-import { settlementsFeed } from "./realtime-connection";
+} from "./api";
+import { useRealtimeFeed } from "@/lib/realtime";
+import { settlementsFeed } from "@/lib/realtime-connection";
 import { dateTimeLabel } from "@/lib/time";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 type Actions = ReturnType<typeof useSettlementActions>;
 
-export function BackendSettlements({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function SettlementReceipts({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const key = ["backend-tables", user.id, "settlements"] as const;
   useRealtimeFeed(settlementsFeed, () => void queryClient.invalidateQueries({ queryKey: key }));
@@ -46,12 +46,7 @@ export function BackendSettlements({ user, expire }: { user: BackendUser; expire
     enabled: overflow,
     retry: false,
   });
-  const unauthorized = [reviews.error, groups.error, counterparties.error].some(
-    (error) => error instanceof BackendError && error.status === 401,
-  );
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([reviews.error, groups.error, counterparties.error], expire);
   const actions = useSettlementActions(
     user.id,
     async () => {
@@ -224,7 +219,7 @@ function Group({
   reviewRequired,
 }: {
   group: SettlementGroup;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   queryKey: readonly string[];
   actions: Actions;
@@ -322,7 +317,7 @@ function ReceiptHistory({
   actions,
   reviewRequired,
 }: {
-  user: BackendUser;
+  user: User;
   other: string;
   expire: () => void;
   queryKey: readonly string[];
@@ -334,10 +329,7 @@ function ReceiptHistory({
     queryFn: ({ signal }) => receiptHistory(user.id, other, signal),
     retry: false,
   });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([query.error], expire);
   return (
     <details className="mt-3">
       <summary className="cursor-pointer text-sm font-semibold">Receipt history</summary>
@@ -371,7 +363,7 @@ function ReceiptLines({
   reviewRequired,
 }: {
   lines: SettlementLine[];
-  user: BackendUser;
+  user: User;
   other: string;
   actions: Actions;
   reviewRequired: boolean;
@@ -410,7 +402,7 @@ function LineActions({
   reviewRequired,
 }: {
   line: SettlementLine;
-  user: BackendUser;
+  user: User;
   other: string;
   actions: Actions;
   reviewRequired: boolean;

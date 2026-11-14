@@ -1,8 +1,8 @@
 // SSR request middleware. API calls go from the browser to the backend through `/api` with the session
-// cookie and CSRF token (see `features/auth/backend-api.ts`), not through server functions.
+// cookie and CSRF token (see `lib/api-client.ts`), not through server functions.
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
-import { renderErrorPage } from "./lib/error-page";
+import { renderErrorPage } from "@/lib/error-page";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {

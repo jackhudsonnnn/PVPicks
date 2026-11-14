@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { mutationRequest } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
+import { mutationRequest } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
 
 export const FEEDBACK_SENT = "Thanks, it's in.";
 

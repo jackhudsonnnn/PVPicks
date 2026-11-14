@@ -10,13 +10,21 @@ import org.springframework.scheduling.annotation.Scheduled;
 @EnableScheduling
 class BetLockScheduling {
     private final BetLockWorker worker;
+    private final SportsResolutionWorker sports;
 
-    BetLockScheduling(BetLockWorker worker) {
+    BetLockScheduling(BetLockWorker worker, SportsResolutionWorker sports) {
         this.worker = worker;
+        this.sports = sports;
     }
 
     @Scheduled(fixedDelay = 5000)
     void poll() {
         worker.poll();
+    }
+
+    /** Sports results only change when the feed does (about once a minute), so check less often. */
+    @Scheduled(fixedDelay = 30000, initialDelay = 10000)
+    void resolveSports() {
+        sports.poll();
     }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChatMessage } from "./chat-api";
+import type { ChatMessage } from "./api";
 import {
   appendNewer,
   canReactTo,
@@ -8,7 +8,7 @@ import {
   prependOlder,
   reactionChips,
   textProblem,
-} from "./chat-model";
+} from "./model";
 
 const table = "123e4567-e89b-42d3-a456-426614174000";
 const me = "123e4567-e89b-42d3-a456-426614174001";

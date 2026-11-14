@@ -1,29 +1,17 @@
-import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { repeatForTicker } from "@/features/bets/ticker";
-import { BackendError, type BackendUser } from "./backend-api";
-import { useRealtimeFeed } from "./realtime";
-import { tickerFeed } from "./realtime-connection";
-import { getTicker, tickerStatus, type TickerGame } from "./ticker-api";
+import { useMemo } from "react";
+import { repeatForTicker } from "./ticker-strip";
+import type { User } from "@/features/people";
+import { tickerStatus, type TickerGame } from "./api";
+import { useTicker } from "./use-ticker";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 /**
  * Sports-only score strip. Refreshes when the realtime ticker feed says scores changed and once a minute as a
  * fallback. Slides on its own (pauses on hover/focus); with reduced motion it stays still and scrolls instead.
  */
-export function BackendTicker({ user, expire }: { user: BackendUser; expire: () => void }) {
-  const queryClient = useQueryClient();
-  const key = ["backend-tables", user.id, "ticker"];
-  const query = useQuery({
-    queryKey: key,
-    queryFn: ({ signal }) => getTicker(signal),
-    retry: false,
-    refetchInterval: 60_000,
-  });
-  useRealtimeFeed(tickerFeed, () => void queryClient.invalidateQueries({ queryKey: key }));
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+export function ScoreTicker({ user, expire }: { user: User; expire: () => void }) {
+  const query = useTicker(user.id);
+  useExpireOnUnauthorized([query.error], expire);
   const games = useMemo(() => repeatForTicker(query.data ?? []), [query.data]);
   const count = query.data?.length ?? 0;
 

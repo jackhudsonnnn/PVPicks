@@ -1,6 +1,7 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { backendErrorMessage, BackendError, getProfile, type BackendUser } from "./backend-api";
+import { backendErrorMessage } from "@/lib/api-client";
+import { getProfile, type User } from "./api";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 export function PersonName({
   id,
@@ -9,7 +10,7 @@ export function PersonName({
   queryKey,
 }: {
   id: string;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   queryKey: readonly string[];
 }) {
@@ -33,10 +34,7 @@ function ProfileName({
     // Live profile.changed events invalidate this, so it never needs to refetch on its own.
     staleTime: Infinity,
   });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  const unauthorized = useExpireOnUnauthorized([query.error], expire);
 
   if (query.isPending) return <>Loading profile…</>;
   if (query.isError) {

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
-import { HUE_BG } from "@/features/social/components/hue";
-import type { BackendUser } from "./backend-api";
+import { HUE_BG } from "./hue";
+import type { User } from "./api";
 import { usePerson } from "./use-person";
 
 const SIZES = {
@@ -19,7 +19,7 @@ export function PersonAvatar({
   className,
 }: {
   id: string;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   queryKey: readonly string[];
   size?: keyof typeof SIZES;
@@ -51,7 +51,7 @@ export function AvatarStack({
 }: {
   ids: string[];
   max?: number;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   queryKey: readonly string[];
 }) {

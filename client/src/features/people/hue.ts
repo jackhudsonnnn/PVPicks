@@ -1,4 +1,4 @@
-import type { Hue } from "@/features/settings/profile";
+import type { Hue } from "@/features/preferences";
 
 /** Avatar color for each profile hue (the chart-1..5 palette). */
 export const HUE_BG: Record<Hue, string> = {

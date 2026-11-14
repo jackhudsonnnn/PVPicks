@@ -36,7 +36,7 @@ class SettlementFrontendIntegrationTest extends IntegrationTestSupport {
         pointsSettlement.settle(hostJwt, table, "preview-points");
         assertThat(reviewRevision(loginAs("previewpayer"), host)).isNotNull();
 
-        runFrontendTest("src/features/auth/settlement-integration.test.tsx", Map.of());
+        runFrontendTest("src/features/settlements/settlement-integration.test.tsx", Map.of());
         assertThat(reviewRevision(loginAs("previewpayer"), host)).isNull();
         assertThat(reviewRevision(loginAs("previewhost"), payer)).isNotNull();
         assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, line))

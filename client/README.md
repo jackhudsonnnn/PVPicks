@@ -1,7 +1,6 @@
 # Frontend
 
-The current entry point (`src/features/auth/backend-app.tsx`) signs in to the
-dev backend. On desktop a sidebar holds Home, Tickets, Friends, How to play and
+The app (`src/app/app.tsx`) signs in to the dev backend. On desktop a sidebar holds Home, Tickets, Friends, How to play and
 Preferences, your tables, and your net settle-up points; phones get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The look follows the
@@ -22,13 +21,19 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   and True points at the table) and Host (or About for members): points
   settlement, members, roles, permissions and table settings.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
-  Pending, Resolved, Washed) with counts, optionally for one table, paged.
+  Pending, Resolved, Washed) with counts, optionally for one table (a
+  dropdown), paged. A ticket says which table it's from and links to it; its
+  player avatars open that table's Peers tab, and Details links to the table.
 
-- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (sports modes
-  show as coming soon), set up a U2Pick, the wager (+0.01/+0.10/+1.00 steps,
+- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (U2Pick, Total
+  Disaster or Give And Take; the player and play-by-play modes show as coming
+  soon), set up a U2Pick or pick one of today's games and set the line and
+  whether overtime counts, the wager (+0.01/+0.10/+1.00 steps,
   0.10 to 10.00, or 4fun) and the pick window, preview the ticket, send. On a
   ticket, tap a choice to pick (you confirm first), tap it again to clear it,
-  and use "Call it" on a locked ticket if its settler rule allows you.
+  and use "Call it" on a locked ticket if its settler rule allows you. Sports
+  tickets show the game's score and settle from the feed; hosts can override
+  them (wash or set the result) until the table's points are settled.
   Creating does not place a pick. Active tickets show only your own pick and
   the pick count; picks, players and the pot appear after lock.
 
@@ -38,7 +43,7 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   your read position forward as new messages reach the bottom. Your text, GIF
   and reaction permissions apply.
 
-- **Ticker:** a strip under the header shows today's NBA and NFL games from
+- **Ticker:** a strip under the header (games sized to their content on phones) shows today's NBA and NFL games from
   `GET /ticker`, live first, and says when live scores are unavailable rather
   than showing no games.
 
@@ -53,7 +58,8 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   cache status); it can't join tables, bet or chat. User audit, moderation and
   reports are not built yet.
 
-Quick Picks, sports bets and registration are not connected. The earlier
+Quick Pick subscriptions, the player-stat bet modes and registration are not
+connected. The earlier
 mock-store prototype was removed from the source; it is preserved at the git
 tag `prototype-ui` as a design reference.
 
@@ -74,6 +80,41 @@ history, because the action may have succeeded. Other devices do not see the
 saved action; they reconcile from the server's reads. Storage failure disables
 actions.
 
+## Source layout
+
+Code is organized by feature. See `AGENTS.md` for what lives where.
+
+- `src/app/`: the frame. Session, sign-in routing, the shell, and the realtime
+  connection's lifetime.
+- `src/features/<name>/`: one folder per product area:
+  - `auth`: session and sign-in;
+  - `people`: names, avatars and colors;
+  - `tables`: home, the table page, members and host settings;
+  - `bets`: tickets, the proposal sheet, the Tickets page and bet rules;
+  - `chat`;
+  - `social`: friends, profiles, reports and blocks;
+  - `settlements`: receipts;
+  - `sports`: the score strip;
+  - `preferences`: including display settings;
+  - `guide`: How to play and feedback;
+  - `admin`.
+
+  Files are flat, named for what they hold (`api.ts`, `actions.ts`, `rules.ts`,
+  `*-model.ts`, one file per screen or panel), with their tests beside them.
+  A `components/` subfolder is used only once a feature passes about 15 files.
+  Other code reaches a feature only through its `index.ts`.
+- `src/components/` and `src/lib/`: shared UI and infrastructure. This covers
+  the HTTP client, retryable mutations, query keys, the realtime client and
+  storage. They never import features.
+- `src/routes/`: path stubs for TanStack Router. They render nothing.
+- `src/test/`: test setup and the isolated-backend helper for the integration
+  tests.
+
+`npm run lint` enforces these boundaries. Tests may import any module, so they
+can mock exactly what they need.
+
+## Running locally
+
 For local development, run the dev backend on `127.0.0.1:8080`
 configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
 `npm run dev`, then visit `http://127.0.0.1:5173`. Vite proxies `/api` requests
@@ -86,7 +127,7 @@ loopback origin, in the shell or in a git-ignored `client/.env.local`
 Starting the backend applies pending migrations automatically. Do not expose
 the dev backend or proxy to a network.
 
-Run `npm test` and `npx tsc --noEmit` for client checks.
+Run `npm test`, `npm run lint` and `npx tsc --noEmit` for client checks.
 The lint toolchain temporarily overrides its transitive minimatch dependency
 to a patched major version; recheck the override when upgrading typescript-eslint.
 The opt-in frontend/backend integration tests require installed client
@@ -99,6 +140,6 @@ PVPICKS_FRONTEND_INTEGRATION=true ./gradlew :app:test --rerun \
 
 They use Testcontainers and a random loopback port, and run the React app
 through real HTTP with a test cookie jar. The betting test runs
-`betting-integration.test.tsx` twice: once to create and pick, then, after
+`features/bets/betting-integration.test.tsx` twice: once to create and pick, then, after
 the backend locks the bet, to call the result and settle points. They do not
 exercise a browser.

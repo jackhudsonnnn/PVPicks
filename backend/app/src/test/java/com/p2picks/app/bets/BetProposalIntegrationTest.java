@@ -119,7 +119,7 @@ class BetProposalIntegrationTest extends IntegrationTestSupport {
                 .isEqualTo(U2PickProposalService.Outcome.FORBIDDEN);
         jdbc.update("UPDATE tables SET hosts_only_bets = false WHERE id = ?", table);
         assertThatThrownBy(() -> u2PickProposals.create(jwt, table, proposal, "proposal-cap"))
-                .isInstanceOf(U2PickProposalService.DebtCapExceeded.class);
+                .isInstanceOf(BetProposalWriter.DebtCapExceeded.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM bets WHERE table_id = ?", Integer.class, table)).isZero();
         var fun = new U2PickProposalService.Proposal(definition, json.createObjectNode(), 100, 600,
                 true, U2PickSettler.Rule.ANYONE);

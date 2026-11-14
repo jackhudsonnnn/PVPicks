@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { z } from "zod";
-import { BackendError, backendErrorMessage } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
+import { BackendError, backendErrorMessage, idSchema } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
 import {
   addMembers,
   createTable,
@@ -16,9 +16,9 @@ import {
   updateTableProfile,
   updateTableSettings,
   type MemberOutcome,
-} from "./tables-api";
+} from "./api";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const name = z.string().trim().min(1).max(160);
 const emoji = z.string().min(1).max(32);
 const intentSchema = z.discriminatedUnion("kind", [

@@ -1,7 +1,7 @@
 /**
  * Safe browser storage. Every call is a no-op (or returns the fallback) during SSR,
  * in private modes that block storage, or when saved data is missing or broken,
- * so a bad value can never crash the app. Keys live in `features/auth/storage-keys.ts`.
+ * so a bad value can never crash the app. Keys live in `lib/storage-keys.ts`.
  */
 
 function store(): Storage | null {

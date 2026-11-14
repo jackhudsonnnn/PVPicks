@@ -1,19 +1,114 @@
 # Project rules
 
-- `src/features/bets` and `src/features/table` have their own `AGENTS.md`; read them before changing files there.
-- The app is backend-backed only. `__root.tsx` renders `SettingsProvider` → `BackendApp` (`features/auth/backend-app.tsx`) → `ErrorToasts` for every path; `BackendApp` routes by pathname. Route files under `src/routes` are stubs that only provide the path and page metadata (`component: () => null`). Never add mock or sample data as a substitute for unavailable server data. The earlier mock-store prototype is preserved at the git tag `prototype-ui` as the design reference; its look is being ported screen by screen onto real data. Port components as prop-driven views and don't restore its rules, because the server owns them. Why: HTTP is the only source of truth.
-- Screens live in `features/auth/backend-*.tsx`, inside the app shell (`backend-shell.tsx`: sidebar with navigation, your tables and net settle-up points; phone top bar and tab bar; ticker off table pages). Home (`backend-home.tsx`, plus deleted tables in `backend-archives.tsx`), Tickets (`backend-tickets.tsx`, paged `GET /me/bets` with status tabs and `?table=`), Friends (`backend-friends.tsx`), the table page (`backend-table-page.tsx`: the felt in `backend-felt.tsx` with seats and the open-bet deck, and a Chat / Peers (`backend-peers.tsx`) / Host-or-About (`backend-host-panel.tsx`) side panel that becomes tabs on phones; people open `backend-profile.tsx`; Report and Block live in `backend-safety.tsx` (rules in `report-rules.ts`); live tomatoes play from `backend-tomatoes.tsx`), receipts (`backend-settlements.tsx`), Preferences with Tables/Account/Display tabs (`backend-preferences.tsx`), How to play with feedback (`backend-guide.tsx`), and the admin view (`backend-admin.tsx`). `/me` returns `role`; an `ADMIN` session renders only the admin view, never player screens.
-- Bets render as tickets (`backend-ticket.tsx`, details in `backend-bet-details.tsx`): tap a choice to pick (confirmed), tap it again to clear, "Call it" from a locked ticket. New bets go through the proposal sheet (`backend-propose-sheet.tsx`: mode grid with sports modes shown as "Coming soon", U2Pick setup, cents-based wager stepper and pick windows from `features/bets/wager.ts`, ticket preview). What a ticket shows comes from pure, tested `ticket-model.ts`; who sits at the felt and seat chips from `seating.ts`. Active bets reveal only your own pick and the pick count; tallies, players and pots appear after lock.
-- Names and avatars come from `use-person.ts` (`[...peopleKey, "profile", id]`, cached until a `profile.changed` event invalidates it). Per-table points come from `GET /tables/{id}/balances`, cached under the table's bets key so every bet change refreshes them.
-- Reads use `backend-api.ts` and the per-area API modules (`tables-api.ts`, `social-api.ts`, `chat-api.ts`, `settlement-api.ts`, `preferences-api.ts`, `ticker-api.ts`), each validated with zod. Every query key comes from `query-keys.ts` (`["backend-tables", userId, ...]`) so sign-out clears it.
-- Mutations go through `useRetryableMutation` (`backend-mutation.ts`) via an action hook per area (`bet-actions.ts`, `chat-actions.ts`, `table-actions.ts`, `social-actions.ts`, `preferences-actions.ts`, `settlement-actions.ts`, `feedback-actions.ts`). An uncertain action's idempotency key is saved per user in localStorage until it is retried or cleared; `ActionStatus` (`backend-action-status.tsx`) renders retry/discard. One action hook instance per page: two instances with the same storage key in one tab do not sync. Why: retries reuse one key across tabs, so an uncertain action can't be applied twice.
-- Pure rules for screens live in tested modules, not component files: `ticket-model.ts`, `seating.ts`, `management-rules.ts` (table names, people lists, debt cap input), `bet-results.ts` (who may call a U2Pick result; the server rechecks), `chat-model.ts` (window merges, reactions), `features/bets/u2pick.ts` (custom-bet validation), `features/settings/profile.ts` (usernames, hues), `features/feedback/feedback.ts`. The server enforces every rule; client copies only give early feedback.
+## Layout and boundaries
+
+- Code is organized by feature:
+  - `src/app/` is the frame;
+  - `src/features/<name>/` holds the product areas;
+  - `src/components/` and `src/lib/` are shared;
+  - `src/routes/` holds path stubs;
+  - `src/test/` holds test helpers.
+
+  `npm run lint` enforces the boundaries:
+  - Code outside a feature imports it only through `@/features/<name>` (its `index.ts`).
+  - Inside a feature, use `./x` in the same folder and `@/features/<own>/…` across its subfolders, never `../`.
+  - Features never import `@/app`.
+  - `lib` and `components` never import features or the app.
+  - Tests may import any module, so they can `vi.mock` the exact module that defines a function. Mock the defining module (for example `@/features/tables/api`), not the barrel.
+  - Unused variables and imports are errors (prefix a deliberately unused name with `_`).
+
+  Why: each area stays findable and replaceable, and its public surface is explicit.
+- Inside a feature, files are flat and named for what they hold:
+  - `api.ts`: zod-validated reads and requests;
+  - `actions.ts`: mutations;
+  - `rules.ts` / `*-model.ts`: pure, tested rules;
+  - one file per screen or panel.
+
+  Tests sit beside their file. Use a `components/` subfolder only past about 15 files (`bets` and `tables` have one). When another feature needs something, export it from the feature's `index.ts`. Remove an export from it when nothing outside the feature uses it, and delete code nothing uses. Barrels re-export only; never import your own feature's barrel.
+- Features:
+  - `auth`: session API, sign-in form;
+  - `people`: user and profile reads, `PersonName`, avatars, `usePerson`, hue colors;
+  - `tables`: table API and actions, home, table list, the table page and felt, Peers, Host/About, archives, tomatoes, seating;
+  - `bets`: bet API and actions, tickets, details, the proposal sheet, the Tickets page, ticket, sports and U2Pick rules, the mode catalog;
+  - `chat`: chat API, window model, reactions, GIF catalog;
+  - `social`: friends, profiles, report and block, invite modes;
+  - `settlements`: receipts;
+  - `sports`: ticker API and strip, `useTicker`;
+  - `preferences`: preferences, display settings, username and hue rules;
+  - `guide`: How to play, feedback;
+  - `admin`.
+
+## App
+
+- The app is backend-backed only. `__root.tsx` renders `SettingsProvider` → `App` (`app/app.tsx`) → `ErrorToasts` for every path; `App` routes by pathname. Route files under `src/routes` are stubs that only provide the path and page metadata (`component: () => null`). Never add mock or sample data as a substitute for unavailable server data. The earlier mock-store prototype is preserved at the git tag `prototype-ui` as the design reference. Port its components as prop-driven views and don't restore its rules, because the server owns them. Why: HTTP is the only source of truth.
+- Screens render inside the app shell (`app/shell.tsx`). On desktop it has a sidebar with navigation, your tables and net settle-up points. On phones it has a top bar and tab bar. The ticker shows everywhere except table pages.
+  - Home: `tables/components/home.tsx` and `table-list.tsx`, plus deleted tables in `archives.tsx`.
+  - Tickets: `bets/components/tickets-page.tsx`. It pages through `GET /me/bets` with status tabs and `?table=`.
+  - Friends: `social/friends.tsx`.
+  - The table page: `tables/components/table-page.tsx`.
+    - The felt is in `felt.tsx`, with seats and the open-bet deck.
+    - A side panel holds Chat, Peers (`peers.tsx`) and Host-or-About (`host-panel.tsx`); on phones it becomes tabs.
+    - People open `social/profile.tsx`.
+    - Report and Block live in `social/safety.tsx`, with rules in `report-rules.ts`.
+    - Live tomatoes play from `tables/components/tomatoes.tsx`.
+  - Receipts: `settlements/settlements.tsx`.
+  - Preferences: `preferences/preferences.tsx`, with Tables, Account and Display tabs.
+  - How to play, with feedback: `guide/guide.tsx`.
+  - The admin view: `admin/admin.tsx`.
+
+  `/me` returns `role`. An `ADMIN` session renders only the admin view, never player screens.
+- Bets render as tickets (`bets/components/ticket.tsx`, with details in `bet-details.tsx`). Tap a choice to pick (confirmed), tap it again to clear, and use "Call it" from a locked ticket. New bets go through the proposal sheet (`bets/components/propose-sheet.tsx`):
+  - a mode grid, where U2Pick and the score modes (Total Disaster and Give And Take) are live and the rest show "Coming soon";
+  - U2Pick setup, or a game picker with a line stepper and an overtime switch (rules and the server-matching question are in tested `bets/sports-model.ts`);
+  - a cents-based wager stepper and pick windows from `bets/wager.ts`;
+  - a ticket preview.
+
+  What a ticket shows comes from pure, tested `bets/ticket-model.ts`. Who sits at the felt, and the seat chips, come from `tables/seating.ts`. Active bets reveal only your own pick and the pick count; tallies, players and pots appear after lock.
+- The server owns every bet rule: modes, locking, picks, results, washes, payouts and the leftover-cent rule. The client only describes and drafts bets.
+  - `bets/modes.ts` is the catalog the guide and sheet show. Add a mode there when the server supports it.
+  - `bets/u2pick.ts` validates U2Pick drafts and lists the settler rules.
+  - `bets/bet-results.ts` decides who may call a result; the server rechecks.
+- Score-mode bets settle from the sports feed. Their tickets show the game's live score (`sports/use-ticker.ts`, shared with the score strip). For hosts, they also show an Override menu (wash or set the result) until points are settled. U2Pick results are called by their settler rule instead.
+
+## Data
+
+- Requests go through `lib/api-client.ts`:
+  - `request`, `read` (zod), `csrf`, `mutationRequest`;
+  - `BackendError`, `backendErrorMessage`, `isUnauthorized`;
+  - `idSchema` for every id (don't redeclare `z.guid()`).
+
+  Each feature's `api.ts` validates its responses with zod. API tests share valid payloads from `src/test/api-fixtures.ts`.
+- Every signed-in view that reads data calls `useExpireOnUnauthorized([query.error, …], expire)` (`lib/use-session-expiry.ts`), so a 401 returns to sign-in. Don't hand-write the effect. Every query key comes from `lib/query-keys.ts` (`["backend-tables", userId, ...]`) so sign-out clears it.
+- Names and avatars come from `people/use-person.ts` (`[...peopleKey, "profile", id]`), cached until a `profile.changed` event invalidates it. Per-table points come from `GET /tables/{id}/balances`, cached under the table's bets key so every bet change refreshes them.
+- Mutations go through `useRetryableMutation` (`lib/mutation.ts`), via one action hook per area (each feature's `actions.ts`).
+  - An uncertain action's idempotency key is saved per user in localStorage until it is retried or cleared.
+  - `ActionStatus` (`components/action-status.tsx`) renders retry and discard.
+  - Use one action hook instance per page: two instances with the same storage key in one tab do not sync.
+
+  Why: retries reuse one key across tabs, so an uncertain action can't be applied twice.
+- Pure rules for screens live in tested modules, not component files:
+  - `bets/ticket-model.ts`, `bets/sports-model.ts`, `bets/bet-results.ts`, `bets/u2pick.ts`;
+  - `tables/seating.ts`, `tables/rules.ts` (table names, addable followers);
+  - `social/rules.ts` (people lists, search), `social/profile-model.ts`;
+  - `preferences/rules.ts` (debt cap input), `preferences/profile-rules.ts` (usernames, hues);
+  - `chat/model.ts` (window merges, reactions);
+  - `guide/feedback.ts`.
+
+  The server enforces every rule; client copies only give early feedback.
+- Live updates go through `lib/realtime-connection.ts` (one STOMP connection, tested) and `lib/realtime.tsx` (`RealtimeProvider`, and `useRealtimeFeed(destination | null, ...)`, where `null` subscribes to nothing). A feed handler only invalidates queries; it never applies message data. Why: invalidations carry no private data, so HTTP stays the source of truth.
+- Table chat:
+  - `chat/chat.tsx` with `chat/use-chat.ts`: contiguous server windows, one operation at a time. `readOnly` (archives) skips the live feed, the read position, sending and reactions.
+  - `chat/gifs.ts` is the GIF catalog, keyed by the IDs the server accepts.
+  - `chat/reactions.ts` holds the quick reactions; the server toggles them.
+- The score strip is `sports/ticker.tsx` over `sports/api.ts`. `sports/ticker-strip.ts` repeats games in whole cycles so the loop seam stays continuous. A null ticker means unavailable and must never render as "no games".
+
+## UI conventions
+
 - Menus that open dialogs (like the chat's ⋯ menu) use `DropdownMenu modal={false}`, or the two focus traps fight.
-- Live updates go through `realtime-connection.ts` (one STOMP connection, tested) and `realtime.tsx` (`RealtimeProvider`, `useRealtimeFeed(destination | null, ...)`; `null` subscribes to nothing). A feed handler only invalidates queries, never applies message data. Why: invalidations carry no private data, so HTTP stays the source of truth.
-- Table chat is `backend-chat.tsx` with `use-backend-chat.ts` (contiguous server windows, one operation at a time). `readOnly` (archives) skips the live feed, the read position, sending and reactions.
-- The score strip is `backend-ticker.tsx` over `ticker-api.ts`; a null ticker means unavailable and must never render as "no games".
-- Display settings (theme, text size, motion, 24-hour clock) stay with the device: `features/settings/settings-provider.tsx` applies them to `<html>`, saves them under `SHARED_KEYS.display` only when the user changes one, and owns the app-wide `MotionConfig`; don't add nested `MotionConfig`s. All browser storage goes through `src/lib/storage.ts` (SSR-safe, never throws).
-- Every scrollable region uses `ScrollContainer` (`src/components/scroll-container.tsx`); never hand-write `overflow-*-auto` in feature code. Growing lists use `AnimatedList`/`AnimatedItem` (`src/components/animated-list.tsx`); re-key the list when the whole data set swaps. Animations use `motion` (`motion/react`) and keep a stable DOM order. Why: one consistent scroll and list-motion behavior.
-- Every tab strip, filter and single-choice toggle uses `SegmentedTabs` (`src/components/segmented-tabs.tsx`); on/off settings use `Switch`, whose CSS slide is disabled by the `reduce-motion` class on `<html>`. Settings pages use `SettingsSection`/`SettingRow` (`src/components/settings.tsx`). Why: one consistent toggle look and animation rule.
-- Non-React failures report through `src/lib/error-bus.ts`; `ErrorToasts` displays them. Don't silently discard errors; show request errors in context with `backendErrorMessage`.
-- Game bets will settle from the sports feed and hosts will be able to wash or set a sports result until points are settled (rules in the docs' domain guide; not yet built). Only U2Pick betting is connected today.
+- Display settings (theme, text size, motion, 24-hour clock) stay with the device.
+  - `preferences/settings-provider.tsx` applies them to `<html>` and saves them under `SHARED_KEYS.display` only when the user changes one.
+  - It owns the app-wide `MotionConfig`; don't add nested `MotionConfig`s.
+  - All browser storage goes through `lib/storage.ts` (SSR-safe, never throws).
+- Every scrollable region uses `ScrollContainer` (`components/scroll-container.tsx`); never hand-write `overflow-*-auto` in feature code. Growing lists use `AnimatedList`/`AnimatedItem` (`components/animated-list.tsx`); re-key the list when the whole data set swaps. Animations use `motion` (`motion/react`) and keep a stable DOM order. Why: one consistent scroll and list-motion behavior.
+- Every tab strip, filter and single-choice toggle uses `SegmentedTabs` (`components/segmented-tabs.tsx`). On/off settings use `Switch`, whose CSS slide is disabled by the `reduce-motion` class on `<html>`. Settings pages use `SettingsSection`/`SettingRow` (`components/settings.tsx`). Why: one consistent toggle look and animation rule.
+- Non-React failures report through `lib/error-bus.ts`, and `ErrorToasts` displays them. Don't silently discard errors; show request errors in context with `backendErrorMessage`.

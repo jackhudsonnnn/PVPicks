@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotionConfig } from "motion/react";
-import type { BackendUser } from "./backend-api";
-import { newThrows } from "./profile-model";
-import { userKey } from "./query-keys";
-import { useRealtimeFeed } from "./realtime";
-import { tableViewFeed } from "./realtime-connection";
-import { listTomatoes, type TomatoThrow } from "./tables-api";
-import { usePerson } from "./use-person";
+import { type User, usePerson } from "@/features/people";
+import { newThrows } from "@/features/tables/tomato-model";
+import { userKey } from "@/lib/query-keys";
+import { useRealtimeFeed } from "@/lib/realtime";
+import { tableViewFeed } from "@/lib/realtime-connection";
+import { listTomatoes, type TomatoThrow } from "@/features/tables/api";
 
 /**
  * Plays every tomato thrown at the table while you're watching it. The realtime feed only says "tomatoes changed";
@@ -22,7 +21,7 @@ export function TomatoLayer({
   peopleKey,
 }: {
   tableId: string;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }) {
@@ -88,7 +87,7 @@ function TomatoEffect({
   onComplete,
 }: {
   tomato: TomatoThrow;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
   onComplete: () => void;

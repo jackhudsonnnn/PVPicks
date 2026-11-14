@@ -1,11 +1,11 @@
-import { HowToPlay } from "@/features/guide/components/guide-page";
-import { FeedbackSection } from "@/features/feedback/components/feedback-form";
-import type { BackendUser } from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
+import { HowToPlay } from "./guide-page";
+import { FeedbackSection } from "./feedback-form";
+import type { User } from "@/features/people";
+import { ActionStatus } from "@/components/action-status";
 import { FEEDBACK_SENT, useFeedbackActions } from "./feedback-actions";
 
 /** The How to play guide, with its feedback form sending to the backend. */
-export function BackendGuide({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function GuidePage({ user, expire }: { user: User; expire: () => void }) {
   const actions = useFeedbackActions(user.id, expire);
   const sent = actions.message === FEEDBACK_SENT && !actions.pending;
   return (

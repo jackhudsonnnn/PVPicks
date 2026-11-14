@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendApp } from "./backend-app";
-import { useIsolatedBackend } from "./backend-integration-utils";
+import { App } from "@/app/app";
+import { useIsolatedBackend } from "@/test/isolated-backend";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
@@ -23,7 +23,7 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <BackendApp />
+        <App />
       </QueryClientProvider>,
     );
     fireEvent.change(await screen.findByLabelText("Username"), {

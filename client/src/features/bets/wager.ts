@@ -13,9 +13,6 @@ export function stepWager(currentCents: number, stepCents: number) {
 export const canStep = (currentCents: number, stepCents: number) =>
   currentCents + stepCents <= WAGER_MAX_CENTS;
 
-export const isValidWager = (cents: number) =>
-  Number.isSafeInteger(cents) && cents >= WAGER_MIN_CENTS && cents <= WAGER_MAX_CENTS;
-
 /** Pick windows offered on the proposal sheet; the server accepts 30 to 600 seconds. */
 export const PICK_WINDOWS = [
   { label: "30s", sec: 30 },

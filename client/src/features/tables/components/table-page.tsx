@@ -6,34 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
+import { backendErrorMessage } from "@/lib/api-client";
+import { getTable, type Table, listTableBalances } from "@/features/tables/api";
 import {
-  backendErrorMessage,
-  BackendError,
-  getTable,
   listTableBets,
-  type BackendTable,
-  type BackendUser,
-} from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
-import { BetMutationStatus } from "./backend-bet-controls";
-import { AboutPanel, HostPanel } from "./backend-host-panel";
-import { ProfileDialog } from "./backend-profile";
-import { TomatoLayer } from "./backend-tomatoes";
-import { useSocialActions } from "./social-actions";
-import { BackendChat } from "./backend-chat";
-import { Felt } from "./backend-felt";
-import { PeersPanel } from "./backend-peers";
-import { ProposeBetSheet } from "./backend-propose-sheet";
-import { BetTicket } from "./backend-ticket";
-import { useBetActions } from "./bet-actions";
-import { getChatUnread } from "./chat-api";
-import { userKey } from "./query-keys";
-import { useRealtimeFeed } from "./realtime";
-import { tableBetsFeed, tableChatFeed, tableViewFeed } from "./realtime-connection";
-import { arrangeSeats, openBets } from "./seating";
-import { useTableActions } from "./table-actions";
-import { listTableBalances } from "./tables-api";
-import { proposeBlock } from "./ticket-model";
+  BetMutationStatus,
+  ProposeBetSheet,
+  BetTicket,
+  useBetActions,
+  proposeBlock,
+} from "@/features/bets";
+import type { User } from "@/features/people";
+import { ActionStatus } from "@/components/action-status";
+import { AboutPanel, HostPanel } from "./host-panel";
+import { ProfileDialog, useSocialActions } from "@/features/social";
+import { TomatoLayer } from "./tomatoes";
+import { TableChat, getChatUnread } from "@/features/chat";
+import { Felt } from "./felt";
+import { PeersPanel } from "./peers";
+import { userKey } from "@/lib/query-keys";
+import { useRealtimeFeed } from "@/lib/realtime";
+import { tableBetsFeed, tableChatFeed, tableViewFeed } from "@/lib/realtime-connection";
+import { arrangeSeats, openBets } from "@/features/tables/seating";
+import { useTableActions } from "@/features/tables/actions";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 type TabId = "table" | "chat" | "peers" | "host" | "about";
 
@@ -51,7 +47,7 @@ export function TablePage({
   tableId,
   expire,
 }: {
-  user: BackendUser;
+  user: User;
   tableId: string;
   expire: () => void;
 }) {
@@ -67,10 +63,7 @@ export function TablePage({
     if (event.type === "table.changed")
       void queryClient.invalidateQueries({ queryKey: key, exact: true });
   });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([query.error], expire);
 
   if (query.isPending) return <p className="p-6">Loading table…</p>;
   if (query.isError) {
@@ -92,15 +85,7 @@ export function TablePage({
   return <TableLayout user={user} table={query.data} expire={expire} />;
 }
 
-function TableLayout({
-  user,
-  table,
-  expire,
-}: {
-  user: BackendUser;
-  table: BackendTable;
-  expire: () => void;
-}) {
+function TableLayout({ user, table, expire }: { user: User; table: Table; expire: () => void }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const peopleKey = userKey(user.id, "people");
@@ -149,12 +134,7 @@ function TableLayout({
   useRealtimeFeed(tableChatFeed(table.id), () => {
     void queryClient.invalidateQueries({ queryKey: unreadKey });
   });
-  const unauthorized = [bets.error, balances.error, unread.error].some(
-    (error) => error instanceof BackendError && error.status === 401,
-  );
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  const unauthorized = useExpireOnUnauthorized([bets.error, balances.error, unread.error], expire);
 
   const betActions = useBetActions(
     user.id,
@@ -339,7 +319,7 @@ function TableLayout({
               className="min-h-0 flex-1"
             />
           ) : (
-            <BackendChat
+            <TableChat
               user={user}
               table={table}
               expire={expire}

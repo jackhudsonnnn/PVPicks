@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import type { Hue } from "@/features/settings/profile";
-import { BackendError, getProfile, type BackendUser } from "./backend-api";
+import type { Hue } from "@/features/preferences";
+import { getProfile, type User } from "./api";
+import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 
 export interface Person {
   name: string;
@@ -15,7 +15,7 @@ export interface Person {
  */
 export function usePerson(
   id: string,
-  user: BackendUser,
+  user: User,
   expire: () => void,
   queryKey: readonly string[],
 ): Person | null {
@@ -27,10 +27,7 @@ export function usePerson(
     staleTime: Infinity,
     enabled: id !== user.id,
   });
-  const unauthorized = query.error instanceof BackendError && query.error.status === 401;
-  useEffect(() => {
-    if (unauthorized) expire();
-  }, [unauthorized, expire]);
+  useExpireOnUnauthorized([query.error], expire);
   // The schema limits hues to 1-5.
   if (id === user.id) return { name: "You", hue: user.hue as Hue, deleted: false };
   if (!query.data) return null;

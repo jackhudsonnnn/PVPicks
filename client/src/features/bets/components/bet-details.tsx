@@ -12,14 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollContainer } from "@/components/scroll-container";
 import { MODES } from "@/features/bets/modes";
-import { StatusBadge } from "@/features/bets/components/status-badge";
+import { StatusBadge } from "./status-badge";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
-import { PersonAvatar } from "./backend-avatar";
-import { PersonName } from "./backend-person-name";
-import { formatClock, potCents, ticketStatus } from "./ticket-model";
+import type { Bet } from "@/features/bets/api";
+import type { Table } from "@/features/tables";
+import { type User, PersonAvatar, PersonName } from "@/features/people";
+import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
 
 const SETTLER = {
   anyone: "Anyone at the table",
@@ -56,9 +56,9 @@ export function FactSection({ title, children }: { title: string; children: Reac
 }
 
 interface Props {
-  bet: BackendBet;
-  table: BackendTable;
-  user: BackendUser;
+  bet: Bet;
+  table: Table;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }

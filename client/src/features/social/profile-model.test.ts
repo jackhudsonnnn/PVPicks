@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { BackendBet } from "./backend-api";
-import { betsInvolving, newThrows, profileStats } from "./profile-model";
+import type { Bet } from "@/features/bets/api";
+import { betsInvolving, profileStats } from "./profile-model";
+import { newThrows } from "@/features/tables/tomato-model";
 
 const me = "123e4567-e89b-42d3-a456-426614174000";
 const them = "123e4567-e89b-42d3-a456-426614174001";
 const other = "123e4567-e89b-42d3-a456-426614174002";
 
-const base: BackendBet = {
+const base: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174010",
   tableId: "123e4567-e89b-42d3-a456-426614174020",
   proposerId: other,
@@ -24,7 +25,7 @@ const base: BackendBet = {
   myPick: null,
   myParticipation: "not_joined",
 };
-const bet = (id: string, patch: Partial<BackendBet>): BackendBet => ({ ...base, id, ...patch });
+const bet = (id: string, patch: Partial<Bet>): Bet => ({ ...base, id, ...patch });
 
 const won = bet("w", {
   status: "SETTLED",

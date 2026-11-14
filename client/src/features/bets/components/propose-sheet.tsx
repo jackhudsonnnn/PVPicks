@@ -11,8 +11,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { Section } from "@/features/bets/components/form-parts";
-import { U2PickEditor } from "@/features/bets/components/u2pick-editor";
+import { Section, Stepper } from "./form-parts";
+import { U2PickEditor } from "./u2pick-editor";
 import { MODES, type ModeDef } from "@/features/bets/modes";
 import type { SettlerRule } from "@/features/bets/types";
 import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
@@ -28,11 +28,24 @@ import {
 } from "@/features/bets/wager";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
-import { BetFacts } from "./backend-bet-details";
-import type { BetActions } from "./backend-bet-controls";
-import { BetTicket } from "./backend-ticket";
-import { proposeBlock } from "./ticket-model";
+import type { Bet } from "@/features/bets/api";
+import type { Table } from "@/features/tables";
+import type { User } from "@/features/people";
+import { BetFacts } from "./bet-details";
+import type { BetActions } from "./bet-controls";
+import { BetTicket } from "./ticket";
+import { proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
+import {
+  canPush,
+  DEFAULT_LINE,
+  isScoreMode,
+  LINE_LIMITS,
+  proposableGames,
+  scoreTerms,
+  stepLine,
+  type ScoreMode,
+} from "@/features/bets/sports-model";
+import { tickerStatus, type TickerGame, useTicker } from "@/features/sports";
 
 const LEAGUE_BADGES = [
   { id: "nfl", label: "NFL", className: "border-primary/30 bg-primary/10 text-primary" },
@@ -43,7 +56,10 @@ const LEAGUE_BADGES = [
   },
 ];
 
-/** Propose a bet: choose a mode, set it up, preview the ticket, send. Only U2Pick is available until sports bets exist. */
+/**
+ * Propose a bet: choose a mode, set it up, preview the ticket, send. U2Pick and the score modes (Total Disaster,
+ * Give And Take) are available; the player and play-by-play modes are "Coming soon".
+ */
 export function ProposeBetSheet({
   open,
   onOpenChange,
@@ -55,8 +71,8 @@ export function ProposeBetSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  table: BackendTable;
-  user: BackendUser;
+  table: Table;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
   actions: BetActions;
@@ -69,20 +85,61 @@ export function ProposeBetSheet({
   const [wager, setWager] = useState(WAGER_DEFAULT_CENTS);
   const [timer, setTimer] = useState(PICK_WINDOW_DEFAULT);
   const [previewing, setPreviewing] = useState(false);
+  const [gameId, setGameId] = useState<string | null>(null);
+  const [league, setLeague] = useState<TickerGame["league"]>("NBA");
+  const [line, setLine] = useState(0);
+  const [overtime, setOvertime] = useState(true);
+  const ticker = useTicker(user.id);
+  const games = proposableGames(ticker.data);
+  const game = games.find((g) => g.id === gameId);
+  const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
   const block = proposeBlock(table, user.id);
   const busy = actions.busy || !!actions.pending || !!actions.storageError;
-  const problem = mode ? customBetProblem(question, options) : null;
+  const problem = !mode
+    ? null
+    : mode.custom
+      ? (u2pickBlock(table) ?? customBetProblem(question, options))
+      : !game
+        ? "Pick a game."
+        : null;
 
-  const previewBet: BackendBet = useMemo(() => {
+  function pickGame(next: TickerGame) {
+    setGameId(next.id);
+    // A new league gets that league's default line; the same league keeps yours.
+    if (scoreMode && (!game || game.league !== next.league))
+      setLine(DEFAULT_LINE[next.league][scoreMode]);
+  }
+
+  function pickMode(next: ModeDef) {
+    setMode(next);
+    if (isScoreMode(next.id)) {
+      const first = games.find((g) => g.league === league) ?? games[0];
+      setGameId(first?.id ?? null);
+      if (first) setLeague(first.league);
+      setLine(DEFAULT_LINE[first?.league ?? league][next.id]);
+    }
+  }
+
+  const previewBet: Bet = useMemo(() => {
     const now = Date.now();
     return {
       id: "00000000-0000-4000-8000-000000000000",
       tableId: table.id,
       proposerId: user.id,
-      modeId: "u2pick",
-      config: {},
-      question: question.trim() || "Your question shows up here",
-      choices: cleanOptions(options),
+      ...(scoreMode && game
+        ? {
+            modeId: scoreMode,
+            config: { line },
+            gameId: game.id,
+            includesOvertime: overtime,
+            ...scoreTerms(scoreMode, line, game.home.abbreviation, game.away.abbreviation),
+          }
+        : {
+            modeId: "u2pick" as const,
+            config: {},
+            question: question.trim() || "Your question shows up here",
+            choices: cleanOptions(options),
+          }),
       wagerCents: forFun ? 0 : wager,
       forFun,
       status: "ACTIVE",
@@ -96,7 +153,21 @@ export function ProposeBetSheet({
     };
     // Rebuilt whenever the preview opens, so its clock starts fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewing, table.id, user.id, question, options, forFun, wager, timer, settledBy]);
+  }, [
+    previewing,
+    table.id,
+    user.id,
+    question,
+    options,
+    forFun,
+    wager,
+    timer,
+    settledBy,
+    scoreMode,
+    game,
+    line,
+    overtime,
+  ]);
 
   function reset() {
     setMode(null);
@@ -107,10 +178,30 @@ export function ProposeBetSheet({
     setWager(WAGER_DEFAULT_CENTS);
     setTimer(PICK_WINDOW_DEFAULT);
     setPreviewing(false);
+    setGameId(null);
+    setOvertime(true);
   }
 
   function submit() {
     if (!mode || problem || block || busy) return;
+    if (scoreMode && game) {
+      actions.start({
+        kind: "propose-sports",
+        tableId: table.id,
+        proposal: {
+          modeId: scoreMode,
+          gameId: game.id,
+          line,
+          includesOvertime: overtime,
+          wagerCents: forFun ? 0 : wager,
+          durationSec: timer,
+          forFun,
+        },
+      });
+      onOpenChange(false);
+      reset();
+      return;
+    }
     actions.start({
       kind: "propose",
       tableId: table.id,
@@ -185,13 +276,15 @@ export function ProposeBetSheet({
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {MODES.map((m) => {
                 const Icon = m.icon;
-                const off = !m.custom || !!block;
+                const available = m.custom || isScoreMode(m.id);
+                const modeBlock = block ?? (m.custom ? u2pickBlock(table) : null);
+                const off = !available || !!modeBlock;
                 return (
                   <Button
                     variant="outline"
                     key={m.id}
                     disabled={off}
-                    onClick={() => setMode(m)}
+                    onClick={() => pickMode(m)}
                     className="group flex h-auto flex-col items-start gap-3 whitespace-normal rounded-xl border bg-surface p-4 text-left transition-all enabled:hover:border-primary enabled:hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span className="flex w-full items-center justify-between gap-2">
@@ -219,7 +312,7 @@ export function ProposeBetSheet({
                         {m.name}
                       </span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        {!m.custom ? "Coming soon" : (block ?? m.tagline)}
+                        {!available ? "Coming soon" : (modeBlock ?? m.tagline)}
                       </span>
                     </span>
                   </Button>
@@ -228,14 +321,112 @@ export function ProposeBetSheet({
             </div>
           ) : (
             <div className="space-y-6">
-              <U2PickEditor
-                question={question}
-                onQuestionChange={setQuestion}
-                options={options}
-                onOptionsChange={setOptions}
-                settledBy={settledBy}
-                onSettledByChange={setSettledBy}
-              />
+              {scoreMode ? (
+                <>
+                  <Section label="Game">
+                    <SegmentedTabs<TickerGame["league"]>
+                      size="sm"
+                      ariaLabel="League"
+                      tabs={[
+                        { id: "NBA", label: "NBA" },
+                        { id: "NFL", label: "NFL" },
+                      ]}
+                      value={league}
+                      onChange={setLeague}
+                    />
+                    {ticker.data === null ? (
+                      <p className="text-sm text-muted-foreground">
+                        Live scores are unavailable, so games can't be picked right now.
+                      </p>
+                    ) : games.filter((g) => g.league === league).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {ticker.isPending ? "Loading games…" : `No ${league} games left today.`}
+                      </p>
+                    ) : (
+                      <div className="grid gap-2" role="radiogroup" aria-label="Game">
+                        {games
+                          .filter((g) => g.league === league)
+                          .map((g) => (
+                            <button
+                              key={g.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={g.id === gameId}
+                              onClick={() => pickGame(g)}
+                              className={cn(
+                                "flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                                g.id === gameId
+                                  ? "border-primary bg-primary/10"
+                                  : "bg-surface hover:border-muted-foreground",
+                              )}
+                            >
+                              <span className="scoreboard text-lg">
+                                {g.away.abbreviation} {g.status === "LIVE" && g.away.score}{" "}
+                                <span className="text-muted-foreground">@</span>{" "}
+                                {g.home.abbreviation} {g.status === "LIVE" && g.home.score}
+                              </span>
+                              <span className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                                {g.status === "LIVE" && (
+                                  <span className="size-1.5 animate-pulse-dot rounded-full bg-loss" />
+                                )}
+                                {tickerStatus(g)}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </Section>
+                  <Section label="Setup">
+                    <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+                      {scoreMode === "total_disaster"
+                        ? "Total points line"
+                        : `${game?.home.abbreviation ?? "Home"} spread`}
+                      <Stepper
+                        value={line}
+                        step={0.5}
+                        min={LINE_LIMITS[scoreMode].min}
+                        max={LINE_LIMITS[scoreMode].max}
+                        label={
+                          scoreMode === "total_disaster" ? "Total points line" : "Home team spread"
+                        }
+                        format={(v) =>
+                          scoreMode === "give_and_take" && v > 0 ? `+${v}` : String(v)
+                        }
+                        onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
+                      />
+                      {canPush(line) && (
+                        <span className="font-normal">
+                          A whole-number line can land exactly on the score; that washes the bet.
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold">Overtime counts</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {overtime
+                            ? "Points scored in overtime count."
+                            : "Decided at the end of regulation."}
+                        </span>
+                      </span>
+                      <Switch
+                        checked={overtime}
+                        onCheckedChange={setOvertime}
+                        aria-label="Overtime counts"
+                      />
+                    </div>
+                  </Section>
+                </>
+              ) : (
+                <U2PickEditor
+                  question={question}
+                  onQuestionChange={setQuestion}
+                  options={options}
+                  onOptionsChange={setOptions}
+                  settledBy={settledBy}
+                  onSettledByChange={setSettledBy}
+                />
+              )}
 
               <Section label="Wager (points each)">
                 <div className="space-y-3">

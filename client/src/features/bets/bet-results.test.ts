@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { BackendBet, BackendTable } from "./backend-api";
+import type { Bet } from "./api";
+import type { Table } from "@/features/tables/api";
 import { awaitingPointsSettlement, canCallResult } from "./bet-results";
 
 const host = "123e4567-e89b-42d3-a456-426614174000";
 const player = "123e4567-e89b-42d3-a456-426614174001";
 const outsider = "123e4567-e89b-42d3-a456-426614174002";
-const table: BackendTable = {
+const table: Table = {
   id: "123e4567-e89b-42d3-a456-426614174010",
   name: "Table",
   emoji: "T",
@@ -19,7 +20,7 @@ const table: BackendTable = {
   subscribedTo: [],
   disabledPermissions: {},
 };
-const locked: BackendBet = {
+const locked: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174020",
   tableId: table.id,
   proposerId: player,
@@ -46,7 +47,7 @@ const locked: BackendBet = {
 
 describe("canCallResult", () => {
   it("follows each settler rule", () => {
-    const callers = (bet: BackendBet) =>
+    const callers = (bet: Bet) =>
       [host, player, outsider].filter((id) => canCallResult(bet, table, id));
     expect(callers({ ...locked, settledBy: "anyone" })).toEqual([host, player, outsider]);
     expect(callers({ ...locked, settledBy: "hosts" })).toEqual([host]);

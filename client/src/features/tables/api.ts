@@ -1,7 +1,38 @@
 import { z } from "zod";
-import { BackendError, mutationRequest, read, request, tableSchema } from "./backend-api";
+import { BackendError, idSchema, mutationRequest, read, request } from "@/lib/api-client";
 
-const uuid = z.guid();
+const uuid = idSchema;
+
+const tableSchema = z.object({
+  id: z.guid(),
+  name: z.string(),
+  emoji: z.string(),
+  memberIds: z.array(z.guid()),
+  hostIds: z.array(z.guid()).min(1),
+  remainderRule: z.enum(["host", "proposer", "earliest", "random"]),
+  hostsOnlyBets: z.boolean(),
+  u2pickEnabled: z.boolean(),
+  quickPicksEnabled: z.boolean(),
+  quickPickSharing: z.boolean(),
+  quickPickCode: z.string().optional(),
+  subscribedTo: z.array(z.guid()),
+  disabledPermissions: z.record(z.string(), z.array(z.enum(["bets", "text", "react", "gifs"]))),
+});
+
+export type Table = z.infer<typeof tableSchema>;
+
+export async function listTables(signal?: AbortSignal): Promise<Table[]> {
+  return read(await request("/tables", signal ? { signal } : undefined), z.array(tableSchema));
+}
+
+export async function getTable(id: string, signal?: AbortSignal): Promise<Table> {
+  if (!uuid.safeParse(id).success) throw new BackendError("Table not found.", 404);
+  return read(
+    await request(`/tables/${encodeURIComponent(id)}`, signal ? { signal } : undefined),
+    tableSchema,
+  );
+}
+
 const outcomeSchema = z.object({
   userId: uuid,
   outcome: z.enum(["added", "invited", "not_added"]),

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { backendErrorMessage } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
-import { acknowledgeReview, transitionGroup, transitionLine } from "./settlement-api";
+import { backendErrorMessage, idSchema } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
+import { acknowledgeReview, transitionGroup, transitionLine } from "./api";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("review"), other: uuid, revision: uuid }),
   z.object({

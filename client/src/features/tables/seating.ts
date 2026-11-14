@@ -1,5 +1,5 @@
 import { formatCents } from "@/lib/money";
-import type { BackendBet } from "./backend-api";
+import type { Bet } from "@/features/bets";
 
 /** Seats around the felt. With more people than seats, the last seat becomes an "N others" spot. */
 export const SEAT_CAP = 8;
@@ -12,7 +12,7 @@ export const SEAT_CAP = 8;
 export function arrangeSeats(
   memberIds: string[],
   me: string,
-  focused: BackendBet | undefined,
+  focused: Bet | undefined,
   cap = SEAT_CAP,
 ) {
   const inBet =
@@ -38,7 +38,7 @@ export type SeatTone = "pick" | "pass" | "win" | "loss" | "washed";
  * The chip under a seat for the focused bet. While Active only your own pick is known, so others show nothing.
  */
 export function seatStatus(
-  bet: BackendBet | undefined,
+  bet: Bet | undefined,
   userId: string,
   me: string,
 ): { label: string; tone: SeatTone } | null {
@@ -64,7 +64,7 @@ export function seatStatus(
 }
 
 /** Open bets for the deck, newest first. */
-export function openBets(bets: BackendBet[]) {
+export function openBets(bets: Bet[]) {
   return bets
     .filter((bet) => bet.status === "ACTIVE" || bet.status === "PENDING")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

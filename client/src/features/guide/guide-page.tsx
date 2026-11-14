@@ -1,21 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  Radio,
-  Zap,
-  Megaphone,
-  Ban,
-  Flag,
-  Trash2,
-  MessagesSquare,
-  ArrowRight,
-  BadgeDollarSign,
-  Heart,
-  HeartHandshake,
-  Scale,
-  ShieldCheck,
-  Users,
-  Handshake,
-} from "lucide-react";
+import { Zap, Megaphone, Flag, ArrowRight, Heart, HeartHandshake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,11 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
-import { MODES } from "@/features/bets/modes";
+import { MODES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 
-import { StatusBadge } from "@/features/bets/components/status-badge";
 import {
   FILTERS,
   LIFECYCLE,
@@ -41,7 +24,7 @@ import {
   QUICK_PICK_POINTS,
   SAFETY_POINTS,
   type ModeFilter,
-} from "../constants";
+} from "./constants";
 
 function ModesSection() {
   const [filter, setFilter] = useState<ModeFilter>("all");

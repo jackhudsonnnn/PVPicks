@@ -41,8 +41,13 @@ current code, not an estimated delivery date.
 - **Later:** ordering and gap detection beyond refetch-on-reconnect; durable
   consumers that record processed events; verify the feed's NFL fields,
   coverage, chronology and per-game statistics against live data before using
-  it to resolve sports bets; game history, rosters, player stats and a dev
-  replay feed (ADR 0005), and choosing a BallDontLie plan for player modes.
+  it to resolve sports bets; game history, rosters, stored player stats and a
+  dev replay feed (ADR 0005). All-Star is chosen for both leagues; raw player
+  box scores are already recorded during games.
+- **Next:** the player modes (Either Or, Prop Hunt, King Of The Hill) on the
+  stored player stats, and the replay feed. Done: saved specs and contract
+  tests, sports data storage, the shared sports-bet lifecycle, the host
+  override, Total Disaster and Give And Take.
 
 ## 5. Frontend integration — in progress
 

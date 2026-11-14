@@ -2,29 +2,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendApp } from "./backend-app";
-import {
-  BackendError,
-  currentUser,
-  getProfile,
-  getTable,
-  listMyBets,
-  listTableBets,
-  listTables,
-  signIn,
-  signOut,
-  type BackendBet,
-} from "./backend-api";
-import { listPendingReviews, listSettlementGroups } from "./settlement-api";
-import { getRelationships, listInvites } from "./social-api";
-import type { Invalidation } from "./realtime-connection";
-import { getChatUnread, getChatWindow } from "./chat-api";
-import { listTableBalances } from "./tables-api";
+import { App } from "./app";
+import { BackendError } from "@/lib/api-client";
+import { currentUser, signIn, signOut } from "@/features/auth/api";
+import { getProfile } from "@/features/people/api";
+import { getTable, listTables, listTableBalances } from "@/features/tables/api";
+import { listMyBets, listTableBets, type Bet } from "@/features/bets/api";
+import { listPendingReviews, listSettlementGroups } from "@/features/settlements/api";
+import { getRelationships, listInvites } from "@/features/social/api";
+import type { Invalidation } from "@/lib/realtime-connection";
+import { getChatUnread, getChatWindow } from "@/features/chat/api";
 
 // Several components may listen to one destination (the table view feed carries table and tomato changes), so keep
 // each component's latest listener.
 const feeds = vi.hoisted(() => new Map<string, Map<unknown, (event: Invalidation) => void>>());
-vi.mock("./realtime", async () => {
+vi.mock("@/lib/realtime", async () => {
   const { useRef } = await import("react");
   return {
     RealtimeProvider: ({ children }: { children: ReactNode }) => children,
@@ -60,33 +52,35 @@ vi.mock("@tanstack/react-router", () => ({
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
     select({ location: route }),
 }));
-vi.mock("./backend-api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./backend-api")>();
-  return {
-    ...actual,
-    currentUser: vi.fn(),
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-    listTables: vi.fn(),
-    getTable: vi.fn(),
-    listTableBets: vi.fn(),
-    listMyBets: vi.fn(),
-    getProfile: vi.fn(),
-  };
-});
-vi.mock("./tables-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./tables-api")>()),
+vi.mock("@/features/auth/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/auth/api")>()),
+  currentUser: vi.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+}));
+vi.mock("@/features/tables/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/tables/api")>()),
+  listTables: vi.fn(),
+  getTable: vi.fn(),
   listTableBalances: vi.fn(),
 }));
-vi.mock("./chat-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./chat-api")>()),
+vi.mock("@/features/bets/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/bets/api")>()),
+  listTableBets: vi.fn(),
+  listMyBets: vi.fn(),
+}));
+vi.mock("@/features/people/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/people/api")>()),
+  getProfile: vi.fn(),
+}));
+vi.mock("@/features/chat/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat/api")>()),
   getChatUnread: vi.fn(),
   getChatWindow: vi.fn(),
   markRead: vi.fn(),
 }));
-
-vi.mock("./social-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./social-api")>()),
+vi.mock("@/features/social/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/social/api")>()),
   getRelationships: vi.fn(),
   listInvites: vi.fn(),
   searchUsers: vi.fn(),
@@ -94,8 +88,8 @@ vi.mock("./social-api", async (importOriginal) => ({
   setBlock: vi.fn(),
   respondToInvite: vi.fn(),
 }));
-vi.mock("./settlement-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./settlement-api")>()),
+vi.mock("@/features/settlements/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/settlements/api")>()),
   listPendingReviews: vi.fn(),
   listSettlementCounterparties: vi.fn(),
   listSettlementGroups: vi.fn(),
@@ -125,7 +119,7 @@ const table = {
   subscribedTo: [],
   disabledPermissions: {},
 };
-const bet: BackendBet = {
+const bet: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174002",
   tableId: table.id,
   proposerId: user.id,
@@ -148,7 +142,7 @@ function renderApp() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BackendApp />
+      <App />
     </QueryClientProvider>,
   );
 }
@@ -227,7 +221,7 @@ describe("backend app", () => {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <BackendApp />
+        <App />
       </QueryClientProvider>,
     );
     expect(await screen.findByRole("alert")).toHaveTextContent("unavailable");
@@ -263,7 +257,7 @@ describe("backend app", () => {
   });
 
   it("shows locked picks and distinguishes resolved outcomes from points settlement", async () => {
-    const locked: BackendBet = {
+    const locked: Bet = {
       ...bet,
       status: "SETTLED",
       picks: [
@@ -308,7 +302,7 @@ describe("backend app", () => {
 
   it("shows a profile lookup error and retries without hiding the bet", async () => {
     const memberId = "123e4567-e89b-42d3-a456-426614174003";
-    const locked: BackendBet = {
+    const locked: Bet = {
       ...bet,
       status: "PENDING",
       picks: [{ userId: memberId, choice: "No" }],
@@ -338,7 +332,7 @@ describe("backend app", () => {
   });
 
   it("expires the session when a profile lookup returns 401", async () => {
-    const locked: BackendBet = {
+    const locked: Bet = {
       ...bet,
       status: "PENDING",
       picks: [{ userId: "123e4567-e89b-42d3-a456-426614174003", choice: "No" }],
@@ -360,7 +354,7 @@ describe("backend app", () => {
   it("clears cached participant profiles on logout", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const memberId = "123e4567-e89b-42d3-a456-426614174003";
-    const locked: BackendBet = {
+    const locked: Bet = {
       ...bet,
       status: "PENDING",
       picks: [{ userId: memberId, choice: "No" }],
@@ -376,7 +370,7 @@ describe("backend app", () => {
     vi.mocked(signOut).mockResolvedValue();
     render(
       <QueryClientProvider client={client}>
-        <BackendApp />
+        <App />
       </QueryClientProvider>,
     );
     await openTicket("Who wins?");
@@ -422,7 +416,7 @@ describe("backend app", () => {
 
   it("refreshes the table list, the open table and displayed names from realtime feeds", async () => {
     const memberId = "123e4567-e89b-42d3-a456-426614174003";
-    const locked: BackendBet = {
+    const locked: Bet = {
       ...bet,
       status: "PENDING",
       picks: [{ userId: memberId, choice: "No" }],

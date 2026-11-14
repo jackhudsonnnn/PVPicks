@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendApp } from "./backend-app";
-import { useIsolatedBackend } from "./backend-integration-utils";
+import { App } from "@/app/app";
+import { useIsolatedBackend } from "@/test/isolated-backend";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -34,7 +34,7 @@ function renderTable() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <BackendApp />
+      <App />
     </QueryClientProvider>,
   );
 }
@@ -81,7 +81,8 @@ describe.runIf(phase === "pick")("isolated U2Pick integration: proposal and pick
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await pick("Cats");
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    // The shell renders Sign out in both the sidebar and the phone top bar.
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign out" })[0]!);
     await signIn("betuiplayer");
     const ticket = await openTicket();
     expect(ticket.getByText(/Tap a choice to join/)).toBeInTheDocument();
@@ -115,8 +116,8 @@ describe.runIf(phase === "result")("isolated U2Pick integration: result and poin
     fireEvent.click((await screen.findAllByRole("tab", { name: "Host" }))[0]!);
     expect(await screen.findByText(/1 resolved bet is waiting/)).toBeInTheDocument();
     await confirm("Settle table points");
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Settle table points" })).not.toBeInTheDocument(),
-    );
+    // The button stays, disabled, once nothing is waiting.
+    expect(await screen.findByText("No resolved bets are waiting.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settle table points" })).toBeDisabled();
   }, 30000);
 });

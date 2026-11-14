@@ -274,10 +274,16 @@ paths:
       operationId: proposeBet
       summary: Propose a bet at a table
       description: >-
-        Dev implementation for U2Pick only; sports proposal
-        validation is not implemented.
-        The server checks table permissions, wager rules and debt cap, captures
-        any game baseline, and assigns the bet identity and lock time. The
+        Dev implementation for U2Pick and the score modes (total_disaster,
+        give_and_take); other sports modes are not implemented. For score
+        modes the client sends gameId, config.line (half-point steps: the
+        total for total_disaster, the home team's spread for give_and_take)
+        and includesOvertime (default true); the server builds the question
+        and choices from the stored game. A game bet can be proposed until its
+        game is Final, canceled or postponed (409 game_unavailable); picks
+        lock at the window's end or the game's start, whichever is first.
+        The server checks table permissions, wager rules and debt cap, and
+        assigns the bet identity and lock time. The
         proposer is the visible author but does not join the bet automatically.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -549,6 +555,46 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /bets/{betId}/override:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    post:
+      operationId: overrideSportsBet
+      summary: A host washes a sports bet or sets its result
+      description: >-
+        Dev implementation for the score modes. A current host may wash
+        (winningChoice null) or set the result to one of the bet's choices
+        while it is Active (it locks first), Pending, or resolved with the
+        table's points not yet settled (409 points_settled after). A
+        correction appends compensating ledger entries. No reason is asked
+        for. The override is recorded on the bet (overriddenBy, overriddenAt)
+        and posted in chat naming the host.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [winningChoice]
+              properties:
+                winningChoice:
+                  type: [string, 'null']
+      responses:
+        '204':
+          description: Overridden.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /bets/{betId}/wash:
     parameters:
       - $ref: '#/components/parameters/BetId'
@@ -612,7 +658,7 @@ paths:
                 name:
                   type: string
                   minLength: 1
-                  description: Trimmed before validation and storage; at most 40 Unicode code points after trimming.
+                  description: Trimmed before validation and storage; at most 14 Unicode code points after trimming.
                 emoji:
                   type: string
                   description: One ICU-supported RGI emoji sequence.
@@ -704,7 +750,7 @@ paths:
                 name:
                   type: string
                   minLength: 1
-                  description: Trimmed before validation and storage; at most 40 Unicode code points after trimming.
+                  description: Trimmed before validation and storage; at most 14 Unicode code points after trimming.
                 emoji:
                   type: string
                   description: One ICU-supported RGI emoji sequence.
@@ -1844,14 +1890,39 @@ paths:
       responses:
         '200':
           description: >-
-            Pending invitations include the table name and emoji needed for
-            the invite screen without granting access to the table.
+            Pending invitations include the table name, emoji and members
+            needed for the invite card without granting access to the
+            table's chat or bets.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/TableInvite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/chat/latest:
+    get:
+      operationId: listLatestChatMessages
+      summary: The latest visible chat message at each of your current tables
+      description: >-
+        For the table cards on Home. One entry per current (not archived)
+        table you belong to, in table id order. Visibility matches the chat
+        window: deleted authors' and blocked authors' text and GIF messages
+        are skipped, so the preview is the newest message you would see in
+        that table's chat. Only text and system messages carry `text`
+        (system text names host-event subjects as in the window); for GIF,
+        bet and settlement messages the client describes the kind. Refetch
+        when a table's chat feed reports a change.
+      responses:
+        '200':
+          description: The previews.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatPreview'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /invites/{inviteId}/respond:
@@ -2582,7 +2653,7 @@ components:
     TableInvite:
       type: object
       additionalProperties: false
-      required: [id, tableId, tableName, tableEmoji, fromId, userId, createdAt]
+      required: [id, tableId, tableName, tableEmoji, fromId, userId, createdAt, memberIds]
       properties:
         id:
           type: string
@@ -2603,6 +2674,15 @@ components:
         createdAt:
           type: string
           format: date-time
+        memberIds:
+          type: array
+          description: >-
+            The table's members in join order, for avatars on the invite
+            card. Leaves out deleted accounts and members who block the
+            invitee, so every listed profile is readable.
+          items:
+            type: string
+            format: uuid
     Settlement:
       type: object
       additionalProperties: false
@@ -2789,6 +2869,39 @@ components:
               firstUnreadMessageId:
                 type: string
                 format: uuid
+    ChatPreview:
+      type: object
+      additionalProperties: false
+      required: [tableId, message]
+      properties:
+        tableId:
+          type: string
+          format: uuid
+        message:
+          description: The newest visible message, or null when the table has none.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ChatPreviewMessage'
+    ChatPreviewMessage:
+      type: object
+      additionalProperties: false
+      required: [id, kind, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [text, gif, bet, system, settlement]
+        createdAt:
+          type: string
+          format: date-time
+        authorId:
+          type: string
+          format: uuid
+        text:
+          type: string
+          minLength: 1
     ChatMessage:
       type: object
       additionalProperties: false
@@ -2965,6 +3078,8 @@ components:
           format: uuid
         name:
           type: string
+          minLength: 1
+          maxLength: 14
         emoji:
           type: string
         memberIds:
@@ -3017,7 +3132,7 @@ components:
     BetProposal:
       type: object
       additionalProperties: false
-      required: [modeId, config, question, choices, wagerCents, durationSec, forFun]
+      required: [modeId, config, wagerCents, durationSec, forFun]
       properties:
         modeId:
           $ref: '#/components/schemas/BetMode'
@@ -3037,6 +3152,7 @@ components:
         question:
           type: string
           minLength: 1
+          description: Required for U2Pick; ignored for game bets, whose question the server builds.
         choices:
           type: array
           minItems: 2
@@ -3075,6 +3191,7 @@ components:
                 const: u2pick
             required: [modeId]
           then:
+            required: [question, choices]
             properties:
               question:
                 maxLength: 120
@@ -3198,6 +3315,13 @@ components:
         settledBy:
           type: string
           enum: [anyone, non_participants, hosts, me]
+        overriddenBy:
+          type: string
+          format: uuid
+          description: The host who last overrode this sports bet's result.
+        overriddenAt:
+          type: string
+          format: date-time
         calledBy:
           type: string
           format: uuid

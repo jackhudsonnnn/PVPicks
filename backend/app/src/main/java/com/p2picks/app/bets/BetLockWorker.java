@@ -16,7 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class BetLockWorker {
     private static final Logger log = LoggerFactory.getLogger(BetLockWorker.class);
     private static final int PAGE_SIZE = 100;
-    private static final Set<String> SUPPORTED_MODES = Set.of("u2pick");
+    private static final Set<String> SUPPORTED_MODES = Set.of("u2pick", "total_disaster", "give_and_take");
     private final JdbcTemplate jdbc;
     private final BetLockService locks;
     private final TransactionTemplate transaction;

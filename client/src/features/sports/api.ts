@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BackendError, request } from "./backend-api";
+import { BackendError, request } from "@/lib/api-client";
 import { timeLabel } from "@/lib/time";
 
 const team = z.object({

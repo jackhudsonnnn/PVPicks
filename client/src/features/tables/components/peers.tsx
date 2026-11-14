@@ -5,10 +5,9 @@ import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { backendErrorMessage, type BackendTable, type BackendUser } from "./backend-api";
-import { PersonAvatar } from "./backend-avatar";
-import type { TableBalance } from "./tables-api";
-import { usePerson } from "./use-person";
+import { backendErrorMessage } from "@/lib/api-client";
+import type { Table, TableBalance } from "@/features/tables/api";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
 
 type Scenario = "settle" | "true";
 
@@ -28,7 +27,7 @@ const SCENARIOS: { id: Scenario; label: string; description: string }[] = [
 ];
 
 interface People {
-  user: BackendUser;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }
@@ -43,7 +42,7 @@ export function PeersPanel({
   ...people
 }: People & {
   onSelectUser: (userId: string) => void;
-  table: BackendTable;
+  table: Table;
   balances: { data?: TableBalance[] | undefined; error: unknown };
   seatedIds: string[];
   className?: string;

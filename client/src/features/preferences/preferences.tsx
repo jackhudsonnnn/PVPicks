@@ -7,24 +7,24 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
-import { HUE_BG } from "@/features/social/components/hue";
-import { DisplaySettings } from "@/features/settings/components/display-settings";
-import { INVITE_MODES } from "@/features/social/invites";
-import { HUES, normalizeUsername, usernameError, type Hue } from "@/features/settings/profile";
+import { HUE_BG, type User } from "@/features/people";
+import { DisplaySettings } from "./display-settings";
+import { INVITE_MODES } from "@/features/social";
+import { HUES, normalizeUsername, usernameError, type Hue } from "./profile-rules";
 import { cn } from "@/lib/utils";
-import { backendErrorMessage, type BackendUser } from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
-import { usePreferencesActions } from "./preferences-actions";
+import { backendErrorMessage } from "@/lib/api-client";
+import { ActionStatus } from "@/components/action-status";
+import { usePreferencesActions } from "./actions";
 import {
   getDebt,
   getDebtCap,
   getInvitePreferences,
   type InviteMode,
   type InvitePreferences,
-} from "./preferences-api";
-import { userKey } from "./query-keys";
-import { formatPoints } from "./settlement-api";
-import { parseCap } from "./management-rules";
+} from "./api";
+import { userKey } from "@/lib/query-keys";
+import { formatPoints } from "@/features/settlements";
+import { parseCap } from "./rules";
 
 const SESSION_KEY = ["backend-session"];
 
@@ -44,7 +44,7 @@ const INVITE_ROWS = [
 ] as const;
 
 /** Preferences: who can add you to tables, and your account (username, color, debt cap). */
-export function BackendPreferences({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function PreferencesPage({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"tables" | "account" | "display">("tables");
   const actions = usePreferencesActions(
@@ -91,7 +91,7 @@ function InviteSettings({
   disabled,
   actions,
 }: {
-  user: BackendUser;
+  user: User;
   disabled: boolean;
   actions: ReturnType<typeof usePreferencesActions>;
 }) {
@@ -136,7 +136,7 @@ function AccountSettings({
   disabled,
   actions,
 }: {
-  user: BackendUser;
+  user: User;
   disabled: boolean;
   actions: ReturnType<typeof usePreferencesActions>;
 }) {
@@ -205,7 +205,7 @@ function DebtCapSettings({
   disabled,
   actions,
 }: {
-  user: BackendUser;
+  user: User;
   disabled: boolean;
   actions: ReturnType<typeof usePreferencesActions>;
 }) {

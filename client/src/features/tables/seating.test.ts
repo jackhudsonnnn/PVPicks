@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BackendBet } from "./backend-api";
+import type { Bet } from "@/features/bets/api";
 import { arrangeSeats, openBets, seatPosition, seatStatus } from "./seating";
 
 const ids = Array.from(
@@ -8,7 +8,7 @@ const ids = Array.from(
 );
 const [me, a, b, c] = ids as [string, string, string, string];
 
-const active: BackendBet = {
+const active: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174099",
   tableId: "123e4567-e89b-42d3-a456-426614174098",
   proposerId: a,
@@ -26,7 +26,7 @@ const active: BackendBet = {
   myPick: "Yes",
   myParticipation: "picked",
 };
-const locked: BackendBet = {
+const locked: Bet = {
   ...active,
   status: "PENDING",
   picks: [

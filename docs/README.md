@@ -13,3 +13,5 @@ local dev server and Mermaid diagrams before removing or changing them.
 - [`adr/`](adr/0001-modular-monolith.md): architecture decision records.
 The guides, current references and accepted decisions describe current
 behavior and planned work.
+
+Run `npx vitepress preview docs` to view.

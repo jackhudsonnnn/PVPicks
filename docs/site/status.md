@@ -38,8 +38,16 @@ planned operations; it is not an implementation inventory.
   membership. Published outbox rows are deleted after seven days.
 - The sports feed: BallDontLie NBA and NFL snapshots (verified against live NBA
   games), polled only when `PVPICKS_BALLDONTLIE_API_KEY` is set, with raw
-  responses recorded under `recordings/sports/`, and `GET /ticker`, which reports the
-  feed as unavailable rather than empty when polling has failed.
+  responses recorded under `recordings/sports/`, game history (one snapshot
+  per change, provider state, points per period), players and per-game player
+  stats with history, contract tests against saved provider specs, and
+  `GET /ticker`, which reports the feed as unavailable rather than empty when
+  polling has failed.
+- Score-mode sports bets (dev): Total Disaster and Give And Take on today's
+  games, before or during the game, with picks locking at the window's end or
+  the start; results and washes settle from the feed 20 minutes after Final;
+  hosts can wash or set a result until points are settled
+  (`POST /bets/{id}/override`), recorded on the bet and posted in chat.
 - The frontend entry point supports backend sign-in, session restoration,
   table creation, invitations (join or decline), members (add followers,
   remove, host roles, permissions), table settings and deletion, a Friends
@@ -68,7 +76,10 @@ planned operations; it is not an implementation inventory.
   moderation queue (`POST /reports`); tomatoes are short-lived and
   block-filtered (`/tables/{id}/tomatoes`). Subscribing to another table's
   Quick Picks is not yet connected. The mock-store
-  prototype was removed from the client (git tag `prototype-ui`).
+  prototype was removed from the client (git tag `prototype-ui`). The client
+  source is organized by feature (`client/src/features/<area>`, each with an
+  `index.ts` as its only public entry, enforced by lint); see the client
+  README.
 - An action whose outcome is unknown (for example, a lost response) keeps its
   retry key per user in the browser's local storage, so every tab sees it and
   blocks new actions until it is retried with the same key or cleared after
@@ -77,9 +88,9 @@ planned operations; it is not an implementation inventory.
 
 ## Not yet available
 
-- Sports-bet modes and locking, Quick Pick copy propagation, and end-to-end cap enforcement.
-- Sports-bet modes, feed-driven results and host overrides (rules decided; see the domain guide); the feed's NFL mapping still needs checking against live data.
-- Sports data history, rosters, player stats and a dev replay feed (ADR 0005, proposed).
+- Quick Pick copy propagation and end-to-end cap enforcement.
+- The player modes (Either Or, Prop Hunt, King Of The Hill) and the play-by-play modes (Choose Their Fate, Scorcerer, which need GOAT). The feed's NFL mapping still needs checking against live data.
+- The dev replay feed and per-game fixture slices (ADR 0005). Game history, players and player stats are stored.
 - Full account deletion, moderation, host-recovery flows, and the remaining frontend integrations.
 - LAN/production security and deployment.
 

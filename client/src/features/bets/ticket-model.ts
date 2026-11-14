@@ -1,19 +1,20 @@
-import type { BetStatus } from "@/features/bets/types";
-import type { BackendBet, BackendTable } from "./backend-api";
+import type { BetStatus } from "./types";
+import type { Bet } from "./api";
+import type { Table } from "@/features/tables";
 
 /** What a bet ticket shows, derived only from the server's projection of the bet for this viewer. */
 
-const STATUS: Record<BackendBet["status"], BetStatus> = {
+const STATUS: Record<Bet["status"], BetStatus> = {
   ACTIVE: "active",
   PENDING: "pending",
   SETTLED: "resolved",
   WASHED: "washed",
 };
 
-export const ticketStatus = (bet: BackendBet): BetStatus => STATUS[bet.status];
+export const ticketStatus = (bet: Bet): BetStatus => STATUS[bet.status];
 
 /** Whole seconds until picks lock, never negative. The server locks the bet; the client only counts down. */
-export function secondsLeft(bet: BackendBet, nowMs: number) {
+export function secondsLeft(bet: Bet, nowMs: number) {
   return Math.max(0, Math.ceil((Date.parse(bet.locksAt) - nowMs) / 1000));
 }
 
@@ -35,7 +36,7 @@ export interface ChoiceTally {
 }
 
 /** Picks per choice once picks are revealed (after lock); null while picks are still private. */
-export function choiceTallies(bet: BackendBet): ChoiceTally[] | null {
+export function choiceTallies(bet: Bet): ChoiceTally[] | null {
   if (!bet.picks) return null;
   const total = bet.picks.length;
   return bet.choices.map((choice) => {
@@ -45,13 +46,13 @@ export function choiceTallies(bet: BackendBet): ChoiceTally[] | null {
 }
 
 /** Everyone who joined: pickers first, then No guess, in the server's participation order. */
-export function participantIds(bet: BackendBet): string[] | null {
+export function participantIds(bet: Bet): string[] | null {
   if (!bet.picks || !bet.noGuessUserIds) return null;
   return [...bet.picks.map((pick) => pick.userId), ...bet.noGuessUserIds];
 }
 
 /** Points in the pot: one wager per person with a pick. Only known after lock. */
-export function potCents(bet: BackendBet): number | null {
+export function potCents(bet: Bet): number | null {
   if (!bet.picks) return null;
   return bet.forFun ? 0 : bet.picks.length * bet.wagerCents;
 }
@@ -60,13 +61,13 @@ export function potCents(bet: BackendBet): number | null {
  * The viewer's result on a resolved bet: their delta, 0 for a pick that broke even, or null when they had no
  * pick. The server omits zero deltas.
  */
-export function myResultCents(bet: BackendBet, userId: string): number | null {
+export function myResultCents(bet: Bet, userId: string): number | null {
   if (bet.status !== "SETTLED" || bet.forFun || bet.myParticipation !== "picked") return null;
   return bet.deltasCents?.[userId] ?? 0;
 }
 
 /** The line under an active ticket's choices, from the viewer's point of view. */
-export function activeHint(bet: BackendBet, canBet: boolean, wager: string) {
+export function activeHint(bet: Bet, canBet: boolean, wager: string) {
   if (!canBet) return "A host turned off betting for you at this table.";
   const stake = bet.forFun
     ? "4fun: no points at stake."
@@ -77,12 +78,15 @@ export function activeHint(bet: BackendBet, canBet: boolean, wager: string) {
   return "Picks stay hidden until the timer runs out. Tap again to clear your guess.";
 }
 
-/** Why the viewer can't propose a U2Pick at this table, or null when they can. The server rechecks. */
-export function proposeBlock(table: BackendTable, userId: string): string | null {
+/** Why the viewer can't propose any bet at this table, or null when they can. The server rechecks. */
+export function proposeBlock(table: Table, userId: string): string | null {
   if (table.disabledPermissions[userId]?.includes("bets"))
     return "A host turned off betting for you at this table.";
   if (table.hostsOnlyBets && !table.hostIds.includes(userId))
     return "Only hosts can start bets at this table.";
-  if (!table.u2pickEnabled) return "A host turned off U2Pick at this table.";
   return null;
 }
+
+/** Why U2Pick in particular is off at this table, or null. Sports modes don't depend on it. */
+export const u2pickBlock = (table: Table) =>
+  table.u2pickEnabled ? null : "A host turned off U2Pick at this table.";

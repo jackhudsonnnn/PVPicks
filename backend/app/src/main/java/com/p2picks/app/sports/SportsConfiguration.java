@@ -25,9 +25,21 @@ class SportsConfiguration {
     static class PollScheduling {
         private static final Logger log = LoggerFactory.getLogger(PollScheduling.class);
         private final GamePoller poller;
+        private final StatsPoller stats;
 
-        PollScheduling(GamePoller poller) {
+        PollScheduling(GamePoller poller, StatsPoller stats) {
             this.poller = poller;
+            this.stats = stats;
+        }
+
+        /** One player-data request per run, so the interval is the player-data request budget. */
+        @Scheduled(fixedDelayString = "${pvpicks.sports.stats.interval:PT20S}", initialDelayString = "PT15S")
+        void pollStats() {
+            try {
+                stats.runOnce();
+            } catch (RuntimeException exception) {
+                log.warn("Player stats poll failed", exception);
+            }
         }
 
         @Scheduled(fixedDelayString = "${pvpicks.sports.poll-interval:PT60S}")

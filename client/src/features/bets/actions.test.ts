@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { executeBetAction } from "./bet-actions";
+import { executeBetAction } from "./actions";
 
 const userId = "123e4567-e89b-42d3-a456-426614174000";
 const tableId = "123e4567-e89b-42d3-a456-426614174001";

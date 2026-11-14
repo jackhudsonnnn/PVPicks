@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { dateTimeLabel } from "@/lib/time";
-import { backendErrorMessage, type BackendUser } from "./backend-api";
-import { BackendChat } from "./backend-chat";
-import { userKey } from "./query-keys";
-import { listArchives } from "./tables-api";
+import { backendErrorMessage } from "@/lib/api-client";
+import type { User } from "@/features/people";
+import { TableChat } from "@/features/chat";
+import { userKey } from "@/lib/query-keys";
+import { listArchives } from "@/features/tables/api";
 
 function useArchives(userId: string) {
   return useQuery({
@@ -15,7 +16,7 @@ function useArchives(userId: string) {
 }
 
 /** Deleted tables whose chat you can still read; hidden when there are none. */
-export function ArchivedTables({ user }: { user: BackendUser }) {
+export function ArchivedTables({ user }: { user: User }) {
   const archives = useArchives(user.id);
   if (!archives.data?.length) return null;
   return (
@@ -55,7 +56,7 @@ export function ArchivedTable({
   tableId,
   expire,
 }: {
-  user: BackendUser;
+  user: User;
   tableId: string;
   expire: () => void;
 }) {
@@ -83,7 +84,7 @@ export function ArchivedTable({
               {dateTimeLabel(archive.expiresAt)}.
             </p>
           </div>
-          <BackendChat
+          <TableChat
             user={user}
             table={{ id: archive.id, disabledPermissions: {} }}
             expire={expire}

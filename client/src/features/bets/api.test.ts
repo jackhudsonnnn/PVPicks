@@ -1,26 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listMyBets, type BackendBet } from "./backend-api";
-import { listTableBalances } from "./tables-api";
+import { bet, json, table, user } from "@/test/api-fixtures";
+import { listMyBets, listTableBets } from "./api";
 
-const tableId = "123e4567-e89b-42d3-a456-426614174001";
-const bet: BackendBet = {
-  id: "123e4567-e89b-42d3-a456-426614174002",
-  tableId,
-  proposerId: "123e4567-e89b-42d3-a456-426614174000",
-  modeId: "u2pick",
-  config: {},
-  question: "Who wins?",
-  choices: ["Yes", "No"],
-  wagerCents: 100,
-  forFun: false,
-  status: "ACTIVE",
-  locksAt: "2026-11-13T12:00:00Z",
-  createdAt: "2026-11-13T11:58:00Z",
-  pointsSettled: false,
-  pickCount: 0,
-  myPick: null,
-  myParticipation: "not_joined",
-};
+const tableId = table.id;
 const counts = { ACTIVE: 1, PENDING: 0, SETTLED: 2, WASHED: 0 };
 
 function respond(body: unknown) {
@@ -62,26 +44,34 @@ describe("my bets", () => {
   });
 });
 
-describe("table balances", () => {
-  it("reads 64-bit balances exactly", async () => {
-    respond([
-      {
-        userId: bet.proposerId,
-        settleCents: 150,
-        trueCents: -9_007_199_254_740_991,
-      },
-    ]);
-    const [balance] = await listTableBalances(tableId);
-    expect(balance).toEqual({
-      userId: bet.proposerId,
-      settleCents: 150n,
-      trueCents: -9_007_199_254_740_991n,
-    });
+describe("table bets", () => {
+  it("reads active and locked projections and refuses an invalid table id without a request", async () => {
+    const locked = {
+      ...bet,
+      status: "PENDING",
+      picks: [{ userId: user.id, choice: "Yes" }],
+      noGuessUserIds: [],
+      remainderRule: "host",
+      remainderHostId: user.id,
+    };
+    const fetch = vi.fn().mockResolvedValueOnce(json([bet, locked]));
+    vi.stubGlobal("fetch", fetch);
+    await expect(listTableBets(tableId)).resolves.toEqual([bet, locked]);
+    expect(fetch.mock.calls[0]?.[0]).toBe(`/api/tables/${tableId}/bets`);
+    await expect(listTableBets("../auth/logout")).rejects.toMatchObject({ status: 404 });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("refuses an invalid table id without a request", async () => {
-    const fetch = respond([]);
-    await expect(listTableBalances("nope")).rejects.toThrow("Table not found");
-    expect(fetch).not.toHaveBeenCalled();
+  it("rejects leaked active picks, malformed projections and bets from another table", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json([{ ...bet, picks: [{ userId: user.id, choice: "No" }] }]))
+      .mockResolvedValueOnce(json([{ ...bet, myPick: null }]))
+      .mockResolvedValueOnce(json([{ ...bet, status: "PENDING" }]))
+      .mockResolvedValueOnce(json([{ ...bet, tableId: user.id }]));
+    vi.stubGlobal("fetch", fetch);
+    for (let i = 0; i < 4; i++) {
+      await expect(listTableBets(tableId)).rejects.toThrow("unexpected response");
+    }
   });
 });

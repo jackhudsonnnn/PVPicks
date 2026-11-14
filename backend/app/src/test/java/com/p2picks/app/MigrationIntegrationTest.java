@@ -662,7 +662,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 .target(MigrationVersion.fromVersion("22")).load();
         assertThat(hostAttribution.migrate().migrationsExecuted).isEqualTo(1);
         Flyway updated = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword()).load();
-        assertThat(updated.migrate().migrationsExecuted).isEqualTo(6); // V23 through V28
+        assertThat(updated.migrate().migrationsExecuted).isEqualTo(10); // V23 through V32
         assertThatThrownBy(() -> upgradedJdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", userId))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(upgradedJdbc.queryForObject("""

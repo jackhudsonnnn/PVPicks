@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { userKey } from "./query-keys";
-import { getRelationships, listInvites } from "./social-api";
+import { userKey } from "@/lib/query-keys";
+import { getRelationships, listInvites } from "./api";
 
 export function useRelationships(userId: string) {
   return useQuery({

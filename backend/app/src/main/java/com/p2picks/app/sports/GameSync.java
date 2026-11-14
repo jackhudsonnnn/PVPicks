@@ -26,31 +26,81 @@ class GameSync {
         this.outbox = outbox;
     }
 
-    /** Upserts the league's games and marks the feed healthy; returns how many games changed. */
+    /**
+     * Upserts the league's games, appends a history snapshot for each game that changed (ADR 0005), and marks the feed
+     * healthy; returns how many games changed.
+     */
     @Transactional
     public int record(League league, List<FeedGame> games, Instant observedAt) {
         Map<String, FeedGame> previous = previous(games);
         int changed = 0;
         for (FeedGame game : games) {
             if (game.league() != league) throw new IllegalArgumentException("Game from another league");
-            if (!game.equals(previous.get(game.id()))) changed++;
-            jdbc.update("""
-                    INSERT INTO games (id, league, provider_id, status, starts_at, period, clock,
-                        home_abbreviation, home_name, home_city, home_score,
-                        away_abbreviation, away_name, away_city, away_score, observed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, starts_at = EXCLUDED.starts_at,
-                        period = EXCLUDED.period, clock = EXCLUDED.clock,
-                        home_abbreviation = EXCLUDED.home_abbreviation, home_name = EXCLUDED.home_name,
-                        home_city = EXCLUDED.home_city, home_score = EXCLUDED.home_score,
-                        away_abbreviation = EXCLUDED.away_abbreviation, away_name = EXCLUDED.away_name,
-                        away_city = EXCLUDED.away_city, away_score = EXCLUDED.away_score,
-                        observed_at = EXCLUDED.observed_at
-                    """, game.id(), league.name(), game.providerId(), game.status().name(),
-                    Timestamp.from(game.startsAt()), game.period(), game.clock(),
-                    game.home().abbreviation(), game.home().name(), game.home().city(), game.home().score(),
-                    game.away().abbreviation(), game.away().name(), game.away().city(), game.away().score(),
-                    Timestamp.from(observedAt));
+            boolean isChanged = !game.equals(previous.get(game.id()));
+            if (isChanged) changed++;
+            jdbc.update(connection -> {
+                var statement = connection.prepareStatement("""
+                        INSERT INTO games (id, league, provider_id, status, starts_at, period, clock,
+                            home_abbreviation, home_name, home_city, home_score,
+                            away_abbreviation, away_name, away_city, away_score, observed_at,
+                            provider_state, home_periods, away_periods, final_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                                CASE WHEN ? = 'FINAL' THEN ?::timestamptz END)
+                        ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, starts_at = EXCLUDED.starts_at,
+                            period = EXCLUDED.period, clock = EXCLUDED.clock,
+                            home_abbreviation = EXCLUDED.home_abbreviation, home_name = EXCLUDED.home_name,
+                            home_city = EXCLUDED.home_city, home_score = EXCLUDED.home_score,
+                            away_abbreviation = EXCLUDED.away_abbreviation, away_name = EXCLUDED.away_name,
+                            away_city = EXCLUDED.away_city, away_score = EXCLUDED.away_score,
+                            observed_at = EXCLUDED.observed_at, provider_state = EXCLUDED.provider_state,
+                            home_periods = EXCLUDED.home_periods, away_periods = EXCLUDED.away_periods,
+                            final_at = CASE WHEN EXCLUDED.status = 'FINAL'
+                                            THEN COALESCE(games.final_at, EXCLUDED.final_at) END
+                        """);
+                int i = 0;
+                statement.setString(++i, game.id());
+                statement.setString(++i, league.name());
+                statement.setString(++i, game.providerId());
+                statement.setString(++i, game.status().name());
+                statement.setTimestamp(++i, Timestamp.from(game.startsAt()));
+                statement.setObject(++i, game.period());
+                statement.setString(++i, game.clock());
+                statement.setString(++i, game.home().abbreviation());
+                statement.setString(++i, game.home().name());
+                statement.setString(++i, game.home().city());
+                statement.setObject(++i, game.home().score());
+                statement.setString(++i, game.away().abbreviation());
+                statement.setString(++i, game.away().name());
+                statement.setString(++i, game.away().city());
+                statement.setObject(++i, game.away().score());
+                statement.setTimestamp(++i, Timestamp.from(observedAt));
+                statement.setString(++i, game.providerState());
+                statement.setArray(++i, connection.createArrayOf("integer", game.home().periods().toArray()));
+                statement.setArray(++i, connection.createArrayOf("integer", game.away().periods().toArray()));
+                statement.setString(++i, game.status().name());
+                statement.setTimestamp(++i, Timestamp.from(observedAt));
+                return statement;
+            });
+            if (isChanged) {
+                jdbc.update(connection -> {
+                    var statement = connection.prepareStatement("""
+                            INSERT INTO game_snapshots (game_id, observed_at, status, provider_state, period, clock,
+                                home_score, away_score, home_periods, away_periods)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """);
+                    statement.setString(1, game.id());
+                    statement.setTimestamp(2, Timestamp.from(observedAt));
+                    statement.setString(3, game.status().name());
+                    statement.setString(4, game.providerState());
+                    statement.setObject(5, game.period());
+                    statement.setString(6, game.clock());
+                    statement.setObject(7, game.home().score());
+                    statement.setObject(8, game.away().score());
+                    statement.setArray(9, connection.createArrayOf("integer", game.home().periods().toArray()));
+                    statement.setArray(10, connection.createArrayOf("integer", game.away().periods().toArray()));
+                    return statement;
+                });
+            }
         }
         jdbc.update("""
                 INSERT INTO sports_feed_status (league, last_success_at) VALUES (?, ?)
@@ -75,6 +125,10 @@ class GameSync {
     }
 
 
+    private static List<Integer> periods(java.sql.Array array) throws java.sql.SQLException {
+        return array == null ? List.of() : List.of((Integer[]) array.getArray());
+    }
+
     private Map<String, FeedGame> previous(List<FeedGame> games) {
         Map<String, FeedGame> previous = new HashMap<>();
         if (games.isEmpty()) return previous;
@@ -87,9 +141,12 @@ class GameSync {
                     GameStatus.valueOf(rs.getString("status")), rs.getTimestamp("starts_at").toInstant(),
                     (Integer) rs.getObject("period"), rs.getString("clock"),
                     new FeedGame.Team(rs.getString("home_abbreviation"), rs.getString("home_name"),
-                            rs.getString("home_city"), (Integer) rs.getObject("home_score")),
+                            rs.getString("home_city"), (Integer) rs.getObject("home_score"),
+                            periods(rs.getArray("home_periods"))),
                     new FeedGame.Team(rs.getString("away_abbreviation"), rs.getString("away_name"),
-                            rs.getString("away_city"), (Integer) rs.getObject("away_score")));
+                            rs.getString("away_city"), (Integer) rs.getObject("away_score"),
+                            periods(rs.getArray("away_periods"))),
+                    rs.getString("provider_state"));
             previous.put(Objects.requireNonNull(rs.getString("id")), game);
         });
         return previous;

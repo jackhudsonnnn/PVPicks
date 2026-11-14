@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, EyeOff, Gavel, Lock, Trophy, Undo2 } from "lucide-react";
+import { Check, EyeOff, Gavel, Lock, ShieldAlert, Trophy, Undo2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,18 +21,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MODES } from "@/features/bets/modes";
-import { StatusBadge } from "@/features/bets/components/status-badge";
+import { StatusBadge } from "./status-badge";
 import { settlerRule } from "@/features/bets/u2pick";
 import { formatCents } from "@/lib/money";
 import { timeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
-import { AvatarStack } from "./backend-avatar";
-import { usePerson } from "./use-person";
-import { BetDetailsDialog } from "./backend-bet-details";
-import type { BetActions } from "./backend-bet-controls";
-import { canCallResult } from "./bet-results";
-import { useNow } from "./use-now";
+import type { Bet } from "@/features/bets/api";
+import type { Table } from "@/features/tables";
+import { type User, AvatarStack, usePerson } from "@/features/people";
+import { BetDetailsDialog } from "./bet-details";
+import type { BetActions } from "./bet-controls";
+import { canCallResult } from "@/features/bets/bet-results";
+import { useNow } from "@/lib/use-now";
+import { useTicker, tickerStatus } from "@/features/sports";
+import { isScoreMode, scoreLine } from "@/features/bets/sports-model";
 import {
   activeHint,
   choiceTallies,
@@ -42,12 +44,12 @@ import {
   potCents,
   secondsLeft,
   ticketStatus,
-} from "./ticket-model";
+} from "@/features/bets/ticket-model";
 
 interface TicketProps {
-  bet: BackendBet;
-  table: BackendTable;
-  user: BackendUser;
+  bet: Bet;
+  table: Table;
+  user: User;
   expire: () => void;
   /** Profile cache key shared by every name and avatar on the page. */
   peopleKey: readonly string[];
@@ -81,6 +83,11 @@ export function BetTicket({
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
   const canPick = status === "active" && canBet && left > 0 && !blocked;
   const proposer = usePerson(bet.proposerId, user, expire, peopleKey);
+  const ticker = useTicker(user.id);
+  const game = bet.gameId ? ticker.data?.find((g) => g.id === bet.gameId) : undefined;
+  const sports = isScoreMode(bet.modeId);
+  // Hosts have the final say on sports results until the table's points are settled.
+  const canOverride = !!actions && sports && table.hostIds.includes(user.id) && !bet.pointsSettled;
   const wager = formatCents(bet.wagerCents);
   const [confirming, setConfirming] = useState<string | null>(null);
 
@@ -93,7 +100,17 @@ export function BetTicket({
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-extrabold uppercase leading-none">{mode.name}</p>
           <p className="mt-1 line-clamp-2 break-words font-mono text-[11px] leading-tight text-ticket-muted">
-            Custom · <SettlerLabel bet={bet} proposer={proposer?.name} />
+            {bet.gameId ? (
+              game ? (
+                scoreLine(game, tickerStatus(game))
+              ) : (
+                "Game"
+              )
+            ) : (
+              <>
+                Custom · <SettlerLabel bet={bet} proposer={proposer?.name} />
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -214,10 +231,23 @@ export function BetTicket({
         {status === "pending" && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-status-pending/20 px-3 py-2 text-xs font-medium">
             <span className="flex items-center gap-2">
-              <Lock className="size-3.5" /> Locked · picks are in
+              <Lock className="size-3.5" /> Locked ·{" "}
+              {sports ? "waiting on the game" : "picks are in"}
             </span>
-            {actions && canCallResult(bet, table, user.id) ? (
-              <CallItMenu bet={bet} tableId={table.id} actions={actions} disabled={blocked} />
+            {sports ? (
+              canOverride ? (
+                <OutcomeMenu
+                  bet={bet}
+                  tableId={table.id}
+                  actions={actions!}
+                  disabled={blocked}
+                  override
+                />
+              ) : (
+                <span className="text-right text-ticket-muted">Settles from the feed</span>
+              )
+            ) : actions && canCallResult(bet, table, user.id) ? (
+              <OutcomeMenu bet={bet} tableId={table.id} actions={actions} disabled={blocked} />
             ) : (
               <span className="text-right text-ticket-muted">
                 Waiting on <SettlerWho bet={bet} proposer={proposer?.name} />
@@ -248,6 +278,23 @@ export function BetTicket({
         {status === "washed" && (
           <div className="flex items-center gap-2 rounded-lg bg-status-washed/20 px-3 py-2 text-xs font-medium">
             <Undo2 className="size-3.5" /> {bet.washReason ?? "Washed"}, wagers returned
+          </div>
+        )}
+
+        {bet.overriddenAt && (
+          <p className="flex items-center gap-1.5 text-xs text-ticket-muted">
+            <ShieldAlert className="size-3.5" /> Result set by a host
+          </p>
+        )}
+        {canOverride && status !== "pending" && (
+          <div className="flex justify-end">
+            <OutcomeMenu
+              bet={bet}
+              tableId={table.id}
+              actions={actions!}
+              disabled={blocked}
+              override
+            />
           </div>
         )}
 
@@ -327,7 +374,7 @@ export function BetTicket({
   );
 }
 
-function SettlerLabel({ bet, proposer }: { bet: BackendBet; proposer: string | undefined }) {
+function SettlerLabel({ bet, proposer }: { bet: Bet; proposer: string | undefined }) {
   const rule = bet.settledBy ?? "hosts";
   if (rule === "me")
     return <>{proposer === "You" ? "you call it" : `${proposer ?? "…"} calls it`}</>;
@@ -339,55 +386,72 @@ function SettlerLabel({ bet, proposer }: { bet: BackendBet; proposer: string | u
   );
 }
 
-function SettlerWho({ bet, proposer }: { bet: BackendBet; proposer: string | undefined }) {
+function SettlerWho({ bet, proposer }: { bet: Bet; proposer: string | undefined }) {
   const rule = bet.settledBy ?? "hosts";
   if (rule === "me") return <>{proposer ?? "the proposer"}</>;
   return <>{settlerRule(rule).label.toLowerCase()}</>;
 }
 
-/** "What happened?" menu: one of the bet's choices or a wash, confirmed before it's sent (it can't be undone). */
-function CallItMenu({
+/**
+ * "What happened?" menu: one of the bet's choices or a wash, confirmed before it's sent. U2Pick settlers call the
+ * result once; with {@code override}, a host sets or corrects a sports result until points are settled.
+ */
+function OutcomeMenu({
   bet,
   tableId,
   actions,
   disabled,
+  override = false,
 }: {
-  bet: BackendBet;
+  bet: Bet;
   tableId: string;
   actions: BetActions;
   disabled: boolean;
+  override?: boolean;
 }) {
   // undefined: nothing chosen; null: wash.
   const [choice, setChoice] = useState<string | null | undefined>(undefined);
+  const resolved = bet.status === "SETTLED" || bet.status === "WASHED";
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="ticketGhost" className="h-7 gap-1.5 px-2" disabled={disabled}>
-            <Gavel className="size-3.5" /> Call it
+            {override ? <ShieldAlert className="size-3.5" /> : <Gavel className="size-3.5" />}
+            {override ? (resolved ? "Change result" : "Override") : "Call it"}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>What happened?</DropdownMenuLabel>
+          <DropdownMenuLabel>{override ? "Set the result" : "What happened?"}</DropdownMenuLabel>
           {bet.choices.map((c) => (
             <DropdownMenuItem key={c} onSelect={() => setChoice(c)}>
               {c}
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setChoice(null)}>None of these (wash)</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setChoice(null)}>
+            {override ? "Wash it" : "None of these (wash)"}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <AlertDialog open={choice !== undefined} onOpenChange={(o) => !o && setChoice(undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {choice === null ? "Wash this bet?" : `Call “${choice}” as the result?`}
+              {choice === null
+                ? "Wash this bet?"
+                : override
+                  ? `Set “${choice}” as the result?`
+                  : `Call “${choice}” as the result?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {choice === null
-                ? "Everyone's wager comes back. This can't be undone."
-                : "Points move between players who picked. This can't be undone."}
+              {override
+                ? choice === null
+                  ? "Everyone's wager comes back. The table sees that a host washed it. You can change it again until points are settled."
+                  : "This replaces the feed's result. The table sees that a host set it. You can change it again until points are settled."
+                : choice === null
+                  ? "Everyone's wager comes back. This can't be undone."
+                  : "Points move between players who picked. This can't be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -395,7 +459,12 @@ function CallItMenu({
             <AlertDialogAction
               onClick={() => {
                 if (choice !== undefined)
-                  actions.start({ kind: "resolve", tableId, betId: bet.id, winningChoice: choice });
+                  actions.start({
+                    kind: override ? "override" : "resolve",
+                    tableId,
+                    betId: bet.id,
+                    winningChoice: choice,
+                  });
                 setChoice(undefined);
               }}
             >

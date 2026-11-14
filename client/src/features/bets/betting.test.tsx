@@ -2,18 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendApp } from "./backend-app";
-import { getChatUnread, getChatWindow } from "./chat-api";
-import { listTableBalances } from "./tables-api";
-import {
-  currentUser,
-  getTable,
-  listMyBets,
-  listTableBets,
-  listTables,
-  mutationRequest,
-  type BackendBet,
-} from "./backend-api";
+import { App } from "@/app/app";
+import { getChatUnread, getChatWindow } from "@/features/chat/api";
+import { listTableBalances, getTable, listTables } from "@/features/tables/api";
+import { getTicker, type TickerGame } from "@/features/sports/api";
+import { currentUser } from "@/features/auth/api";
+import { listMyBets, listTableBets, type Bet } from "./api";
+import { mutationRequest } from "@/lib/api-client";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -22,21 +17,31 @@ vi.mock("@tanstack/react-router", () => ({
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
     select({ location: route }),
 }));
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/auth/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/auth/api")>()),
   currentUser: vi.fn(),
+}));
+vi.mock("@/features/tables/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/tables/api")>()),
   getTable: vi.fn(),
   listTables: vi.fn(),
-  listTableBets: vi.fn(),
-  listMyBets: vi.fn(),
-  mutationRequest: vi.fn(),
-}));
-vi.mock("./tables-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./tables-api")>()),
   listTableBalances: vi.fn(),
 }));
-vi.mock("./chat-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./chat-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
+  listTableBets: vi.fn(),
+  listMyBets: vi.fn(),
+}));
+vi.mock("@/lib/api-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api-client")>()),
+  mutationRequest: vi.fn(),
+}));
+vi.mock("@/features/sports/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/sports/api")>()),
+  getTicker: vi.fn(),
+}));
+vi.mock("@/features/chat/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat/api")>()),
   getChatUnread: vi.fn(),
   getChatWindow: vi.fn(),
   markRead: vi.fn(),
@@ -62,7 +67,7 @@ const table = {
   subscribedTo: [],
   disabledPermissions: {},
 };
-const bet: BackendBet = {
+const bet: Bet = {
   id: "123e4567-e89b-42d3-a456-426614174002",
   tableId: table.id,
   proposerId: user.id,
@@ -82,7 +87,7 @@ const bet: BackendBet = {
   myParticipation: "not_joined",
 };
 
-const locked: BackendBet = {
+const locked: Bet = {
   ...bet,
   status: "PENDING",
   settledBy: "hosts",
@@ -96,7 +101,7 @@ function renderApp() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BackendApp />
+      <App />
     </QueryClientProvider>,
   );
 }
@@ -132,7 +137,20 @@ beforeEach(() => {
   vi.mocked(listTableBalances).mockResolvedValue([]);
   vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
   vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
+  vi.mocked(getTicker).mockResolvedValue([liveGame]);
 });
+
+const liveGame: TickerGame = {
+  id: "NBA-18447",
+  league: "NBA",
+  status: "LIVE",
+  startsAt: "2026-11-14T00:00:00Z",
+  period: 3,
+  clock: "Q3 5:12",
+  home: { abbreviation: "BOS", score: 80 },
+  away: { abbreviation: "NYK", score: 77 },
+  observedAt: "2026-11-14T01:30:00Z",
+};
 
 /** Opens the front bet on the felt and returns the ticket dialog. */
 async function openTicket() {
@@ -152,7 +170,9 @@ describe("U2Pick betting", () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: "Bet" }));
     expect(screen.getByRole("button", { name: /Either Or/ })).toBeDisabled();
-    expect(screen.getAllByText("Coming soon")).toHaveLength(7);
+    // Score modes are live; player and play-by-play modes are coming soon.
+    expect(screen.getAllByText("Coming soon")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: /Total Disaster/ })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /U2Pick/ }));
     expect(screen.getByRole("button", { name: "Preview ticket" })).toBeDisabled();
     expect(screen.getByText("Write what you're betting on.")).toBeInTheDocument();
@@ -180,6 +200,78 @@ describe("U2Pick betting", () => {
       },
     );
     expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
+  });
+
+  it("proposes a Total Disaster on a live game; the server builds the question", async () => {
+    vi.mocked(mutationRequest).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...bet,
+          modeId: "total_disaster",
+          gameId: liveGame.id,
+          question: "NYK + BOS combined: over or under 225?",
+          choices: ["Over 225", "Under 225"],
+        }),
+      ),
+    );
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "Bet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Total Disaster/ }));
+    expect(
+      await screen.findByRole("radio", { name: /NYK.*BOS/, checked: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Total points line")).toHaveTextContent("224.5");
+    fireEvent.click(screen.getByRole("button", { name: "Increase" }));
+    expect(screen.getByText(/whole-number line/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Overtime counts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
+    expect(await screen.findByText("NYK + BOS combined: over or under 225?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Send · 1.00 pts/ }));
+    await waitFor(() =>
+      expect(mutationRequest).toHaveBeenCalledWith(
+        `/tables/${table.id}/bets`,
+        "POST",
+        expect.any(String),
+        {
+          modeId: "total_disaster",
+          gameId: liveGame.id,
+          config: { line: 225 },
+          includesOvertime: false,
+          wagerCents: 100,
+          durationSec: 120,
+          forFun: false,
+        },
+      ),
+    );
+  });
+
+  it("lets a host override a locked sports bet; it waits on the game otherwise", async () => {
+    vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 204 }));
+    vi.mocked(listTableBets).mockResolvedValue([
+      {
+        ...locked,
+        modeId: "total_disaster",
+        gameId: liveGame.id,
+        question: "Who wins?",
+        choices: ["Over 224.5", "Under 224.5"],
+        picks: [{ userId: user.id, choice: "Over 224.5" }],
+      },
+    ]);
+    renderApp();
+    const ticket = await openTicket();
+    expect(ticket.getByText(/waiting on the game/)).toBeInTheDocument();
+    expect(ticket.getByText("NYK 77 @ BOS 80 · Q3 5:12")).toBeInTheDocument();
+    fireEvent.keyDown(ticket.getByRole("button", { name: "Override" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Wash it" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    await waitFor(() =>
+      expect(mutationRequest).toHaveBeenCalledWith(
+        `/bets/${bet.id}/override`,
+        "POST",
+        expect.any(String),
+        { winningChoice: null },
+      ),
+    );
   });
 
   it("sends a 4fun bet with no wager", async () => {

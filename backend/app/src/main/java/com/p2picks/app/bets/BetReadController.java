@@ -163,6 +163,7 @@ class BetReadController {
                         'gameId', b.game_id, 'baseline', b.baseline,
                         'includesOvertime', b.includes_overtime, 'settledBy', b.settler_rule,
                         'sourceBetId', b.source_bet_id, 'sourceTableId', b.source_table_id,
+                        'overriddenBy', b.overridden_by, 'overriddenAt', b.overridden_at,
                         'overridden', CASE WHEN b.source_bet_id IS NOT NULL THEN b.overridden END
                     )) ||
                     CASE WHEN b.status = 'ACTIVE' THEN '{}'::jsonb ELSE

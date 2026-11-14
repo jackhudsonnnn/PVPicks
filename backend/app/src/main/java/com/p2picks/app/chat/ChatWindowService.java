@@ -83,11 +83,7 @@ public class ChatWindowService {
                 )
                 SELECT viewer.id AS viewer_id, access.id AS access_id, anchor.message_order AS anchor_order,
                        m.id, m.table_id, m.kind, m.created_at, m.author_id,
-                       CASE m.system_event
-                           WHEN 'host_promoted' THEN COALESCE(subject.username::text, 'Deleted user') || ' is now a host'
-                           WHEN 'host_demoted' THEN COALESCE(subject.username::text, 'Deleted user') || ' is no longer a host'
-                           ELSE m.text
-                       END AS text, m.gif_id, m.bet_id,
+                       %s AS text, m.gif_id, m.bet_id,
                        m.settlement_id, m.message_order, s.host_id,
                        COALESCE((SELECT jsonb_agg(jsonb_build_object('userId', r.user_id, 'emoji', r.emoji)
                                                   ORDER BY r.user_id)
@@ -104,7 +100,7 @@ public class ChatWindowService {
                 LEFT JOIN users subject ON subject.id = m.system_subject_id
                 LEFT JOIN settlements s ON s.id = m.settlement_id AND s.table_id = m.table_id
                 ORDER BY m.message_order
-                """).formatted(ChatVisibility.VISIBLE, selection);
+                """).formatted(ChatVisibility.VISIBLE, selection, ChatVisibility.TEXT);
         List<Object> parameters = new ArrayList<>(List.of(UUID.fromString(jwt.getId()), userId, tableId));
         parameters.add(query.anchor());
         if (query.direction() == Direction.BEFORE || query.direction() == Direction.AFTER) {

@@ -5,18 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { TABLE_EMOJIS } from "@/features/table/emojis";
-import { backendErrorMessage, type BackendUser } from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
-import { PersonName } from "./backend-person-name";
-import { userKey } from "./query-keys";
-import { useSocialActions } from "./social-actions";
-import { useInvites, useRelationships } from "./social-queries";
-import { useTableActions } from "./table-actions";
-import { tableNameProblem } from "./management-rules";
+import { TABLE_EMOJIS } from "@/features/tables/emojis";
+import { backendErrorMessage } from "@/lib/api-client";
+import { type User, PersonName } from "@/features/people";
+import { ActionStatus } from "@/components/action-status";
+import { userKey } from "@/lib/query-keys";
+import { useSocialActions, useInvites, useRelationships } from "@/features/social";
+import { useTableActions } from "@/features/tables/actions";
+import { tableNameProblem } from "@/features/tables/rules";
 
 /** Create a table, optionally asking people who follow you to join. */
-export function CreateTable({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function CreateTable({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const relationships = useRelationships(user.id);
   const actions = useTableActions(
@@ -119,7 +118,7 @@ export function CreateTable({ user, expire }: { user: BackendUser; expire: () =>
 }
 
 /** Pending invitations to join tables, with accept and decline. */
-export function Invitations({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function Invitations({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const invites = useInvites(user.id);
   const actions = useSocialActions(

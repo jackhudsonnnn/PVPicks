@@ -4,16 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { backendErrorMessage, type BackendUser } from "./backend-api";
-import { ActionStatus } from "./backend-action-status";
-import { ConfirmAction } from "./backend-confirm-action";
-import { PersonName } from "./backend-person-name";
-import { BackendSettlements } from "./backend-settlements";
-import { userKey } from "./query-keys";
-import { searchUsers, type Relationships } from "./social-api";
-import { useSocialActions } from "./social-actions";
-import { useRelationships } from "./social-queries";
-import { peopleIn, searchTerm } from "./management-rules";
+import { backendErrorMessage } from "@/lib/api-client";
+import { type User, PersonName } from "@/features/people";
+import { ActionStatus } from "@/components/action-status";
+import { ConfirmAction } from "@/components/confirm-action";
+import { SettlementReceipts } from "@/features/settlements";
+import { userKey } from "@/lib/query-keys";
+import { searchUsers, type Relationships } from "./api";
+import { useSocialActions } from "./actions";
+import { useRelationships } from "./queries";
+import { peopleIn, searchTerm } from "./rules";
 
 const noRelationships: Relationships = { followingIds: [], followerIds: [], blockedIds: [] };
 
@@ -28,7 +28,7 @@ const HINTS: Record<Tab, string> = {
 };
 
 /** Friends: settle-ups, new followers and people, like the prototype's Friends tab. */
-export function BackendFriends({ user, expire }: { user: BackendUser; expire: () => void }) {
+export function FriendsPage({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const relationships = useRelationships(user.id);
   const actions = useSocialActions(
@@ -58,7 +58,7 @@ export function BackendFriends({ user, expire }: { user: BackendUser; expire: ()
   return (
     <div className="space-y-10">
       <h1 className="font-display text-3xl font-bold uppercase">Friends</h1>
-      <BackendSettlements user={user} expire={expire} />
+      <SettlementReceipts user={user} expire={expire} />
 
       <section className="space-y-3" aria-labelledby="people-heading">
         <h2 id="people-heading" className="font-display text-2xl font-bold uppercase">
@@ -117,7 +117,7 @@ export function BackendFriends({ user, expire }: { user: BackendUser; expire: ()
   );
 }
 
-function FindPeople({ user, row }: { user: BackendUser; row: (id: string) => React.ReactNode }) {
+function FindPeople({ user, row }: { user: User; row: (id: string) => React.ReactNode }) {
   const [text, setText] = useState("");
   const term = searchTerm(text);
   const results = useInfiniteQuery({
@@ -175,7 +175,7 @@ function PersonRow({
   actions,
 }: {
   id: string;
-  user: BackendUser;
+  user: User;
   expire: () => void;
   names: string[];
   relationships: Relationships;

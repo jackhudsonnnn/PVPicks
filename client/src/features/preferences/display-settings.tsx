@@ -2,8 +2,8 @@ import { SunMoon, Clock, Sparkles, Type } from "lucide-react";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { Switch } from "@/components/ui/switch";
-import type { ThemePref, MotionPref, TextSize } from "../display";
-import { useSettings } from "../settings-provider";
+import type { ThemePref, MotionPref, TextSize } from "./display";
+import { useSettings } from "./settings-provider";
 
 export function DisplaySettings() {
   const { display, updateDisplay } = useSettings();

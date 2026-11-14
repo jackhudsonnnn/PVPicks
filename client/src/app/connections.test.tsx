@@ -2,15 +2,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsProvider } from "@/features/settings/settings-provider";
-import { currentUser, listTables, mutationRequest } from "./backend-api";
-import { BackendApp } from "./backend-app";
-import { ArchivedTable, ArchivedTables } from "./backend-archives";
-import { BackendGuide } from "./backend-guide";
-import { BackendPreferences } from "./backend-preferences";
-import { getChatUnread, getChatWindow } from "./chat-api";
-import { getDebt, getDebtCap, getInvitePreferences } from "./preferences-api";
-import { listArchives } from "./tables-api";
+import { SettingsProvider } from "@/features/preferences/settings-provider";
+import { currentUser } from "@/features/auth/api";
+import { listTables, listArchives } from "@/features/tables/api";
+import { mutationRequest } from "@/lib/api-client";
+import { App } from "./app";
+import { ArchivedTable, ArchivedTables } from "@/features/tables/components/archives";
+import { GuidePage } from "@/features/guide/guide";
+import { PreferencesPage } from "@/features/preferences/preferences";
+import { getChatUnread, getChatWindow } from "@/features/chat/api";
+import { getDebt, getDebtCap, getInvitePreferences } from "@/features/preferences/api";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -22,30 +23,33 @@ vi.mock("@tanstack/react-router", () => ({
     select: (state: { location: { pathname: string; hash: string } }) => string;
   }) => select({ location: { ...route, hash: "" } }),
 }));
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/auth/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/auth/api")>()),
   currentUser: vi.fn(),
-  listTables: vi.fn(),
-  mutationRequest: vi.fn(),
 }));
-vi.mock("./tables-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./tables-api")>()),
+vi.mock("@/features/tables/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/tables/api")>()),
+  listTables: vi.fn(),
   listArchives: vi.fn(),
 }));
-vi.mock("./chat-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./chat-api")>()),
+vi.mock("@/lib/api-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api-client")>()),
+  mutationRequest: vi.fn(),
+}));
+vi.mock("@/features/chat/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat/api")>()),
   getChatWindow: vi.fn(),
   getChatUnread: vi.fn(),
   markRead: vi.fn(),
 }));
-vi.mock("./preferences-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./preferences-api")>()),
+vi.mock("@/features/preferences/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/preferences/api")>()),
   getInvitePreferences: vi.fn(),
   getDebtCap: vi.fn(),
   getDebt: vi.fn(),
 }));
 const feeds = vi.hoisted(() => [] as (string | null)[]);
-vi.mock("./realtime", () => ({
+vi.mock("@/lib/realtime", () => ({
   RealtimeProvider: ({ children }: { children: ReactNode }) => children,
   useRealtimeStatus: () => null,
   useRealtimeFeed: (destination: string | null) => {
@@ -95,7 +99,7 @@ describe("admin accounts", () => {
         }),
       ),
     );
-    wrap(<BackendApp />);
+    wrap(<App />);
     expect(await screen.findByRole("heading", { name: "Site health" })).toBeInTheDocument();
     expect(await screen.findByText("Up")).toBeInTheDocument();
     expect(screen.getByText("DOWN")).toBeInTheDocument();
@@ -106,7 +110,7 @@ describe("admin accounts", () => {
 describe("guide feedback", () => {
   it("sends feedback to the backend and thanks the player", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 201 }));
-    wrap(<BackendGuide user={player} expire={() => {}} />);
+    wrap(<GuidePage user={player} expire={() => {}} />);
     fireEvent.change(screen.getByLabelText("Your feedback"), {
       target: { value: "  A bet on who scores first, please.  " },
     });
@@ -161,7 +165,7 @@ describe("display settings", () => {
     vi.mocked(getInvitePreferences).mockResolvedValue({ friends: "open", following: "request" });
     vi.mocked(getDebtCap).mockResolvedValue(null);
     vi.mocked(getDebt).mockResolvedValue(0);
-    wrap(<BackendPreferences user={player} expire={() => {}} />);
+    wrap(<PreferencesPage user={player} expire={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Display" }));
     fireEvent.click(await screen.findByRole("tab", { name: "Light" }));
     await waitFor(() => expect(document.documentElement.classList.contains("light")).toBe(true));

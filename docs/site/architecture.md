@@ -47,11 +47,12 @@ flowchart LR
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
 | `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions` |
-| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` |
+| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback`, `admin` | `feedback`; `admin_user_flags` (storage only) |
+| `moderation` | `reports` (stored for a future moderation queue) |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
-| `sports` | `games`, `sports_feed_status` |
+| `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status` |
 | `delivery` | `outbox.published_at` and deletion of old published rows; reads sessions, memberships, invitations, blocks and receipt parties to choose realtime audiences |
 
 Every event type is listed in `common.OutboxEvent`; `common.Outbox` is the only
@@ -89,7 +90,7 @@ U2Pick result, and a member-called result must never authorize a sports bet.
 The only manual path for a sports bet is the planned host override, which
 records the host and announces the change (see the domain rules).
 U2Pick transactions and shared points settlement are exposed over HTTP. The
-`sports` module polls the feed into game snapshots and serves the ticker;
+`sports` module polls the feed into game snapshots with change history, keeps players and per-game player stats (also with history), and serves the ticker;
 sports bets do not read it yet.
 
 ## Transaction pattern

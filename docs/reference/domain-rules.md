@@ -1,20 +1,21 @@
 # Domain rules and test inventory — working reference
 
 Current guides, the roadmap, and accepted decisions describe the design.
-The source paths below identify frontend tests; proposed JUnit names are
-examples rather than a list of implemented tests.
+The paths below are the current client tests that cover each area (most rules
+are server-only, so the backend tests are authoritative); proposed JUnit names
+are examples rather than a list of implemented tests.
 
-| Area | Invariants to preserve | Existing frontend tests | Example JUnit targets |
+| Area | Invariants to preserve | Client tests | Example JUnit targets |
 |---|---|---|---|
-| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Host/proposer can receive remainder even when not a winner; earliest/random distribute to winners. | `bets/payout.test.ts`, `bets/ledger.test.ts` | `splitsLoserPotInCents`, `washWhenNoWinner`, `remainderCanGoToNonParticipant`, `settlementIsZeroSum` |
-| Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `store/reducer.test.ts`, `bets/picks.test.ts`, `bets/u2pick.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
-| Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/modes.test.ts`, `bets/overtime.test.ts`, `bets/info.test.ts` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
-| Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `table/scenarios.test.ts`, `settings/debt-cap.test.ts` | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
-| Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `table/settlements.test.ts`, `social/settle-receipts.test.ts`, `social/settle-groups.test.ts`, `social/settle-changes.test.ts` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
-| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `table/quick-picks.test.ts`, `store/reducer.test.ts` | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
-| Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `auth/local-accounts.test.ts`, `settings/profile.test.ts`, `settings/deletion.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
-| Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `social/follows.test.ts`, `social/invites.test.ts`, `social/safety.test.ts`, `admin/admin-pages.test.ts` | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
-| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. | `table/chat-window.test.ts`, `table/reactions.test.ts`, `table/unread.test.ts` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
+| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Host/proposer can receive remainder even when not a winner; earliest/random distribute to winners. | None (server only) | `splitsLoserPotInCents`, `washWhenNoWinner`, `remainderCanGoToNonParticipant`, `settlementIsZeroSum` |
+| Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
+| Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
+| Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `bets/api.test.ts` (balances), `preferences/preferences.test.tsx` (debt cap) | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
+| Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/settlement-integration.test.tsx` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
+| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
+| Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
+| Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
+| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
 
 Paths in the table are relative to `client/src/features/`. Review the
 backend test guidance before declaring the contract complete.
@@ -553,10 +554,31 @@ records. The outbox records events but does not deliver them; future
 consumers must recheck invitation eligibility before exposing or delivering an
 event that may have been cancelled after it was written.
 
-## Sports outcomes and host overrides — planned
+## Sports outcomes and host overrides — partly implemented
 
-Nothing in this section is implemented yet. It records the user's decisions
-for sports bets, which resolve from the feed (ADR 0004, ADR 0005).
+Implemented for the score modes, Total Disaster and Give And Take (dev,
+2026-11-14): proposals on a stored game, locking, automatic results and washes
+from the feed, and the host override. The player and play-by-play modes are
+not implemented. Sports bets resolve from the feed (ADR 0004, ADR 0005).
+
+Implementation notes:
+
+- The server builds a score-mode bet's question and choices from the stored
+  game: Total Disaster "AWY + HOM combined: over or under L?" with Over and
+  Under; Give And Take "HOM ±S, who covers?" with the home side first. Lines
+  are in half points.
+- A pregame bet's picks lock at its window's end or the game's scheduled start,
+  whichever is first. A delayed start never reopens picks.
+- The resolution worker checks Pending score bets every 30 seconds without
+  locking anything until a result is due, then settles them in their own
+  transaction. Feed results have no `called_by`. The grace period after Final
+  is 20 minutes. Wash reasons: "Push", "Game canceled or postponed", "Game
+  suspended for more than 48 hours".
+- Overrides: `POST /bets/{id}/override` (current host; sports modes only). An
+  Active bet locks first. A correction appends compensating ledger entries so
+  each user's sum is the new result. The bet records `overriddenBy` and
+  `overriddenAt`, and chat shows "<host> set “<question>” to <choice>" or
+  "<host> washed “<question>”".
 
 **Hosts have the final say.** A host is the person the table trusts to be fair
 and to facilitate the money exchange, so a host may override any sports bet
@@ -575,7 +597,24 @@ Automatic resolution, before any override:
 | Score corrected after the bet resolved | No automatic re-settlement |
 | Feed outage or `unknown` status | Never settles automatically; waits |
 | Player prop whose player did not play | Wash |
-| Proposal after the game started | Rejected; sports bets lock at the start |
+| Proposal after the game is Final, canceled or postponed | Rejected |
+
+Sports bet rules (decided 2026-11-14):
+
+- **Live and pregame:** a sports bet can be proposed any time until its game is
+  Final, canceled or postponed, with the usual 30–600 second pick window. Picks
+  lock when the window ends, or when the game starts if that comes first.
+- **Whole-game totals:** player and score modes count the whole game's totals,
+  whenever the bet was made. No baseline is snapshotted.
+- **Overtime:** stat and score modes have an "Overtime counts" setting chosen
+  by the proposer, on by default. Off means the result is decided at the end of
+  regulation.
+- **King Of The Hill:** the target must be above both players' current numbers
+  when proposed. If either player reaches it before picks lock, the bet washes.
+  If both first reach it in the same feed update, the bet washes. If neither
+  reaches it by the end, Neither wins.
+- **Lines:** a push on a whole-number line (Total Disaster, Give And Take, Prop
+  Hunt) washes; half-point lines can't push. Either Or washes on a tie.
 
 Host override:
 

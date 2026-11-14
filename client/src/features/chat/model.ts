@@ -1,5 +1,5 @@
-import { QUICK_REACTIONS, summarize, type ReactionSummary } from "@/features/table/reactions";
-import type { ChatMessage } from "./chat-api";
+import { QUICK_REACTIONS, summarize, type ReactionSummary } from "./reactions";
+import type { ChatMessage } from "./api";
 
 /**
  * Pure helpers for the loaded chat history. The server orders messages by an internal sequence that clients

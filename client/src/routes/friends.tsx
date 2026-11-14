@@ -17,6 +17,6 @@ export const Route = createFileRoute("/friends")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  // The root renders BackendApp for every path; this route only provides the path and page metadata.
+  // The root renders App for every path; this route only provides the path and page metadata.
   component: () => null,
 });

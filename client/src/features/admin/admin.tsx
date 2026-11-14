@@ -3,8 +3,9 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { backendErrorMessage, read, request, type BackendUser } from "./backend-api";
-import { userKey } from "./query-keys";
+import { backendErrorMessage, read, request } from "@/lib/api-client";
+import type { User } from "@/features/people";
+import { userKey } from "@/lib/query-keys";
 import { timeLabel } from "@/lib/time";
 
 const status = z.enum(["UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN"]);
@@ -23,13 +24,7 @@ async function getAdminHealth(signal?: AbortSignal) {
  * The admin view. Admin accounts cannot use player APIs (tables, bets, chat, friends), so they see admin tools
  * only. Today that is dependency health; user audit, moderation and reports are not implemented on the server.
  */
-export function AdminWorkspace({
-  user,
-  logout,
-}: {
-  user: BackendUser;
-  logout: () => Promise<void>;
-}) {
+export function AdminWorkspace({ user, logout }: { user: User; logout: () => Promise<void> }) {
   const health = useQuery({
     queryKey: userKey(user.id, "admin-health"),
     queryFn: ({ signal }) => getAdminHealth(signal),

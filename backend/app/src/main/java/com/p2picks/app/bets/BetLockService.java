@@ -42,15 +42,21 @@ class BetLockService {
 
     @Transactional
     public Outcome lock(UUID betId) {
-        return lockInternal(betId, null);
+        return lockInternal(betId, null, false);
     }
 
     @Transactional
     public Outcome lock(UUID betId, Set<String> supportedModes) {
-        return lockInternal(betId, Set.copyOf(supportedModes));
+        return lockInternal(betId, Set.copyOf(supportedModes), false);
     }
 
-    private Outcome lockInternal(UUID betId, Set<String> supportedModes) {
+    /** Locks before the deadline, for a host override on a bet still taking picks. */
+    @Transactional
+    public Outcome lockNow(UUID betId) {
+        return lockInternal(betId, null, true);
+    }
+
+    private Outcome lockInternal(UUID betId, Set<String> supportedModes, boolean early) {
         List<UUID> tableIds = jdbc.query("SELECT table_id FROM bets WHERE id = ?",
                 (rs, row) -> rs.getObject("table_id", UUID.class), betId);
         if (tableIds.isEmpty()) return Outcome.NOT_FOUND;
@@ -76,7 +82,7 @@ class BetLockService {
         if (bets.isEmpty()) throw new IllegalStateException("Bet disappeared during locking");
         Bet bet = bets.getFirst();
         if (!bet.status().equals("ACTIVE")) return Outcome.ALREADY_LOCKED;
-        if (!bet.due()) return Outcome.NOT_DUE;
+        if (!bet.due() && !early) return Outcome.NOT_DUE;
         if (supportedModes != null && !supportedModes.contains(bet.mode())) throw new UnsupportedMode(bet.mode());
 
         List<Picker> pickers = jdbc.query("""

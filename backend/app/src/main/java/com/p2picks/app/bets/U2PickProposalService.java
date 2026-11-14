@@ -4,19 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.p2picks.app.bets.U2PickSettler;
 import com.p2picks.app.common.IdempotencyGuard;
-import com.p2picks.app.common.Outbox;
-import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.common.PostgresText;
-import com.p2picks.app.security.MutationAuthentication;
-import com.p2picks.app.settlement.DebtQuery;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,23 +40,12 @@ class U2PickProposalService {
         }
     }
 
-    static class DebtCapExceeded extends RuntimeException {}
-
-    private final JdbcTemplate jdbc;
-    private final MutationAuthentication authentication;
-    private final IdempotencyGuard idempotency;
-    private final DebtQuery debt;
+    private final BetProposalWriter writer;
     private final ObjectMapper json;
-    private final Outbox outbox;
 
-    U2PickProposalService(JdbcTemplate jdbc, MutationAuthentication authentication,
-            IdempotencyGuard idempotency, DebtQuery debt, ObjectMapper json, Outbox outbox) {
-        this.jdbc = jdbc;
-        this.authentication = authentication;
-        this.idempotency = idempotency;
-        this.debt = debt;
+    U2PickProposalService(BetProposalWriter writer, ObjectMapper json) {
+        this.writer = writer;
         this.json = json;
-        this.outbox = outbox;
     }
 
     @Transactional
@@ -83,61 +66,11 @@ class U2PickProposalService {
         fingerprint.put("forFun", proposal.forFun());
         fingerprint.put("settledBy", proposal.settlerRule().name());
 
-        UUID actor = UUID.fromString(jwt.getSubject());
-        if (!authentication.lockActive(jwt)) return failure(Outcome.UNAUTHORIZED);
-        authentication.requireUnexpired(jwt);
-        if (!"PLAYER".equals(jdbc.queryForObject("SELECT role FROM users WHERE id = ?", String.class, actor))) {
-            return failure(Outcome.FORBIDDEN);
-        }
-        List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled FROM tables
-                WHERE id = ? AND archived_at IS NULL FOR UPDATE
-                """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"),
-                        rs.getBoolean("u2pick_enabled")), tableId);
-        if (tables.isEmpty()) {
-            authentication.requireUnexpired(jwt);
-            return failure(Outcome.NOT_FOUND);
-        }
-        List<Member> members = jdbc.query("""
-                SELECT role, can_bet FROM table_members WHERE table_id = ? AND user_id = ? FOR UPDATE
-                """, (rs, row) -> new Member(rs.getString("role"), rs.getBoolean("can_bet")), tableId, actor);
-        authentication.requireUnexpired(jwt);
-        if (members.isEmpty()) return failure(Outcome.NOT_FOUND);
-        Member member = members.getFirst();
-        if (!member.canBet()) return failure(Outcome.FORBIDDEN);
-
-        IdempotencyGuard.Claim claim = idempotency.claim(actor, key, OPERATION, write(fingerprint),
-                IdempotencyGuard.SuccessStatus.CREATED);
-        authentication.requireUnexpired(jwt);
-        if (claim == IdempotencyGuard.Claim.CONFLICT) return failure(Outcome.CONFLICT);
-        if (claim == IdempotencyGuard.Claim.REPLAY) {
-            UUID betId = idempotency.responseReference(actor, key, OPERATION);
-            authentication.requireUnexpired(jwt);
-            return new Result(Outcome.REPLAYED, betId);
-        }
-        Settings settings = tables.getFirst();
-        if (!settings.u2pickEnabled() || (settings.hostsOnlyBets() && !member.role().equals("HOST"))) {
-            idempotency.discardNewClaim(actor, key);
-            authentication.requireUnexpired(jwt);
-            return failure(Outcome.FORBIDDEN);
-        }
-        if (!debt.canRiskForLockedUser(actor, proposal.wagerCents(), proposal.forFun())) {
-            throw new DebtCapExceeded();
-        }
-        UUID betId = UUID.randomUUID();
-        jdbc.update("""
-                WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AS at)
-                INSERT INTO bets (id, table_id, proposer_id, mode, config, question, choices,
-                                  wager_cents, is_4fun, locks_at, created_at, settler_rule)
-                SELECT ?, ?, ?, 'u2pick', ?::jsonb, ?, ?::jsonb, ?, ?,
-                       stamp.at + (? * interval '1 second'), stamp.at, ? FROM stamp
-                """, betId, tableId, actor, configJson, proposal.definition().question(), choicesJson,
-                proposal.wagerCents(), proposal.forFun(), proposal.durationSec(),
-                proposal.settlerRule().name().toLowerCase(java.util.Locale.ROOT));
-        outbox.append(OutboxEvent.BET_CREATED, betId, Map.of("tableId", tableId, "betId", betId));
-        idempotency.saveResponseReference(actor, key, OPERATION, betId);
-        authentication.requireUnexpired(jwt);
-        return new Result(Outcome.CREATED, betId);
+        BetProposalWriter.Result result = writer.create(jwt, tableId, key, OPERATION, write(fingerprint), true,
+                () -> new BetProposalWriter.NewBet("u2pick", null, configJson, proposal.definition().question(),
+                        choicesJson, proposal.wagerCents(), proposal.forFun(), proposal.durationSec(),
+                        proposal.settlerRule().name().toLowerCase(java.util.Locale.ROOT), null, null));
+        return new Result(Outcome.valueOf(result.outcome().name()), result.betId());
     }
 
     private ObjectNode canonicalConfig(ObjectNode config, U2PickDefinition definition) {
@@ -176,10 +109,4 @@ class U2PickProposalService {
         }
     }
 
-    private static Result failure(Outcome outcome) {
-        return new Result(outcome, null);
-    }
-
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled) {}
-    private record Member(String role, boolean canBet) {}
 }

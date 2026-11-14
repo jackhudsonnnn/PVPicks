@@ -28,14 +28,22 @@ import org.springframework.web.bind.annotation.RestController;
 class BetMutationController {
     private static final Set<String> PROPOSAL_FIELDS =
             Set.of("modeId", "config", "question", "choices", "wagerCents", "durationSec", "forFun", "settledBy");
+    private static final Set<String> SPORTS_FIELDS =
+            Set.of("modeId", "gameId", "config", "includesOvertime", "wagerCents", "durationSec", "forFun",
+                    "question", "choices");
     private final U2PickProposalService proposals;
+    private final SportsProposalService sportsProposals;
     private final BetPickService picks;
     private final U2PickResolutionService resolutions;
+    private final HostOverrideService overrides;
     private final BetReadController reads;
 
-    BetMutationController(U2PickProposalService proposals, BetPickService picks,
-            U2PickResolutionService resolutions, BetReadController reads) {
+    BetMutationController(U2PickProposalService proposals, SportsProposalService sportsProposals,
+            BetPickService picks, U2PickResolutionService resolutions, HostOverrideService overrides,
+            BetReadController reads) {
+        this.overrides = overrides;
         this.proposals = proposals;
+        this.sportsProposals = sportsProposals;
         this.picks = picks;
         this.resolutions = resolutions;
         this.reads = reads;
@@ -45,6 +53,9 @@ class BetMutationController {
     ResponseEntity<?> propose(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tableId,
             @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody JsonNode input) {
         if (!IdempotencyGuard.validKey(key)) return badKey();
+        if (SportsProposalService.MODES.contains(input.path("modeId").asText(""))) {
+            return proposeSports(jwt, tableId, key, input);
+        }
         U2PickProposalService.Proposal proposal;
         try {
             proposal = parseProposal(input);
@@ -53,25 +64,60 @@ class BetMutationController {
         }
         try {
             var result = proposals.create(jwt, tableId, proposal, key);
-            return switch (result.outcome()) {
-                case CREATED, REPLAYED -> {
-                    ResponseEntity<?> bet = reads.get(jwt, result.betId());
-                    yield bet.getStatusCode().is2xxSuccessful()
-                            ? ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(bet.getBody())
-                            : bet;
-                }
-                case CONFLICT -> conflict();
-                case UNAUTHORIZED -> unauthorized();
-                case FORBIDDEN -> forbidden();
-                case NOT_FOUND -> notFound();
-            };
+            return created(jwt, result.outcome().name(), result.betId());
         } catch (IllegalArgumentException exception) {
             return error(400, "bad_request", "Invalid U2Pick proposal.");
-        } catch (U2PickProposalService.DebtCapExceeded exception) {
+        } catch (BetProposalWriter.DebtCapExceeded exception) {
             return error(409, "debt_cap_exceeded", "This proposal would exceed the debt cap.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }
+    }
+
+    private ResponseEntity<?> proposeSports(Jwt jwt, UUID tableId, String key, JsonNode input) {
+        SportsProposalService.Proposal proposal;
+        try {
+            if (!input.isObject() || !onlyFields(input, SPORTS_FIELDS) || !input.path("gameId").isTextual()
+                    || !(input.get("config") instanceof ObjectNode config) || config.size() != 1
+                    || !config.path("line").isNumber()
+                    || (input.has("includesOvertime") && !input.path("includesOvertime").isBoolean())
+                    || !input.path("wagerCents").isIntegralNumber() || !input.path("wagerCents").canConvertToLong()
+                    || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()
+                    || !input.path("forFun").isBoolean()) {
+                throw new IllegalArgumentException("Invalid proposal");
+            }
+            proposal = new SportsProposalService.Proposal(input.path("modeId").textValue(),
+                    input.path("gameId").textValue(), config.path("line").decimalValue(),
+                    input.path("includesOvertime").asBoolean(true), input.path("wagerCents").longValue(),
+                    input.path("durationSec").intValue(), input.path("forFun").booleanValue());
+        } catch (IllegalArgumentException exception) {
+            return error(400, "bad_request", "Invalid sports proposal.");
+        }
+        try {
+            var result = sportsProposals.create(jwt, tableId, proposal, key);
+            return created(jwt, result.outcome().name(), result.betId());
+        } catch (BetProposalWriter.ModeUnavailable exception) {
+            return error(409, "game_unavailable", "That game can't take new bets.");
+        } catch (BetProposalWriter.DebtCapExceeded exception) {
+            return error(409, "debt_cap_exceeded", "This proposal would exceed the debt cap.");
+        } catch (MutationAuthentication.ExpiredSession exception) {
+            return unauthorized();
+        }
+    }
+
+    private ResponseEntity<?> created(Jwt jwt, String outcome, UUID betId) {
+        return switch (outcome) {
+            case "CREATED", "REPLAYED" -> {
+                ResponseEntity<?> bet = reads.get(jwt, betId);
+                yield bet.getStatusCode().is2xxSuccessful()
+                        ? ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(bet.getBody())
+                        : bet;
+            }
+            case "CONFLICT" -> conflict();
+            case "UNAUTHORIZED" -> unauthorized();
+            case "FORBIDDEN" -> forbidden();
+            default -> notFound();
+        };
     }
 
     @PutMapping("/bets/{betId}/pick")
@@ -117,6 +163,34 @@ class BetMutationController {
             return error(409, "bet_affected_users_changed", "Affected users changed; retry the request.");
         } catch (U2PickResolutionService.CopyPropagationUnavailable exception) {
             return error(409, "quick_pick_propagation_unavailable", "Quick Pick result propagation is unavailable.");
+        } catch (MutationAuthentication.ExpiredSession exception) {
+            return unauthorized();
+        }
+    }
+
+    /** A host washes a sports bet or sets its result, until the table's points are settled. */
+    @PostMapping("/bets/{betId}/override")
+    ResponseEntity<?> override(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID betId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody JsonNode input) {
+        if (!IdempotencyGuard.validKey(key)) return badKey();
+        JsonNode choice = input.path("winningChoice");
+        if (!input.isObject() || input.size() != 1 || (!choice.isTextual() && !choice.isNull())) {
+            return error(400, "bad_request", "A winning choice or null is required.");
+        }
+        try {
+            return switch (overrides.override(jwt, betId, choice.isNull() ? null : choice.textValue(), key)) {
+                case OVERRIDDEN, REPLAYED -> noContent();
+                case CONFLICT -> conflict();
+                case UNAUTHORIZED -> unauthorized();
+                case FORBIDDEN -> forbidden();
+                case NOT_FOUND -> notFound();
+            };
+        } catch (HostOverrideService.InvalidChoice exception) {
+            return error(400, "invalid_choice", "The result does not match the bet.");
+        } catch (HostOverrideService.PointsSettled exception) {
+            return error(409, "points_settled", "The table's points for this bet are settled; the result is final.");
+        } catch (SportsBetLoader.UsersChanged exception) {
+            return error(409, "bet_affected_users_changed", "Affected users changed; retry the request.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }

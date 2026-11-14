@@ -119,6 +119,90 @@ class SportsIntegrationTest extends IntegrationTestSupport {
         mvc.perform(get("/ticker")).andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void historyKeepsOneSnapshotPerChangeAndFinalAtStartsTheGracePeriod() {
+        String id = "h" + ThreadLocalRandom.current().nextLong(1L << 40);
+        Instant start = Instant.parse("2026-11-13T00:00:00Z");
+        Instant t1 = start.plusSeconds(3600);
+        FeedGame live = new FeedGame(League.NFL, id, GameStatus.LIVE, start, 4, "4th", team("HOM", 17,
+                List.of(7, 3, 7)), team("AWY", 14, List.of(0, 7, 7)), "in_progress");
+        sync.record(League.NFL, List.of(live), t1);
+        sync.record(League.NFL, List.of(live), t1.plusSeconds(60));
+        FeedGame overtime = new FeedGame(League.NFL, id, GameStatus.FINAL, start, null, null,
+                team("HOM", 23, List.of(7, 3, 7, 0, 6)), team("AWY", 17, List.of(0, 7, 7, 3, 0)), "final");
+        sync.record(League.NFL, List.of(overtime), t1.plusSeconds(120));
+        sync.record(League.NFL, List.of(overtime), t1.plusSeconds(180));
+        String gameId = "NFL-" + id;
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM game_snapshots WHERE game_id = ?", Integer.class, gameId))
+                .as("only changes are kept").isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT final_at FROM games WHERE id = ?", java.sql.Timestamp.class, gameId)
+                .toInstant()).as("first Final, not the latest poll").isEqualTo(t1.plusSeconds(120));
+        assertThat(jdbc.queryForObject("SELECT provider_state || array_to_string(home_periods, ',') FROM games "
+                + "WHERE id = ?", String.class, gameId)).isEqualTo("final7,3,7,0,6");
+        assertThat(overtime.home().regulationScore()).isEqualTo(17);
+
+        // A correction back out of Final clears final_at, so the grace period restarts.
+        sync.record(League.NFL, List.of(live), t1.plusSeconds(240));
+        assertThat(jdbc.queryForObject("SELECT final_at FROM games WHERE id = ?", java.sql.Timestamp.class, gameId))
+                .isNull();
+        assertThat(jdbc.queryForObject("""
+                SELECT string_agg(status || ':' || provider_state, ',' ORDER BY observed_at, id)
+                FROM game_snapshots WHERE game_id = ?
+                """, String.class, gameId)).isEqualTo("LIVE:in_progress,FINAL:final,LIVE:in_progress");
+    }
+
+    @Autowired
+    private StatsSync stats;
+
+    @Test
+    void playerLinesKeepCurrentTotalsAndAHistoryOfChanges() {
+        String id = "s" + ThreadLocalRandom.current().nextLong(1L << 40);
+        Instant start = Instant.parse("2026-11-13T00:00:00Z");
+        sync.record(League.NBA, List.of(new FeedGame(League.NBA, id, GameStatus.LIVE, start, 1, "Q1 5:00",
+                team("HOM", 10, List.of(10)), team("AWY", 8, List.of(8)), "in_progress")), start);
+        String gameId = "NBA-" + id;
+        FeedPlayer star = new FeedPlayer(League.NBA, "p" + id, "Star", "Player", "G", "HOM");
+        FeedPlayer bench = new FeedPlayer(League.NBA, "b" + id, "Bench", "Player", "C", "HOM");
+        StatLine early = new StatLine(League.NBA, id, star, true, Map.of("points", 4, "rebounds", 1));
+        StatLine sitting = new StatLine(League.NBA, id, bench, false, Map.of("points", 0, "rebounds", 0));
+        assertThat(stats.recordGame(gameId, List.of(early, sitting), start.plusSeconds(60))).isEqualTo(2);
+        assertThat(stats.recordGame(gameId, List.of(early, sitting), start.plusSeconds(80))).as("unchanged").isZero();
+        StatLine later = new StatLine(League.NBA, id, star, true, Map.of("points", 9, "rebounds", 1));
+        assertThat(stats.recordGame(gameId, List.of(later, sitting), start.plusSeconds(100))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT (stats ->> 'points')::int FROM player_game_stats WHERE game_id = ? AND player_id = ?
+                """, Integer.class, gameId, star.id())).isEqualTo(9);
+        assertThat(jdbc.queryForObject("""
+                SELECT string_agg((stats ->> 'points') || '@' || extract(epoch FROM observed_at)::bigint, ','
+                                  ORDER BY observed_at, id)
+                FROM player_stat_snapshots WHERE game_id = ? AND player_id = ?
+                """, String.class, gameId, star.id()))
+                .isEqualTo("4@" + start.plusSeconds(60).getEpochSecond() + ",9@" + start.plusSeconds(100).getEpochSecond());
+        assertThat(jdbc.queryForObject("SELECT played FROM player_game_stats WHERE player_id = ?", Boolean.class,
+                bench.id())).isFalse();
+    }
+
+    @Test
+    void anActiveListRefreshRetiresPlayersItNoLongerLists() {
+        String id = "r" + ThreadLocalRandom.current().nextLong(1L << 40);
+        Instant first = Instant.parse("2026-11-10T00:00:00Z");
+        FeedPlayer stays = new FeedPlayer(League.NFL, "a" + id, "Stays", "Here", "WR", "NYG");
+        FeedPlayer leaves = new FeedPlayer(League.NFL, "b" + id, "Leaves", "Soon", "RB", "NYG");
+        stats.recordActivePlayers(League.NFL, List.of(stays, leaves), first, first, true);
+        Instant second = first.plus(Duration.ofDays(1));
+        stats.recordActivePlayers(League.NFL, List.of(stays), second, second, false);
+        assertThat(jdbc.queryForObject("SELECT active FROM players WHERE id = ?", Boolean.class, leaves.id()))
+                .as("not retired until the refresh finishes").isTrue();
+        stats.recordActivePlayers(League.NFL, List.of(), second, second.plusSeconds(20), true);
+        assertThat(jdbc.queryForObject("SELECT active FROM players WHERE id = ?", Boolean.class, leaves.id())).isFalse();
+        assertThat(jdbc.queryForObject("SELECT active FROM players WHERE id = ?", Boolean.class, stays.id())).isTrue();
+        assertThat(stats.playersRefreshedAt(League.NFL)).isEqualTo(second.plusSeconds(20));
+    }
+
+    private static FeedGame.Team team(String abbreviation, int score, List<Integer> periods) {
+        return new FeedGame.Team(abbreviation, abbreviation, abbreviation, score, periods);
+    }
+
     private int events() {
         Integer count = jdbc.queryForObject("SELECT count(*) FROM outbox WHERE event_type = 'sports.games.changed.v1'",
                 Integer.class);

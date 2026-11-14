@@ -2,54 +2,55 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getProfile, type BackendTable } from "./backend-api";
-import { BackendChat } from "./backend-chat";
-import { HostPanel } from "./backend-host-panel";
-import { ProfileDialog } from "./backend-profile";
-import { TomatoLayer } from "./backend-tomatoes";
-import { useBetActions } from "./bet-actions";
-import { getChatUnread, getChatWindow, markRead } from "./chat-api";
-import type { Invalidation } from "./realtime-connection";
-import { listSettlementGroups } from "./settlement-api";
-import { useSocialActions } from "./social-actions";
-import { getRelationships, submitReport } from "./social-api";
-import { useTableActions } from "./table-actions";
+import { getProfile } from "@/features/people/api";
 import {
+  type Table,
   listTomatoes,
   rotateQuickPickCode,
   setQuickPicksEnabled,
   throwTomato,
   type TomatoThrow,
-} from "./tables-api";
+} from "./api";
+import { TableChat } from "@/features/chat/chat";
+import { HostPanel } from "@/features/tables/components/host-panel";
+import { ProfileDialog } from "@/features/social/profile";
+import { TomatoLayer } from "@/features/tables/components/tomatoes";
+import { useBetActions } from "@/features/bets/actions";
+import { getChatUnread, getChatWindow, markRead } from "@/features/chat/api";
+import type { Invalidation } from "@/lib/realtime-connection";
+import { listSettlementGroups } from "@/features/settlements/api";
+import { useSocialActions } from "@/features/social/actions";
+import { getRelationships, submitReport } from "@/features/social/api";
+import { useTableActions } from "./actions";
 
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("@/features/people/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/people/api")>()),
   getProfile: vi.fn(),
 }));
-vi.mock("./chat-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./chat-api")>()),
+vi.mock("@/features/chat/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat/api")>()),
   getChatUnread: vi.fn(),
   getChatWindow: vi.fn(),
   markRead: vi.fn(),
 }));
-vi.mock("./social-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./social-api")>()),
+vi.mock("@/features/social/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/social/api")>()),
   getRelationships: vi.fn(),
   submitReport: vi.fn(),
 }));
-vi.mock("./settlement-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./settlement-api")>()),
+vi.mock("@/features/settlements/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/settlements/api")>()),
   listSettlementGroups: vi.fn(),
 }));
-vi.mock("./tables-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./tables-api")>()),
+vi.mock("./api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api")>()),
   listTomatoes: vi.fn(),
   throwTomato: vi.fn(),
   setQuickPicksEnabled: vi.fn(),
   rotateQuickPickCode: vi.fn(),
 }));
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
-vi.mock("./realtime", () => ({
+vi.mock("@/lib/realtime", () => ({
   useRealtimeStatus: () => "live",
   useRealtimeFeed: (destination: string | null, listener: (event: Invalidation) => void) => {
     if (destination) feeds.set(destination, listener);
@@ -58,7 +59,7 @@ vi.mock("./realtime", () => ({
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me", hue: 1 };
 const friend = "123e4567-e89b-42d3-a456-426614174001";
-const table: BackendTable = {
+const table: Table = {
   id: "123e4567-e89b-42d3-a456-426614174010",
   name: "Game Night",
   emoji: "🎲",
@@ -89,7 +90,7 @@ function wrap(children: ReactNode) {
 function Chat() {
   const social = useSocialActions(me.id, async () => {}, expire);
   return (
-    <BackendChat
+    <TableChat
       user={me}
       table={table}
       expire={expire}

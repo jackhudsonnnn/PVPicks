@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { mutationRequest, read, request, userSchema, type BackendUser } from "./backend-api";
+import { mutationRequest, read, request } from "@/lib/api-client";
+import { userSchema, type User } from "@/features/people";
 
 const mode = z.enum(["open", "request", "closed"]);
 const invitePreferencesSchema = z.object({ friends: mode, following: mode });
@@ -43,6 +44,6 @@ export async function getDebt(signal?: AbortSignal): Promise<number> {
 export async function updateProfile(
   change: { username?: string; hue?: number },
   key: string,
-): Promise<BackendUser> {
+): Promise<User> {
   return read(await mutationRequest("/me/profile", "PATCH", key, change), userSchema);
 }

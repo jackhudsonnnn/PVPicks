@@ -9,17 +9,21 @@ import {
   type Variants,
 } from "motion/react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/features/bets/components/status-badge";
-import { MODES } from "@/features/bets/modes";
+import {
+  StatusBadge,
+  MODES,
+  type Bet,
+  formatClock,
+  potCents,
+  secondsLeft,
+  ticketStatus,
+} from "@/features/bets";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import type { BackendBet, BackendTable, BackendUser } from "./backend-api";
-import { PersonAvatar } from "./backend-avatar";
-import { arrangeSeats, seatPosition, seatStatus, type SeatTone } from "./seating";
-import type { TableBalance } from "./tables-api";
-import { formatClock, potCents, secondsLeft, ticketStatus } from "./ticket-model";
-import { useNow } from "./use-now";
-import { usePerson } from "./use-person";
+import type { Table, TableBalance } from "@/features/tables/api";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
+import { arrangeSeats, seatPosition, seatStatus, type SeatTone } from "@/features/tables/seating";
+import { useNow } from "@/lib/use-now";
 
 type Slot = "front" | "right" | "left";
 
@@ -56,7 +60,7 @@ const TONE: Record<SeatTone, string> = {
 };
 
 interface People {
-  user: BackendUser;
+  user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }
@@ -77,9 +81,9 @@ export function Felt({
   onPropose,
   ...people
 }: People & {
-  table: BackendTable;
-  bets: BackendBet[];
-  focused: BackendBet | undefined;
+  table: Table;
+  bets: Bet[];
+  focused: Bet | undefined;
   balances: TableBalance[] | undefined;
   onFocus: (id: string) => void;
   onOpenBet: (id: string) => void;
@@ -173,7 +177,7 @@ function Seat({
   ...people
 }: People & {
   id: string;
-  focused: BackendBet | undefined;
+  focused: Bet | undefined;
   balance: TableBalance | undefined;
   onClick: () => void;
 }) {
@@ -251,7 +255,7 @@ function BetStack({
   onOpen,
   onPropose,
 }: {
-  bets: BackendBet[];
+  bets: Bet[];
   focusedId: string | undefined;
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
@@ -292,7 +296,7 @@ function BetStack({
   const behind = [1, -1]
     .map((d) => bets[(idx + d + bets.length) % bets.length]!)
     .filter((b, i, arr) => b.id !== focused.id && arr.findIndex((y) => y.id === b.id) === i);
-  const cards: { bet: BackendBet; slot: Slot }[] = [
+  const cards: { bet: Bet; slot: Slot }[] = [
     { bet: focused, slot: "front" },
     ...behind.map((bet, i) => ({ bet, slot: (i === 0 ? "right" : "left") as Slot })),
   ];
@@ -380,7 +384,7 @@ function MiniTicket({
   focused,
   className,
   ...props
-}: { bet: BackendBet; focused?: boolean } & HTMLMotionProps<"button">) {
+}: { bet: Bet; focused?: boolean } & HTMLMotionProps<"button">) {
   const mode = MODES.find((m) => m.id === bet.modeId)!;
   const Icon = mode.icon;
   const status = ticketStatus(bet);

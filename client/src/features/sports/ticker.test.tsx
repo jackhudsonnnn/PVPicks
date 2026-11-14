@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BackendTicker } from "./backend-ticker";
-import type { Invalidation } from "./realtime-connection";
-import { getTicker, tickerStatus, type TickerGame } from "./ticker-api";
+import { ScoreTicker } from "./ticker";
+import type { Invalidation } from "@/lib/realtime-connection";
+import { getTicker, tickerStatus, type TickerGame } from "./api";
 
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
-vi.mock("./realtime", () => ({
+vi.mock("@/lib/realtime", () => ({
   useRealtimeFeed: (destination: string, listener: (event: Invalidation) => void) => {
     feeds.set(destination, listener);
   },
@@ -41,7 +41,7 @@ function renderTicker() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <BackendTicker user={user} expire={() => {}} />
+      <ScoreTicker user={user} expire={() => {}} />
     </QueryClientProvider>,
   );
 }

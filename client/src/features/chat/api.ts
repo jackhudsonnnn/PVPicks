@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { BackendError, mutationRequest, request } from "./backend-api";
-import { exactCents, readExact } from "./settlement-api";
+import { BackendError, mutationRequest, request, idSchema } from "@/lib/api-client";
+import { exactCents, readExact } from "@/features/settlements";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const timestamp = z.string().datetime({ offset: true });
 const reaction = z.object({ userId: uuid, emoji: z.string().min(1) });
 const base = {

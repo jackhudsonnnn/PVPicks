@@ -83,10 +83,59 @@ class BallDontLieFeed implements GameFeed {
                 .queryParam("per_page", 100);
         for (LocalDate date : dates) uri.queryParam("dates[]", date.toString());
         if (cursor != null) uri.queryParam("cursor", cursor);
+        return get(league, "games", uri);
+    }
+
+    /**
+     * Every player's whole-game line for one game, in canonical stats (one page holds a whole game; more are followed
+     * up to {@link #MAX_PAGES}). Unreadable rows are skipped.
+     */
+    List<StatLine> playerStats(League league, String providerGameId) throws FeedUnavailable {
+        if (!configured()) throw new FeedUnavailable("No BallDontLie API key is configured", false, null);
+        List<StatLine> lines = new ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
+                    .path(league == League.NBA ? "/v1/stats" : "/nfl/v1/stats")
+                    .queryParam("game_ids[]", providerGameId)
+                    .queryParam("per_page", 100);
+            if (cursor != null) uri.queryParam("cursor", cursor);
+            JsonNode body = get(league, "stats", uri);
+            for (JsonNode row : body.path("data")) {
+                StatLine line = league == League.NBA ? StatLine.nba(row) : StatLine.nfl(row);
+                if (line != null && line.gameProviderId().equals(providerGameId)) lines.add(line);
+            }
+            JsonNode next = body.path("meta").path("next_cursor");
+            if (next.isMissingNode() || next.isNull()) return lines;
+            cursor = next.asText();
+        }
+        return lines;
+    }
+
+    /** One page of the league's active players; {@code nextCursor} is null after the last page. */
+    record PlayerPage(List<FeedPlayer> players, String nextCursor) {}
+
+    PlayerPage activePlayers(League league, String cursor) throws FeedUnavailable {
+        if (!configured()) throw new FeedUnavailable("No BallDontLie API key is configured", false, null);
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
+                .path(league == League.NBA ? "/v1/players/active" : "/nfl/v1/players/active")
+                .queryParam("per_page", 100);
+        if (cursor != null) uri.queryParam("cursor", cursor);
+        JsonNode body = get(league, "players_active", uri);
+        List<FeedPlayer> players = new ArrayList<>();
+        for (JsonNode row : body.path("data")) {
+            FeedPlayer player = FeedPlayer.from(league, row, row.path("team"));
+            if (player != null) players.add(player);
+        }
+        JsonNode next = body.path("meta").path("next_cursor");
+        return new PlayerPage(players, next.isMissingNode() || next.isNull() ? null : next.asText());
+    }
+
+    private JsonNode get(League league, String endpoint, UriComponentsBuilder uri) throws FeedUnavailable {
         var target = uri.encode().build().toUri();
         try {
             String body = http.get().uri(target).header("Authorization", apiKey).retrieve().body(String.class);
-            recorder.record(league, "games", target.getRawQuery(), 200, body);
+            recorder.record(league, endpoint, target.getRawQuery(), 200, body);
             return json.readTree(body == null ? "{}" : body);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
@@ -111,8 +160,13 @@ class BallDontLieFeed implements GameFeed {
                     : !time.isEmpty() && !time.equalsIgnoreCase("final") ? time : status.trim();
             return new FeedGame(League.NBA, game.path("id").asText(), state, startsAt,
                     state == GameStatus.LIVE && period >= 1 ? period : null, emptyToNull(clock),
-                    team(game.path("home_team"), score(game, "home_team_score", state)),
-                    team(game.path("visitor_team"), score(game, "visitor_team_score", state)));
+                    team(game.path("home_team"), score(game, "home_team_score", state),
+                            periods(game, state, "home_q1", "home_q2", "home_q3", "home_q4", "home_ot1", "home_ot2",
+                                    "home_ot3")),
+                    team(game.path("visitor_team"), score(game, "visitor_team_score", state),
+                            periods(game, state, "visitor_q1", "visitor_q2", "visitor_q3", "visitor_q4",
+                                    "visitor_ot1", "visitor_ot2", "visitor_ot3")),
+                    providerState(game));
         } catch (RuntimeException exception) {
             log.debug("Skipped an unreadable NBA game", exception);
             return null;
@@ -135,8 +189,13 @@ class BallDontLieFeed implements GameFeed {
             String clock = state != GameStatus.LIVE ? null : status.trim();
             return new FeedGame(League.NFL, game.path("id").asText(), state, startsAt,
                     state == GameStatus.LIVE && period >= 1 ? period : null, emptyToNull(clock),
-                    team(game.path("home_team"), score(game, "home_team_score", state)),
-                    team(game.path("visitor_team"), score(game, "visitor_team_score", state)));
+                    team(game.path("home_team"), score(game, "home_team_score", state),
+                            periods(game, state, "home_team_q1", "home_team_q2", "home_team_q3", "home_team_q4",
+                                    "home_team_ot")),
+                    team(game.path("visitor_team"), score(game, "visitor_team_score", state),
+                            periods(game, state, "visitor_team_q1", "visitor_team_q2", "visitor_team_q3",
+                                    "visitor_team_q4", "visitor_team_ot")),
+                    providerState(game));
         } catch (RuntimeException exception) {
             log.debug("Skipped an unreadable NFL game", exception);
             return null;
@@ -195,10 +254,32 @@ class BallDontLieFeed implements GameFeed {
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
-    private static FeedGame.Team team(JsonNode team, Integer score) {
+    private static FeedGame.Team team(JsonNode team, Integer score, List<Integer> periods) {
         String city = team.path("city").asText(null);
         if (city == null) city = team.path("location").asText("");
-        return new FeedGame.Team(team.path("abbreviation").asText(null), team.path("name").asText(""), city, score);
+        return new FeedGame.Team(team.path("abbreviation").asText(null), team.path("name").asText(""), city, score,
+                periods);
+    }
+
+    /**
+     * Points per period in order, up to the first period without a number (unplayed periods and missing overtimes
+     * are null). Empty before a game starts.
+     */
+    static List<Integer> periods(JsonNode game, GameStatus state, String... fields) {
+        List<Integer> periods = new ArrayList<>();
+        if (state == GameStatus.SCHEDULED || state == GameStatus.POSTPONED) return periods;
+        for (String field : fields) {
+            JsonNode points = game.path(field);
+            if (!points.isInt() || points.asInt() < 0) break;
+            periods.add(points.asInt());
+        }
+        return periods;
+    }
+
+    /** The provider's lifecycle state, lowercased; null when missing. */
+    private static String providerState(JsonNode game) {
+        String state = game.path("status_state").asText("").trim().toLowerCase(Locale.ROOT);
+        return state.isEmpty() ? null : state;
     }
 
     private static Integer score(JsonNode game, String field, GameStatus state) {

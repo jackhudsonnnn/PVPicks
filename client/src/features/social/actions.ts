@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { BackendError, backendErrorMessage } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
-import { respondToInvite, setBlock, setFollow, submitReport } from "./social-api";
+import { BackendError, backendErrorMessage, idSchema } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
+import { respondToInvite, setBlock, setFollow, submitReport } from "./api";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("follow"), userId: uuid, follow: z.boolean() }),
   z.object({ kind: z.literal("block"), userId: uuid, block: z.boolean() }),

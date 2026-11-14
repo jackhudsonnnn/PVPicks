@@ -1,10 +1,10 @@
 import type { Client, IMessage, StompConfig } from "@stomp/stompjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { csrf } from "./backend-api";
+import { csrf } from "./api-client";
 import { RealtimeConnection, tableBetsFeed } from "./realtime-connection";
 
-vi.mock("./backend-api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./backend-api")>()),
+vi.mock("./api-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./api-client")>()),
   csrf: vi.fn(),
 }));
 

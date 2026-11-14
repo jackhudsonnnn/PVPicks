@@ -269,7 +269,7 @@ public abstract class IntegrationTestSupport {
 
     /**
      * Runs one client test file through real HTTP against this test's server (see
-     * client/src/features/auth/backend-integration-utils.ts). Requires installed client dependencies.
+     * client/src/test/isolated-backend.ts). Requires installed client dependencies.
      */
     protected void runFrontendTest(String file, Map<String, String> environment) throws Exception {
         ProcessBuilder builder = new ProcessBuilder("npm", "test", "--", file)

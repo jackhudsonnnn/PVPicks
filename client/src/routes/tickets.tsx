@@ -16,6 +16,6 @@ export const Route = createFileRoute("/tickets")({
   // ?table=<id> narrows the list to one table.
   validateSearch: (search: Record<string, unknown>): { table?: string } =>
     typeof search["table"] === "string" ? { table: search["table"] } : {},
-  // The root renders BackendApp for every path; this route only provides the path and page metadata.
+  // The root renders App for every path; this route only provides the path and page metadata.
   component: () => null,
 });

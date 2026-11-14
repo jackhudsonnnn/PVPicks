@@ -1,0 +1,110 @@
+package com.p2picks.app.sports;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+/**
+ * Keeps player stats and the active-player list current (ADR 0005), one provider request per run so the run interval
+ * is the request budget. Live games come first, each turn going to the game that has waited longest; finished games
+ * (within six hours of their start) refresh every 15 minutes so late corrections land. With nothing to do for games,
+ * the turn refreshes the next page of a league's active players, at most once a day. A rate-limited request pauses
+ * everything for a minute. Responses are also recorded when feed recording is on.
+ */
+@Component
+class StatsPoller {
+    private static final Logger log = LoggerFactory.getLogger(StatsPoller.class);
+    static final Duration FINAL_REFRESH = Duration.ofMinutes(15);
+    static final Duration FINAL_WINDOW = Duration.ofHours(6);
+    static final Duration PLAYER_REFRESH = Duration.ofHours(24);
+    private static final Duration RATE_LIMIT_PAUSE = Duration.ofMinutes(1);
+
+    private final JdbcTemplate jdbc;
+    private final BallDontLieFeed feed;
+    private final StatsSync sync;
+    private final Clock clock;
+    private final Map<String, Instant> lastFetched = new HashMap<>();
+    /** A league's active-list refresh in progress: where it started and the next page. */
+    private final Map<League, Refresh> refreshing = new EnumMap<>(League.class);
+    private Instant pausedUntil = Instant.MIN;
+
+    StatsPoller(JdbcTemplate jdbc, BallDontLieFeed feed, StatsSync sync, Clock clock) {
+        this.jdbc = jdbc;
+        this.feed = feed;
+        this.sync = sync;
+        this.clock = clock;
+    }
+
+    record Candidate(String id, League league, String providerId, boolean live) {}
+
+    private record Refresh(Instant startedAt, String cursor) {}
+
+    void runOnce() {
+        if (!feed.configured()) return;
+        Instant now = clock.instant();
+        if (now.isBefore(pausedUntil)) return;
+        try {
+            Optional<Candidate> game = next(candidates(now), lastFetched, now);
+            if (game.isPresent()) {
+                fetchGame(game.get(), now);
+            } else {
+                refreshPlayers(now);
+            }
+        } catch (GameFeed.FeedUnavailable exception) {
+            if (exception.rateLimited()) pausedUntil = now.plus(RATE_LIMIT_PAUSE);
+            log.debug("Player data unavailable: {}", exception.getMessage());
+        }
+        lastFetched.values().removeIf(at -> at.isBefore(now.minus(FINAL_WINDOW.multipliedBy(2))));
+    }
+
+    private void fetchGame(Candidate game, Instant now) throws GameFeed.FeedUnavailable {
+        lastFetched.put(game.id(), now);
+        sync.recordGame(game.id(), feed.playerStats(game.league(), game.providerId()), now);
+    }
+
+    private void refreshPlayers(Instant now) throws GameFeed.FeedUnavailable {
+        for (League league : League.values()) {
+            Refresh refresh = refreshing.get(league);
+            if (refresh == null) {
+                Instant last = sync.playersRefreshedAt(league);
+                if (last != null && last.isAfter(now.minus(PLAYER_REFRESH))) continue;
+                refresh = new Refresh(now, null);
+            }
+            BallDontLieFeed.PlayerPage page = feed.activePlayers(league, refresh.cursor());
+            boolean finished = page.nextCursor() == null;
+            sync.recordActivePlayers(league, page.players(), refresh.startedAt(), now, finished);
+            if (finished) refreshing.remove(league);
+            else refreshing.put(league, new Refresh(refresh.startedAt(), page.nextCursor()));
+            return;
+        }
+    }
+
+    private List<Candidate> candidates(Instant now) {
+        return jdbc.query("""
+                SELECT id, league, provider_id, status FROM games
+                WHERE status = 'LIVE' OR (status = 'FINAL' AND starts_at > ?)
+                """, (rs, row) -> new Candidate(rs.getString("id"), League.valueOf(rs.getString("league")),
+                rs.getString("provider_id"), rs.getString("status").equals("LIVE")),
+                java.sql.Timestamp.from(now.minus(FINAL_WINDOW)));
+    }
+
+    /** The game that has waited longest; finished games only once their refresh interval has passed. */
+    static Optional<Candidate> next(List<Candidate> games, Map<String, Instant> lastFetched, Instant now) {
+        return games.stream()
+                .filter(g -> g.live() || lastFetched.getOrDefault(g.id(), Instant.MIN)
+                        .isBefore(now.minus(FINAL_REFRESH)))
+                .min(Comparator.comparing((Candidate g) -> lastFetched.getOrDefault(g.id(), Instant.MIN))
+                        .thenComparing(g -> !g.live())
+                        .thenComparing(Candidate::id));
+    }
+}

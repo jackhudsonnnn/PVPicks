@@ -28,10 +28,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
-import type { ReportReason } from "./social-api";
+import type { ReportReason } from "./api";
 import { NOTE_MAX, REPORT_REASONS, reportProblem } from "./report-rules";
-import type { useSocialActions } from "./social-actions";
-import { useRelationships } from "./social-queries";
+import type { useSocialActions } from "./actions";
+import { useRelationships } from "./queries";
 
 export type SocialActions = ReturnType<typeof useSocialActions>;
 

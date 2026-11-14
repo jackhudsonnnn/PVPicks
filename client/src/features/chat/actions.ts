@@ -1,10 +1,10 @@
 import { useRef } from "react";
 import { z } from "zod";
-import { backendErrorMessage } from "./backend-api";
-import { useRetryableMutation } from "./backend-mutation";
-import { sendChatMessage, setReaction } from "./chat-api";
+import { backendErrorMessage, idSchema } from "@/lib/api-client";
+import { useRetryableMutation } from "@/lib/mutation";
+import { sendChatMessage, setReaction } from "./api";
 
-const uuid = z.guid();
+const uuid = idSchema;
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("send"),
