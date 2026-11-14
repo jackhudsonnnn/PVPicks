@@ -117,7 +117,8 @@ bash scripts/seed-dev.sh --seed
   mutations fail closed and invalidates chat cursors; rotation and recovery are
   not implemented.
 - The seed creates two sample tables and two active U2Pick bets for the
-  intermediate and pro accounts, once, in one transaction. Never run it against
+  intermediate and pro accounts, and follows (intermediate and pro are
+  friends; newbie follows pro), each step once, in one transaction. Never run it against
   LAN, production or real-user data.
 - Compose requires `PVPICKS_DB_PASSWORD` in the ignored `infra/compose/.env`
   or the shell. `PVPICKS_PORT` (default 8080) changes the loopback host port.

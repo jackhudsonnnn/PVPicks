@@ -60,4 +60,22 @@ BEGIN
     INSERT INTO p2picks_dev_seed.runs (name) VALUES ('sample-v1');
 END;
 $$;
+
+-- Follows, so members can be added (a host may only add people who follow them):
+-- intermediate and pro are friends; newbie follows pro, who has not followed back.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM p2picks_dev_seed.runs WHERE name = 'follows-v1') THEN
+        RAISE NOTICE 'Dev follows were already seeded; existing data is unchanged.';
+        RETURN;
+    END IF;
+    INSERT INTO follows (follower_id, followee_id)
+    SELECT follower.id, followee.id
+    FROM (VALUES ('intermediate', 'pro'), ('pro', 'intermediate'), ('newbie', 'pro')) AS pair (follower, followee)
+    JOIN users follower ON follower.username = pair.follower::citext AND follower.status = 'ACTIVE'
+    JOIN users followee ON followee.username = pair.followee::citext AND followee.status = 'ACTIVE'
+    ON CONFLICT DO NOTHING;
+    INSERT INTO p2picks_dev_seed.runs (name) VALUES ('follows-v1');
+END;
+$$;
 COMMIT;

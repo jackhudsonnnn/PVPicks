@@ -52,14 +52,20 @@ class DevSeedTest {
                 JOIN bet_participants bp ON bp.bet_id = b.id AND bp.user_id = b.proposer_id
                 WHERE b.question = 'What will the next play be?'
                 """, Integer.class)).isZero();
+        assertThat(jdbc.queryForList("""
+                SELECT a.username::text || '>' || b.username::text FROM follows f
+                JOIN users a ON a.id = f.follower_id JOIN users b ON b.id = f.followee_id ORDER BY 1
+                """, String.class)).containsExactly("intermediate>pro", "newbie>pro", "pro>intermediate");
 
         jdbc.update("UPDATE tables SET name = 'Changed locally' WHERE quickpick_code = 'DEMA2A'");
         jdbc.update("DELETE FROM picks WHERE choice = 'Pass'");
+        jdbc.update("DELETE FROM follows WHERE follower_id = (SELECT id FROM users WHERE username = 'newbie')");
         seed(jdbc);
         assertThat(jdbc.queryForObject("SELECT name FROM tables WHERE quickpick_code = 'DEMA2A'", String.class))
                 .isEqualTo("Changed locally");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE choice = 'Pass'", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM p2picks_dev_seed.runs", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM follows", Integer.class)).as("removed follow").isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM p2picks_dev_seed.runs", Integer.class)).isEqualTo(2);
     }
 
     @Test
@@ -103,7 +109,8 @@ class DevSeedTest {
             second.get(20, TimeUnit.SECONDS);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM tables", Integer.class)).isEqualTo(2);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM bets", Integer.class)).isEqualTo(2);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM p2picks_dev_seed.runs", Integer.class)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM p2picks_dev_seed.runs", Integer.class)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM follows", Integer.class)).isEqualTo(3);
         } finally {
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
