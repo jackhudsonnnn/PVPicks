@@ -78,7 +78,8 @@ Add a replay feed: an opt-in `GameFeed` for the dev profile that plays back
 recorded games, optionally sped up. Everything after the feed (snapshots,
 history, outbox, realtime, ticker and bet resolution) then runs the real code.
 This amends ADR 0004, which allows a scripted feed only in automated tests.
-Once replay exists, the prototype's dev-only Simulate menu is retired.
+Replay replaces the prototype's dev-only Simulate menu, which was removed with
+the prototype client (git tag `prototype-ui`).
 
 ## Consequences
 

@@ -595,9 +595,9 @@ Host override:
   idempotent like other mutations.
 
 Interface: the host override reuses the prototype ticket's outcome menu (the
-bet's choices plus a wash), in the same place. The prototype's **Simulate**
-menu in that location stands in for the feed. It stays as a dev-only tool until
-replayed feed data is available (ADR 0005), and is then removed.
+bet's choices plus a wash), in the same place (see the `prototype-ui` git tag).
+The prototype's dev-only **Simulate** menu there was removed with the prototype;
+in dev, replayed feed data (ADR 0005) will drive sports results instead.
 
 Open:
 

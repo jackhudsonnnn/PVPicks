@@ -1,10 +1,13 @@
 # Frontend
 
 The current entry point (`src/features/auth/backend-app.tsx`) signs in to the
-dev backend. A header switches between Home and Friends.
+dev backend. A header switches between Home, Friends, How to play and
+Preferences. It is the only app: every route renders it, and the route files
+only supply paths and page metadata.
 
-- **Home:** pending table invitations (join or decline), your tables, and
-  "Create a table" (name, icon, and people who follow you).
+- **Home:** pending table invitations (join or decline), your tables,
+  "Create a table" (name, icon, and people who follow you), and deleted tables
+  whose chat you can still read for 90 days (read-only, at `/archives/<id>`).
 - **Friends:** settle-up receipts, new followers, and lists of friends,
   following, followers and blocked people, with username search, follow,
   follow back, block and unblock. A host can only add people who follow them,
@@ -35,12 +38,19 @@ dev backend. A header switches between Home and Friends.
   than showing no games.
 
 - **Preferences:** a Tables tab for who can add you (friends and people you
-  follow, each Open, Request or Closed) and an Account tab for your username
+  follow, each Open, Request or Closed), an Account tab for your username
   (also your sign-in name), avatar color and debt cap, which can only change
-  while you owe nothing.
+  while you owe nothing, and a Display tab (theme, text size, motion, 24-hour
+  clock) saved on this device.
+- **How to play:** the game modes, bet lifecycle and payout rules, and a
+  feedback form that sends to the backend.
+- **Admin:** an admin account sees only a site-health view (database and
+  cache status); it can't join tables, bet or chat. User audit, moderation and
+  reports are not built yet.
 
-Quick Picks, table archives, display settings, registration and the other
-prototype workflows are not connected; the mock-backed app remains in the source but is not exposed.
+Quick Picks, sports bets and registration are not connected. The earlier
+mock-store prototype was removed from the source; it is preserved at the git
+tag `prototype-ui` as a design reference.
 
 Bets and receipts update live. While signed in, the app keeps one STOMP
 connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on

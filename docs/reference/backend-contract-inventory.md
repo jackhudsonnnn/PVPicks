@@ -11,12 +11,13 @@ Other admin reads and surfaces remain incomplete; it is not ready to generate
 a client.
 `realtime-contract.md` records the realtime gateway's destinations and rules.
 
-Source: `client/src/features/store/commands.ts`. These are retained prototype
-commands, not the current frontend entry point. The backend-backed app uses
-asynchronous sign-in, table and bet reads, U2Pick proposal, picks and results,
-host points settlement, and receipt reviews and actions; integrating the
-remaining commands will require asynchronous adapters and screen changes where
-results are consumed.
+Source: the prototype's `client/src/features/store/commands.ts`, removed from
+the client and preserved at the git tag `prototype-ui`. The command names below
+are kept as an inventory of intended operations. The backend-backed app
+already uses sign-in, tables, members, invitations, social, preferences, chat
+and archives, U2Pick proposal, picks and results, host points settlement,
+receipt reviews and actions, feedback and the admin health snapshot; the
+remaining commands still need endpoints, screens, or both.
 
 ## Commands
 
@@ -26,7 +27,7 @@ results are consumed.
 | `propose` | Dev `POST /tables/{id}/bets` (U2Pick only) |
 | `pick` | Dev `PUT /bets/{id}/pick`; `DELETE /bets/{id}/pick` for No guess |
 | `settle` | Dev `POST /bets/{id}/settle` for authorized U2Pick settlers only |
-| `simulateResult` | Dev-only stand-in for the feed, retired once replayed feed data exists (ADR 0005); no player endpoint |
+| `simulateResult` | Removed with the prototype; replayed feed data (ADR 0005) replaces it in dev; no player endpoint |
 | `overrideQuickPick` | Planned host override (wash or set a result) for sports bets and Quick Pick copies until points are settled; endpoint not yet designed |
 | `send`, `sendGif` | Dev `POST /tables/{id}/messages` |
 | `react` | Dev `PUT`/`DELETE /messages/{id}/reaction` |

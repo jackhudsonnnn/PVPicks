@@ -50,10 +50,13 @@ planned operations; it is not an implementation inventory.
   table chat (paged history, text and GIF messages, reactions, unread marker
   and read position), and a live sports ticker, all updating live. Active
   picks remain private;
-  participant names are loaded from the backend after lock. The previous mock
-  app is not exposed there. A Preferences page sets who can add you to tables,
-  your username, avatar color and debt cap (shown with your current debt).
-  Quick Picks, archive views and display settings are not yet connected.
+  participant names are loaded from the backend after lock. A Preferences page
+  sets who can add you to tables, your username, avatar color and debt cap
+  (shown with your current debt), plus device display settings. Deleted tables'
+  chats are readable from Home for 90 days, the How to play guide sends
+  feedback to the backend, and admin accounts get a site-health view instead
+  of player screens. Quick Picks are not yet connected. The mock-store
+  prototype was removed from the client (git tag `prototype-ui`).
 - An action whose outcome is unknown (for example, a lost response) keeps its
   retry key per user in the browser's local storage, so every tab sees it and
   blocks new actions until it is retried with the same key or cleared after

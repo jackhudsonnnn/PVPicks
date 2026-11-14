@@ -46,10 +46,11 @@ current code, not an estimated delivery date.
 
 ## 5. Frontend integration — in progress
 
-- Backend sign-in, session restoration, table and bet views, U2Pick betting,
-  result calling, host points settlement and settle-up receipts are connected.
-  The mock-backed app is retained in source but is not exposed by the current
-  entry point.
+- Backend sign-in, session restoration, tables, members, invitations,
+  friends, preferences, table chat and archives, U2Pick betting, result
+  calling, host points settlement, settle-up receipts, the guide with feedback
+  and an admin site-health view are connected. The mock-store prototype was
+  removed (git tag `prototype-ui`).
 - Uncertain actions are saved per user in local storage and shared across
   tabs; other devices reconcile from server reads.
 - Integrate one real workflow at a time; validate recovery, permissions, mobile
