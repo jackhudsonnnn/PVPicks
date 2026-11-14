@@ -52,9 +52,19 @@ from different endpoints:
   need them and only on a plan that includes them.
 
 Store an append-only history of game snapshots, one row per observed change,
-next to the current snapshot. Resolution reads the history, so it can tell
+next to the current snapshot. Each row keeps the provider's own lifecycle state
+(`status_state`: scheduled, delayed, in_progress, final, postponed, canceled,
+suspended, abandoned or unknown, per the provider's published OpenAPI specs at
+https://www.balldontlie.io/openapi/nba.yml and .../nfl.yml) and, for NFL, its
+`updated_at`. The canonical status used by the ticker merges postponed,
+canceled, suspended and abandoned, but resolution must tell them apart: a
+suspended game may still finish and settle, while a canceled one washes. Resolution reads the history, so it can tell
 when a game went final, whether a correction followed and what the feed
 showed when a bet locked. The history also serves disputes and replay.
+
+Keep a dated copy of the provider's OpenAPI specs and contract-test recordings
+and fixtures against their game schemas, so provider changes fail a test
+instead of silently skipping games.
 
 Keep raw recordings exactly as received, one timestamped file per response,
 grouped by league and New York day (implemented: `PVPICKS_SPORTS_RECORDING_DIR`,
