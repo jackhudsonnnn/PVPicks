@@ -24,7 +24,9 @@ https://nba.balldontlie.io and https://nfl.balldontlie.io; check before buying):
 
 The GOAT 7-day trial is limited to 5 requests a minute.
 
-The user plans to start on All-Star and upgrade as the app grows. All-Star
+Decided 2026-11-13: All-Star for both NBA and NFL, upgrading as the app grows.
+Until it is bought, development runs on a GOAT trial (all endpoints, 5
+requests a minute, 7 days); nothing may depend on GOAT-only endpoints. All-Star
 covers game results and player props, including live prop progress during a
 game, and injuries for proposal warnings. GOAT is the upgrade for sportsbook
 lines and odds, play-by-play bet types and higher request rates. On All-Star,
