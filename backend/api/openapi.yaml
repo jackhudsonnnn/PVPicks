@@ -223,8 +223,7 @@ paths:
         key. New caps must be whole points in cents (a multiple of 100), at
         most 2147483600 cents. Matching retries do not reapply the update even
         if debt has since changed. Existing fractional-point cap values
-        remain readable. Betting and lock-time cap enforcement are not yet
-        implemented.
+        remain readable. Proposal, pick and lock transactions enforce the cap.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1678,7 +1677,7 @@ paths:
         Updates the caller's policy and permanently cancels pending invitations
         that no longer qualify. A mutual follow uses friends; a one-way follow
         uses following. Both open and request permit accepting an existing
-        request. Invitation creation is not implemented yet.
+        request. Table creation and member additions create invitations.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:

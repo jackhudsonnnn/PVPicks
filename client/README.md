@@ -34,8 +34,13 @@ dev backend. A header switches between Home and Friends.
   `GET /ticker`, live first, and says when live scores are unavailable rather
   than showing no games.
 
-Your profile, debt cap and invite preferences, Quick Picks, archives,
-registration and the other prototype workflows are not connected; the mock-backed app remains in the source but is not exposed.
+- **Preferences:** a Tables tab for who can add you (friends and people you
+  follow, each Open, Request or Closed) and an Account tab for your username
+  (also your sign-in name), avatar color and debt cap, which can only change
+  while you owe nothing.
+
+Quick Picks, table archives, display settings, registration and the other
+prototype workflows are not connected; the mock-backed app remains in the source but is not exposed.
 
 Bets and receipts update live. While signed in, the app keeps one STOMP
 connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on

@@ -6,7 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "./auth-provider";
 import { AuthBrand } from "./sign-in-screen";
-import { PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN, signUpErrors, type SignUpErrors, type SignUpInput } from "./local-accounts";
+import {
+  PASSWORD_MIN,
+  USERNAME_MAX,
+  USERNAME_MIN,
+  signUpErrors,
+  type SignUpErrors,
+  type SignUpInput,
+} from "./local-accounts";
 
 const EMPTY: SignUpInput = { username: "", password: "", confirm: "" };
 

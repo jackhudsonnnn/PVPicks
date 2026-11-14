@@ -13,17 +13,7 @@ import { userKey } from "./query-keys";
 import { useSocialActions } from "./social-actions";
 import { useInvites, useRelationships } from "./social-queries";
 import { useTableActions } from "./table-actions";
-
-export const TABLE_NAME_LIMIT = 40;
-
-/** Why a table name can't be used, or null. Matches the server: 1–40 characters after trimming. */
-export function tableNameProblem(name: string): string | null {
-  const trimmed = name.trim();
-  if (!trimmed) return "Give the table a name.";
-  if ([...trimmed].length > TABLE_NAME_LIMIT)
-    return `Keep the name to ${TABLE_NAME_LIMIT} characters or fewer.`;
-  return null;
-}
+import { tableNameProblem } from "./management-rules";
 
 /** Create a table, optionally asking people who follow you to join. */
 export function CreateTable({ user, expire }: { user: BackendUser; expire: () => void }) {

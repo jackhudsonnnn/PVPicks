@@ -3,9 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile, type BackendTable } from "./backend-api";
-import { BackendFriends, peopleIn, searchTerm } from "./backend-friends";
-import { CreateTable, Invitations, tableNameProblem } from "./backend-home";
-import { addableFollowers, TableMembers } from "./backend-table-members";
+import { BackendFriends } from "./backend-friends";
+import { CreateTable, Invitations } from "./backend-home";
+import { TableMembers } from "./backend-table-members";
+import { addableFollowers, peopleIn, searchTerm, tableNameProblem } from "./management-rules";
 import {
   getRelationships,
   listInvites,

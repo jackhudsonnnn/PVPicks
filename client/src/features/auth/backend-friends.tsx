@@ -13,6 +13,7 @@ import { userKey } from "./query-keys";
 import { searchUsers, type Relationships } from "./social-api";
 import { useSocialActions } from "./social-actions";
 import { useRelationships } from "./social-queries";
+import { peopleIn, searchTerm } from "./management-rules";
 
 const noRelationships: Relationships = { followingIds: [], followerIds: [], blockedIds: [] };
 
@@ -25,26 +26,6 @@ const HINTS: Record<Tab, string> = {
   blocked: "People you blocked. Unblocking does not restore follows.",
   find: "Search usernames across P2Picks.",
 };
-
-/** Usernames are 1–15 lowercase letters, digits or underscores; search uses the same rule. */
-export function searchTerm(text: string): string | null {
-  const term = text.trim().toLowerCase();
-  return /^[a-z0-9_]{1,15}$/.test(term) ? term : null;
-}
-
-export function peopleIn(tab: Exclude<Tab, "find">, relationships: Relationships): string[] {
-  const { followingIds, followerIds, blockedIds } = relationships;
-  switch (tab) {
-    case "friends":
-      return followingIds.filter((id) => followerIds.includes(id));
-    case "following":
-      return followingIds;
-    case "followers":
-      return followerIds;
-    case "blocked":
-      return blockedIds;
-  }
-}
 
 /** Friends: settle-ups, new followers and people, like the prototype's Friends tab. */
 export function BackendFriends({ user, expire }: { user: BackendUser; expire: () => void }) {

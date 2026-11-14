@@ -35,6 +35,7 @@ import { PersonName } from "./backend-person-name";
 import { BackendChat } from "./backend-chat";
 import { BackendFriends } from "./backend-friends";
 import { CreateTable, Invitations } from "./backend-home";
+import { BackendPreferences } from "./backend-preferences";
 import { TableMembers } from "./backend-table-members";
 import { useTableActions } from "./table-actions";
 import { BackendTicker } from "./backend-ticker";
@@ -252,6 +253,13 @@ function TableWorkspace({
               >
                 Friends
               </Link>
+              <Link
+                to="/preferences"
+                aria-current={pathname === "/preferences" ? "page" : undefined}
+                className={pathname === "/preferences" ? "font-semibold" : "text-muted-foreground"}
+              >
+                Preferences
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -281,6 +289,8 @@ function TableWorkspace({
             </>
           ) : pathname === "/friends" ? (
             <BackendFriends user={user} expire={expire} />
+          ) : pathname === "/preferences" ? (
+            <BackendPreferences user={user} expire={expire} />
           ) : tableId ? (
             <TableDetails key={tableId} user={user} tableId={tableId} expire={expire} />
           ) : (

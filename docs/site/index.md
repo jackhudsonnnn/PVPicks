@@ -27,8 +27,8 @@ features:
 The backend is not ready for real users or network exposure. The frontend
 connects sign-in, table creation and management, members and invitations,
 friends (follows and blocks), U2Pick betting, settle-up receipts, table chat
-and a live sports ticker; your profile and preferences, Quick Pick
-subscriptions and sports bets remain unavailable.
+a live sports ticker and your preferences (who can add you, username, color,
+debt cap); Quick Picks, table archives and sports bets remain unavailable.
 :::
 
 ## Documentation hierarchy

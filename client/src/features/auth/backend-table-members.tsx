@@ -8,7 +8,7 @@ import { TABLE_EMOJIS } from "@/features/table/emojis";
 import { backendErrorMessage, type BackendTable, type BackendUser } from "./backend-api";
 import { ActionStatus } from "./backend-action-status";
 import { ConfirmAction } from "./backend-confirm-action";
-import { tableNameProblem } from "./backend-home";
+import { addableFollowers, tableNameProblem } from "./management-rules";
 import { PersonName } from "./backend-person-name";
 import { userKey } from "./query-keys";
 import { useRelationships } from "./social-queries";
@@ -30,15 +30,6 @@ const REMAINDER: { id: RemainderRule; label: string }[] = [
   { id: "earliest", label: "Earliest pick" },
   { id: "random", label: "Random" },
 ];
-
-/** People who follow you, are not members yet and are not blocked: the ones a host can try to add. */
-export function addableFollowers(
-  table: BackendTable,
-  followerIds: string[],
-  blockedIds: string[],
-): string[] {
-  return followerIds.filter((id) => !table.memberIds.includes(id) && !blockedIds.includes(id));
-}
 
 /** Members, and for hosts: adding people, roles, permissions and table settings. */
 export function TableMembers({
