@@ -3,8 +3,16 @@
 The app (`src/app/app.tsx`) signs in to the dev backend. On desktop a sidebar holds Home, Tickets, Friends, How to play and
 Preferences, your tables, and your net settle-up points; phones get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
-route files only supply paths and page metadata. The look follows the
-original prototype (git tag `prototype-ui`), adapted to the server's data.
+route files only supply paths and page metadata. The design came from an
+earlier prototype (git tag `prototype-ui`).
+
+- **Signing in:** the sign-in page shows the demo account picker when the
+  backend has the demo, and the password form otherwise. While the backend is
+  unreachable (a restart, say), it keeps checking every 3 seconds and switches
+  to the picker when it answers. Every sign-in starts on Home, whatever URL the
+  last session left open, so a different account never lands on someone
+  else's page. Signing out, an expired session and a demo reset all return to
+  sign-in.
 
 - **Home:** a greeting ("Sunday slate / Hey, name") and one sideways-scrolling
   row of cards that snaps card by card.
@@ -71,9 +79,16 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
   bet's question, mode and current status, also in deleted tables' archives.
 
-- **Dev data** (dev backend only): a Dev page (flask icon beside the logo) starts
-  scenario files and recorded chunks that add DEV games, marked DEV in the
-  ticker and game picker. See `docs/site/dev-sports-data.md`.
+- **Dev and docs icons** (dev backend only): beside the logo, in the app and
+  on the sign-in page. The document icon opens these docs in a new tab, on the
+  app's own address (the dev server proxies `/docs/` to the backend). The
+  flask opens the Dev page, which also works signed out (`/dev` without a
+  session shows it with a "Sign in" button).
+- **Dev page** (dev backend only, flask icon beside the logo): the demo
+  world's size and what its bots have done, a Reset (the app shows a
+  "Resetting" screen, then the account picker), and the scenario files and
+  recorded chunks that add DEV games, marked DEV in the ticker and game
+  picker. See [Demo world](/demo-data) and [Dev sports data](/dev-sports-data).
 
 - **Permissions come from the server.** Which bets you may call or override,
   which receipt actions you may take, and which modes can be proposed are all
@@ -97,14 +112,12 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
     players with strikes or frozen accounts, to unfreeze or clear strikes.
   - **Site health:** database and cache status.
 - **Account deletion:** Preferences → Account → "Delete my account", with
-  your password. It's refused, with the reason, until you're square (no open
+  your password (`demo` for demo accounts). It's refused, with the reason, until you're square (no open
   bets, unsettled table points or open receipts). A frozen account sees
   "This account is frozen" at sign-in.
 
 Quick Pick subscriptions, the player-stat bet modes and registration are not
-connected. The earlier
-mock-store prototype was removed from the source; it is preserved at the git
-tag `prototype-ui` as a design reference.
+connected.
 
 Bets and receipts update live. While signed in, the app keeps one STOMP
 connection to the backend's `/ws` (through `/api/ws`), sends the CSRF token on
@@ -121,11 +134,20 @@ it is retried with the same key or cleared after review; retries are refused
 after 23 hours. Before clearing, check the bet list, your pick or receipt
 history, because the action may have succeeded. Other devices do not see the
 saved action; they reconcile from the server's reads. Storage failure disables
-actions.
+actions. The retry box appears only once an outcome is unknown, never while
+an action is still being sent, so the page doesn't jump on every action.
+
+What you're told about an action is a toast, not text on the page. Errors show
+as toasts; successes are silent (the screen updating is the confirmation)
+unless there's something worth saying, like "Unblocked. Follows are not
+restored." Loading never shows text either: lists, pages, chat, the ticker and
+names show grey placeholders shaped like what's coming
+(`components/loading.tsx`), and busy buttons show a spinner. The empty state
+("Nothing here yet") only appears once a list is known to be empty.
 
 ## Source layout
 
-Code is organized by feature. See `AGENTS.md` for what lives where.
+Code is organized by feature. `client/AGENTS.md` has the detailed rules for what lives where.
 
 - `src/app/`: the frame. Session, sign-in routing, the shell, and the realtime
   connection's lifetime.
@@ -149,7 +171,7 @@ Code is organized by feature. See `AGENTS.md` for what lives where.
 - `src/components/` and `src/lib/`: shared UI and infrastructure. This covers
   the HTTP client, retryable mutations, query keys, the realtime client and
   storage. They never import features.
-- `src/routes/`: path stubs for TanStack Router. They render nothing.
+- `src/routes/`: path stubs for TanStack Router's file-based routes (`__root.tsx` is the shell; `routeTree.gen.ts` is generated, don't edit it). They render nothing.
 - `src/test/`: test setup and the isolated-backend helper for the integration
   tests.
 
@@ -158,16 +180,22 @@ can mock exactly what they need.
 
 ## Running locally
 
-For local development, run the dev backend on `127.0.0.1:8080`
-configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
-`npm run dev`, then visit `http://127.0.0.1:5173`. Vite proxies `/api` requests
-to the backend; this development-only proxy is not a production deployment.
-With the dev backend, pick an account on the sign-in page; there are no dev
-passwords (see the docs' Demo world page). Without the demo, sign in with a
-provisioned account's password.
-For a backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its HTTP
-loopback origin, in the shell or in a git-ignored `client/.env.local`
-(`PVPICKS_DEV_BACKEND_URL=http://127.0.0.1:8090`); the shell wins.
+`docker compose up -d --build` from the project root runs the client's Vite
+dev server in the `client` container at `http://127.0.0.1:5173`
+(`PVPICKS_CLIENT_PORT`), with `client/` mounted, so edits hot-reload. It
+proxies `/api`, including the realtime WebSocket, to the backend over the
+Compose network. After changing dependencies, rebuild it with
+`docker compose up -d --build client`.
+
+To run the dev server on your machine instead, stop the container
+(`docker compose stop client`), then run `npm run dev` from `client/`. It
+proxies to `http://127.0.0.1:8080`. For a backend on another port, set
+`PVPICKS_DEV_BACKEND_URL` to its loopback origin, in the shell or in a
+git-ignored `client/.env.local` (`PVPICKS_DEV_BACKEND_URL=http://127.0.0.1:8090`).
+
+Pick an account on the sign-in page; there are no dev passwords (see
+[Demo world](/demo-data)). Every demo account's password is `demo`, for the
+password form and account deletion.
 
 Starting the backend applies pending migrations automatically. Do not expose
 the dev backend or proxy to a network.

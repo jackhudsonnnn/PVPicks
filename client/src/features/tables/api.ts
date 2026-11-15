@@ -51,7 +51,7 @@ const balanceSchema = z.object({ userId: uuid, settleCents: cents, trueCents: ce
 export type MemberOutcome = z.infer<typeof outcomeSchema>;
 /** A member's points at a table: what the next settlement moves, and that minus their locked wagers. */
 export type TableBalance = z.infer<typeof balanceSchema>;
-export type TableArchive = z.infer<typeof archiveSchema>;
+type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs";
 export type RemainderRule = "host" | "proposer" | "earliest" | "random";
 

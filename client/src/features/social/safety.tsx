@@ -35,7 +35,7 @@ import { useRelationships } from "./queries";
 
 export type SocialActions = ReturnType<typeof useSocialActions>;
 
-export interface ReportContext {
+interface ReportContext {
   tableId?: string | undefined;
   messageId?: string | undefined;
   /** Shown in the dialog; the server keeps its own copy of the message. */

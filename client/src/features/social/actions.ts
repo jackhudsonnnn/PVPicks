@@ -18,8 +18,6 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type SocialIntent = z.infer<typeof intentSchema>;
-
 function socialErrorMessage(error: BackendError) {
   if (error.status === 429) return "You've sent a lot of reports today. Try again tomorrow.";
   if (error.status === 404) return "That person or invitation is no longer available.";

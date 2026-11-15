@@ -165,7 +165,7 @@ const recordSchema = z.object({
   lost: z.number().int().nonnegative(),
   netCents: z.number().int().safe(),
 });
-export type MemberRecord = z.infer<typeof recordSchema>;
+type MemberRecord = z.infer<typeof recordSchema>;
 
 /** A member's record at a table, computed by the server from resolved, non-4fun bets they picked in. */
 export async function getMemberRecord(

@@ -85,7 +85,7 @@ member-called resolution, host points settlement and individual/group receipt
 history and actions. Balance-change warnings are delivered privately through
 the pending-review list, and the private settlement realtime feed tells both
 parties when to refetch it.
-Sports modes follow later and are not yet implemented.
+The score modes are covered under "Sports outcomes and host overrides".
 
 Both mode families use the same pick, privacy, cap, lock, payout and points
 settlement invariants. U2Pick validates custom questions and choices and uses
@@ -387,8 +387,7 @@ confirm a zero-net group. Paid and forgiven history stays visible but does
 not affect the net. Matching group retries require a retained direct receipt
 relationship and do not reapply the action. Fresh declined forgiveness
 requests cannot be repeated for 24 hours, measured by the database clock.
-The prototype permits an individual sent claim to coexist with an open
-forgiveness request: `forgive_requested_at` tracks that request independently
+An individual sent claim can coexist with an open forgiveness request: `forgive_requested_at` tracks that request independently
 of `status`, and a dispute restores the open request. A group sent, paid,
 unpaid or forgiven action clears requests and cooldowns across its lines;
 group ask/decline updates all requests while preserving sent offset claims.
@@ -404,7 +403,7 @@ bets do not require financial settlement. A host must be able to settle
 eligible resolved bets even when their combined balance is zero for every
 person: record the settlement and mark and link the bets atomically, without
 creating zero-amount receipts. This avoids trapping a table when results cancel
-out; the prototype currently disables that zero-net action.
+out.
 
 Dev deletion removes the table from normal active-table views and disables
 normal mutations. `GET /tables/archives` lists it for the active users who
@@ -422,8 +421,8 @@ preserves existing copies and financial records. It cancels pending invitations
 and snapshots membership atomically. The service locks member users in UUID
 order before locking the table, and rejects a concurrent membership change.
 Future bet, settlement, subscription and event writers must use compatible
-locking and preserve committed source-result propagation. Outbox delivery,
-public receipt actions and account deletion are not yet implemented.
+locking and preserve committed source-result propagation. Account deletion
+("Moderation and account lifecycle") requires the user to be square first.
 
 `GET /me/chat/latest` returns, for each current table, the newest message the
 viewer would see in its chat window (the same block and deleted-author
@@ -448,7 +447,7 @@ message is deleted. They use a domain-separated key derived from the dev
 idempotency secret, so replacing that secret invalidates them. Bet projections
 contain no picks; settlement projections contain only static parties and
 amounts. Reactions from deleted users are hidden; blocked users' reactions on
-otherwise visible messages remain visible, matching the prototype. Archive
+otherwise visible messages remain visible. Archive
 members can read these windows for 90 days after deletion; last-read endpoints
 remain restricted to active tables.
 
@@ -464,8 +463,8 @@ table's chat feed.
 
 Dev chat sending requires current table membership and the corresponding text
 or GIF permission. The user delegated the text limit; it is 1–2000 Unicode
-code points after prototype-compatible trimming. The user selected the
-prototype GIF catalog only; its accepted IDs must be updated with that catalog.
+code points after trimming. GIFs come only from the catalog in
+`chat/gifs.json`; its IDs are the accepted ones.
 A send atomically stores a message, internal outbox event and retry claim.
 Matching retries recheck current access, permission and unchanged message content,
 then return the original 201 message without later reactions. If the message
@@ -532,10 +531,9 @@ stores picks in plaintext; an operator with infrastructure access can inspect
 or modify stored data. Pick authorization and lifecycle services do not yet
 exist.
 The proposer is visible as the bet's author but is not automatically a
-participant. This intentionally changes the prototype, which inserts the
-proposer on No guess when a bet is created.
-The prototype retains a participant's position when changing or clearing a
-guess and choosing again. For the earliest-pick remainder rule, preserve that
+participant.
+A participant keeps their position when changing or clearing a guess and
+choosing again. For the earliest-pick remainder rule, preserve that
 first participation order instead of ordering by the latest pick timestamp.
 Future pick transactions must serialize per bet so concurrent first picks
 have a well-defined order; database sequence values alone do not establish
@@ -587,7 +585,7 @@ shared current membership, shared unexpired archive membership, a direct
 receipt, or a reference in accessible bet, system-attribution or settlement
 chat. The same 404 covers other deleted users, hidden blocks and missing IDs.
 Deleted identities referenced only by future history APIs will need their own
-authorization design; account deletion is not implemented.
+authorization design.
 Social transactions lock both user rows in PostgreSQL UUID order before the
 session and relationship rows; future follow, block, invitation, deletion and
 moderation writers must use compatible ordering. Account-deletion cleanup,
@@ -611,8 +609,8 @@ decline only updates the invitation. Retries recheck visibility, and acceptance
 replay requires current membership. The system chat line is not a user chat
 client delivery. Member removal cancels pending invitations involving the target;
 table deletion cancels all pending invitations. Host demotion cancels its own
-pending invitations. Future account-deletion writers must enforce cancellation
-using compatible locks. Account deletion and event delivery are not implemented.
+pending invitations. Account deletion and freezing cancel the account's
+invitations using compatible locks.
 
 Dev table creation and host member requests accept at most 100 unique IDs.
 The creator is a host. For active recipients who follow the host, mutual follows
@@ -655,8 +653,8 @@ Implementation notes:
 - Overrides: `POST /bets/{id}/override` (current host; sports modes only). An
   Active bet locks first. A correction appends compensating ledger entries so
   each user's sum is the new result. The bet records `overriddenBy` and
-  `overriddenAt`, and chat shows "<host> set “<question>” to <choice>" or
-  "<host> washed “<question>”".
+  `overriddenAt`, and chat shows `<host> set “<question>” to <choice>` or
+  `<host> washed “<question>”`.
 
 **Hosts have the final say.** A host is the person the table trusts to be fair
 and to facilitate the money exchange, so a host may override any sports bet
@@ -711,10 +709,9 @@ Host override:
   the actor is a current host, lock affected users before bets, and are
   idempotent like other mutations.
 
-Interface: the host override reuses the prototype ticket's outcome menu (the
-bet's choices plus a wash), in the same place (see the `prototype-ui` git tag).
-The prototype's dev-only **Simulate** menu there was removed with the prototype;
-in dev, replayed feed data (ADR 0005) will drive sports results instead.
+Interface: the host override is the ticket's outcome menu (the bet's choices
+plus a wash). In dev, scenario files and recorded chunks drive sports results
+(see Dev sports data).
 
 Open:
 

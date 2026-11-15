@@ -2,7 +2,7 @@ import type { Bet } from "./api";
 
 export type BetStatus = "active" | "pending" | "resolved" | "washed";
 
-export interface StatusInfo {
+interface StatusInfo {
   /** The badge's style key. */
   id: BetStatus;
   label: string;

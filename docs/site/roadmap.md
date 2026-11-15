@@ -1,88 +1,56 @@
 # Project roadmap
 
-Work may proceed in parallel where dependencies permit. Status describes the
-current code, not an estimated delivery date.
+What's left, by area. See [Project status](/status) for what's built. Work
+proceeds in parallel where dependencies allow; nothing here has a date.
 
-## 1. Documentation & foundations — in progress
+## Betting
 
-- Maintain this handbook, the current domain rules, ADRs and draft contracts.
-- Add an interactive API reference later, after defining request execution and
-  access safeguards; the current site links to the draft OpenAPI file.
-- Complete the API contract review.
+- **Next:** the player-stat modes (Either Or, Prop Hunt, King Of The Hill) on
+  the stored player stats. One product decision is open first: whether
+  "touchdowns" counts return, fumble and interception touchdowns
+  ([Player stats](/player-stats)).
+- Quick Pick subscriptions and copying results between tables; end-to-end
+  debt-cap enforcement across copies.
+- Maybe: a host setting for who may override sports results; showing
+  host-changed outcomes in the settlement message.
+- Every mode reuses the shared pick, privacy, cap, lock, payout and
+  settlement transactions; only the feed supplies sports outcomes.
 
-## 2. Tables & social — in progress
+## Sports data
 
-- **Available:** table creation, profile updates and reads, member additions, removal and invitations,
-  deletion and read-only chat archives, host/permission/remainder and betting-setting changes, Quick Pick controls, relationships,
-  invitation responses, personal profile updates, user search and lookup, preferences and chat basics.
-- **Available (2026-11-14):** an admin moderation queue (dismiss, or strike; three strikes freeze, which blocks sign-in), account deletion once you're square, and host recovery (the oldest active member takes over, or the table is archived).
-- **Later:** Quick Pick subscriptions and copying, and an archive data cleanup policy.
+- **Buy All-Star for NBA and NFL before the GOAT trial ends (about Nov 20).**
+  Check BallDontLie's terms for showing and storing their data first. The
+  switch itself is configuration only ([Player stats](/player-stats)).
+- Make the plan a per-league setting that drives poll rate, endpoints and
+  offered modes (ADR 0005).
+- Check the recordings: how fast stats update, how a player who didn't play
+  appears, corrections after Final, and NFL status and quarter handling on a
+  live Sunday.
+- Cut chunks with player stats (`scripts/cut-sports-chunk.py`), and add player
+  stats to the demo games.
 
-## 3. Betting & settlement — in progress
+## Social and tables
 
-- **Available:** U2Pick proposal, picks, deadline locking by the dev lock
-  worker, member-called results and washes, ledger writes, host points
-  settlement, and individual/group receipt actions with private balance-change
-  reviews, over HTTP and in the frontend.
-- **Later:** sports-bet modes and their feed-driven locking and results, with
-  the decided automatic outcomes and host overrides (domain rules, "Sports
-  outcomes and host overrides"); Quick Pick copy propagation; end-to-end
-  debt-cap enforcement.
-- Sports modes must reuse the shared pick, privacy, cap, lock, payout and
-  settlement transactions; only the feed may supply their outcomes.
-- Preserve lock-time remainder snapshots, including the randomly chosen host,
-  and keep Active picks hidden from other players and admin views.
+- An archive data cleanup policy, and revoking a single session ("sign out of
+  other devices"). Freezing and deleting an account already end every
+  session.
+- Keep reactions on older loaded chat messages current. Today a change
+  refreshes the newest window and the message you reacted to.
 
-## 4. Delivery & sports data — in progress
+## Delivery
 
-- **Available:** the outbox relay to Kafka with seven-day cleanup of published
-  rows, a realtime consumer, and an authenticated STOMP gateway delivering
-  every outbox event to its reviewed audience; the BallDontLie NBA/NFL feed and
-  the sports ticker, live in the frontend.
-- **Later:** ordering and gap detection beyond refetch-on-reconnect; durable
-  consumers that record processed events; verify the feed's NFL fields,
-  coverage, chronology and per-game statistics against live data before using
-  it to resolve sports bets; game history, rosters, stored player stats and a
-  dev replay feed (ADR 0005). All-Star is chosen for both leagues; raw player
-  box scores are already recorded during games.
-- **Next:** the player modes (Either Or, Prop Hunt, King Of The Hill) on the
-  stored player stats. Done: saved specs and contract tests, sports data
-  storage, the shared sports-bet lifecycle, the host override, Total Disaster
-  and Give And Take, and dev sports data (scenario files and recorded chunks
-  as DEV games, with a Dev page).
+- Ordering and gap detection beyond refetch-on-reconnect, and durable
+  consumers that record processed events.
 
-## 5. Frontend integration — in progress
+## Documentation
 
-- Backend sign-in, session restoration, tables, members, invitations,
-  friends, preferences, table chat and archives, U2Pick betting, result
-  calling, host points settlement, settle-up receipts, the guide with feedback
-  and an admin site-health view are connected. The mock-store prototype was
-  removed (git tag `prototype-ui`).
-- Uncertain actions are saved per user in local storage and shared across
-  tabs; other devices reconcile from server reads.
-- Home matches the prototype: table and invitation cards (green when you're
-  in play), and on desktop a live-first Tickets column.
-- Settle-ups follow the prototype: a card per person on Friends and a
-  receipts dialog with per-receipt and group actions.
-- Out of scope for the MVP (owner decision, 2026-11-14): notifications. The
-  prototype's bell is not coming back; live updates and Home's cards cover
-  what changed.
-- Integrate one real workflow at a time; validate recovery, permissions, mobile
-  layout and accessibility. Prototype completion is not backend completion.
-- See the <a href="/docs/source/frontend-roadmap.md" download>frontend roadmap</a>
-  for integration work.
+- An interactive API reference, once request execution and access safeguards
+  are defined. Finish the API contract review.
 
-- Demo world (implemented; see [Demo world](/demo-data)): 200 demo users
-  with behavior profiles played by bots, seeded main accounts and history,
-  always-live demo games, passwordless dev sign-in and a Reset on the Dev
-  page. Not yet: player stats on demo games.
+## Security, operations and launch
 
-## 6. Security, operations & launch — planned
-
-- Legacy system-message cleanup, and revoking a single session (sign out of
-  other devices). Freezing and deleting accounts already end every session.
-- Design retention and rotation for retry records and audit data.
-- Add rate limits, secure cookies, TLS and operational protections before LAN.
-  Validate backup/recovery and observability before production or AWS.
-- Until then the dev environment is disposable; before LAN, switch to preserving
-  data and approving destructive operations.
+- Rate limits, secure cookies, TLS and other protections before LAN.
+- Retention and rotation for retry records and audit data.
+- Backups, recovery and observability before production.
+- Until then the dev environment is disposable. Before LAN, switch to
+  preserving data and approving destructive operations.

@@ -1,15 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  BookOpen,
-  FlaskConical,
-  Home,
-  LogOut,
-  SlidersHorizontal,
-  Ticket,
-  Users,
-} from "lucide-react";
+import { BookOpen, Home, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ScrollContainer } from "@/components/scroll-container";
@@ -24,7 +16,8 @@ import { settlementsFeed } from "@/lib/realtime-connection";
 import { listSettlementGroups } from "@/features/settlements";
 import { useInvites } from "@/features/social";
 import { userKey } from "@/lib/query-keys";
-import { useDemo, useDevSports } from "@/features/devdata";
+import { useDevAvailable } from "@/features/devdata";
+import { DevLinks } from "./dev-links";
 
 const NAV = [
   { to: "/", label: "Home", short: "Home", icon: Home },
@@ -88,22 +81,6 @@ function LiveStatus() {
     >
       {status === "live" ? "Live" : "Reconnecting…"}
     </span>
-  );
-}
-
-/** Icon link to the Dev data page, beside the logo; shown only when the backend has dev sports data on. */
-function DevDataLink({ active }: { active: boolean }) {
-  return (
-    <Button asChild size="icon" variant="ghost" className={cn(active && "text-primary")}>
-      <Link
-        to="/dev"
-        aria-label="Dev data"
-        title="Dev data"
-        aria-current={active ? "page" : undefined}
-      >
-        <FlaskConical />
-      </Link>
-    </Button>
   );
 }
 
@@ -194,10 +171,9 @@ export function AppShell({
   children: ReactNode;
 }) {
   const isTable = pathname.startsWith("/tables/");
-  const dev = useDevSports(user.id);
-  const demo = useDemo(user.id);
-  const devLink =
-    dev.data || demo.data ? <DevDataLink active={isActive(pathname, "/dev")} /> : undefined;
+  const devLink = useDevAvailable(user.id) ? (
+    <DevLinks active={isActive(pathname, "/dev")} />
+  ) : undefined;
   return (
     <div
       className={cn(

@@ -2,7 +2,7 @@ import type { Relationships } from "./api";
 
 /** Rules for people lists and search, matching the server. */
 
-export type PeopleTab = "friends" | "following" | "followers" | "blocked";
+type PeopleTab = "friends" | "following" | "followers" | "blocked";
 
 /** Usernames are 1–15 lowercase letters, digits or underscores; search uses the same rule. */
 export function searchTerm(text: string): string | null {

@@ -2,7 +2,7 @@ import { formatCents } from "@/lib/money";
 import { STATUSES, type Bet } from "@/features/bets";
 
 /** Seats around the felt. With more people than seats, the last seat becomes an "N others" spot. */
-export const SEAT_CAP = 8;
+const SEAT_CAP = 8;
 
 /**
  * Who sits at the felt. While the focused bet is Active nobody's participation is public yet, so everyone sits;

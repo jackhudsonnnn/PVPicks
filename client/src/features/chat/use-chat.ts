@@ -5,7 +5,7 @@ import { appendNewer, mergeRange, prependOlder } from "./model";
 
 const pageSize = 25;
 
-export type ChatState = {
+type ChatState = {
   status: "loading" | "ready" | "error";
   error: unknown;
   messages: ChatMessage[];

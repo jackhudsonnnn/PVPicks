@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { FEEDBACK_KINDS, FEEDBACK_MAX, feedbackProblem, type FeedbackKind } from "./feedback";
 
 /** Guide section: send game mode ideas, perk ideas, GIFs, bugs or anything else. */
-export interface FeedbackInput {
+interface FeedbackInput {
   kind: FeedbackKind;
   text: string;
   link?: string;

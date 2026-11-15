@@ -6,7 +6,7 @@ import type { Table, Permission, RemainderRule, TableBalance } from "@/features/
 import { type User } from "@/features/people";
 import type { useTableActions } from "@/features/tables/actions";
 
-export type TableActions = ReturnType<typeof useTableActions>;
+type TableActions = ReturnType<typeof useTableActions>;
 
 export interface People {
   user: User;

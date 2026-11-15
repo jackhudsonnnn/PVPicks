@@ -7,7 +7,7 @@ import type { ChatMessage } from "./api";
  * refreshed window replaces the range it overlaps.
  */
 
-export const TEXT_LIMIT = 2000;
+const TEXT_LIMIT = 2000;
 export { QUICK_REACTIONS };
 
 /** Appends a newer window, skipping messages already loaded. */

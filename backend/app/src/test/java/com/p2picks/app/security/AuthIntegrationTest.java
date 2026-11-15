@@ -112,6 +112,9 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         mvc.perform(get("/dev/demo/accounts")).andExpect(status().isNotFound());
         mvc.perform(get("/dev/demo/accounts").cookie(new Cookie("session", "stale.token.value")))
                 .andExpect(status().isNotFound());
+        // The Dev page works signed out in dev: with dev data off here, its paths are absent, not unauthorized.
+        mvc.perform(get("/dev/sports")).andExpect(status().isNotFound());
+        mvc.perform(get("/dev/demo")).andExpect(status().isNotFound());
     }
 
     @Test

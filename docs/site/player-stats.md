@@ -13,6 +13,16 @@ for live bets. GOAT is needed only for play-by-play, sportsbook odds and
 player props, and advanced stats. Choose Their Fate and Scorcerer need
 play-by-play, so they stay "Coming soon" (ADR 0005).
 
+Every endpoint the app calls (games, player stats, active players) is on
+All-Star, so switching from the trial is configuration only:
+
+1. If BallDontLie issues a new key, replace `PVPICKS_BALLDONTLIE_API_KEY` in
+   `infra/compose/.env`.
+2. Add `PVPICKS_SPORTS_POLL_INTERVAL=PT15S` and
+   `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` there. That's about 8 score and 20
+   stats requests a minute, within All-Star's 60 with room for manual checks.
+3. Redeploy the backend.
+
 | League | Endpoint | Rows |
 |---|---|---|
 | NBA | `GET /v1/stats?game_ids[]=…&per_page=100` | Every player on both rosters, including ones who didn't play (`min` blank or `"00"`). |

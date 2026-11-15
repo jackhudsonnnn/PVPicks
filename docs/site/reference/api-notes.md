@@ -1,69 +1,20 @@
-# Backend contract inventory — Phase 0 draft
+# API behavior notes
 
-This maps the current frontend seam, not an OpenAPI specification or a list of
-implemented endpoints. Proposed paths still need request/response schemas,
-authorization, validation, error semantics and review.
+Per-endpoint behavior and known limits of the dev backend that the OpenAPI
+file (`backend/api/openapi.yaml`) doesn't spell out: retries, visibility,
+paging and what's still missing. The OpenAPI file is the contract; the domain
+rules are the business rules. The [realtime contract](/reference/realtime-contract) covers the WebSocket
+destinations.
 
-`../../backend/api/openapi.yaml` contains preliminary identity, debt-cap, betting,
-table, Quick Picks, chat, social, feedback, game and settlement
-operations, an admin health snapshot and a draft admin user-action operation.
-Other admin reads and surfaces remain incomplete; it is not ready to generate
-a client.
-`realtime-contract.md` records the realtime gateway's destinations and rules.
+## By area
 
-Source: the prototype's `client/src/features/store/commands.ts`, removed from
-the client and preserved at the git tag `prototype-ui`. The command names below
-are kept as an inventory of intended operations. The backend-backed app
-already uses sign-in, tables, members, invitations, social, preferences, chat
-and archives, U2Pick proposal, picks and results, host points settlement,
-receipt reviews and actions, feedback and the admin health snapshot; the
-remaining commands still need endpoints, screens, or both.
-
-## Commands
-
-| Frontend command | Intended backend operation |
-|---|---|
-| `setDebtCap` | `PUT /me/debt-cap`; `GET /me/debt` for current debt |
-| `propose` | Dev `POST /tables/{id}/bets` (U2Pick only) |
-| `pick` | Dev `PUT /bets/{id}/pick`; `DELETE /bets/{id}/pick` for No guess |
-| `settle` | Dev `POST /bets/{id}/settle` for authorized U2Pick settlers only |
-| `simulateResult` | Removed with the prototype; replayed feed data (ADR 0005) replaces it in dev; no player endpoint |
-| `overrideQuickPick` | Planned host override (wash or set a result) for sports bets and Quick Pick copies until points are settled; endpoint not yet designed |
-| `send`, `sendGif` | Dev `POST /tables/{id}/messages` |
-| `react` | Dev `PUT`/`DELETE /messages/{id}/reaction` |
-| `updateProfile` | Dev `PATCH /me/profile` |
-| `follow` | `POST`/`DELETE /follows/{userId}` |
-| `block` | `POST /blocks/{userId}`; proposed `DELETE /blocks/{userId}` |
-| `deleteAccount` | `DELETE /me` |
-| `setInvitePrefs` | `PUT /me/invite-preferences` |
-| `respondInvite` | `POST /invites/{id}/respond` |
-| `createTable` | Dev `POST /tables`, including requested initial members |
-| `updateTable` | Dev `PATCH /tables/{id}` |
-| `addMembers` | Dev `POST /tables/{id}/members` |
-| `removeMember` | Dev `DELETE /tables/{id}/members/{userId}` with unsettled-bet and host guards |
-| `deleteTable` | Dev `DELETE /tables/{id}`; 409 for Active/Pending bets or unresolved points settlement |
-| `toggleHost` | Dev `PUT`/`DELETE /tables/{id}/hosts/{userId}` |
-| `setPermission` | Dev `PUT /tables/{id}/members/{userId}/permissions` |
-| `setRemainderMode` | Dev `PATCH /tables/{id}/remainder`; 409 for a change while any bet is Active |
-| `setHostsOnlyBets`, `setU2PickOff` | Dev `PATCH /tables/{id}/settings` |
-| `setQuickPicks`, `setSharing` | Dev `PUT /tables/{id}/quick-picks` and `POST`/`DELETE /tables/{id}/quick-picks/share`; rotation is `POST /tables/{id}/quick-picks/rotate`. |
-| `subscribe` | `POST /tables/{id}/quick-picks/subscribe` with code |
-| `unsubscribe` | `DELETE /tables/{id}/quick-picks/subscribe?sourceTableId=...` |
-| `settlePoints` | Dev `POST /tables/{id}/settle-points` |
-| `settlePerson` | Dev `POST /people/{id}/settle` with step and expected revision |
-| `reviewSettleChange` | Dev `GET /users/{id}/settlement-review` and idempotent `POST /users/{id}/settlement-review/acknowledge` |
-| `markSent`, `confirmPaid`, `disputePaid`, `forgive`, `askForgive` | Dev `POST /settlement-lines/{id}/{action}` with revision |
-| `declineForgive` | Dev `POST /settlement-lines/{id}/decline-forgive` with revision |
-
-## Other contract surfaces
-
-- Authentication: login, logout, current user and secure session lifecycle.
-  Dev and LAN use provisioned accounts; decide production sign-up after LAN.
-  The dev-only eight-hour cookie session, CSRF flow, login, logout and `/me`
-  are implemented. The dev security filter checks the current database role
-  for `/admin` routes; only the admin health snapshot exists. The wider
-  contract remains a draft. LAN refresh-token and TLS policy remain to be
-  designed.
+- Authentication: the dev-only eight-hour cookie session, CSRF flow, login,
+  logout and `/me`. In dev, `/dev/demo/accounts` and `/dev/demo/sign-in` sign
+  in as any demo account without a password; like login, they ignore a stale
+  session cookie. In dev, every `/dev/**` path (dev data and the demo) works
+  without a session, so the Dev page works signed out. The security filter checks the current database role for
+  `/admin` routes (moderation and site health). Production sign-up, LAN
+  refresh tokens and TLS are still to be designed.
 - Initial state and read APIs for tables, users, bets, games, follows, blocks,
   invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
@@ -98,7 +49,7 @@ remaining commands still need endpoints, screens, or both.
   ICU4J 76.1 RGI emoji sequence. A matching retry rechecks access without
   reapplying. Reaction changes invalidate the table's chat feed.
 - Dev chat sending validates the current text/GIF permission, trims text to
-  1–2000 Unicode code points and restricts GIF IDs to the prototype catalog.
+  1–2000 Unicode code points and restricts GIF IDs to the catalog in `chat/gifs.json` (`GET /gifs`).
   A retry rechecks access and returns the original 201 representation without
   resending; if the message was removed or its content changed, it returns 404.
   The retry record stores a message reference, not a copy of the text. Rate
@@ -147,22 +98,23 @@ remaining commands still need endpoints, screens, or both.
   direct receipt parties. Deleted identities are placeholders only for
   shared current membership, unexpired archive membership, direct receipts,
   or identities referenced by accessible historical chat. Unavailable
-  identities return the same 404. Account deletion and receipt-history APIs
-  still need implementation and must preserve authorized historical identity.
+  identities return the same 404. Deleted accounts keep their authorized
+  historical identity as `Deleted user`.
 - Dev host PUT/DELETE clears restrictions on promotion, cancels the demoted
   host's pending invitations and requires another active host for demotion.
   Attributed host-change chat resolves current usernames at read time and
-  shows `Deleted user` for tombstones. Account deletion, freeze recovery and a
-  realtime table-view invalidation remain unimplemented.
-- Reports, feedback and admin operations are outside
-  `AppCommands`. Dev `POST /feedback` submits feedback but does not implement
-  rate limiting, moderation reads or personal-data cleanup; links stored before
-  V18 are not revalidated. Dev `GET /admin/health` reports PostgreSQL and Redis
-  status without connection details; Kafka is `NOT_CHECKED` and no latency or
-  error metrics exist. Admin flag and strike storage does not enforce
-  authorization, automatic freezes, session revocation or deletion cleanup.
-  Report submission, moderation reads, report-status updates and most admin
-  operations remain incomplete.
+  shows `Deleted user` for tombstones. When an account is frozen or deleted
+  and it was a table's last host, the oldest active member is promoted (or the
+  table is archived). A realtime table-view invalidation for host changes is
+  still missing.
+- Reports, feedback and admin: `POST /reports` (a daily limit per reporter)
+  feeds the moderation queue: `GET /admin/reports`, `GET /admin/users/flagged`,
+  dismiss or strike a report (the third strike freezes the account and ends
+  its sessions), unfreeze, clear strikes. Repeated actions answer
+  `already_handled`. `POST /feedback` has no rate limit, moderation reads or
+  personal-data cleanup, and links stored before V18 aren't revalidated.
+  `GET /admin/health` reports PostgreSQL and Redis without connection details;
+  Kafka is `NOT_CHECKED` and there are no latency or error metrics.
 - Dev `GET /me/debt-cap` reads the saved setting and default. Dev
   `GET /me/debt` reads current table exposure and open receipt nets in one
   database snapshot. Dev `PUT /me/debt-cap` requires zero debt and whole-point
@@ -201,9 +153,6 @@ remaining commands still need endpoints, screens, or both.
   frontend keeps an uncertain action's key in per-user local storage, shared by
   the browser's tabs, and refuses to retry it after 23 hours; other devices
   reconcile from reads.
-- Prototype-only reducer actions such as local `tick`, `gameResult`, and
-  `loadBlocks` are not public player commands. Server-side clock and feed events
-  drive lock and game result transitions.
 - Bet outcome resolution (`SETTLED`) is distinct from the host's later
   settlement of table points (`pointsSettled`); clients need both for balances
   and Quick Pick wash eligibility.
@@ -218,10 +167,3 @@ remaining commands still need endpoints, screens, or both.
   `/user/queue/tables/{id}/chat`, `/user/queue/settlements`, `/user/queue/me`
   and `/user/queue/ticker`. Ordering, replay and gap detection beyond
   refetch-on-reconnect remain open.
-
-## Phase 0 exit checklist
-
-- [ ] Describe every command and read surface in OpenAPI 3.1, with schemas and
-      errors; reconcile the table above with the client and current decisions.
-- [x] Specify and review authenticated realtime destinations and event shapes.
-- [ ] Verify sports-feed chronology and coverage before auto-settlement.

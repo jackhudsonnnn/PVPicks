@@ -11,7 +11,7 @@ Get oriented, run the stack locally and keep credentials out of source control.
 The codebase contains a Spring Boot backend in `backend/`, a TanStack
 frontend in `client/`, and documentation in `docs/`. The backend app has
 one Spring Modulith module per Java package; the
-<a href="/docs/source/backend-readme.md" download>backend README</a> maps them.
+[Backend](/backend) page maps them.
 
 ## Build the documentation
 
@@ -22,12 +22,21 @@ npm ci --prefix docs
 npm --prefix docs run build
 ```
 
-The backend Gradle resource build also builds the site; it requires those npm
-dependencies to be installed first. The dev backend serves the bundled site at
-`http://127.0.0.1:8080/docs/` when running with the default port. Its contents
-are rebuilt into the application artifact; edits are not live in a running jar.
-Documentation sources and downloadable references are explicitly allowlisted
-in `docs/scripts/build.mjs`; add new reference files there when needed.
+All documentation lives in this site (`docs/site/`): guides, the backend and
+frontend pages, references and ADRs. The only other Markdown files are the root
+`README.md` (quick start) and the `AGENTS.md` instructions for coding agents.
+
+The backend image builds the site and serves it at `/docs/`
+(`http://127.0.0.1:8080/docs/` with the default port), so `docker compose up
+--build` refreshes it. To see edits live, run `npm --prefix docs run dev`
+(`http://127.0.0.1:5180/docs/`; it has its own port so it never collides with
+the app on 5173). Downloadable files (the OpenAPI draft) are listed in
+`docs/scripts/build.mjs`.
+
+VitePress 1.x and Mermaid 11 use scoped overrides for patched Vite 6 and KaTeX
+releases outside their declared ranges. Recheck them when upgrading, and
+validate the build, the dev server and the Mermaid diagrams before removing
+them.
 
 ## Run focused backend tests
 
@@ -38,8 +47,8 @@ From `backend/`, using an installed Java 21:
 ```
 
 Integration tests use disposable Testcontainers and require Docker. The
-<a href="/docs/source/backend-readme.md" download>backend setup notes</a> cover local JDK selection,
-provisioning, configuration, and the dev stack.
+[Backend](/backend) page cover local JDK selection,
+configuration, and the dev stack.
 
 ::: tip Disposable local environment
 The project is pre-MVP and the dev environment is local: development data is
@@ -48,32 +57,28 @@ or regenerate credentials. Pending Flyway migrations run automatically when the
 backend starts. Never commit credentials or expose the dev stack to a network.
 :::
 
-## Frontend
+## Run the stack
 
-The current frontend provides backend sign-in, table and bet views, U2Pick
-betting (create, pick, call results, host points settlement) and settle-up
-receipts, table chat and a live sports ticker, all updating live over a
-WebSocket, as well as creating and managing tables, inviting people who follow
-you, and a Friends page for following and blocking. The dev backend seeds a demo world
-and the sign-in page lets you pick any account without a password (see
-[Demo world](/demo-data)). In dev, the lock worker locks U2Pick bets at their
-deadline and the outbox relay publishes events for live updates; set
-`PVPICKS_BET_LOCK_WORKER_ENABLED=false` or `PVPICKS_OUTBOX_RELAY_ENABLED=false`
-to turn either off. The sports ticker needs a BallDontLie API key in
-`PVPICKS_BALLDONTLIE_API_KEY`; without one it says live scores are
-unavailable.
+The root `README.md` is the quick start: `./scripts/provision-dev.sh --init`
+once (it creates `infra/compose/.env` from `.env.example` and the local keys),
+then `docker compose up -d --build` from the repository root. That runs
+PostgreSQL, Redis, Kafka, the backend (serving these docs at `/docs/`) and the
+app at `http://127.0.0.1:5173`. Startup applies pending migrations and seeds
+an empty database with the [demo world](/demo-data); sign in by picking an
+account.
 
-For a dev backend listening on `127.0.0.1:8080`, configure
-its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From
-`client/`, run `npm run dev` and open `http://127.0.0.1:5173`. Vite proxies
-same-origin `/api` requests to the backend and preserves the browser's Origin;
-the browser obtains a CSRF token before login and logout. Use the exact host and
-port shown, and do not expose this development proxy to a network. This proxy
-is for Vite development only, not a production deployment configuration.
-If port 8080 is taken, start Compose with `PVPICKS_PORT` set to another port
-and set `PVPICKS_DEV_BACKEND_URL` to that HTTP loopback origin, in the shell
-or in a git-ignored `client/.env.local`, before starting Vite.
-Startup applies pending migrations automatically.
+- The app's container runs the client's Vite dev server with `client/`
+  mounted, so edits hot-reload. It proxies `/api` (and the realtime
+  WebSocket) to the backend and keeps the browser's Origin, which the backend
+  checks against `PVPICKS_DEV_ORIGIN` (default the app's address). See
+  [Frontend](/frontend) for running it outside Docker.
+- The lock worker locks U2Pick bets at their deadline and the outbox relay
+  publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or
+  `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns either off.
+- Live scores need `PVPICKS_BALLDONTLIE_API_KEY`; without it the ticker says
+  they're unavailable, and the demo's DEV games still run.
+- Everything is published on 127.0.0.1 only. Don't expose the stack or the
+  dev proxy to a network.
 
 ## Authentication for API development
 

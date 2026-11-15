@@ -5,7 +5,7 @@ import { userSchema } from "@/features/people";
 const currentUserSchema = userSchema.extend({ role: z.enum(["PLAYER", "ADMIN"]) });
 
 /** The signed-in account; admins get the admin view because they cannot use player APIs. */
-export type CurrentUser = z.infer<typeof currentUserSchema>;
+type CurrentUser = z.infer<typeof currentUserSchema>;
 
 export async function currentUser(signal?: AbortSignal): Promise<CurrentUser | null> {
   try {

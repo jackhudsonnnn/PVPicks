@@ -26,7 +26,7 @@
 
   Tests sit beside their file. Use a `components/` subfolder only past about 15 files (`bets` and `tables` have one). When another feature needs something, export it from the feature's `index.ts`. Remove an export from it when nothing outside the feature uses it, and delete code nothing uses. Barrels re-export only; never import your own feature's barrel.
 - Features:
-  - `auth`: session API, sign-in form, and the demo's passwordless account picker (shown when `GET /dev/demo/accounts` answers);
+  - `auth`: session API, sign-in form, and the demo's passwordless account picker (shown when `GET /dev/demo/accounts` answers; a failed check keeps retrying);
   - `people`: user and profile reads, `PersonName`, avatars, `usePerson`, hue colors;
   - `tables`: table API and actions, home, table list, the table page and felt, Peers, Host/About, archives, tomatoes, seating;
   - `bets`: bet API and actions, tickets, details, the proposal sheet, the Tickets page, ticket, sports and U2Pick rules, the mode catalog;
@@ -59,11 +59,12 @@
     - Receipt rows name tables through `tables` `useTableNames`: current tables, plus deleted ones for 90 days.
   - Preferences: `preferences/preferences.tsx`, with Tables, Account and Display tabs.
   - How to play, with feedback: `guide/guide.tsx`.
-  - Dev data: `devdata/dev-page.tsx` at `/dev`. The flask icon beside the logo shows only when `GET /dev/sports` answers (it 404s unless the backend has dev data on). Ticker games carry `dev`, and DEV games are marked in the ticker and the game picker.
+  - Dev data: `devdata/dev-page.tsx` at `/dev`. `app/dev-links.tsx` (flask for the Dev page, document for the docs at `/docs/`, which Vite proxies) sits beside the logo in the shell and on the sign-in page whenever `useDevAvailable` says `GET /dev/sports` or `GET /dev/demo` answers (both 404 outside dev). Signed out, `/dev` renders the Dev page (`SignedOutDev` in `app/app.tsx`, scope `"guest"`, keys from `devKey` outside the user's keys); the backend permits `/dev/**` without a session in dev. The page shows the demo world (counts, bot activity, Reset) and the dev sports sources. Ticker games carry `dev`, and DEV games are marked in the ticker and the game picker.
   - The admin view: `admin/admin.tsx`, with tabs for Moderation (`admin/moderation.tsx`: the report queue and frozen or struck players) and Site health. Admin actions are plain requests, not retryable mutations: each is one-shot on the server, so a repeat answers "already handled".
   - Account deletion: `preferences/delete-account.tsx` (blocker wording in tested `preferences/delete-rules.ts`). `BackendError` keeps the raw 403/409 body for errors that carry more than a code.
 
   `/me` returns `role`. An `ADMIN` session renders only the admin view, never player screens.
+  Every sign-in (`App` `startSession`) navigates to `/` first: the URL may be the last session's page, possibly another account's. The demo reset runs in `App` (`resetWorld`) behind a full-screen "Resetting" state, so nothing reads as an expired session halfway through.
 - Bets render as tickets (`bets/components/ticket.tsx`, with details in `bet-details.tsx`). Tap a choice to pick (confirmed), tap it again to clear, and use "Call it" from a locked ticket. New bets go through the proposal sheet (`bets/components/propose-sheet.tsx`):
   - a mode grid, where U2Pick and the score modes (Total Disaster and Give And Take) are live and the rest show "Coming soon";
   - U2Pick setup, or a game picker with a line stepper and an overtime switch (rules and the server-matching question are in tested `bets/sports-model.ts`);

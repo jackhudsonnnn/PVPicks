@@ -78,11 +78,10 @@ const unreadSchema = z.object({
 });
 
 export type ChatMessage = z.infer<typeof messageSchema>;
-export type ChatWindow = z.infer<typeof windowSchema>;
-export type ChatUnread = z.infer<typeof unreadSchema>;
+type ChatWindow = z.infer<typeof windowSchema>;
+type ChatUnread = z.infer<typeof unreadSchema>;
 /** Which window to read: the latest, older/newer than a cursor, or around a visible message. */
-export type WindowRequest =
-  { latest: true } | { before: string } | { after: string } | { around: string };
+type WindowRequest = { latest: true } | { before: string } | { after: string } | { around: string };
 
 function tablePath(tableId: string) {
   if (!uuid.safeParse(tableId).success) throw new BackendError("Table not found.", 404);

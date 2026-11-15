@@ -21,7 +21,7 @@ export function formatClock(seconds: number) {
   return `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
 }
 
-export interface ChoiceTally {
+interface ChoiceTally {
   choice: string;
   count: number;
   /** Share of the people in the pot, rounded to a whole percent. */

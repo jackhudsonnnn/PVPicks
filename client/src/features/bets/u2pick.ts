@@ -3,8 +3,8 @@ import type { SettlerRule } from "./types";
 /** Rules for U2Pick, the custom mode where the proposer writes the question and options. */
 
 export const MAX_OPTIONS = 6;
-export const MAX_QUESTION = 120;
-export const MAX_OPTION = 40;
+const MAX_QUESTION = 120;
+const MAX_OPTION = 40;
 
 export const SETTLER_RULES: { id: SettlerRule; label: string; description: string }[] = [
   { id: "anyone", label: "Anyone", description: "Anyone at the table can call it." },

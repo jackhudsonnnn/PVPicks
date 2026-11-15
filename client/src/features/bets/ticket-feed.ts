@@ -3,9 +3,9 @@ import type { Bet, BetPage } from "./api";
 type Status = Bet["status"];
 
 /** Home's ticket order: live first, then waiting on results, then finished. Newest first within each. */
-export const TICKET_ORDER: readonly Status[] = ["ACTIVE", "PENDING", "SETTLED", "WASHED"];
+const TICKET_ORDER: readonly Status[] = ["ACTIVE", "PENDING", "SETTLED", "WASHED"];
 
-export interface TicketPageParam {
+interface TicketPageParam {
   status: Status;
   cursor: string | null;
 }

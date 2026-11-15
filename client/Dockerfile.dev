@@ -1,0 +1,8 @@
+# The client's Vite dev server for Docker Compose (development only). Dependencies are installed in the image;
+# the source is mounted from the checkout, so edits hot-reload. Rebuild (`up --build`) after changing dependencies.
+FROM node:22.12-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+EXPOSE 5173
+CMD ["npm", "run", "dev"]

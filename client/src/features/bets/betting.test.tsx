@@ -11,6 +11,7 @@ import { currentUser } from "@/features/auth/api";
 import { listModes, listMyBets, listTableBets, type Bet } from "./api";
 import { modeAvailability } from "@/test/api-fixtures";
 import { mutationRequest } from "@/lib/api-client";
+import { PICK_WINDOW_DEFAULT } from "./wager";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("@tanstack/react-router", () => ({
@@ -253,7 +254,7 @@ describe("U2Pick betting", () => {
           config: { line: 225 },
           includesOvertime: false,
           wagerCents: 100,
-          durationSec: 120,
+          durationSec: PICK_WINDOW_DEFAULT,
           forFun: false,
         },
       ),

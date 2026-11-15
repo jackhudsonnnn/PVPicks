@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "vitepress dev site",
+    "dev": "vitepress dev site --host 127.0.0.1 --port 5180 --strictPort",
     "preview": "vitepress preview site"
   },
   "overrides": {

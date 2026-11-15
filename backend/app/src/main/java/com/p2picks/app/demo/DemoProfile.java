@@ -19,7 +19,7 @@ import java.util.function.UnaryOperator;
  * @param reportChance chance of reporting a message aimed at them
  * @param joinBetChance chance of picking on a pending bet they can see
  * @param proposalsPerHour bets they propose in one of their tables
- * @param modes mode ids they propose; empty means every available mode
+ * @param modes mode ids they propose (u2pick, total_disaster, give_and_take); empty means every one
  * @param leagues leagues they bet on
  * @param pickStyle how they choose a side
  * @param wagerMinCents smallest wager they propose

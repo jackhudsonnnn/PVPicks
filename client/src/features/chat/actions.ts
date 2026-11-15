@@ -22,7 +22,7 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type ChatIntent = z.infer<typeof intentSchema>;
+type ChatIntent = z.infer<typeof intentSchema>;
 
 /** Sending and reacting, with the same retry-key safety as bets and receipts. */
 export function useChatActions(

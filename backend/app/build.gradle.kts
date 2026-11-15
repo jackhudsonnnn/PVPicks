@@ -24,8 +24,6 @@ val buildDeveloperDocs = tasks.register<Exec>("buildDeveloperDocs") {
         exclude("node_modules/**", "site/.vitepress/dist/**", "site/.vitepress/cache/**")
     })
     inputs.file(rootProject.file("api/openapi.yaml"))
-    inputs.file(rootProject.file("README.md"))
-    inputs.file(rootProject.projectDir.parentFile.resolve("client/roadmap.md"))
     outputs.dir(docsOutput)
     onlyIf { !prebuiltDocs }
 }

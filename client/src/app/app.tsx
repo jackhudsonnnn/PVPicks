@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
 import { currentUser, signIn, signInAs, signOut, SignIn } from "@/features/auth";
@@ -11,7 +11,9 @@ import { FriendsPage } from "@/features/social";
 import { GuidePage } from "@/features/guide";
 import { PreferencesPage } from "@/features/preferences";
 import { AppShell } from "./shell";
-import { DevPage, resetDemo } from "@/features/devdata";
+import { DevPage, resetDemo, useDevAvailable } from "@/features/devdata";
+import { DevLinks } from "./dev-links";
+import { Logo } from "@/components/logo";
 import { TicketsPage } from "@/features/bets";
 import { RealtimeProvider, useRealtimeFeed } from "@/lib/realtime";
 import { personalFeed } from "@/lib/realtime-connection";
@@ -22,6 +24,7 @@ import { toast } from "sonner";
 
 export function App() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const session = useQuery({
@@ -29,6 +32,9 @@ export function App() {
     queryFn: ({ signal }) => currentUser(signal),
     retry: false,
   });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // Signed out, the dev icons and the Dev page still work on a dev backend.
+  const devAvailable = useDevAvailable("guest");
 
   async function clearSession(message?: string) {
     await queryClient.cancelQueries({ queryKey: sessionKey });
@@ -53,7 +59,10 @@ export function App() {
     await startSession(await signInAs(userId));
   }
 
+  // Every sign-in starts on Home: the URL may still be the previous session's page (possibly another
+  // account's table), and the app routes by URL.
   async function startSession(user: Awaited<ReturnType<typeof signIn>>) {
+    await navigate({ to: "/", replace: true });
     await queryClient.cancelQueries({ queryKey: sessionKey });
     await queryClient.cancelQueries({ queryKey: tablesKey });
     queryClient.removeQueries({ queryKey: tablesKey });
@@ -78,6 +87,7 @@ export function App() {
     setResetting(true);
     try {
       await resetDemo();
+      await navigate({ to: "/", replace: true });
       await clearSession("The demo world was reset. Pick an account.");
     } catch (error) {
       toast.error(`The reset didn't finish: ${backendErrorMessage(error)}`);
@@ -99,7 +109,18 @@ export function App() {
       </main>
     );
   }
-  if (!session.data) return <SignIn login={login} loginAs={loginAs} notice={notice} />;
+  if (!session.data) {
+    if (pathname === "/dev" && devAvailable)
+      return <SignedOutDev onReset={() => void resetWorld()} />;
+    return (
+      <SignIn
+        login={login}
+        loginAs={loginAs}
+        notice={notice}
+        extras={devAvailable ? <DevLinks active={false} /> : undefined}
+      />
+    );
+  }
   if (session.data.role === "ADMIN")
     return <AdminWorkspace key={session.data.id} user={session.data} logout={logout} />;
   return (
@@ -111,6 +132,23 @@ export function App() {
       endSession={(message) => void clearSession(message)}
       resetWorld={() => void resetWorld()}
     />
+  );
+}
+
+/** The Dev page without signing in (dev backend only): the demo reset and the dev sports controls. */
+function SignedOutDev({ onReset }: { onReset: () => void }) {
+  return (
+    <main className="min-h-dvh bg-background px-4 py-6 md:px-8">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="flex items-center justify-between">
+          <Logo badge={<DevLinks active />} />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/">Sign in</Link>
+          </Button>
+        </div>
+        <DevPage scope="guest" onReset={onReset} />
+      </div>
+    </main>
   );
 }
 
@@ -202,7 +240,7 @@ function TableWorkspace({
             ) : archiveId ? (
               <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
             ) : pathname === "/dev" ? (
-              <DevPage user={user} onReset={resetWorld} />
+              <DevPage scope={user.id} onReset={resetWorld} />
             ) : pathname === "/tickets" ? (
               <TicketsPage user={user} expire={expire} />
             ) : (

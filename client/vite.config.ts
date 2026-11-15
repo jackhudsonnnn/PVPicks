@@ -13,22 +13,30 @@ const backend = new URL(
     loadEnv("development", process.cwd(), "PVPICKS_")["PVPICKS_DEV_BACKEND_URL"] ??
     "http://127.0.0.1:8080",
 );
+// In Docker Compose the dev server runs in its own container: it listens on every interface (Compose publishes it
+// on loopback only) and reaches the backend by its service name.
+const inDocker = process.env["PVPICKS_CLIENT_IN_DOCKER"] === "true";
+const allowedBackendHosts = inDocker ? ["backend"] : ["127.0.0.1", "localhost"];
 if (
   backend.protocol !== "http:" ||
-  !["127.0.0.1", "localhost"].includes(backend.hostname) ||
+  !allowedBackendHosts.includes(backend.hostname) ||
   backend.username ||
   backend.password ||
   backend.pathname !== "/" ||
   backend.search ||
   backend.hash
 ) {
-  throw new Error("PVPICKS_DEV_BACKEND_URL must be an HTTP loopback origin.");
+  throw new Error(
+    inDocker
+      ? "PVPICKS_DEV_BACKEND_URL must be http://backend:<port> in Docker Compose."
+      : "PVPICKS_DEV_BACKEND_URL must be an HTTP loopback origin.",
+  );
 }
 
 export default defineConfig({
   vite: {
     server: {
-      host: "127.0.0.1",
+      host: inDocker ? "0.0.0.0" : "127.0.0.1",
       port: 5173,
       strictPort: true,
       proxy: {
@@ -38,6 +46,8 @@ export default defineConfig({
           // Realtime updates use a WebSocket at /api/ws.
           ws: true,
         },
+        // The docs (built into the backend, dev only), on the app's own address.
+        "/docs": { target: backend.origin },
       },
     },
   },

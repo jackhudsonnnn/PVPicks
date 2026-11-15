@@ -4,7 +4,7 @@ import { readProposedBet } from "./api";
 import { useRetryableMutation } from "@/lib/mutation";
 
 const uuid = idSchema;
-export const proposalSchema = z.object({
+const proposalSchema = z.object({
   question: z.string().min(1),
   choices: z.array(z.string().min(1)).min(2).max(6),
   wagerCents: z.number().int().min(0).max(1000),
@@ -13,7 +13,7 @@ export const proposalSchema = z.object({
   settledBy: z.enum(["anyone", "non_participants", "hosts", "me"]),
 });
 /** A score-mode proposal; the server builds the question and choices from the game. */
-export const sportsProposalSchema = z.object({
+const sportsProposalSchema = z.object({
   modeId: z.enum(["total_disaster", "give_and_take"]),
   gameId: z.string().regex(/^(NBA|NFL)-[A-Za-z0-9_-]+$/),
   line: z.number().refine((n) => Number.isInteger(n * 2), "Half-point steps"),
@@ -41,7 +41,7 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("settle-points"), tableId: uuid }),
 ]);
-export type BetIntent = z.infer<typeof intentSchema>;
+type BetIntent = z.infer<typeof intentSchema>;
 
 export async function executeBetAction(userId: string, intent: BetIntent, key: string) {
   if (!uuid.safeParse(userId).success || !intentSchema.safeParse(intent).success)
@@ -112,6 +112,6 @@ const betErrors: Record<string, string> = {
   settlement_affected_users_changed: "Players changed while points were being settled. Try again.",
 };
 
-export function betErrorMessage(error: BackendError) {
+function betErrorMessage(error: BackendError) {
   return (error.code && betErrors[error.code]) ?? backendErrorMessage(error);
 }

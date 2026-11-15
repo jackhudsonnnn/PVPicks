@@ -59,7 +59,7 @@ export function PersonLabel({ id, user, expire, peopleKey }: People & { id: stri
   return <>{usePerson(id, user, expire, peopleKey)?.name ?? "…"}</>;
 }
 
-export function OnOff({ on }: { on: boolean }) {
+function OnOff({ on }: { on: boolean }) {
   return (
     <span className={cn("text-sm font-bold", on ? "text-primary" : "text-muted-foreground")}>
       {on ? "On" : "Off"}

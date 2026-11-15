@@ -20,10 +20,13 @@ export function SignIn({
   login,
   loginAs,
   notice,
+  extras,
 }: {
   login: (username: string, password: string) => Promise<void>;
   loginAs: (userId: string) => Promise<void>;
   notice: string | null;
+  /** Shown beside the logo, e.g. the dev backend's Dev and docs icons. */
+  extras?: React.ReactNode;
 }) {
   const demo = useQuery({
     queryKey: ["demo-accounts", ""],
@@ -82,7 +85,7 @@ export function SignIn({
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm space-y-6">
-        <Logo asLink={false} className="justify-center" />
+        <Logo asLink={false} className="justify-center" badge={extras} />
         {notice && (
           <p role="status" className="text-sm">
             {notice}

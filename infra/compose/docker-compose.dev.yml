@@ -68,7 +68,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SERVER_ADDRESS: 0.0.0.0
-      PVPICKS_DEV_ORIGIN: ${PVPICKS_DEV_ORIGIN:-http://127.0.0.1:${PVPICKS_PORT:-8080}}
+      # The browser origin allowed to call the API: the client below.
+      PVPICKS_DEV_ORIGIN: ${PVPICKS_DEV_ORIGIN:-http://127.0.0.1:${PVPICKS_CLIENT_PORT:-5173}}
       PVPICKS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/p2picks
       PVPICKS_DB_USER: p2picks
       PVPICKS_DB_PASSWORD: ${PVPICKS_DB_PASSWORD:?Set PVPICKS_DB_PASSWORD in infra/compose/.env}
@@ -80,7 +81,7 @@ services:
       PVPICKS_OUTBOX_RETENTION: ${PVPICKS_OUTBOX_RETENTION:-P7D}
       PVPICKS_BALLDONTLIE_API_KEY: ${PVPICKS_BALLDONTLIE_API_KEY:-}
       # Request budget: scores poll once per league per interval, stats once per interval. The defaults fit
-      # 5 requests a minute (free tier, GOAT trial); see BALLDONTLIE.md for All-Star values.
+      # 5 requests a minute (free tier, GOAT trial); docs: Player stats has the All-Star values.
       PVPICKS_SPORTS_POLL_INTERVAL: ${PVPICKS_SPORTS_POLL_INTERVAL:-PT60S}
       PVPICKS_SPORTS_STATS_INTERVAL: ${PVPICKS_SPORTS_STATS_INTERVAL:-PT20S}
       PVPICKS_SPORTS_PLAYERS_INTERVAL: ${PVPICKS_SPORTS_PLAYERS_INTERVAL:-PT10M}
@@ -94,7 +95,7 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      # Raw sports feed responses, one timestamped file each (git-ignored); see backend/README.md.
+      # Raw sports feed responses, one timestamped file each (git-ignored); see docs/site/backend.md.
       - ../../recordings/sports:/recordings
       # Dev scenario files (committed) and recorded chunks (git-ignored); see docs/site/dev-sports-data.md.
       - ../../dev/sports:/dev-sports:ro
@@ -106,6 +107,25 @@ services:
       timeout: 8s
       retries: 5
       start_period: 30s
+
+  # The P2Picks app: the client's Vite dev server, with the source mounted for hot reload. It proxies /api
+  # (including the WebSocket) to the backend over the Compose network.
+  client:
+    build:
+      context: ../../client
+      dockerfile: Dockerfile.dev
+    environment:
+      PVPICKS_CLIENT_IN_DOCKER: "true"
+      PVPICKS_DEV_BACKEND_URL: http://backend:8080
+    volumes:
+      - ../../client:/app
+      # The image's dependencies (built for Linux), not the checkout's.
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PVPICKS_CLIENT_PORT:-5173}:5173"
 
 volumes:
   pgdata:

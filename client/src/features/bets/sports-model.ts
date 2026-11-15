@@ -6,7 +6,7 @@ import type { TickerGame } from "@/features/sports";
  */
 export type ScoreMode = "total_disaster" | "give_and_take";
 
-export const SCORE_MODES: readonly ScoreMode[] = ["total_disaster", "give_and_take"];
+const SCORE_MODES: readonly ScoreMode[] = ["total_disaster", "give_and_take"];
 
 export const isScoreMode = (mode: string): mode is ScoreMode =>
   (SCORE_MODES as readonly string[]).includes(mode);

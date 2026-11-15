@@ -48,7 +48,8 @@ NFL responses have no
 clock or quarter field, so the period is the latest quarter with a score
 (overtime is period 5) and the label stands in for the clock; this still needs
 checking against live NFL games. Games without a readable start time or teams
-are skipped. Scores are not yet used to resolve bets.
+are skipped. Score bets resolve from these games (ADR 0005 and the domain
+rules).
 
 When `PVPICKS_SPORTS_RECORDING_DIR` is set, every raw response is saved as its
 own pretty-printed file, `<league>/<New York date>/<UTC timestamp>_<endpoint>.json`,

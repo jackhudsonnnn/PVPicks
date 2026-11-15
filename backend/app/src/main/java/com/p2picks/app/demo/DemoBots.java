@@ -315,15 +315,20 @@ public class DemoBots {
             long wager = BotMind.wager(random, bot.profile());
             boolean forFun = random.nextDouble() < 0.1;
             int window = 90 + random.nextInt(511);
-            if (!games.isEmpty() && (!table.u2pickEnabled() || random.nextDouble() < 0.6)) {
+            // Only the modes this bot likes (all when its profile names none) that the table allows.
+            Set<String> liked = bot.profile().modes();
+            List<String> scoreModes = List.of("total_disaster", "give_and_take").stream()
+                    .filter(mode -> liked.isEmpty() || liked.contains(mode)).toList();
+            boolean u2pick = table.u2pickEnabled() && (liked.isEmpty() || liked.contains("u2pick"));
+            if (!games.isEmpty() && !scoreModes.isEmpty() && (!u2pick || random.nextDouble() < 0.6)) {
                 Game game = DemoLines.any(random, games);
-                boolean total = random.nextBoolean();
+                boolean total = DemoLines.any(random, scoreModes).equals("total_disaster");
                 BigDecimal line = total ? totalLine(game) : spreadLine();
                 var proposal = new SportsProposalService.Proposal(total ? "total_disaster" : "give_and_take",
                         game.id(), line, random.nextBoolean(), forFun ? 0 : wager, window, forFun);
                 return act(bot.id(), jwt -> sportsBets.create(jwt, member.table(), proposal, key()).outcome().name());
             }
-            if (!table.u2pickEnabled()) return "SKIPPED";
+            if (!u2pick) return "SKIPPED";
             DemoLines.Question question = DemoLines.any(random, DemoLines.QUESTIONS);
             var proposal = new U2PickProposalService.Proposal(
                     new U2PickDefinition(question.question(), question.choices()), json.createObjectNode(),

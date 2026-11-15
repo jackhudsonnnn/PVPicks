@@ -7,12 +7,13 @@ binds to `127.0.0.1`.
 
 What is implemented and what is planned:
 
-- [Project status](../docs/site/status.md): available features and gaps.
-- [Backend contract inventory](../docs/reference/backend-contract-inventory.md):
+- [Project status](/status): available features and gaps.
+- [API behavior notes](/reference/api-notes):
   per-endpoint behavior, retry protection and known limits.
-- [Domain rules](../docs/reference/domain-rules.md) and
-  [architecture](../docs/site/architecture.md): invariants, lock order and boundaries.
-- `api/openapi.yaml` and `api/realtime.schema.json`: draft contracts that
+- [Domain rules](/reference/domain-rules) and
+  [architecture](/architecture): invariants, lock order and boundaries.
+- `backend/api/openapi.yaml` (<a href="/docs/source/openapi.yaml" download>download</a>) and
+  `backend/api/realtime.schema.json`: draft contracts that
   include planned operations, not an implementation inventory.
 
 ## Code layout
@@ -32,11 +33,15 @@ backend/
                           balances, lock worker
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
-      sports/             sports feed (BallDontLie), game snapshots, GET /ticker
+      sports/             sports feed (BallDontLie), game history, players and
+                          player stats, GET /ticker
       delivery/           outbox relay to Kafka and cleanup, realtime consumer and
                           the STOMP WebSocket gateway (/ws) with its audience checks
       feedback/  admin/   feedback submission; admin health
-      moderation/         player reports (POST /reports), stored for a moderation queue
+      moderation/         reports (POST /reports) and the admin moderation queue
+      accounts/           freeze/unfreeze and account deletion across modules
+      devdata/            dev sports data: scenario files and recorded chunks
+      demo/               the dev demo world: users, history, games, bots, reset
       config/             dev-only profile guard, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
                           Outbox/OutboxEvent, ApiErrors, PostgresText;
@@ -68,7 +73,7 @@ for example `tables` may use `chat`, `settlement`, `common` and `security`.
   package with a `package-info.java` and add it to the test's module set.
 - The database is not yet divided along module lines: many queries read or lock
   other modules' tables inside one transaction. The
-  [architecture guide](../docs/site/architecture.md#modules-and-data-ownership)
+  [architecture guide](/architecture#modules-and-data-ownership)
   maps which module owns each table.
 
 Controllers map service outcomes to HTTP statuses and use `ApiErrors.error` for
@@ -93,44 +98,48 @@ pass `-PdocsPrebuilt=true` to reuse an existing `docs/site/.vitepress/dist`.
 
 ### Run with Compose
 
-From the project root:
+The root `README.md` has the quick start. From the project root,
+`docker compose up -d --build` starts everything in `compose.yaml` (which
+includes `infra/compose/docker-compose.dev.yml`): PostgreSQL, Redis, Kafka, the
+backend (serving these docs at `/docs/`) and the client. Run
+`./scripts/provision-dev.sh --init` once first.
 
-```sh
-./scripts/provision-dev.sh --init
-docker compose -f infra/compose/docker-compose.dev.yml up --build
-```
-
-- `--init` generates the session signing key (`infra/compose/.env.auth`) and
-  the retry-fingerprint key (`infra/compose/.env.idempotency`). These files are
-  ignored and owner-only: never share or commit them.
+- `--init` creates `infra/compose/.env` from `infra/compose/.env.example`
+  (every setting the stack reads, with defaults) with a random database
+  password, plus the session signing key (`infra/compose/.env.auth`) and the
+  retry-fingerprint key (`infra/compose/.env.idempotency`). It keeps existing
+  files. They're git-ignored and owner-only: never share or commit them.
 - There are no dev passwords. An empty database gets the demo world on
   startup (about 200 demo users plus newbie, intermediate, pro and admin), and
   the sign-in page signs you in as anyone you pick. **Reset data** on the Dev
-  page wipes app data (sports data stays) and reseeds it. See the docs' Demo
-  world page. The demo exists only in the dev profile (`pvpicks.demo.enabled`
+  page wipes app data (sports data stays) and reseeds it. See
+  [Demo world](/demo-data). The demo exists only in the dev profile (`pvpicks.demo.enabled`
   in `application-dev.yml`; tests turn it off). Demo users are played by bots
   (`demo/DemoBots`) through the real services; `pvpicks.demo.bots.enabled=false`
   turns them off. Every demo account's password is `demo`.
 - Keep the retry key with its database. Replacing a used key makes protected
   mutations fail closed and invalidates chat cursors; rotation and recovery are
   not implemented.
-- Compose requires `PVPICKS_DB_PASSWORD` in the ignored `infra/compose/.env`
-  or the shell. `PVPICKS_PORT` (default 8080) changes the loopback host port.
+- Compose requires `PVPICKS_DB_PASSWORD` in `infra/compose/.env` or the
+  shell. `PVPICKS_PORT` (default 8080) changes the backend's loopback
+  host port, and `PVPICKS_CLIENT_PORT` (default 5173) the client's. The backend
+  accepts browser calls from `PVPICKS_DEV_ORIGIN` (default the client's
+  address).
 - PostgreSQL is published on loopback at `PVPICKS_DB_PORT` (default 5433) for a
   local client such as pgAdmin: database and user `p2picks`, password
   `PVPICKS_DB_PASSWORD`.
 - Add `--profile tools` before `up` for Kafka UI on `PVPICKS_KAFKA_UI_PORT`
   (default 8081). It is unauthenticated: use it only with disposable data.
-- `down -v` deletes the PostgreSQL and Kafka volumes.
+- `docker compose logs -f backend` follows the backend's log; `down` stops
+  everything and `down -v` also deletes the PostgreSQL and Kafka volumes.
 
 ### Reset
 
 - **App data:** **Reset data** on the Dev page wipes users, social, tables,
   bets, chat and settlements, keeps sports data (games, players, stats), and
   reseeds the demo world. Everyone is signed out.
-- **Everything:** from the project root,
-  `docker compose -f infra/compose/docker-compose.dev.yml down -v`, then
-  `up -d --build --wait`. Startup migrates the empty database and seeds the
+- **Everything:** from the project root, `docker compose down -v`, then
+  `docker compose up -d --build --wait`. Startup migrates the empty database and seeds the
   demo world. The next poll restores yesterday's to tomorrow's games, but
   finished games' player stats are gone. The local key files, `infra/compose/.env`,
   `recordings/` and `dev/sports/` are untouched; there's nothing to
@@ -158,7 +167,7 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
 ## Safety
 
 - Startup applies pending Flyway migrations. The dev environment is local and
-  disposable (see AGENTS.md), so resetting it is fine; any future shared or
+  disposable (see the root `AGENTS.md`), so resetting it is fine; any future shared or
   production database needs backups and approval first. Flyway does not
   baseline an existing nonempty schema.
 - The database role needs permission to install the `citext` and `pgcrypto`
@@ -195,7 +204,7 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   recorded chunks as `DEV-` games through the same game and stats sync, and the
   app shows a Dev page to control them. `PVPICKS_DEV_SPORTS_TICK` sets how often
   (default `PT2S`). The stats poller skips dev games. See
-  `docs/site/dev-sports-data.md`; cut chunks with `scripts/cut-sports-chunk.py`.
+  [Dev sports data](/dev-sports-data); cut chunks with `scripts/cut-sports-chunk.py`.
 - Dated copies of the provider's OpenAPI specs live in `api/providers/`;
   `ProviderContractTest` checks trimmed real responses against them. When it
   fails, re-download the spec and re-check the mapping in `BallDontLieFeed`.
@@ -230,5 +239,5 @@ From `backend/`:
 
 Application integration tests share one Spring context and start PostgreSQL,
 Redis and Kafka Testcontainers once per run, so Docker is required. They never
-use the dev database. See the [test guide](../docs/reference/backend-test-map.md)
+use the dev database. See the [test guide](/reference/test-guide)
 for what each suite covers and how to run the opt-in frontend integration tests.

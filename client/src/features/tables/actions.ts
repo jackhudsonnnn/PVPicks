@@ -61,7 +61,7 @@ const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("rotate"), tableId: uuid }),
 ]);
 
-export type TableIntent = z.infer<typeof intentSchema>;
+type TableIntent = z.infer<typeof intentSchema>;
 
 /** "2 added, 1 invited, 1 couldn't be added" for the people a host asked to add. */
 export function describeOutcomes(outcomes: MemberOutcome[]): string {
@@ -85,7 +85,7 @@ const tableErrors: Record<string, string> = {
   table_archive_membership_changed: "Membership changed while deleting. Try again.",
 };
 
-export function tableErrorMessage(error: BackendError) {
+function tableErrorMessage(error: BackendError) {
   return (error.code && tableErrors[error.code]) ?? backendErrorMessage(error);
 }
 

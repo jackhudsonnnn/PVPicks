@@ -19,9 +19,8 @@ import { Button } from "@/components/ui/button";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-import type { User } from "@/features/people";
 import { devAction, type DemoWorld, type DevKind, type DevSource, type DevSports } from "./api";
-import { useDemo, useDevSports } from "./use-dev-sports";
+import { devKey, useDemo, useDevSports } from "./use-dev-sports";
 import { LoadingList } from "@/components/loading";
 
 const minutes = (seconds: number) =>
@@ -31,9 +30,12 @@ const minutes = (seconds: number) =>
  * Dev-only controls: the demo world's reset, and scenario files and recorded chunks, which feed `DEV` games through
  * the real sports pipeline. Scenario files are edited in the repo (`dev/sports/scenarios/`) and picked up live.
  */
-export function DevPage({ user, onReset }: { user: User; onReset: () => void }) {
-  const sports = useDevSports(user.id, true);
-  const demo = useDemo(user.id, true);
+/**
+ * `scope` keys its queries: the signed-in user's id, or "guest" on the signed-out Dev page (dev only).
+ */
+export function DevPage({ scope, onReset }: { scope: string; onReset: () => void }) {
+  const sports = useDevSports(scope, true);
+  const demo = useDemo(scope, true);
 
   if (sports.isPending || demo.isPending)
     return <LoadingList label="Loading dev data" rows={3} rowClassName="h-24" />;
@@ -50,7 +52,7 @@ export function DevPage({ user, onReset }: { user: User; onReset: () => void }) 
     <div className="space-y-8">
       <PageHeader eyebrow="Dev only" title="Dev data" />
       {demo.data && <DemoSection world={demo.data} onReset={onReset} />}
-      {sports.data && <SportsSections user={user} sports={sports.data} />}
+      {sports.data && <SportsSections scope={scope} sports={sports.data} />}
     </div>
   );
 }
@@ -127,14 +129,16 @@ function BotActivity({ bots }: { bots: DemoWorld["bots"] }) {
   );
 }
 
-function SportsSections({ user, sports }: { user: User; sports: DevSports }) {
+function SportsSections({ scope, sports }: { scope: string; sports: DevSports }) {
   const queryClient = useQueryClient();
   const act = useMutation({
     mutationFn: (run: () => Promise<void>) => run(),
     onError: (error) => toast.error(backendErrorMessage(error)),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: userKey(user.id, "dev-sports") });
-      void queryClient.invalidateQueries({ queryKey: userKey(user.id, "ticker") });
+      void queryClient.invalidateQueries({ queryKey: devKey(scope, "dev-sports") });
+      // Signed out there's no ticker to refresh.
+      if (scope !== "guest")
+        void queryClient.invalidateQueries({ queryKey: userKey(scope, "ticker") });
     },
   });
   const { scenarios, chunks, speeds } = sports;

@@ -130,8 +130,8 @@ stats appear only in recordings made since stats recording started
 | `atl-chi-overtime` | ATL @ CHI tied 110-110 late, overtime, CHI 125-117. Regulation total 220, final 242. |
 | `uta-hou-close-finish` | UTA @ HOU, HOU up 2 with 5 minutes left, wins 125-118. |
 
-Chunks with player stats come from tonight's and Sunday's games, once they're
-recorded.
+Chunks cut from recordings made since 2026-11-14 include player stats; none
+have been cut yet.
 
 ## Limits
 

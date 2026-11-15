@@ -19,7 +19,7 @@ flowchart LR
 The `delivery` module's relay publishes committed outbox rows to Kafka at
 least once; its consumer turns bet, chat and settlement events into
 invalidations that the WebSocket gateway sends to authorized subscribers. The
-<a href="/docs/source/reference/realtime-contract.md" download>realtime contract</a> describes
+[realtime contract](/reference/realtime-contract) describes
 destinations, authorization and recovery. Redis is not used for delivery yet.
 
 ## Modules and data ownership
@@ -94,8 +94,8 @@ uses a custom question and choices and an eligible member calls its outcome;
 sports modes require validated game data and resolve only from the feed.
 Feed freshness, baselines, overtime and chronology must not be inferred from a
 U2Pick result, and a member-called result must never authorize a sports bet.
-The only manual path for a sports bet is the planned host override, which
-records the host and announces the change (see the domain rules).
+The only manual path for a sports bet is the host override, which records
+the host and announces the change (see the domain rules).
 U2Pick transactions and shared points settlement are exposed over HTTP. The
 `sports` module polls the feed into game snapshots with change history, keeps players and per-game player stats (also with history), and serves the ticker;
 sports bets do not read it yet.
@@ -118,7 +118,7 @@ sequenceDiagram
 Selected mutations implement this pattern; it is not universal. Retry records
 are not pruned and key rotation/recovery are unresolved. Future debt-affecting
 writers must acquire affected user rows in PostgreSQL UUID order before table,
-bet, ledger, or receipt locks. See the <a href="/docs/source/reference/domain-rules.md" download>domain rules</a>
+bet, ledger, or receipt locks. See the [domain rules](/reference/domain-rules)
 for operation-specific invariants.
 
 ## Runtime and trust boundaries

@@ -4,8 +4,6 @@ COPY docs/package.json docs/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY docs/ ./
 COPY backend/api/openapi.yaml /workspace/backend/api/openapi.yaml
-COPY backend/README.md /workspace/backend/README.md
-COPY client/roadmap.md /workspace/client/roadmap.md
 RUN npm run build
 
 FROM eclipse-temurin:21-jdk-alpine AS build

@@ -1,7 +1,7 @@
 # Domain & privacy
 
 This is a guide to important invariants, not a claim that every rule has an
-implemented service. The detailed <a href="/docs/source/reference/domain-rules.md" download>domain rules</a>
+implemented service. The detailed [domain rules](/reference/domain-rules)
 and current decisions remain the working references.
 
 ## Bets and balances
@@ -18,10 +18,11 @@ and current decisions remain the working references.
 - Debt cap is off by default; changing it requires zero debt. Proposal, pick
   and lock transactions enforce the cap.
 
-U2Pick proposal, picks, locking, results, points settlement and receipts are
-available over HTTP and in the frontend. Sports modes are planned.
+U2Pick and the score modes (Total Disaster, Give And Take) are available over
+HTTP and in the frontend, with points settlement and receipts. The player-stat
+modes are planned.
 
-## Sports outcomes (planned)
+## Sports outcomes
 
 - Sports bets resolve from the feed. Canceled, postponed or abandoned games,
   ties without a tie choice, suspensions longer than 48 hours and player props
@@ -68,5 +69,5 @@ the Active-bet restrictions on the server. Dev bet reads enforce them.
   or `Deleted user` at read time. Older free-text messages have not been
   retroactively repaired.
 
-See the <a href="/docs/source/reference/backend-contract-inventory.md" download>contract inventory</a>
+See the [API behavior notes](/reference/api-notes)
 for detailed access and retry semantics.

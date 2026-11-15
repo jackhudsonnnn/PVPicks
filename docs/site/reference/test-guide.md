@@ -1,9 +1,9 @@
 # Test guide
 
 Run frontend tests with `npm --prefix client test`. They cover backend session,
-tables, betting, receipts, chat, the ticker and realtime handling of the backend-backed app as well as the retained browser-local prototype's
-presentation, storage isolation, betting calculations, chat unread state,
-settlement warnings and error toasts.
+tables, betting, receipts, chat, the ticker, realtime handling, the demo
+picker and Dev page, storage isolation, betting calculations, chat unread
+state, settlement warnings and toasts.
 
 Run backend tests from `backend/` with `./gradlew test` (all projects) or
 `./gradlew :app:test`. Integration tests use disposable PostgreSQL, Redis and
@@ -35,7 +35,7 @@ cover.
     app over HTTP against the containers. The betting run creates and picks,
     lets the backend lock the bet, then calls the result and settles points.
     Their invocation and prerequisites are in the
-    [frontend README](../../client/README.md). These use jsdom, not a browser.
+    [Frontend](/frontend). These use jsdom, not a browser.
 - `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the lock
   worker and its recovery; integration tests turn the worker off and lock
   bets explicitly. `settlement.SettlementGroupControllerTest` checks the

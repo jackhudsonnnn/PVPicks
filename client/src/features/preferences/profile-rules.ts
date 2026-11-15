@@ -8,8 +8,8 @@ export interface Profile {
   hue: Hue;
 }
 
-export const USERNAME_MIN = 3;
-export const USERNAME_MAX = 15;
+const USERNAME_MIN = 3;
+const USERNAME_MAX = 15;
 
 /** Usernames are compared ignoring case and surrounding spaces. */
 export const normalizeUsername = (raw: string) => raw.trim().toLowerCase();

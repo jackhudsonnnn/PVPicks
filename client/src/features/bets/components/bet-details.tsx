@@ -45,7 +45,7 @@ function FactRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function FactSection({ title, children }: { title: string; children: ReactNode }) {
+function FactSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-1">
       <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-primary">

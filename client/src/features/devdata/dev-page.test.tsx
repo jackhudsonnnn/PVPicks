@@ -21,7 +21,7 @@ function renderPage() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <DevPage user={user} onReset={onReset} />
+      <DevPage scope={user.id} onReset={onReset} />
     </QueryClientProvider>,
   );
 }

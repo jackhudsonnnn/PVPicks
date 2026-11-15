@@ -57,7 +57,7 @@ variation from a fixed seed, so a reset rebuilds the same world.
 | | `reportChance` | 0.01 | Reports that trash talk. |
 | Betting | `joinBetChance` | 0.5 | Picks on an open bet they can see. |
 | | `proposalsPerHour` | 0.3 | Proposes a bet in one of their tables. |
-| | `modes`, `leagues` | all | Modes and leagues they bet on (`modes` isn't used yet). |
+| | `modes`, `leagues` | all | Modes and leagues they propose (`u2pick`, `total_disaster`, `give_and_take`). |
 | | `pickStyle` | `RANDOM` | `FAVORITE`, `UNDERDOG`, `HOME`, `RANDOM` or `CONTRARIAN` (against the table). |
 | | `wager` | 1–5 pts | Wager range when they propose (the bet rule caps it at 10). |
 | | `reactionSeconds` | 10–120 | Delay before acting, so nothing happens instantly. |
@@ -153,7 +153,7 @@ seconds.
 
 ## Reset
 
-**Reset data** on the Dev page:
+**Reset data** on the Dev page (the flask icon beside the logo, which works signed out too):
 
 1. pauses the bots;
 2. wipes app data: users, sessions, social, tables, bets, chat, ledger,

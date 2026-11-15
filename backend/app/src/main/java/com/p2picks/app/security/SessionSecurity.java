@@ -121,15 +121,16 @@ class SessionSecurity {
                     String[] profiles = environment.getActiveProfiles();
                     if (profiles.length == 1 && profiles[0].equals("dev")) {
                         authorize.requestMatchers(HttpMethod.GET, "/docs", "/docs/**").permitAll()
-                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").permitAll();
+                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").permitAll()
+                                // The Dev page works signed out (dev only): the demo's picker already lets anyone be
+                                // anyone, and these controllers exist only with dev data or the demo on. CSRF and
+                                // same-origin checks still apply to its POSTs.
+                                .requestMatchers("/dev/**").permitAll();
                     } else {
-                        authorize.requestMatchers("/docs", "/docs/**").denyAll();
+                        authorize.requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                            // The dev demo's sign-in picker; these 404 unless the demo is on.
-                            .requestMatchers(HttpMethod.GET, "/dev/demo/accounts").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/dev/demo/sign-in").permitAll()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
                             .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
                             .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()

@@ -12,6 +12,7 @@ import { listSettlementGroups } from "@/features/settlements/api";
 import { getRelationships, listInvites } from "@/features/social/api";
 import type { Invalidation } from "@/lib/realtime-connection";
 import { getChatUnread, getChatWindow } from "@/features/chat/api";
+import { getDemo, getDevSports } from "@/features/devdata/api";
 
 // Several components may listen to one destination (the table view feed carries table and tomato changes), so keep
 // each component's latest listener.
@@ -46,9 +47,14 @@ function deliver(destination: string, event: Partial<Invalidation>) {
 }
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
+const navigate = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
-  useNavigate: () => () => Promise.resolve(),
+  Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+  useNavigate: () => navigate,
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
     select({ location: route }),
 }));
@@ -88,6 +94,11 @@ vi.mock("@/features/social/api", async (importOriginal) => ({
   setFollow: vi.fn(),
   setBlock: vi.fn(),
   respondToInvite: vi.fn(),
+}));
+vi.mock("@/features/devdata/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/devdata/api")>()),
+  getDemo: vi.fn(),
+  getDevSports: vi.fn(),
 }));
 vi.mock("@/features/settlements/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/settlements/api")>()),
@@ -152,6 +163,8 @@ beforeEach(() => {
   feeds.clear();
   vi.resetAllMocks();
   route.pathname = "/";
+  vi.mocked(getDemo).mockResolvedValue(null);
+  vi.mocked(getDevSports).mockResolvedValue(null);
   vi.mocked(listTableBets).mockResolvedValue([]);
   vi.mocked(listMyBets).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(getRelationships).mockResolvedValue({
@@ -208,6 +221,58 @@ describe("backend app", () => {
     fireEvent.click(signOutButton());
     expect(await screen.findByLabelText("Username")).toBeInTheDocument();
     expect(signOut).toHaveBeenCalledOnce();
+  });
+
+  it("starts every sign-in on Home, not the page the last session left open", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    vi.mocked(signIn).mockResolvedValue(user);
+    vi.mocked(listTables).mockResolvedValue([table]);
+    route.pathname = "/tables/123e4567-e89b-42d3-a456-426614174099";
+    renderApp();
+    fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "testuser" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/", replace: true }));
+  });
+
+  it("offers the Dev page and the docs on a dev backend, even signed out", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    vi.mocked(getDemo).mockResolvedValue({
+      users: 204,
+      follows: 0,
+      blocks: 0,
+      tables: 18,
+      bots: null,
+    });
+    renderApp();
+    expect(await screen.findByRole("link", { name: "Docs (opens in a new tab)" })).toHaveAttribute(
+      "href",
+      "/docs/",
+    );
+    expect(screen.getByRole("link", { name: "Dev data" })).toBeInTheDocument();
+  });
+
+  it("opens the Dev page without signing in", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    vi.mocked(getDemo).mockResolvedValue({
+      users: 204,
+      follows: 0,
+      blocks: 0,
+      tables: 18,
+      bots: null,
+    });
+    route.pathname = "/dev";
+    renderApp();
+    expect(await screen.findByText(/204 people, 18 tables/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("shows the sign-in form without dev icons on a backend without dev data", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    route.pathname = "/dev";
+    renderApp();
+    expect(await screen.findByLabelText("Username")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Dev data" })).not.toBeInTheDocument();
   });
 
   it("loads the requested table independently and reports inaccessible tables", async () => {

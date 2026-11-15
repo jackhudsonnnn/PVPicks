@@ -17,8 +17,6 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type PreferencesIntent = z.infer<typeof intentSchema>;
-
 function preferencesErrorMessage(error: BackendError) {
   if (error.code === "username_taken") return "Someone already has that username.";
   return backendErrorMessage(error);

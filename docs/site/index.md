@@ -15,8 +15,8 @@ features:
   - title: Know the system
     details: Follow the current modular-monolith design, its boundaries, and the paths data takes.
     link: /architecture
-  - title: See what is real
-    details: Separate implemented dev features from drafts, prototypes, and planned work.
+  - title: See what is implemented
+    details: What's built today, and what's still a draft or planned.
     link: /status
   - title: Find the next milestone
     details: Track the project across frontend, backend, infrastructure, and security.
@@ -24,11 +24,8 @@ features:
 ---
 
 ::: warning Development only
-The backend is not ready for real users or network exposure. The frontend
-connects sign-in, table creation and management, members and invitations,
-friends (follows and blocks), U2Pick betting, settle-up receipts, table chat
-a live sports ticker and your preferences (who can add you, username, color,
-debt cap); Quick Picks, table archives and sports bets remain unavailable.
+The backend is not ready for real users or network exposure. See
+[Project status](/status) for what's built.
 :::
 
 ## Documentation hierarchy

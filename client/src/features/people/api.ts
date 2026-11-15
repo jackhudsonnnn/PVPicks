@@ -17,7 +17,7 @@ const profileSchema = z.union([
 ]);
 
 export type User = z.infer<typeof userSchema>;
-export type UserProfile = z.infer<typeof profileSchema>;
+type UserProfile = z.infer<typeof profileSchema>;
 
 export async function getProfile(id: string, signal?: AbortSignal): Promise<UserProfile> {
   if (!idSchema.safeParse(id).success) throw new BackendError("Profile not found.", 404);

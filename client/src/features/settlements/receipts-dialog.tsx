@@ -39,7 +39,7 @@ export type Actions = ReturnType<typeof useSettlementActions>;
 /** Receipts per screenful; older ones load on request. */
 const PAGE = 30;
 
-export interface ReceiptsProps {
+interface ReceiptsProps {
   user: User;
   expire: () => void;
   /** Everything with this person: open net, receipts, any unreviewed warning, and the viewer's group actions. */
