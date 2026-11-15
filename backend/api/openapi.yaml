@@ -2663,6 +2663,110 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /dev/demo:
+    get:
+      operationId: getDemoWorld
+      summary: The demo world's size (dev demo only)
+      description: >-
+        Registered only when the dev demo is on (the dev profile); 404
+        otherwise. The Dev page shows its Reset section when this answers. See
+        docs/site/demo-data.md.
+      responses:
+        '200':
+          description: Counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoWorld'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/demo/reset:
+    post:
+      operationId: resetDemoWorld
+      summary: Wipe app data and reseed the demo world (dev demo only)
+      description: >-
+        Wipes every app table except sports data (games, players, stats, feed
+        status) and the migration history, then reseeds the demo world. Every
+        session ends, the caller's included: the response clears the session
+        cookie and rotates the CSRF token.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: The reseeded world's counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoWorld'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/demo/accounts:
+    get:
+      operationId: listDemoAccounts
+      summary: Accounts for the demo's sign-in picker (dev demo only)
+      description: >-
+        No authentication. The main accounts (newbie, intermediate, pro,
+        admin) in that order, then up to 20 other accounts whose username
+        starts with q.
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: {type: string, pattern: '^[A-Za-z0-9_]{0,15}$'}
+      responses:
+        '200':
+          description: Accounts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [main, others]
+                properties:
+                  main:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DemoAccount'
+                  others:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DemoAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/demo/sign-in:
+    post:
+      operationId: signInToDemoAccount
+      summary: Sign in as any account without a password (dev demo only)
+      description: >-
+        Same session cookie and CSRF rotation as /auth/login, replacing the
+        caller's session. Frozen accounts get 403 account_frozen.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: {type: string, format: uuid}
+      responses:
+        '204':
+          description: Signed in.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /admin/health:
     get:
       operationId: getAdminHealth
@@ -3931,6 +4035,23 @@ components:
         tableId: {type: [string, 'null'], format: uuid}
         tableName: {type: [string, 'null']}
         messageSnapshot: {type: [string, 'null']}
+    DemoWorld:
+      type: object
+      required: [users, follows, blocks, tables]
+      properties:
+        users: {type: integer}
+        follows: {type: integer}
+        blocks: {type: integer}
+        tables: {type: integer, description: Unarchived tables.}
+    DemoAccount:
+      type: object
+      required: [id, username, hue, role, frozen]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        hue: {type: integer, minimum: 1, maximum: 5}
+        role: {type: string, enum: [PLAYER, ADMIN]}
+        frozen: {type: boolean}
     DevSource:
       type: object
       required: [name, title, description, league, running]

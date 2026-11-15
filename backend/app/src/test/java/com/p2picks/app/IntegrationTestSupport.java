@@ -87,6 +87,9 @@ public abstract class IntegrationTestSupport {
         // the realtime consumer cannot miss an event published while it is still joining.
         registry.add("pvpicks.outbox-relay.enabled", () -> "false");
         registry.add("pvpicks.outbox-cleanup.enabled", () -> "false");
+        // The demo world would seed (and its reset would wipe) the shared test database; DemoWorldTest
+        // exercises it on a database of its own.
+        registry.add("pvpicks.demo.enabled", () -> "false");
         // Never call the real sports provider from tests, even if a key is exported in the shell.
         registry.add("pvpicks.sports.balldontlie.api-key", () -> "");
         registry.add("pvpicks.realtime.offset-reset", () -> "earliest");

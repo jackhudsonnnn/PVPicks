@@ -92,6 +92,25 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    DevelopmentSessions developmentSessions;
+
+    @Test
+    void passwordlessSignInIssuesAWorkingSessionButNotForFrozenOrMissingAccounts() throws Exception {
+        UUID userId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?)",
+                userId, "pwless_user", 1, passwords.encode("unused password"), "PLAYER", "ACTIVE");
+        String token = developmentSessions.signInWithoutPassword(userId, null);
+        mvc.perform(get("/me").cookie(new Cookie("session", token))).andExpect(status().isOk());
+        assertThat(developmentSessions.signInWithoutPassword(UUID.randomUUID(), null)).isNull();
+        jdbc.update("UPDATE users SET status = 'FROZEN' WHERE id = ?", userId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> developmentSessions.signInWithoutPassword(userId, null))
+                .isInstanceOf(DevelopmentSessions.Frozen.class);
+        // The demo's picker endpoints exist only with the demo on; here they're open but absent.
+        mvc.perform(get("/dev/demo/accounts")).andExpect(status().isNotFound());
+    }
+
     @Test
     void rejectsWrongCredentialsAndDisablesFrozenAndExpiredSessions() throws Exception {
         UUID userId = UUID.randomUUID();

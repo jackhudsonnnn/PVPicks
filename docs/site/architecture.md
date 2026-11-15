@@ -40,6 +40,7 @@ flowchart LR
   accounts --> tables & chat & social & feedback & settlement & bets
   moderation --> accounts
   devdata --> sports
+  demo --> sports
   users & social & tables & chat & bets & settlement & sports & delivery & feedback --> shared["common + security (open)"]
 ```
 
@@ -57,6 +58,7 @@ flowchart LR
 | `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone). Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
 | `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status` |
+| `demo` | Nothing of its own: dev profile only (`pvpicks.demo.enabled`), it seeds the demo world, resets app data (keeping sports data) and serves the passwordless sign-in picker through `security.PasswordlessSignIn` |
 | `devdata` | Nothing of its own: dev profile only, it writes `DEV-` games and stats through `sports.GameSync` and `StatsSync` from scenario files and recorded chunks |
 | `delivery` | `outbox.published_at` and deletion of old published rows; reads sessions, memberships, invitations, blocks and receipt parties to choose realtime audiences |
 

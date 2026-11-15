@@ -80,7 +80,6 @@ tasks.withType<Test> {
 tasks.processTestResources {
     from("../api/openapi.yaml")
     from("../api/realtime.schema.json")
-    from("../dev/dev-seed.sql")
     // Dated copies of the sports provider's OpenAPI specs, for contract tests against recorded responses.
     from("../api/providers") { into("providers") }
 }

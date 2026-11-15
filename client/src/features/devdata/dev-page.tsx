@@ -1,27 +1,128 @@
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { SegmentedTabs } from "@/components/segmented-tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import type { User } from "@/features/people";
-import { devAction, type DevKind, type DevSource } from "./api";
-import { useDevSports } from "./use-dev-sports";
+import {
+  devAction,
+  resetDemo,
+  type DemoWorld,
+  type DevKind,
+  type DevSource,
+  type DevSports,
+} from "./api";
+import { useDemo, useDevSports } from "./use-dev-sports";
 
 const minutes = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 /**
- * Dev data controls (dev backend only): start scenario files and recorded chunks, which feed `DEV` games through the
- * real sports pipeline. Scenario files are edited in the repo (`dev/sports/scenarios/`) and picked up live.
+ * Dev-only controls: the demo world's reset, and scenario files and recorded chunks, which feed `DEV` games through
+ * the real sports pipeline. Scenario files are edited in the repo (`dev/sports/scenarios/`) and picked up live.
  */
-export function DevPage({ user }: { user: User }) {
+export function DevPage({
+  user,
+  endSession,
+}: {
+  user: User;
+  endSession: (message: string) => void;
+}) {
+  const sports = useDevSports(user.id, true);
+  const demo = useDemo(user.id);
+
+  if (sports.isPending || demo.isPending)
+    return <p className="text-sm text-muted-foreground">Loading dev data…</p>;
+  if (sports.isError) return <p role="alert">{backendErrorMessage(sports.error)}</p>;
+  if (demo.isError) return <p role="alert">{backendErrorMessage(demo.error)}</p>;
+  if (!sports.data && !demo.data)
+    return (
+      <EmptyState boxed className="p-6">
+        Dev data is off. Set PVPICKS_DEV_SPORTS_DIR on the backend to turn it on.
+      </EmptyState>
+    );
+
+  return (
+    <div className="space-y-8">
+      <PageHeader eyebrow="Dev only" title="Dev data" />
+      {demo.data && <DemoSection world={demo.data} endSession={endSession} />}
+      {sports.data && <SportsSections user={user} sports={sports.data} />}
+    </div>
+  );
+}
+
+function DemoSection({
+  world,
+  endSession,
+}: {
+  world: DemoWorld;
+  endSession: (message: string) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const reset = useMutation({
+    mutationFn: resetDemo,
+    onSuccess: () => endSession("The demo world was reset. Pick an account."),
+    onError: (error) => toast.error(backendErrorMessage(error)),
+  });
+  return (
+    <section className="space-y-3">
+      <h2 className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        Demo world
+      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-surface p-4">
+        <p className="text-sm">
+          {world.users} people, {world.tables} tables, {world.follows} follows, {world.blocks}{" "}
+          blocks.
+          <span className="block text-muted-foreground">
+            Reset wipes everything but sports data, reseeds the demo and signs everyone out.
+          </span>
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={reset.isPending}
+          onClick={() => setConfirming(true)}
+        >
+          <RotateCcw /> {reset.isPending ? "Resetting…" : "Reset data"}
+        </Button>
+      </div>
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset the demo world?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Every account, table, bet, chat and settle-up goes back to the seeded demo. Games and
+              player stats stay. Everyone, you included, is signed out.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => reset.mutate()}>Reset</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
+  );
+}
+
+function SportsSections({ user, sports }: { user: User; sports: DevSports }) {
   const queryClient = useQueryClient();
-  const data = useDevSports(user.id, true);
   const act = useMutation({
     mutationFn: (run: () => Promise<void>) => run(),
     onError: (error) => toast.error(backendErrorMessage(error)),
@@ -30,20 +131,10 @@ export function DevPage({ user }: { user: User }) {
       void queryClient.invalidateQueries({ queryKey: userKey(user.id, "ticker") });
     },
   });
-
-  if (data.isPending) return <p className="text-sm text-muted-foreground">Loading dev data…</p>;
-  if (data.isError) return <p role="alert">{backendErrorMessage(data.error)}</p>;
-  if (!data.data)
-    return (
-      <EmptyState boxed className="p-6">
-        Dev data is off. Set PVPICKS_DEV_SPORTS_DIR on the backend to turn it on.
-      </EmptyState>
-    );
-  const { scenarios, chunks, speeds } = data.data;
+  const { scenarios, chunks, speeds } = sports;
 
   return (
-    <div className="space-y-8">
-      <PageHeader eyebrow="Dev only" title="Dev data" />
+    <>
       <p className="text-sm text-muted-foreground">
         Running sources add DEV games next to real ones, through the same pipeline: bets on them
         lock, resolve and settle like real bets. Edit scenario files in{" "}
@@ -76,7 +167,7 @@ export function DevPage({ user }: { user: User }) {
           />
         ))}
       </Section>
-    </div>
+    </>
   );
 }
 

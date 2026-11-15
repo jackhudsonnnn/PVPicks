@@ -1,23 +1,27 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { devAction, getDevSports } from "./api";
+import { devAction, getDemo, getDevSports, resetDemo } from "./api";
 import { DevPage } from "./dev-page";
 
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   getDevSports: vi.fn(),
   devAction: vi.fn(),
+  getDemo: vi.fn(),
+  resetDemo: vi.fn(),
 }));
 
 const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "dev", hue: 1 };
+
+const endSession = vi.fn();
 
 function renderPage() {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <DevPage user={user} />
+      <DevPage user={user} endSession={endSession} />
     </QueryClientProvider>,
   );
 }
@@ -25,6 +29,8 @@ function renderPage() {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(devAction).mockResolvedValue();
+  vi.mocked(getDemo).mockResolvedValue(null);
+  vi.mocked(resetDemo).mockResolvedValue();
 });
 
 describe("dev data page", () => {
@@ -73,5 +79,19 @@ describe("dev data page", () => {
     vi.mocked(getDevSports).mockResolvedValue(null);
     renderPage();
     expect(await screen.findByText(/Dev data is off/)).toBeInTheDocument();
+  });
+
+  it("resets the demo world after confirming, which ends the session", async () => {
+    vi.mocked(getDevSports).mockResolvedValue(null);
+    vi.mocked(getDemo).mockResolvedValue({ users: 204, follows: 1400, blocks: 7, tables: 18 });
+    renderPage();
+    expect(await screen.findByText(/204 people, 18 tables/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Reset data/ }));
+    expect(resetDemo).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Reset" }));
+    await waitFor(() => expect(resetDemo).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(endSession).toHaveBeenCalledWith("The demo world was reset. Pick an account."),
+    );
   });
 });

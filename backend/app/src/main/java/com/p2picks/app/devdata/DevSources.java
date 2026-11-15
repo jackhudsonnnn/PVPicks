@@ -207,6 +207,8 @@ final class DevSources {
             if (games.stream().noneMatch(feed -> feed.providerId().equals(game))) continue;
             List<StatLine> gameLines = new ArrayList<>();
             for (StatLine line : ProviderParsing.stats(league, body(json, stats.getValue()))) {
+                // One recorded request can cover several games; keep this file's game only.
+                if (!line.gameProviderId().equals(stats.getKey())) continue;
                 gameLines.add(new StatLine(league, game, line.player(), line.played(), line.stats()));
             }
             lines.put(game, gameLines);

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
-import { currentUser, signIn, signOut, SignIn } from "@/features/auth";
+import { currentUser, signIn, signInAs, signOut, SignIn } from "@/features/auth";
 import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
 import type { User } from "@/features/people";
 import { AdminWorkspace } from "@/features/admin";
@@ -43,7 +43,14 @@ export function App() {
   }, [signedOut, queryClient]);
 
   async function login(username: string, password: string) {
-    const user = await signIn(username, password);
+    await startSession(await signIn(username, password));
+  }
+
+  async function loginAs(userId: string) {
+    await startSession(await signInAs(userId));
+  }
+
+  async function startSession(user: Awaited<ReturnType<typeof signIn>>) {
     await queryClient.cancelQueries({ queryKey: sessionKey });
     await queryClient.cancelQueries({ queryKey: tablesKey });
     queryClient.removeQueries({ queryKey: tablesKey });
@@ -71,7 +78,7 @@ export function App() {
       </main>
     );
   }
-  if (!session.data) return <SignIn login={login} notice={notice} />;
+  if (!session.data) return <SignIn login={login} loginAs={loginAs} notice={notice} />;
   if (session.data.role === "ADMIN")
     return <AdminWorkspace key={session.data.id} user={session.data} logout={logout} />;
   return (
@@ -170,7 +177,7 @@ function TableWorkspace({
             ) : archiveId ? (
               <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
             ) : pathname === "/dev" ? (
-              <DevPage user={user} />
+              <DevPage user={user} endSession={endSession} />
             ) : pathname === "/tickets" ? (
               <TicketsPage user={user} expire={expire} />
             ) : (

@@ -72,6 +72,10 @@ current code, not an estimated delivery date.
 - See the <a href="/docs/source/frontend-roadmap.md" download>frontend roadmap</a>
   for integration work.
 
+- Demo world (planned, being built; see [Demo world](/demo-data)): about 200
+  demo users with behavior profiles, live bots, passwordless dev sign-in,
+  seeded personas and a Reset on the Dev page.
+
 ## 6. Security, operations & launch — planned
 
 - Legacy system-message cleanup, and revoking a single session (sign out of

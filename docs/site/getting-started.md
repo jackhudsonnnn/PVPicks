@@ -54,8 +54,9 @@ The current frontend provides backend sign-in, table and bet views, U2Pick
 betting (create, pick, call results, host points settlement) and settle-up
 receipts, table chat and a live sports ticker, all updating live over a
 WebSocket, as well as creating and managing tables, inviting people who follow
-you, and a Friends page for following and blocking. Accounts must already be provisioned
-in the dev backend. In dev, the lock worker locks U2Pick bets at their
+you, and a Friends page for following and blocking. The dev backend seeds a demo world
+and the sign-in page lets you pick any account without a password (see
+[Demo world](/demo-data)). In dev, the lock worker locks U2Pick bets at their
 deadline and the outbox relay publishes events for live updates; set
 `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or `PVPICKS_OUTBOX_RELAY_ENABLED=false`
 to turn either off. The sports ticker needs a BallDontLie API key in

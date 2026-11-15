@@ -71,7 +71,7 @@ original prototype (git tag `prototype-ui`), adapted to the server's data.
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
   bet's question, mode and current status, also in deleted tables' archives.
 
-- **Dev data** (dev backend only): a Dev page in the navigation starts
+- **Dev data** (dev backend only): a Dev page (flask icon beside the logo) starts
   scenario files and recorded chunks that add DEV games, marked DEV in the
   ticker and game picker. See `docs/site/dev-sports-data.md`.
 
@@ -130,7 +130,7 @@ Code is organized by feature. See `AGENTS.md` for what lives where.
 - `src/app/`: the frame. Session, sign-in routing, the shell, and the realtime
   connection's lifetime.
 - `src/features/<name>/`: one folder per product area:
-  - `auth`: session and sign-in;
+  - `auth`: session, sign-in and the demo account picker;
   - `people`: names, avatars and colors;
   - `tables`: home, the table page, members and host settings;
   - `bets`: tickets, the proposal sheet, the Tickets page and bet rules;
@@ -162,7 +162,9 @@ For local development, run the dev backend on `127.0.0.1:8080`
 configured with `PVPICKS_DEV_ORIGIN=http://127.0.0.1:5173`. From `client/` run
 `npm run dev`, then visit `http://127.0.0.1:5173`. Vite proxies `/api` requests
 to the backend; this development-only proxy is not a production deployment.
-Sign in with an already provisioned backend account.
+With the dev backend, pick an account on the sign-in page; there are no dev
+passwords (see the docs' Demo world page). Without the demo, sign in with a
+provisioned account's password.
 For a backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its HTTP
 loopback origin, in the shell or in a git-ignored `client/.env.local`
 (`PVPICKS_DEV_BACKEND_URL=http://127.0.0.1:8090`); the shell wins.

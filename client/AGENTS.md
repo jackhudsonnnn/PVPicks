@@ -26,7 +26,7 @@
 
   Tests sit beside their file. Use a `components/` subfolder only past about 15 files (`bets` and `tables` have one). When another feature needs something, export it from the feature's `index.ts`. Remove an export from it when nothing outside the feature uses it, and delete code nothing uses. Barrels re-export only; never import your own feature's barrel.
 - Features:
-  - `auth`: session API, sign-in form;
+  - `auth`: session API, sign-in form, and the demo's passwordless account picker (shown when `GET /dev/demo/accounts` answers);
   - `people`: user and profile reads, `PersonName`, avatars, `usePerson`, hue colors;
   - `tables`: table API and actions, home, table list, the table page and felt, Peers, Host/About, archives, tomatoes, seating;
   - `bets`: bet API and actions, tickets, details, the proposal sheet, the Tickets page, ticket, sports and U2Pick rules, the mode catalog;
@@ -59,7 +59,7 @@
     - Receipt rows name tables through `tables` `useTableNames`: current tables, plus deleted ones for 90 days.
   - Preferences: `preferences/preferences.tsx`, with Tables, Account and Display tabs.
   - How to play, with feedback: `guide/guide.tsx`.
-  - Dev data: `devdata/dev-page.tsx` at `/dev`. The nav item shows only when `GET /dev/sports` answers (it 404s unless the backend has dev data on). Ticker games carry `dev`, and DEV games are marked in the ticker and the game picker.
+  - Dev data: `devdata/dev-page.tsx` at `/dev`. The flask icon beside the logo shows only when `GET /dev/sports` answers (it 404s unless the backend has dev data on). Ticker games carry `dev`, and DEV games are marked in the ticker and the game picker.
   - The admin view: `admin/admin.tsx`, with tabs for Moderation (`admin/moderation.tsx`: the report queue and frozen or struck players) and Site health. Admin actions are plain requests, not retryable mutations: each is one-shot on the server, so a repeat answers "already handled".
   - Account deletion: `preferences/delete-account.tsx` (blocker wording in tested `preferences/delete-rules.ts`). `BackendError` keeps the raw 403/409 body for errors that carry more than a code.
 

@@ -16,8 +16,8 @@ There are two kinds of source:
 
 ## Using it
 
-Open **Dev** in the app's navigation; it appears only when the backend has dev
-data enabled. Each scenario and chunk is listed with its title, description and
+Open **Dev data** with the flask icon beside the logo; it appears only when the
+backend has dev data enabled. Each scenario and chunk is listed with its title, description and
 league, plus Start, Stop and Restart; chunks also have Pause and speed. A
 running source shows its games and players, or what's wrong with the file
 (the last good state stays in place).

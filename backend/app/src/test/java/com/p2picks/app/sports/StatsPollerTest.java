@@ -33,4 +33,16 @@ class StatsPollerTest {
         Map<String, Instant> stale = Map.of("NBA-3", NOW.minus(StatsPoller.FINAL_REFRESH).minusSeconds(1));
         assertThat(StatsPoller.next(List.of(DONE), stale, NOW)).contains(DONE);
     }
+
+    @Test
+    void oneRequestCoversTwoDueGamesFromTheSameLeague() {
+        StatsPoller.Candidate nfl = new StatsPoller.Candidate("NFL-9", League.NFL, "9", true);
+        StatsPoller.Candidate live = new StatsPoller.Candidate("NBA-4", League.NBA, "4", true);
+        Map<String, Instant> fetched = new HashMap<>(Map.of("NBA-3", NOW.minusSeconds(60)));
+        assertThat(StatsPoller.batch(List.of(LIVE_A, nfl, live, DONE), fetched, NOW))
+                .as("never-fetched NBA games first; not the other league; not a recently fetched final")
+                .containsExactly(LIVE_A, live);
+        assertThat(StatsPoller.batch(List.of(DONE), fetched, NOW)).isEmpty();
+        assertThat(StatsPoller.batch(List.of(nfl, DONE), fetched, NOW)).containsExactly(nfl);
+    }
 }

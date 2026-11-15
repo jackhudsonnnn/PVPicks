@@ -49,3 +49,27 @@ export async function devAction(
     action === "speed" ? { speed } : undefined,
   );
 }
+
+const demoSchema = z.object({
+  users: z.number().int(),
+  follows: z.number().int(),
+  blocks: z.number().int(),
+  tables: z.number().int(),
+});
+
+export type DemoWorld = z.infer<typeof demoSchema>;
+
+/** The demo world's size; null when the backend has no demo (404). */
+export async function getDemo(signal?: AbortSignal): Promise<DemoWorld | null> {
+  try {
+    return await read(await request("/dev/demo", signal ? { signal } : undefined), demoSchema);
+  } catch (error) {
+    if (error instanceof BackendError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** Wipes app data (sports data stays) and reseeds the demo world. Ends every session, yours included. */
+export async function resetDemo(): Promise<void> {
+  await mutationRequest("/dev/demo/reset", "POST", crypto.randomUUID());
+}

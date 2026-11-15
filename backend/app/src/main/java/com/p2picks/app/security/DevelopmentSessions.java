@@ -57,7 +57,24 @@ class DevelopmentSessions {
             return null;
         }
         if (account.status().equals("FROZEN")) throw new Frozen();
+        return issue(account.id(), previousToken);
+    }
 
+    /**
+     * Signs in as an active account without a password (dev demo only; see {@link PasswordlessSignIn}). Null when
+     * there's no such account; {@link Frozen} when it's frozen.
+     */
+    @Transactional
+    String signInWithoutPassword(UUID userId, String previousToken) {
+        List<String> status = jdbc.queryForList("""
+                SELECT status FROM users WHERE id = ? AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                """, String.class, userId);
+        if (status.isEmpty()) return null;
+        if (status.getFirst().equals("FROZEN")) throw new Frozen();
+        return issue(userId, previousToken);
+    }
+
+    private String issue(UUID accountId, String previousToken) {
         if (previousToken != null) {
             try {
                 Jwt previous = decoder.decode(previousToken);
@@ -71,9 +88,9 @@ class DevelopmentSessions {
         Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = issuedAt.plus(8, ChronoUnit.HOURS);
         jdbc.update("INSERT INTO auth_sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-                sessionId, account.id(), java.sql.Timestamp.from(issuedAt), java.sql.Timestamp.from(expiresAt));
+                sessionId, accountId, java.sql.Timestamp.from(issuedAt), java.sql.Timestamp.from(expiresAt));
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer(SessionSecurity.ISSUER)
-                .subject(account.id().toString()).id(sessionId.toString())
+                .subject(accountId.toString()).id(sessionId.toString())
                 .issuedAt(issuedAt).expiresAt(expiresAt).build();
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

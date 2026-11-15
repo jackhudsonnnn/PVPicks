@@ -33,6 +33,7 @@ const config = withMermaid({
           { text: "Domain & privacy", link: "/domain" },
           { text: "Player stats", link: "/player-stats" },
           { text: "Dev sports data", link: "/dev-sports-data" },
+          { text: "Demo world", link: "/demo-data" },
           { text: "Roadmap", link: "/roadmap" }
         ]
       },

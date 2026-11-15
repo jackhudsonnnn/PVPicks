@@ -81,8 +81,13 @@ Game Night) should settle tonight as the first live check. Nothing from
       (about Nov 20). Check BallDontLie's terms for showing and storing their
       data in the app first. Build nothing on GOAT-only endpoints (odds,
       sportsbook props, play-by-play, box scores, NFL rosters).
-- [ ] After buying: set the plan to All-Star for both leagues and shorten
-      the poll interval (60 requests/min allows polling every 15–20 s).
+- [ ] After buying (no code changes: every endpoint in use is All-Star):
+      if BallDontLie issues a new key, replace `PVPICKS_BALLDONTLIE_API_KEY`;
+      then add `PVPICKS_SPORTS_POLL_INTERVAL=PT15S` and
+      `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` to `infra/compose/.env` and
+      redeploy the backend. That's about 8 score requests and 20 stats
+      requests a minute (each live game every few seconds, two per request),
+      within All-Star's 60 with room for manual checks.
 - [ ] Make the plan a per-league setting that drives poll rate, endpoints and
       offered modes (ADR 0005).
 - [ ] Maybe: a host setting for who may override sports results, like the

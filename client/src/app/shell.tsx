@@ -24,7 +24,7 @@ import { settlementsFeed } from "@/lib/realtime-connection";
 import { listSettlementGroups } from "@/features/settlements";
 import { useInvites } from "@/features/social";
 import { userKey } from "@/lib/query-keys";
-import { useDevSports } from "@/features/devdata";
+import { useDemo, useDevSports } from "@/features/devdata";
 
 const NAV = [
   { to: "/", label: "Home", short: "Home", icon: Home },
@@ -33,9 +33,6 @@ const NAV = [
   { to: "/how-to-play", label: "How to play", short: "Guide", icon: BookOpen },
   { to: "/preferences", label: "Preferences", short: "Prefs", icon: SlidersHorizontal },
 ];
-
-/** Shown only when the backend has dev sports data on (dev only). */
-const DEV_NAV = { to: "/dev", label: "Dev data", short: "Dev", icon: FlaskConical };
 
 const isActive = (pathname: string, to: string) =>
   to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -91,6 +88,22 @@ function LiveStatus() {
     >
       {status === "live" ? "Live" : "Reconnecting…"}
     </span>
+  );
+}
+
+/** Icon link to the Dev data page, beside the logo; shown only when the backend has dev sports data on. */
+function DevDataLink({ active }: { active: boolean }) {
+  return (
+    <Button asChild size="icon" variant="ghost" className={cn(active && "text-primary")}>
+      <Link
+        to="/dev"
+        aria-label="Dev data"
+        title="Dev data"
+        aria-current={active ? "page" : undefined}
+      >
+        <FlaskConical />
+      </Link>
+    </Button>
   );
 }
 
@@ -182,7 +195,9 @@ export function AppShell({
 }) {
   const isTable = pathname.startsWith("/tables/");
   const dev = useDevSports(user.id);
-  const nav = dev.data ? [...NAV, DEV_NAV] : NAV;
+  const demo = useDemo(user.id);
+  const devLink =
+    dev.data || demo.data ? <DevDataLink active={isActive(pathname, "/dev")} /> : undefined;
   return (
     <div
       className={cn(
@@ -194,11 +209,11 @@ export function AppShell({
     >
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
         <div className="flex h-16 items-center justify-between pl-5 pr-3">
-          <Logo />
+          <Logo badge={devLink} />
           <SignOutButton onSignOut={onSignOut} busy={signingOut} />
         </div>
         <nav aria-label="Main" className="flex flex-col gap-1 px-3 py-2">
-          {nav.map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}
@@ -231,9 +246,9 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="sticky top-0 z-30 md:pl-64">
+      <div className="sticky top-0 z-30 md:ml-64">
         <header className="glass-bar flex h-14 items-center justify-between border-b px-4 md:hidden">
-          <Logo />
+          <Logo badge={devLink} />
           <div className="flex items-center gap-1">
             <PointsPill user={user} />
             <SignOutButton onSignOut={onSignOut} busy={signingOut} />
@@ -248,7 +263,7 @@ export function AppShell({
         aria-label="Main (phone)"
         className="glass-bar fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t md:hidden"
       >
-        {nav.map(({ to, short, icon: Icon }) => (
+        {NAV.map(({ to, short, icon: Icon }) => (
           <Link
             key={to}
             to={to}

@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -87,23 +88,25 @@ class BallDontLieFeed implements GameFeed {
     }
 
     /**
-     * Every player's whole-game line for one game, in canonical stats (one page holds a whole game; more are followed
-     * up to {@link #MAX_PAGES}). Unreadable rows are skipped.
+     * Every player's whole-game line for a few games in one request (several pages if needed, up to
+     * {@link #MAX_PAGES}), in canonical stats, by provider game id; every requested game has an entry. Unreadable
+     * rows and rows for other games are skipped.
      */
-    List<StatLine> playerStats(League league, String providerGameId) throws FeedUnavailable {
+    Map<String, List<StatLine>> playerStats(League league, List<String> providerGameIds) throws FeedUnavailable {
         if (!configured()) throw new FeedUnavailable("No BallDontLie API key is configured", false, null);
-        List<StatLine> lines = new ArrayList<>();
+        Map<String, List<StatLine>> lines = new java.util.LinkedHashMap<>();
+        for (String id : providerGameIds) lines.put(id, new ArrayList<>());
         String cursor = null;
         for (int page = 0; page < MAX_PAGES; page++) {
             UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
-                    .path(league == League.NBA ? "/v1/stats" : "/nfl/v1/stats")
-                    .queryParam("game_ids[]", providerGameId)
-                    .queryParam("per_page", 100);
+                    .path(league == League.NBA ? "/v1/stats" : "/nfl/v1/stats");
+            for (String id : providerGameIds) uri.queryParam("game_ids[]", id);
+            uri.queryParam("per_page", 100);
             if (cursor != null) uri.queryParam("cursor", cursor);
             JsonNode body = get(league, "stats", uri);
             for (JsonNode row : body.path("data")) {
                 StatLine line = league == League.NBA ? StatLine.nba(row) : StatLine.nfl(row);
-                if (line != null && line.gameProviderId().equals(providerGameId)) lines.add(line);
+                if (line != null && lines.containsKey(line.gameProviderId())) lines.get(line.gameProviderId()).add(line);
             }
             JsonNode next = body.path("meta").path("next_cursor");
             if (next.isMissingNode() || next.isNull()) return lines;

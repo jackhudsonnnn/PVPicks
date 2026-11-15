@@ -46,7 +46,6 @@ backend/
                           holds the shared containers, Spring context and helpers
   shared/kernel/          Money: exact integer-cent value type (plain Java library)
   api/                    draft OpenAPI and realtime contracts
-  dev/                    dev seed SQL
 ```
 
 ### Module rules
@@ -101,27 +100,18 @@ From the project root:
 docker compose -f infra/compose/docker-compose.dev.yml up --build
 ```
 
-After the backend has started and applied migrations, in another terminal:
-
-```sh
-./scripts/provision-dev.sh --provision
-bash scripts/seed-dev.sh --seed
-```
-
-- `--init` generates the session signing key (`infra/compose/.env.auth`), the
-  retry-fingerprint key (`infra/compose/.env.idempotency`) and four dev account
-  passwords (`infra/compose/.env.dev-accounts`). These files are ignored and
-  owner-only: never share or commit them. Lost passwords cannot be recovered
-  from their BCrypt hashes.
-- `--provision` writes the password hashes to PostgreSQL. Re-running verifies
-  existing accounts rather than overwriting them.
+- `--init` generates the session signing key (`infra/compose/.env.auth`) and
+  the retry-fingerprint key (`infra/compose/.env.idempotency`). These files are
+  ignored and owner-only: never share or commit them.
+- There are no dev passwords. An empty database gets the demo world on
+  startup (about 200 demo users plus newbie, intermediate, pro and admin), and
+  the sign-in page signs you in as anyone you pick. **Reset data** on the Dev
+  page wipes app data (sports data stays) and reseeds it. See the docs' Demo
+  world page. The demo exists only in the dev profile (`pvpicks.demo.enabled`
+  in `application-dev.yml`; tests turn it off).
 - Keep the retry key with its database. Replacing a used key makes protected
   mutations fail closed and invalidates chat cursors; rotation and recovery are
   not implemented.
-- The seed creates two sample tables and two active U2Pick bets for the
-  intermediate and pro accounts, and follows (intermediate and pro are
-  friends; newbie follows pro), each step once, in one transaction. Never run it against
-  LAN, production or real-user data.
 - Compose requires `PVPICKS_DB_PASSWORD` in the ignored `infra/compose/.env`
   or the shell. `PVPICKS_PORT` (default 8080) changes the loopback host port.
 - PostgreSQL is published on loopback at `PVPICKS_DB_PORT` (default 5433) for a

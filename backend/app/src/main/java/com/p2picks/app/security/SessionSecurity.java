@@ -127,6 +127,9 @@ class SessionSecurity {
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                            // The dev demo's sign-in picker; these 404 unless the demo is on.
+                            .requestMatchers(HttpMethod.GET, "/dev/demo/accounts").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/dev/demo/sign-in").permitAll()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
                             .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
                             .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()

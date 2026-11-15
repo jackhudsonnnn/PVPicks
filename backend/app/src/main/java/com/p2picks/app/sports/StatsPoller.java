@@ -3,6 +3,7 @@ package com.p2picks.app.sports;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Component;
 @Component
 class StatsPoller {
     private static final Logger log = LoggerFactory.getLogger(StatsPoller.class);
+    static final int BATCH = 2;
     static final Duration FINAL_REFRESH = Duration.ofMinutes(15);
     static final Duration FINAL_WINDOW = Duration.ofHours(6);
     static final Duration PLAYER_REFRESH = Duration.ofHours(24);
@@ -54,9 +56,9 @@ class StatsPoller {
         Instant now = clock.instant();
         if (now.isBefore(pausedUntil)) return;
         try {
-            Optional<Candidate> game = next(candidates(now), lastFetched, now);
-            if (game.isPresent()) {
-                fetchGame(game.get(), now);
+            List<Candidate> games = batch(candidates(now), lastFetched, now);
+            if (!games.isEmpty()) {
+                fetchGames(games, now);
             } else {
                 refreshPlayers(now);
             }
@@ -67,9 +69,11 @@ class StatsPoller {
         lastFetched.values().removeIf(at -> at.isBefore(now.minus(FINAL_WINDOW.multipliedBy(2))));
     }
 
-    private void fetchGame(Candidate game, Instant now) throws GameFeed.FeedUnavailable {
-        lastFetched.put(game.id(), now);
-        sync.recordGame(game.id(), feed.playerStats(game.league(), game.providerId()), now);
+    private void fetchGames(List<Candidate> games, Instant now) throws GameFeed.FeedUnavailable {
+        games.forEach(game -> lastFetched.put(game.id(), now));
+        Map<String, List<StatLine>> lines = feed.playerStats(games.getFirst().league(),
+                games.stream().map(Candidate::providerId).toList());
+        for (Candidate game : games) sync.recordGame(game.id(), lines.get(game.providerId()), now);
     }
 
     private void refreshPlayers(Instant now) throws GameFeed.FeedUnavailable {
@@ -96,6 +100,25 @@ class StatsPoller {
                 """, (rs, row) -> new Candidate(rs.getString("id"), League.valueOf(rs.getString("league")),
                 rs.getString("provider_id"), rs.getString("status").equals("LIVE")),
                 java.sql.Timestamp.from(now.minus(FINAL_WINDOW)));
+    }
+
+    /**
+     * The game that has waited longest, plus the next-longest-waiting due games in its league, up to {@link #BATCH}:
+     * one request covers them all. Two games fit one 100-row page in both leagues.
+     */
+    static List<Candidate> batch(List<Candidate> games, Map<String, Instant> lastFetched, Instant now) {
+        Optional<Candidate> first = next(games, lastFetched, now);
+        if (first.isEmpty()) return List.of();
+        List<Candidate> batch = new ArrayList<>(List.of(first.get()));
+        List<Candidate> rest = new ArrayList<>(games.stream()
+                .filter(g -> g.league() == first.get().league() && !g.equals(first.get())).toList());
+        while (batch.size() < BATCH) {
+            Optional<Candidate> another = next(rest, lastFetched, now);
+            if (another.isEmpty()) break;
+            batch.add(another.get());
+            rest.remove(another.get());
+        }
+        return batch;
     }
 
     /** The game that has waited longest; finished games only once their refresh interval has passed. */

@@ -79,6 +79,10 @@ services:
       PVPICKS_OUTBOX_CLEANUP_ENABLED: ${PVPICKS_OUTBOX_CLEANUP_ENABLED:-true}
       PVPICKS_OUTBOX_RETENTION: ${PVPICKS_OUTBOX_RETENTION:-P7D}
       PVPICKS_BALLDONTLIE_API_KEY: ${PVPICKS_BALLDONTLIE_API_KEY:-}
+      # Request budget: scores poll once per league per interval, stats once per interval. The defaults fit
+      # 5 requests a minute (free tier, GOAT trial); see BALLDONTLIE.md for All-Star values.
+      PVPICKS_SPORTS_POLL_INTERVAL: ${PVPICKS_SPORTS_POLL_INTERVAL:-PT60S}
+      PVPICKS_SPORTS_STATS_INTERVAL: ${PVPICKS_SPORTS_STATS_INTERVAL:-PT20S}
       PVPICKS_SPORTS_RECORDING_DIR: /recordings
       PVPICKS_DEV_SPORTS_DIR: /dev-sports
     depends_on:

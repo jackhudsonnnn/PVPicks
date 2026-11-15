@@ -27,14 +27,18 @@ players seen in a game are added too.
 One request every `PVPICKS_SPORTS_STATS_INTERVAL` (default 20 s), chosen in
 this order:
 
-1. The live game that has waited longest since its last stats request.
+1. The live game that has waited longest since its last stats request,
+   together with the next-longest-waiting due game in the same league: one
+   request covers two games (`game_ids[]` twice), which fits one 100-row page
+   in both leagues.
 2. Finished games, every 15 minutes for six hours after their start, so late
    stat corrections land.
 3. Otherwise, the next page of a league's active-player list (daily).
 
 A rate-limited response pauses polling for a minute. Scores and player stats
 share the plan's request budget. With the 5-requests-a-minute trial, that's
-two for scores and three for player stats. With All-Star (60 a minute), the
+two for scores and three for player stats, so with five NBA games live each
+one's stats refresh about once a minute. With All-Star (60 a minute), the
 interval can drop to every few seconds.
 
 ## Canonical stats
