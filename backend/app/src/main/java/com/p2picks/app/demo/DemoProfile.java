@@ -32,7 +32,8 @@ import java.util.function.UnaryOperator;
  * @param trashTalkChance chance of a canned line after a win or loss
  * @param settleStyle what they do with receipts
  * @param activeFrom start of their active hours (America/New_York)
- * @param activeUntil end of their active hours; before {@code activeFrom} means past midnight
+ * @param activeUntil end of their active hours; before {@code activeFrom} means past midnight, and the same as
+ *     {@code activeFrom} means all day
  * @param onlineChance share of their active hours they're actually around
  */
 public record DemoProfile(
@@ -66,9 +67,9 @@ public record DemoProfile(
     /** The casual default every archetype starts from. */
     public static final DemoProfile DEFAULT = new DemoProfile(
             0.7, 0.6, 0.1, 0.02, 0.01,
-            0.5, 0.3, Set.of(), EnumSet.allOf(League.class), PickStyle.RANDOM, 500, 2_000, 10, 120,
+            0.5, 0.3, Set.of(), EnumSet.allOf(League.class), PickStyle.RANDOM, 100, 500, 10, 120,
             0.5, 0.15, 0.2, 0.3,
-            SettleStyle.PROMPT, LocalTime.of(10, 0), LocalTime.of(1, 0), 0.3);
+            SettleStyle.PROMPT, LocalTime.MIDNIGHT, LocalTime.MIDNIGHT, 0.9);
 
     public DemoProfile {
         modes = Set.copyOf(modes);
@@ -80,8 +81,8 @@ public record DemoProfile(
         if (followsPerDay < 0 || proposalsPerHour < 0 || messagesPerHour < 0) {
             throw new IllegalArgumentException("Rates can't be negative");
         }
-        if (wagerMinCents < 100 || wagerMaxCents < wagerMinCents) {
-            throw new IllegalArgumentException("Wagers are at least 1 point, min ≤ max");
+        if (wagerMinCents < 10 || wagerMaxCents > 1_000 || wagerMaxCents < wagerMinCents) {
+            throw new IllegalArgumentException("Wagers are 10–1,000 cents (the bet rule), min ≤ max");
         }
         if (reactionMinSeconds < 0 || reactionMaxSeconds < reactionMinSeconds) {
             throw new IllegalArgumentException("Reaction delay min ≤ max");
@@ -121,8 +122,8 @@ public record DemoProfile(
     /** Starting points for demo users; each changes only what differs from {@link #DEFAULT}. */
     public enum Archetype {
         CASUAL(35, p -> p),
-        DEGEN(15, p -> p.joinBetChance(0.9).proposalsPerHour(1.5).wager(1_500, 5_000).messagesPerHour(1.5)),
-        LURKER(20, p -> p.joinBetChance(0.2).messagesPerHour(0.05).onlineChance(0.15)),
+        DEGEN(15, p -> p.joinBetChance(0.9).proposalsPerHour(1.5).wager(500, 1_000).messagesPerHour(1.5)),
+        LURKER(20, p -> p.joinBetChance(0.2).messagesPerHour(0.05)),
         SHARP(10, p -> p.pickStyle(PickStyle.FAVORITE).settleStyle(SettleStyle.PROMPT).trashTalkChance(0.05)),
         TROLL(5, p -> p.trashTalkChance(0.8).blockChance(0.1).reportChance(0.1).settleStyle(SettleStyle.DISPUTES)),
         FRIENDLY(15, p -> p.followBackChance(0.95).inviteAcceptChance(0.9).settleStyle(SettleStyle.FORGIVES));

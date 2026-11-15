@@ -15,6 +15,7 @@ import { useSettlementActions } from "./actions";
 import { listSettlementGroups, type SettlementGroup } from "./api";
 import { groupSummary } from "./receipt-rules";
 import { Net, ReceiptsDialog, type Actions } from "./receipts-dialog";
+import { LoadingList } from "@/components/loading";
 
 /**
  * Settle-ups on the Friends page: a sideways-scrolling card per person you've had receipts with, showing the
@@ -67,7 +68,7 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
         checkText="Check the receipt history first."
       />
       {groups.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading receipts…</p>
+        <LoadingList label="Loading settle-ups" rows={3} rowClassName="h-20" />
       ) : groups.isError ? (
         <p role="alert">{backendErrorMessage(groups.error)}</p>
       ) : groups.data.length === 0 ? (

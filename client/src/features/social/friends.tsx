@@ -14,6 +14,7 @@ import { searchUsers, type Relationships } from "./api";
 import { useSocialActions } from "./actions";
 import { useRelationships } from "./queries";
 import { peopleIn, searchTerm } from "./rules";
+import { LoadingList } from "@/components/loading";
 
 const noRelationships: Relationships = { followingIds: [], followerIds: [], blockedIds: [] };
 
@@ -70,7 +71,7 @@ export function FriendsPage({ user, expire }: { user: User; expire: () => void }
           checkText="Check your people lists first."
         />
         {relationships.isPending ? (
-          <p>Loading people…</p>
+          <LoadingList label="Loading people" rows={4} rowClassName="h-14" />
         ) : relationships.isError ? (
           <div className="space-y-3">
             <p role="alert">{backendErrorMessage(relationships.error)}</p>
@@ -142,7 +143,7 @@ function FindPeople({ user, row }: { user: User; row: (id: string) => React.Reac
           Usernames use up to 15 letters, numbers and underscores.
         </p>
       ) : term === null ? null : results.isPending ? (
-        <p>Searching…</p>
+        <LoadingList label="Searching" rows={2} rowClassName="h-14" />
       ) : results.isError ? (
         <p role="alert">{backendErrorMessage(results.error)}</p>
       ) : people.length === 0 ? (

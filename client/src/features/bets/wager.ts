@@ -21,4 +21,4 @@ export const PICK_WINDOWS = [
   { label: "5m", sec: 300 },
   { label: "10m", sec: 600 },
 ] as const;
-export const PICK_WINDOW_DEFAULT = 120;
+export const PICK_WINDOW_DEFAULT = 30;

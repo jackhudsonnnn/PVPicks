@@ -20,15 +20,9 @@ import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import type { User } from "@/features/people";
-import {
-  devAction,
-  resetDemo,
-  type DemoWorld,
-  type DevKind,
-  type DevSource,
-  type DevSports,
-} from "./api";
+import { devAction, type DemoWorld, type DevKind, type DevSource, type DevSports } from "./api";
 import { useDemo, useDevSports } from "./use-dev-sports";
+import { LoadingList } from "@/components/loading";
 
 const minutes = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -37,18 +31,12 @@ const minutes = (seconds: number) =>
  * Dev-only controls: the demo world's reset, and scenario files and recorded chunks, which feed `DEV` games through
  * the real sports pipeline. Scenario files are edited in the repo (`dev/sports/scenarios/`) and picked up live.
  */
-export function DevPage({
-  user,
-  endSession,
-}: {
-  user: User;
-  endSession: (message: string) => void;
-}) {
+export function DevPage({ user, onReset }: { user: User; onReset: () => void }) {
   const sports = useDevSports(user.id, true);
-  const demo = useDemo(user.id);
+  const demo = useDemo(user.id, true);
 
   if (sports.isPending || demo.isPending)
-    return <p className="text-sm text-muted-foreground">Loading dev data…</p>;
+    return <LoadingList label="Loading dev data" rows={3} rowClassName="h-24" />;
   if (sports.isError) return <p role="alert">{backendErrorMessage(sports.error)}</p>;
   if (demo.isError) return <p role="alert">{backendErrorMessage(demo.error)}</p>;
   if (!sports.data && !demo.data)
@@ -61,25 +49,14 @@ export function DevPage({
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Dev only" title="Dev data" />
-      {demo.data && <DemoSection world={demo.data} endSession={endSession} />}
+      {demo.data && <DemoSection world={demo.data} onReset={onReset} />}
       {sports.data && <SportsSections user={user} sports={sports.data} />}
     </div>
   );
 }
 
-function DemoSection({
-  world,
-  endSession,
-}: {
-  world: DemoWorld;
-  endSession: (message: string) => void;
-}) {
+function DemoSection({ world, onReset }: { world: DemoWorld; onReset: () => void }) {
   const [confirming, setConfirming] = useState(false);
-  const reset = useMutation({
-    mutationFn: resetDemo,
-    onSuccess: () => endSession("The demo world was reset. Pick an account."),
-    onError: (error) => toast.error(backendErrorMessage(error)),
-  });
   return (
     <section className="space-y-3">
       <h2 className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
@@ -93,15 +70,11 @@ function DemoSection({
             Reset wipes everything but sports data, reseeds the demo and signs everyone out.
           </span>
         </p>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={reset.isPending}
-          onClick={() => setConfirming(true)}
-        >
-          <RotateCcw /> {reset.isPending ? "Resetting…" : "Reset data"}
+        <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+          <RotateCcw /> Reset data
         </Button>
       </div>
+      <BotActivity bots={world.bots} />
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -113,11 +86,44 @@ function DemoSection({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => reset.mutate()}>Reset</AlertDialogAction>
+            <AlertDialogAction onClick={onReset}>Reset</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/** What the demo users have done since the bots started: counts per action and outcome. */
+function BotActivity({ bots }: { bots: DemoWorld["bots"] }) {
+  if (!bots)
+    return (
+      <p className="text-sm text-muted-foreground">Bots are off (pvpicks.demo.bots.enabled).</p>
+    );
+  const done = Object.entries(bots.done).sort(([, a], [, b]) => b - a);
+  return (
+    <div className="space-y-2 rounded-xl border bg-surface p-4">
+      <p className="text-sm">
+        <span className="font-semibold">Bots</span>{" "}
+        <span className="text-muted-foreground">
+          {bots.lastTick ? "running" : "starting"} · {bots.queued} planned
+        </span>
+      </p>
+      {done.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Nothing yet. Demo users act in tables with newbie, intermediate or pro, when they're
+          online.
+        </p>
+      ) : (
+        <ul className="flex flex-wrap gap-1.5">
+          {done.map(([what, count]) => (
+            <li key={what} className="rounded bg-muted px-2 py-0.5 font-mono text-[11px]">
+              {what} × {count}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

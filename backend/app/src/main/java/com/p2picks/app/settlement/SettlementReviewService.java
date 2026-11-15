@@ -13,13 +13,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class SettlementReviewService {
-    enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }
+public class SettlementReviewService {
+    public enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }
     record Review(boolean authenticated, boolean player, boolean accessible, UUID pendingReviewRevision) {}
     record PendingReview(UUID otherUserId, UUID pendingReviewRevision) {}
     record PendingReviews(boolean authenticated, boolean player, List<PendingReview> reviews) {}
-    static class StaleReview extends RuntimeException {}
-    static class ReviewRequired extends RuntimeException {}
+    public static class StaleReview extends RuntimeException {}
+    public static class ReviewRequired extends RuntimeException {}
 
     private static final String OPERATION = "settlement.review.acknowledge.v1";
     private final JdbcTemplate jdbc;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "./loading";
 
 /**
  * "Load more" for paged lists. Also loads on its own when scrolled into view (where IntersectionObserver exists), so
@@ -21,7 +22,7 @@ export function LoadMore({ loading, onLoad }: { loading: boolean; onLoad: () => 
   }, []);
   return (
     <Button ref={ref} variant="outline" className="w-full" disabled={loading} onClick={onLoad}>
-      {loading ? "Loading…" : "Load more"}
+      {loading && <Spinner />} Load more
     </Button>
   );
 }

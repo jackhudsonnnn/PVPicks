@@ -7,9 +7,10 @@ planned operations; it is not an implementation inventory.
 ## Available in the dev backend
 
 - Login/logout, session and CSRF checks, and personal profile updates.
-- The dev demo world (phase 1 of [Demo world](/demo-data)): 200 generated demo users with behavior
-  profiles, the main accounts' friends, tables, blocks and invitations, a passwordless sign-in
-  picker and a Reset on the Dev page. Seeded history, live demo bets and bots aren't built yet.
+- The dev demo world ([Demo world](/demo-data)): 200 demo users with behavior profiles played by bots
+  through the real services; newbie, intermediate and pro with seeded friends, tables, blocks and
+  history (the pro's ~300 tickets with settlements and receipts, 20 Pending); open reports for admin;
+  always-live looping demo games; a passwordless sign-in picker and a Reset on the Dev page.
 - Table creation, profile updates and reads; member addition, removal and invitations;
   host promotion/demotion, member permissions, remainder rules and betting-setting changes.
 - Table deletion and a 90-day read-only chat archive for members at deletion.

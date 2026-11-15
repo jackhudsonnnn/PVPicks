@@ -24,10 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
  * database-assigned deadline and its outbox event. Modes supply only the validated bet row.
  */
 @Component
-class BetProposalWriter {
-    enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
+public class BetProposalWriter {
+    public enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
 
-    record Result(Outcome outcome, UUID betId) {}
+    public record Result(Outcome outcome, UUID betId) {}
 
     /**
      * A validated bet to insert. {@code lockBy} is the latest moment picks may lock (a game's start); the deadline

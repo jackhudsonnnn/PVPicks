@@ -8,6 +8,7 @@ import { Logo } from "@/components/logo";
 import { BackendError, backendErrorMessage, isUnauthorized } from "@/lib/api-client";
 import { demoAccounts, type DemoAccount } from "./api";
 import { DemoPicker } from "./demo-picker";
+import { LoadingScreen, Spinner } from "@/components/loading";
 
 const frozenMessage = "This account is frozen. Contact an admin if you think that's a mistake.";
 
@@ -28,6 +29,9 @@ export function SignIn({
     queryKey: ["demo-accounts", ""],
     queryFn: ({ signal }) => demoAccounts("", signal),
     retry: false,
+    // An unreachable backend (e.g. restarting) isn't "no demo": keep checking, and the picker replaces the
+    // password form once it answers. A 404 (no demo) resolves to null and stops.
+    refetchInterval: (query) => (query.state.status === "error" ? 3000 : false),
   });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -71,9 +75,9 @@ export function SignIn({
     }
   }
 
-  // A failed demo check falls back to the password form rather than blocking sign-in.
-  if (demo.isPending)
-    return <p className="p-6 text-sm text-muted-foreground">Checking sign-in options…</p>;
+  // A failed demo check shows the password form (and keeps checking) rather than blocking sign-in. Until the
+  // first answer, the same splash as the session check, so the two read as one step.
+  if (demo.isPending) return <LoadingScreen label="Checking sign-in options" />;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
@@ -127,7 +131,7 @@ export function SignIn({
               </p>
             )}
             <Button type="submit" variant="hero" size="lg" className="w-full" disabled={busy}>
-              <LogIn /> {busy ? "Signing in…" : "Sign in"}
+              {busy ? <Spinner /> : <LogIn />} Sign in
             </Button>
           </form>
         )}

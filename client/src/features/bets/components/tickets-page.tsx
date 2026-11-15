@@ -18,6 +18,7 @@ import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
 import { tableBetsFeed } from "@/lib/realtime-connection";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { LoadingList, Spinner } from "@/components/loading";
 
 type Status = Bet["status"];
 
@@ -120,7 +121,7 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
         checkText="Check the table's bets and your pick first."
       />
       {bets.isPending ? (
-        <p>Loading tickets…</p>
+        <LoadingList label="Loading tickets" rows={4} rowClassName="h-28" />
       ) : bets.isError ? (
         <div className="space-y-3">
           <p role="alert">{backendErrorMessage(bets.error)}</p>
@@ -159,7 +160,7 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
               disabled={bets.isFetchingNextPage}
               onClick={() => void bets.fetchNextPage()}
             >
-              {bets.isFetchingNextPage ? "Loading…" : "Load more"}
+              {bets.isFetchingNextPage && <Spinner />} Load more
             </Button>
           )}
         </div>

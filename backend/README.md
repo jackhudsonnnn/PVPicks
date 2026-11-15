@@ -108,7 +108,9 @@ docker compose -f infra/compose/docker-compose.dev.yml up --build
   the sign-in page signs you in as anyone you pick. **Reset data** on the Dev
   page wipes app data (sports data stays) and reseeds it. See the docs' Demo
   world page. The demo exists only in the dev profile (`pvpicks.demo.enabled`
-  in `application-dev.yml`; tests turn it off).
+  in `application-dev.yml`; tests turn it off). Demo users are played by bots
+  (`demo/DemoBots`) through the real services; `pvpicks.demo.bots.enabled=false`
+  turns them off. Every demo account's password is `demo`.
 - Keep the retry key with its database. Replacing a used key makes protected
   mutations fail closed and invalidates chat cursors; rotation and recovery are
   not implemented.
@@ -120,6 +122,19 @@ docker compose -f infra/compose/docker-compose.dev.yml up --build
 - Add `--profile tools` before `up` for Kafka UI on `PVPICKS_KAFKA_UI_PORT`
   (default 8081). It is unauthenticated: use it only with disposable data.
 - `down -v` deletes the PostgreSQL and Kafka volumes.
+
+### Reset
+
+- **App data:** **Reset data** on the Dev page wipes users, social, tables,
+  bets, chat and settlements, keeps sports data (games, players, stats), and
+  reseeds the demo world. Everyone is signed out.
+- **Everything:** from the project root,
+  `docker compose -f infra/compose/docker-compose.dev.yml down -v`, then
+  `up -d --build --wait`. Startup migrates the empty database and seeds the
+  demo world. The next poll restores yesterday's to tomorrow's games, but
+  finished games' player stats are gone. The local key files, `infra/compose/.env`,
+  `recordings/` and `dev/sports/` are untouched; there's nothing to
+  re-provision.
 
 ### Run outside Compose
 
@@ -170,7 +185,9 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   `PVPICKS_SPORTS_STATS_INTERVAL` (default `PT20S`): player stats for the live
   game that has waited longest, finished games every 15 minutes for six hours
   after they start (to catch corrections), and otherwise the next page of a
-  league's active-player list, at most once a day. A rate-limited response
+  league's active-player list, refreshed every
+  `PVPICKS_SPORTS_PLAYERS_INTERVAL` (default `PT10M`; every fourth request
+  while games are live, so it always finishes). A rate-limited response
   pauses this for a minute. Scores and player data share the plan's request
   budget (the GOAT trial allows 5 a minute: 2 for scores, 3 for player data).
 - Dev sports data (dev profile): with `PVPICKS_DEV_SPORTS_DIR` set (Compose

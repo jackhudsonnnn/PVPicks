@@ -8,8 +8,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
-record U2PickDefinition(String question, List<String> choices) {
-    U2PickDefinition {
+public record U2PickDefinition(String question, List<String> choices) {
+    public U2PickDefinition {
         Objects.requireNonNull(question, "question");
         Objects.requireNonNull(choices, "choices");
         question = PostgresText.trim(question);

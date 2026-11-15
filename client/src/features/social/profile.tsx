@@ -26,6 +26,7 @@ import { userKey } from "@/lib/query-keys";
 import { listSettlementGroups, receiptHistory } from "@/features/settlements";
 import { useRelationships } from "./queries";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { LoadingList } from "@/components/loading";
 
 type Tab = "bets" | "settlements";
 
@@ -146,7 +147,7 @@ export function ProfileDialog({
           {tab === "settlements" && !self && userId ? (
             <Receipts otherId={id} tableId={table.id} user={user} expire={expire} />
           ) : history.isPending ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Loading bets…</p>
+            <LoadingList label="Loading bets" rows={3} rowClassName="h-20" className="py-4" />
           ) : history.isError ? (
             <p role="alert">{backendErrorMessage(history.error)}</p>
           ) : theirs.length === 0 ? (
@@ -312,7 +313,8 @@ function Receipts({
     retry: false,
   });
   useExpireOnUnauthorized([query.error], expire);
-  if (query.isPending) return <p className="py-4 text-sm text-muted-foreground">Loading…</p>;
+  if (query.isPending)
+    return <LoadingList label="Loading receipts" rows={2} rowClassName="h-14" className="py-4" />;
   if (query.isError) return <p role="alert">{backendErrorMessage(query.error)}</p>;
   const lines = query.data.filter((line) => line.tableId === tableId);
   if (lines.length === 0)

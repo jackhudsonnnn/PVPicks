@@ -30,6 +30,7 @@ import { tableBetsFeed, tableChatFeed, tableViewFeed } from "@/lib/realtime-conn
 import { arrangeSeats, openBets } from "@/features/tables/seating";
 import { useTableActions } from "@/features/tables/actions";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { LoadingPage } from "@/components/loading";
 
 type TabId = "table" | "chat" | "peers" | "host" | "about";
 
@@ -65,7 +66,7 @@ export function TablePage({
   });
   useExpireOnUnauthorized([query.error], expire);
 
-  if (query.isPending) return <p className="p-6">Loading table…</p>;
+  if (query.isPending) return <LoadingPage label="Loading table" />;
   if (query.isError) {
     return (
       <div className="mx-auto max-w-md space-y-3 px-4 py-20 text-center">

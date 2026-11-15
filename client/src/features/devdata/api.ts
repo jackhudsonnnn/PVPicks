@@ -50,11 +50,19 @@ export async function devAction(
   );
 }
 
+const botsSchema = z.object({
+  since: z.string(),
+  lastTick: z.string().nullable(),
+  queued: z.number().int(),
+  done: z.record(z.string(), z.number().int()),
+});
+
 const demoSchema = z.object({
   users: z.number().int(),
   follows: z.number().int(),
   blocks: z.number().int(),
   tables: z.number().int(),
+  bots: botsSchema.nullable().default(null),
 });
 
 export type DemoWorld = z.infer<typeof demoSchema>;

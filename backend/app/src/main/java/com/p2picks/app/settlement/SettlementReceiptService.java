@@ -17,9 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class SettlementReceiptService {
-    enum Action { SENT, CONFIRM, DISPUTE, FORGIVE, ASK_FORGIVE, DECLINE_FORGIVE }
-    enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
+public class SettlementReceiptService {
+    public enum Action { SENT, CONFIRM, DISPUTE, FORGIVE, ASK_FORGIVE, DECLINE_FORGIVE }
+    public enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
     record Line(UUID id, UUID settlementId, UUID tableId, UUID payerId, UUID payeeId, long amountCents,
                 String status, int revision, OffsetDateTime forgiveRequestedAt, OffsetDateTime forgiveDeclinedAt,
                 OffsetDateTime createdAt, OffsetDateTime updatedAt) {
@@ -32,7 +32,7 @@ class SettlementReceiptService {
         }
     }
     /** A receipt as the API returns it: the line plus what the viewer may do with it. */
-    record LineView(UUID id, UUID settlementId, UUID tableId, UUID payerId, UUID payeeId, long amountCents,
+    public record LineView(UUID id, UUID settlementId, UUID tableId, UUID payerId, UUID payeeId, long amountCents,
                     String status, int revision, OffsetDateTime forgiveRequestedAt, OffsetDateTime forgiveDeclinedAt,
                     OffsetDateTime createdAt, OffsetDateTime updatedAt, List<ReceiptActions.Available> actions) {
         static LineView of(Line line, List<ReceiptActions.Available> actions) {
@@ -41,7 +41,7 @@ class SettlementReceiptService {
                     line.forgiveDeclinedAt(), line.createdAt(), line.updatedAt(), actions);
         }
     }
-    record Result(Outcome outcome, LineView line) {}
+    public record Result(Outcome outcome, LineView line) {}
     record History(boolean authenticated, boolean player, List<LineView> lines) {}
 
     static class StaleRevision extends RuntimeException {}

@@ -32,6 +32,7 @@ import { type TableName, useTableNames } from "@/features/tables";
 import type { SettlementIntent, useSettlementActions } from "./actions";
 import { formatPoints, receiptHistory, type SettlementGroup, type SettlementLine } from "./api";
 import { GROUP_ACTIONS, isClosed, LINE_ACTIONS } from "./receipt-rules";
+import { LoadingList } from "@/components/loading";
 
 export type Actions = ReturnType<typeof useSettlementActions>;
 
@@ -139,7 +140,7 @@ function ReceiptsBody({ user, expire, group, actions, queryKey }: ReceiptsProps)
         </span>
       </div>
       {history.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading receipts…</p>
+        <LoadingList label="Loading receipts" rows={3} />
       ) : history.isError ? (
         <div className="space-y-2">
           <p role="alert">{backendErrorMessage(history.error)}</p>

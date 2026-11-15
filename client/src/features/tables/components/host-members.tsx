@@ -29,6 +29,7 @@ import { addableFollowers } from "@/features/tables/rules";
 import { useRelationships } from "@/features/social";
 import { PERMISSIONS, PanelProps, busy, hasOpenBets } from "./host-shared";
 import { PersonLabel } from "./host-panel";
+import { LoadingList } from "@/components/loading";
 
 export function MemberButton({
   id,
@@ -261,7 +262,12 @@ export function AddPlayersSection({ table, tableActions, ...people }: PanelProps
         </Button>
       </div>
       {relationships.isPending ? (
-        <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">Loading…</p>
+        <LoadingList
+          label="Loading people"
+          rows={3}
+          rowClassName="h-10"
+          className="px-4 py-4 sm:px-5"
+        />
       ) : candidates.length === 0 ? (
         <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">
           Everyone who follows you is already here.

@@ -6,6 +6,7 @@ import type { User } from "@/features/people";
 import { TableChat } from "@/features/chat";
 import { userKey } from "@/lib/query-keys";
 import { listArchives } from "@/features/tables/api";
+import { LoadingList } from "@/components/loading";
 
 function useArchives(userId: string) {
   return useQuery({
@@ -68,7 +69,7 @@ export function ArchivedTable({
         Back to tables
       </Link>
       {archives.isPending ? (
-        <p>Loading…</p>
+        <LoadingList label="Loading archived tables" rows={3} />
       ) : archives.isError ? (
         <p role="alert">{backendErrorMessage(archives.error)}</p>
       ) : !archive ? (

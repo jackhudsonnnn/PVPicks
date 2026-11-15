@@ -27,6 +27,9 @@ final class DemoWorld {
     static final UUID PRO = DemoRoster.idFor("pro");
     static final UUID ADMIN = DemoRoster.idFor("admin");
 
+    /** Every demo account's password. Public on purpose: the demo exists only in the dev profile. */
+    static final String PASSWORD = "demo";
+
     static final int PRO_FRIENDS = 60;
     static final int INTERMEDIATE_FRIENDS = 9;
 
@@ -55,9 +58,9 @@ final class DemoWorld {
     DemoReset.Summary seed() {
         Instant now = clock.instant();
         List<DemoUser> bots = DemoRoster.users();
-        // Nobody signs in with a password in the demo: one hash of a secret that's thrown away.
-        String unusable = passwords.encode(UUID.randomUUID().toString());
-        insertUsers(bots, unusable, now);
+        // The picker signs in without a password; the shared, public demo password is for flows that ask for
+        // one (account deletion) and for the password form. Dev only: production has no demo accounts.
+        insertUsers(bots, passwords.encode(PASSWORD), now);
 
         List<UUID> pool = new ArrayList<>(bots.stream().map(DemoUser::id).toList());
         Collections.shuffle(pool, random);
@@ -147,7 +150,7 @@ final class DemoWorld {
         rows.add(new Object[] {ADMIN, "admin", 4, "ADMIN", Timestamp.from(now.minus(Duration.ofDays(120)))});
         for (DemoUser bot : bots) {
             rows.add(new Object[] {bot.id(), bot.username(), bot.hue(), "PLAYER",
-                    Timestamp.from(now.minus(Duration.ofDays(30 + random.nextInt(120))))});
+                    Timestamp.from(now.minus(Duration.ofDays(100 + random.nextInt(100))))});
         }
         jdbc.batchUpdate("""
                 INSERT INTO users (id, username, hue, password_hash, role, status, created_at)

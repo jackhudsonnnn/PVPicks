@@ -84,7 +84,8 @@ Game Night) should settle tonight as the first live check. Nothing from
 - [ ] After buying (no code changes: every endpoint in use is All-Star):
       if BallDontLie issues a new key, replace `PVPICKS_BALLDONTLIE_API_KEY`;
       then add `PVPICKS_SPORTS_POLL_INTERVAL=PT15S` and
-      `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` to `infra/compose/.env` and
+      `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` to `infra/compose/.env` (the
+      10-minute player-list refresh then fits easily) and
       redeploy the backend. That's about 8 score requests and 20 stats
       requests a minute (each live game every few seconds, two per request),
       within All-Star's 60 with room for manual checks.

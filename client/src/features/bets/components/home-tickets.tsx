@@ -17,6 +17,7 @@ import { listMyBets } from "@/features/bets/api";
 import { FIRST_TICKET_PAGE, nextTicketPage } from "@/features/bets/ticket-feed";
 import { ActionStatus } from "@/components/action-status";
 import { BetTicket } from "./ticket";
+import { LoadingList } from "@/components/loading";
 
 /** Fill the column before waiting for a scroll: a status with few bets shouldn't leave it nearly empty. */
 const MIN_SHOWN = 6;
@@ -83,7 +84,7 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
         checkText="Check the table's bets and your pick first."
       />
       {bets.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading tickets…</p>
+        <LoadingList label="Loading tickets" rows={3} rowClassName="h-28" />
       ) : bets.isError ? (
         <p role="alert">{backendErrorMessage(bets.error)}</p>
       ) : shown.length === 0 && !hasNextPage ? (

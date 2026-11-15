@@ -21,14 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
  * whichever is first (domain rules, "Sports bet rules").
  */
 @Service
-class SportsProposalService {
+public class SportsProposalService {
     static final Set<String> MODES = Set.of("total_disaster", "give_and_take");
     private static final String OPERATION = "bet.sports.propose.v1";
     private static final BigDecimal HALF = new BigDecimal("0.5");
 
-    record Proposal(String mode, String gameId, BigDecimal line, boolean includesOvertime, long wagerCents,
+    public record Proposal(String mode, String gameId, BigDecimal line, boolean includesOvertime, long wagerCents,
                     int durationSec, boolean forFun) {
-        Proposal {
+        public Proposal {
             if (!MODES.contains(mode)) throw new IllegalArgumentException("Unsupported sports mode");
             if (gameId == null || !gameId.matches("^(NBA|NFL)-[A-Za-z0-9_-]+$")) {
                 throw new IllegalArgumentException("Invalid game");

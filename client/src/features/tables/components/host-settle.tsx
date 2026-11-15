@@ -19,11 +19,12 @@ import { awaitingPointsSettlement } from "@/features/bets";
 import { PersonAvatar } from "@/features/people";
 import { PanelProps, busy } from "./host-shared";
 import { PersonLabel } from "./host-panel";
+import { LoadingList } from "@/components/loading";
 
 /** Each member's points that the next settlement moves; everyone pays or is paid through the host. */
 export function SettlementPreview({ table, balances, ...people }: PanelProps) {
   const rows = (balances ?? []).filter((b) => b.settleCents !== 0n);
-  if (!balances) return <p className="text-sm text-muted-foreground">Loading balances…</p>;
+  if (!balances) return <LoadingList label="Loading balances" rows={3} rowClassName="h-6" />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">Everyone is at 0.</p>;
   return (
     <ul className="space-y-1.5">

@@ -10,6 +10,7 @@ import { backendErrorMessage, read, request } from "@/lib/api-client";
 import type { User } from "@/features/people";
 import { userKey } from "@/lib/query-keys";
 import { timeLabel } from "@/lib/time";
+import { LoadingList } from "@/components/loading";
 
 const status = z.enum(["UP", "DOWN", "OUT_OF_SERVICE", "UNKNOWN"]);
 const healthSchema = z.object({
@@ -84,7 +85,7 @@ function SiteHealth({ user }: { user: User }) {
         </Button>
       </div>
       {health.isPending ? (
-        <p>Checking…</p>
+        <LoadingList label="Checking site health" rows={2} rowClassName="h-12" />
       ) : health.isError ? (
         <p role="alert">{backendErrorMessage(health.error)}</p>
       ) : (

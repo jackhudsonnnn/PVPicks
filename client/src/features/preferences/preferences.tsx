@@ -26,6 +26,7 @@ import {
 import { userKey, sessionKey } from "@/lib/query-keys";
 import { formatPoints } from "@/features/settlements";
 import { parseCap } from "./rules";
+import { LoadingList } from "@/components/loading";
 
 const INVITE_ROWS = [
   {
@@ -111,7 +112,8 @@ function InviteSettings({
     queryFn: ({ signal }) => getInvitePreferences(signal),
     retry: false,
   });
-  if (query.isPending) return <p>Loading…</p>;
+  if (query.isPending)
+    return <LoadingList label="Loading invite settings" rows={2} rowClassName="h-12" />;
   if (query.isError) return <p role="alert">{backendErrorMessage(query.error)}</p>;
   const preferences: InvitePreferences = query.data;
   return (
@@ -232,7 +234,8 @@ function DebtCapSettings({
   });
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
-  if (cap.isPending || debt.isPending) return <p>Loading debt cap…</p>;
+  if (cap.isPending || debt.isPending)
+    return <LoadingList label="Loading debt cap" rows={1} rowClassName="h-24" />;
   if (cap.isError || debt.isError)
     return <p role="alert">{backendErrorMessage(cap.error ?? debt.error)}</p>;
   const locked = debt.data > 0;

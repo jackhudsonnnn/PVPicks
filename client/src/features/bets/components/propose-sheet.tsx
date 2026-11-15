@@ -47,6 +47,7 @@ import {
   type ScoreMode,
 } from "@/features/bets/sports-model";
 import { tickerStatus, type TickerGame, useTicker } from "@/features/sports";
+import { LoadingList } from "@/components/loading";
 
 /**
  * Propose a bet: choose a mode (`ModeGrid`), set it up, preview the ticket, send. The server says which modes can
@@ -289,9 +290,13 @@ export function ProposeBetSheet({
                         Live scores are unavailable, so games can't be picked right now.
                       </p>
                     ) : games.filter((g) => g.league === league).length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        {ticker.isPending ? "Loading games…" : `No ${league} games left today.`}
-                      </p>
+                      ticker.isPending ? (
+                        <LoadingList label="Loading games" rows={3} rowClassName="h-12" />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No {league} games left today.
+                        </p>
+                      )
                     ) : (
                       <div className="grid gap-2" role="radiogroup" aria-label="Game">
                         {games

@@ -7,7 +7,8 @@ describe("error toast rendering", () => {
   it("renders a command failure in the toast region", async () => {
     render(<ErrorToasts />);
     act(() => emitError("Debt cap reached", "Review your debt."));
-    expect(await screen.findByText("Debt cap reached")).toBeTruthy();
-    expect(screen.getByText("Review your debt.")).toBeTruthy();
+    // The test setup also mounts a toaster, so each toast can appear twice.
+    expect((await screen.findAllByText("Debt cap reached")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Review your debt.").length).toBeGreaterThan(0);
   });
 });

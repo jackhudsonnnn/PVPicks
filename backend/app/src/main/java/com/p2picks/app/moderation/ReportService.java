@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class ReportService {
+public class ReportService {
     /** Reports one player may file per rolling day; more is far beyond honest use. */
     static final int DAILY_LIMIT = 20;
 
@@ -24,9 +24,9 @@ class ReportService {
         this.authentication = authentication;
     }
 
-    enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, INVALID, RATE_LIMITED }
+    public enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, INVALID, RATE_LIMITED }
 
-    record Submission(UUID targetId, String reason, String note, UUID tableId, UUID messageId) {
+    public record Submission(UUID targetId, String reason, String note, UUID tableId, UUID messageId) {
         String canonical() {
             return targetId + "|" + reason + "|" + note.length() + ":" + note + "|" + tableId + "|" + messageId;
         }

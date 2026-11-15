@@ -59,4 +59,13 @@ describe("sign-in", () => {
     renderSignIn();
     expect(await screen.findByLabelText("Password")).toBeInTheDocument();
   });
+
+  it("keeps checking for the demo while the backend is unreachable", async () => {
+    vi.mocked(demoAccounts)
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValue({ main: [account("pro", 3)], others: [] });
+    renderSignIn();
+    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+    expect(await screen.findByText("Pick an account", {}, { timeout: 5000 })).toBeInTheDocument();
+  });
 });

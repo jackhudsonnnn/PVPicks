@@ -34,6 +34,7 @@ import {
 } from "@/features/social";
 import { listTables, type Table } from "@/features/tables/api";
 import { CreateTableDialog } from "./create-table-dialog";
+import { LoadingList } from "@/components/loading";
 
 type Props = { user: User; expire: () => void };
 
@@ -80,7 +81,7 @@ export function TableCards({ user, expire }: Props) {
       />
       {invites.isError && <p role="alert">{backendErrorMessage(invites.error)}</p>}
       {tables.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading tables…</p>
+        <LoadingList label="Loading tables" rows={2} rowClassName="h-20" />
       ) : tables.isError ? (
         <p role="alert">{backendErrorMessage(tables.error)}</p>
       ) : tables.data.length === 0 && pending.length === 0 ? (

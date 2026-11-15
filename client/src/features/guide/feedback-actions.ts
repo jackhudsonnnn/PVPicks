@@ -2,8 +2,6 @@ import { z } from "zod";
 import { mutationRequest } from "@/lib/api-client";
 import { useRetryableMutation } from "@/lib/mutation";
 
-export const FEEDBACK_SENT = "Thanks, it's in.";
-
 const intentSchema = z.object({
   kind: z.enum(["mode", "perk", "gif", "bug", "other"]),
   text: z.string().min(1).max(4000),
@@ -20,7 +18,7 @@ export function useFeedbackActions(userId: string, expire: () => void) {
     checkDescription: "nothing: feedback can't be listed yet, so retrying is the safe choice",
     execute: async (intent, key) => {
       await mutationRequest("/feedback", "POST", key, intent);
-      return FEEDBACK_SENT;
+      // The form shows its own thank-you, so no toast.
     },
   });
 }

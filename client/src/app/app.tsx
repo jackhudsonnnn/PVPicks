@@ -11,16 +11,19 @@ import { FriendsPage } from "@/features/social";
 import { GuidePage } from "@/features/guide";
 import { PreferencesPage } from "@/features/preferences";
 import { AppShell } from "./shell";
-import { DevPage } from "@/features/devdata";
+import { DevPage, resetDemo } from "@/features/devdata";
 import { TicketsPage } from "@/features/bets";
 import { RealtimeProvider, useRealtimeFeed } from "@/lib/realtime";
 import { personalFeed } from "@/lib/realtime-connection";
 import { sessionKey, tablesKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import { LoadingScreen } from "@/components/loading";
+import { toast } from "sonner";
 
 export function App() {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
   const session = useQuery({
     queryKey: sessionKey,
     queryFn: ({ signal }) => currentUser(signal),
@@ -67,8 +70,26 @@ export function App() {
     await clearSession();
   }
 
-  if (session.isPending)
-    return <p className="p-6 text-sm text-muted-foreground">Checking your session…</p>;
+  /**
+   * The demo reset ends every session a second in, then seeds for several more. The signed-in views step aside
+   * for the whole reset, so nothing reads as "session expired" halfway through.
+   */
+  async function resetWorld() {
+    setResetting(true);
+    try {
+      await resetDemo();
+      await clearSession("The demo world was reset. Pick an account.");
+    } catch (error) {
+      toast.error(`The reset didn't finish: ${backendErrorMessage(error)}`);
+      await queryClient.invalidateQueries({ queryKey: sessionKey });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  if (resetting)
+    return <LoadingScreen label="Resetting the demo world" message="Resetting the demo world" />;
+  if (session.isPending) return <LoadingScreen label="Checking your session" />;
   if (session.isError) {
     return (
       <main className="mx-auto max-w-lg space-y-4 p-6">
@@ -88,6 +109,7 @@ export function App() {
       logout={logout}
       expire={() => void clearSession("Your session expired. Please sign in again.")}
       endSession={(message) => void clearSession(message)}
+      resetWorld={() => void resetWorld()}
     />
   );
 }
@@ -97,12 +119,15 @@ function TableWorkspace({
   logout,
   expire,
   endSession,
+  resetWorld,
 }: {
   user: User;
   logout: () => Promise<void>;
   expire: () => void;
   /** Signs out with a notice (account deleted). */
   endSession: (message: string) => void;
+  /** Resets the demo world (Dev page); ends the session when done. */
+  resetWorld: () => void;
 }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -177,7 +202,7 @@ function TableWorkspace({
             ) : archiveId ? (
               <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
             ) : pathname === "/dev" ? (
-              <DevPage user={user} endSession={endSession} />
+              <DevPage user={user} onReset={resetWorld} />
             ) : pathname === "/tickets" ? (
               <TicketsPage user={user} expire={expire} />
             ) : (

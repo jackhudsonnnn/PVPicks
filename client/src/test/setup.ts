@@ -1,5 +1,16 @@
-import { vi } from "vitest";
+import { createElement } from "react";
+import { render } from "@testing-library/react";
+import { toast, Toaster } from "sonner";
+import { afterEach, beforeEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
+
+// The app's toasts, so tests can find what users are told (outcomes are toasts, not inline text).
+beforeEach(() => {
+  render(createElement(Toaster));
+});
+afterEach(() => {
+  toast.dismiss?.();
+});
 
 globalThis.ResizeObserver = class {
   observe() {}

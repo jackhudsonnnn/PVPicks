@@ -28,23 +28,30 @@ class StatsPoller {
     static final int BATCH = 2;
     static final Duration FINAL_REFRESH = Duration.ofMinutes(15);
     static final Duration FINAL_WINDOW = Duration.ofHours(6);
-    static final Duration PLAYER_REFRESH = Duration.ofHours(24);
+    /** While games are live and a refresh is due, every this-many-th request goes to it, so it can't starve. */
+    static final int PLAYER_SHARE = 4;
     private static final Duration RATE_LIMIT_PAUSE = Duration.ofMinutes(1);
 
     private final JdbcTemplate jdbc;
     private final BallDontLieFeed feed;
     private final StatsSync sync;
     private final Clock clock;
+    /** How often each league's active-player list is refreshed (every page, so every response is recorded). */
+    private final Duration playersInterval;
     private final Map<String, Instant> lastFetched = new HashMap<>();
     /** A league's active-list refresh in progress: where it started and the next page. */
     private final Map<League, Refresh> refreshing = new EnumMap<>(League.class);
     private Instant pausedUntil = Instant.MIN;
+    private long runs;
 
-    StatsPoller(JdbcTemplate jdbc, BallDontLieFeed feed, StatsSync sync, Clock clock) {
+    StatsPoller(JdbcTemplate jdbc, BallDontLieFeed feed, StatsSync sync, Clock clock,
+            @org.springframework.beans.factory.annotation.Value("${pvpicks.sports.players.interval:PT10M}")
+            Duration playersInterval) {
         this.jdbc = jdbc;
         this.feed = feed;
         this.sync = sync;
         this.clock = clock;
+        this.playersInterval = playersInterval;
     }
 
     record Candidate(String id, League league, String providerId, boolean live) {}
@@ -57,7 +64,8 @@ class StatsPoller {
         if (now.isBefore(pausedUntil)) return;
         try {
             List<Candidate> games = batch(candidates(now), lastFetched, now);
-            if (!games.isEmpty()) {
+            boolean playersTurn = ++runs % PLAYER_SHARE == 0 && playersDue(now);
+            if (!games.isEmpty() && !playersTurn) {
                 fetchGames(games, now);
             } else {
                 refreshPlayers(now);
@@ -76,12 +84,24 @@ class StatsPoller {
         for (Candidate game : games) sync.recordGame(game.id(), lines.get(game.providerId()), now);
     }
 
+    private boolean playersDue(Instant now) {
+        if (!refreshing.isEmpty()) return true;
+        for (League league : League.values()) {
+            if (refreshDue(sync.playersRefreshedAt(league), now, playersInterval)) return true;
+        }
+        return false;
+    }
+
+    /** Due when the last full refresh started at least {@code interval} ago (or never ran). */
+    static boolean refreshDue(Instant last, Instant now, Duration interval) {
+        return last == null || !last.plus(interval).isAfter(now);
+    }
+
     private void refreshPlayers(Instant now) throws GameFeed.FeedUnavailable {
         for (League league : League.values()) {
             Refresh refresh = refreshing.get(league);
             if (refresh == null) {
-                Instant last = sync.playersRefreshedAt(league);
-                if (last != null && last.isAfter(now.minus(PLAYER_REFRESH))) continue;
+                if (!refreshDue(sync.playersRefreshedAt(league), now, playersInterval)) continue;
                 refresh = new Refresh(now, null);
             }
             BallDontLieFeed.PlayerPage page = feed.activePlayers(league, refresh.cursor());

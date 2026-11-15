@@ -18,6 +18,7 @@ import { tableChatFeed } from "@/lib/realtime-connection";
 import { useBackendChat } from "./use-chat";
 import { MessageRow } from "./messages";
 import { Composer } from "./composer";
+import { LoadingChat } from "@/components/loading";
 
 /** A table's chat: paged history, text and GIF sending, reactions and read position, updated live. */
 export function TableChat({
@@ -76,7 +77,7 @@ export function TableChat({
   );
   const scroller = useChatScroll(state.messages);
 
-  if (state.status === "loading") return <p className="p-4">Loading chat…</p>;
+  if (state.status === "loading") return <LoadingChat />;
   if (state.status === "error") {
     return (
       <div className="space-y-3 p-4">

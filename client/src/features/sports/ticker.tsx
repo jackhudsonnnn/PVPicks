@@ -4,6 +4,7 @@ import type { User } from "@/features/people";
 import { tickerStatus, type TickerGame } from "./api";
 import { useTicker } from "./use-ticker";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { LoadingChips } from "@/components/loading";
 
 /**
  * Sports-only score strip. Refreshes when the realtime ticker feed says scores changed and once a minute as a
@@ -16,8 +17,14 @@ export function ScoreTicker({ user, expire }: { user: User; expire: () => void }
   const count = query.data?.length ?? 0;
 
   let notice: string | null = null;
-  if (query.isPending) notice = "Loading scores…";
-  else if (query.isError || query.data === null) notice = "Live scores are unavailable right now.";
+  if (query.isPending) {
+    return (
+      <section aria-label="Live games" className="flex h-10 items-center border-b bg-sidebar">
+        <LoadingChips label="Loading scores" />
+      </section>
+    );
+  }
+  if (query.isError || query.data === null) notice = "Live scores are unavailable right now.";
   else if (count === 0) notice = "No NBA or NFL games today.";
 
   return (

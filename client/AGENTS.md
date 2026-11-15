@@ -91,6 +91,9 @@
 - Mutations go through `useRetryableMutation` (`lib/mutation.ts`), via one action hook per area (each feature's `actions.ts`).
   - An uncertain action's idempotency key is saved per user in localStorage until it is retried or cleared.
   - `ActionStatus` (`components/action-status.tsx`) is the one "outcome unknown" box: retry the same action, or clear it after checking. Every area passes its own wording; don't write another.
+  - Action outcomes are toasts, not page text: `useRetryableMutation` toasts a known error, and toasts success only when `execute` returns a note worth saying (otherwise the refreshed screen is the confirmation). Screens with their own "done" state read `succeeded`. Only the uncertain-outcome box stays inline, because it needs its buttons.
+  - Loading never shows text: use `components/loading.tsx` (`LoadingList`, `LoadingPage`, `LoadingChat`, `LoadingChips`, `LoadingText`, `LoadingScreen`, and `Spinner` in busy buttons), shaped like what's coming. Don't show the empty state while loading; it claims there's nothing.
+  - Tests render the real toaster (`src/test/setup.ts`), so assert toast text with `findByText` like any other text.
   - Use one action hook instance per page: two instances with the same storage key in one tab do not sync.
 
   Why: retries reuse one key across tabs, so an uncertain action can't be applied twice.

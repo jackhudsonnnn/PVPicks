@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class U2PickResolutionService {
-    enum Outcome { RESOLVED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
+public class U2PickResolutionService {
+    public enum Outcome { RESOLVED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
 
     static class Closed extends RuntimeException {}
     static class InvalidChoice extends RuntimeException {}

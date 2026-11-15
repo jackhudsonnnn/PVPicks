@@ -8,6 +8,7 @@ import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { searchGifs, useGifs } from "./gifs";
 import { textProblem } from "./model";
+import { LoadingList } from "@/components/loading";
 
 export function Composer({
   canText,
@@ -120,9 +121,7 @@ function GifPicker({ disabled, onPick }: { disabled: boolean; onPick: (gifId: st
         )}
         <ScrollContainer isVisible={false} className="grid h-64 grid-cols-2 content-start gap-1.5">
           {catalog.isPending ? (
-            <p className="col-span-2 py-10 text-center text-sm text-muted-foreground">
-              Loading GIFs…
-            </p>
+            <LoadingList label="Loading GIFs" rows={3} rowClassName="h-24" className="col-span-2" />
           ) : catalog.isError ? (
             <p role="alert" className="col-span-2 py-10 text-center text-sm">
               GIFs are unavailable right now.

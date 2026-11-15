@@ -43,7 +43,8 @@ export function DemoPicker({
     <div className="space-y-4 rounded-2xl border bg-surface p-5">
       <h1 className="font-display text-2xl font-extrabold uppercase">Pick an account</h1>
       <p className="text-sm text-muted-foreground">
-        Demo world: sign in as anyone, no password. Reset it from the Dev page.
+        Demo world: sign in as anyone. If something asks for a password, it's “demo”. Reset it from
+        the Dev page.
       </p>
       <ul className="space-y-2">
         {initial.main.map((account) => (

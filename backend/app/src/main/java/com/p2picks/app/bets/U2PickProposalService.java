@@ -16,14 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class U2PickProposalService {
+public class U2PickProposalService {
     private static final String OPERATION = "bet.u2pick.propose.v1";
 
-    enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
-    record Result(Outcome outcome, UUID betId) {}
-    record Proposal(U2PickDefinition definition, ObjectNode config, long wagerCents, int durationSec,
+    public enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
+    public record Result(Outcome outcome, UUID betId) {}
+    public record Proposal(U2PickDefinition definition, ObjectNode config, long wagerCents, int durationSec,
                     boolean forFun, U2PickSettler.Rule settlerRule) {
-        Proposal {
+        public Proposal {
             Objects.requireNonNull(definition, "definition");
             Objects.requireNonNull(config, "config");
             if (wagerCents < 0 || (!forFun && (wagerCents < 10 || wagerCents > 1000))) {

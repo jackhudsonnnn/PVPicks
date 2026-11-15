@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Service;
 
@@ -22,10 +24,25 @@ public class PasswordlessSignIn {
 
     private final DevelopmentSessions sessions;
     private final CsrfTokenRepository csrfTokens;
+    private final JwtDecoder decoder;
 
-    PasswordlessSignIn(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens) {
+    PasswordlessSignIn(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JwtDecoder decoder) {
         this.sessions = sessions;
         this.csrfTokens = csrfTokens;
+        this.decoder = decoder;
+    }
+
+    /**
+     * A fresh session for an account, as the decoded token a signed-in request would carry: what the demo's bots act
+     * with, so every service checks them like any player. Null when there's no such active account.
+     */
+    public Jwt session(UUID userId) {
+        try {
+            String token = sessions.signInWithoutPassword(userId, null);
+            return token == null ? null : decoder.decode(token);
+        } catch (DevelopmentSessions.Frozen frozen) {
+            return null;
+        }
     }
 
     /** Starts a session for the account, replacing the caller's current one, and rotates the CSRF token. */

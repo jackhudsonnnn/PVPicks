@@ -12,8 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Applies the feed's automatic result to one Pending sports bet (domain rules, "Sports outcomes"). */
 @Service
-class SportsResolutionService {
-    enum Outcome { RESOLVED, WAITING, SKIPPED }
+public class SportsResolutionService {
+    public enum Outcome { RESOLVED, WAITING, SKIPPED }
 
     private final JdbcTemplate jdbc;
     private final SportsBetLoader loader;

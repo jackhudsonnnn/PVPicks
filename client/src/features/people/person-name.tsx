@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { backendErrorMessage } from "@/lib/api-client";
 import { getProfile, type User } from "./api";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { LoadingText } from "@/components/loading";
 
 export function PersonName({
   id,
@@ -36,7 +37,7 @@ function ProfileName({
   });
   const unauthorized = useExpireOnUnauthorized([query.error], expire);
 
-  if (query.isPending) return <>Loading profile…</>;
+  if (query.isPending) return <LoadingText />;
   if (query.isError) {
     return (
       <span>

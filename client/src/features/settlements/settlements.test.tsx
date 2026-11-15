@@ -162,8 +162,9 @@ describe("settle-ups", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Retry same action" }));
     await waitFor(() => expect(transitionGroup).toHaveBeenCalledTimes(2));
     expect(vi.mocked(transitionGroup).mock.calls[1]?.[3]).toBe(key);
-    expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
-    expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();
+    await waitFor(() =>
+      expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull(),
+    );
   });
 
   it("refuses an expired retry and keeps other actions blocked", async () => {
@@ -236,7 +237,7 @@ describe("settle-ups", () => {
     renderScreen();
     const dialog = await openReceipts();
     fireEvent.click(await dialog.findByRole("button", { name: "I've reviewed this" }));
-    expect(await dialog.findByRole("alert")).toHaveTextContent("changed");
+    expect(await screen.findByText(/receipt or warning changed/)).toBeInTheDocument();
     await waitFor(() => expect(listSettlementGroups).toHaveBeenCalledTimes(2));
     expect(acknowledgeReview).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(`p2picks:settlement-action:${user.id}`)).toBeNull();

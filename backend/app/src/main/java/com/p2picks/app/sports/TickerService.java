@@ -39,14 +39,17 @@ class TickerService {
         boolean live = fresh != null && fresh >= League.values().length;
         LocalDate today = LocalDate.ofInstant(now, ZoneId.of(GameSync.NEW_YORK));
         // Dev games (dev scenarios and chunks) don't depend on the real feed, so they show even when it's stale;
-        // with no dev games, a stale feed still reads as unavailable rather than "no games".
+        // with no dev games, a stale feed still reads as unavailable rather than "no games". Dev games drop off an
+        // hour after they finish, since the demo's looping games finish many times a day.
         List<TickerGame> games = jdbc.query("""
                 SELECT * FROM games
                 WHERE ((starts_at AT TIME ZONE '%1$s')::date = ?
                        OR (status = 'LIVE' AND (starts_at AT TIME ZONE '%1$s')::date < ?))
                   AND (? OR provider_id LIKE 'DEV-%%')
+                  AND NOT (provider_id LIKE 'DEV-%%' AND status = 'FINAL' AND final_at < ?)
                 ORDER BY status = 'LIVE' DESC, starts_at, id
-                """.formatted(GameSync.NEW_YORK), (rs, row) -> game(rs), today, today, live);
+                """.formatted(GameSync.NEW_YORK), (rs, row) -> game(rs), today, today, live,
+                Timestamp.from(now.minus(Duration.ofHours(1))));
         return live || !games.isEmpty() ? Optional.of(games) : Optional.empty();
     }
 

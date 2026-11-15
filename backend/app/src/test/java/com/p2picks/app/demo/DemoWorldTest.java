@@ -31,7 +31,10 @@ class DemoWorldTest extends IntegrationTestSupport {
         Flyway.configure().dataSource(source).locations("classpath:db/migration").load().migrate();
         demo = new JdbcTemplate(source);
         transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
-        reset = new DemoReset(demo, passwords, Clock.systemUTC());
+        var none = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        reset = new DemoReset(demo, new DataSourceTransactionManager(source), passwords, Clock.systemUTC(),
+                none.getBeanProvider(DemoBots.class), none.getBeanProvider(DemoHistory.class),
+                none.getBeanProvider(DemoGames.class));
     }
 
     @AfterEach
@@ -53,7 +56,7 @@ class DemoWorldTest extends IntegrationTestSupport {
 
     @Test
     void seedsTheMainAccountsAsDescribed() {
-        DemoReset.Summary summary = transaction.execute(status -> reset.reset());
+        DemoReset.Summary summary = reset.reset();
         assertThat(summary.users()).isEqualTo(DemoRoster.SIZE + 4);
         assertThat(count("SELECT count(*) FROM users")).isEqualTo(DemoRoster.SIZE + 4);
 
@@ -85,11 +88,14 @@ class DemoWorldTest extends IntegrationTestSupport {
                 """)).as("blocks remove follows").isZero();
         assertThat(count("SELECT count(*) FROM tables WHERE char_length(name) > 14")).isZero();
         assertThat(count("SELECT count(*) FROM users WHERE username = 'admin' AND role = 'ADMIN'")).isEqualTo(1);
+        assertThat(passwords.matches(DemoWorld.PASSWORD, demo.queryForObject(
+                "SELECT password_hash FROM users WHERE username = 'pro'", String.class)))
+                .as("the shared demo password works for flows that ask for one").isTrue();
     }
 
     @Test
     void resetWipesAppDataKeepsSportsAndRebuildsTheSameWorld() {
-        transaction.execute(status -> reset.reset());
+        reset.reset();
         demo.update("""
                 INSERT INTO games (id, league, provider_id, starts_at, status, home_abbreviation, home_name,
                                    home_city, away_abbreviation, away_name, away_city, observed_at)
@@ -100,7 +106,7 @@ class DemoWorldTest extends IntegrationTestSupport {
                 UUID.randomUUID(), DemoWorld.PRO);
         demo.update("DELETE FROM follows WHERE follower_id = ?", DemoWorld.PRO);
 
-        transaction.execute(status -> reset.reset());
+        reset.reset();
         assertThat(count("SELECT count(*) FROM auth_sessions")).as("everyone signed out").isZero();
         assertThat(count("SELECT count(*) FROM games WHERE id = 'NBA-KEEP'")).as("sports kept").isEqualTo(1);
         assertThat(friends(DemoWorld.PRO)).isEqualTo(DemoWorld.PRO_FRIENDS);

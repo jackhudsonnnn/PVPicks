@@ -2,12 +2,12 @@ import { HowToPlay } from "./guide-page";
 import { FeedbackSection } from "./feedback-form";
 import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
-import { FEEDBACK_SENT, useFeedbackActions } from "./feedback-actions";
+import { useFeedbackActions } from "./feedback-actions";
 
 /** The How to play guide, with its feedback form sending to the backend. */
 export function GuidePage({ user, expire }: { user: User; expire: () => void }) {
   const actions = useFeedbackActions(user.id, expire);
-  const sent = actions.message === FEEDBACK_SENT && !actions.pending;
+  const sent = actions.succeeded && !actions.pending;
   return (
     <HowToPlay
       feedback={

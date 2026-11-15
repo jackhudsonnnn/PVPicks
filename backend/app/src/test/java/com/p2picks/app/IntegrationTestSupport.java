@@ -57,7 +57,7 @@ import org.testcontainers.utility.DockerImageName;
 @AutoConfigureMockMvc
 @Import(IntegrationTestSupport.AdminProbeConfiguration.class)
 public abstract class IntegrationTestSupport {
-    protected static final PostgreSQLContainer<?> postgres =
+    public static final PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:16-alpine");
 
     private static final GenericContainer<?> redis =
@@ -75,6 +75,17 @@ public abstract class IntegrationTestSupport {
 
     @DynamicPropertySource
     static void serviceProperties(DynamicPropertyRegistry registry) {
+        registerServices(registry);
+        // The demo world would seed (and its reset would wipe) the shared test database; DemoWorldTest and
+        // DemoBotsIntegrationTest exercise it on databases of their own.
+        registry.add("pvpicks.demo.enabled", () -> "false");
+    }
+
+    /**
+     * The shared containers and test-safe settings, for a test that needs its own context (and so can't extend
+     * this class without the two property sources competing): call it first, then add overrides.
+     */
+    public static void registerServices(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
@@ -87,9 +98,6 @@ public abstract class IntegrationTestSupport {
         // the realtime consumer cannot miss an event published while it is still joining.
         registry.add("pvpicks.outbox-relay.enabled", () -> "false");
         registry.add("pvpicks.outbox-cleanup.enabled", () -> "false");
-        // The demo world would seed (and its reset would wipe) the shared test database; DemoWorldTest
-        // exercises it on a database of its own.
-        registry.add("pvpicks.demo.enabled", () -> "false");
         // Never call the real sports provider from tests, even if a key is exported in the shell.
         registry.add("pvpicks.sports.balldontlie.api-key", () -> "");
         registry.add("pvpicks.realtime.offset-reset", () -> "earliest");

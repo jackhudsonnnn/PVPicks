@@ -29,8 +29,12 @@ final class JwtCookieFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String path = request.getServletPath();
-        if (path.equals("/auth/login") || path.equals("/auth/csrf") || path.equals("/actuator/health")) {
+        // The path within the app (servletPath is empty under some dispatch setups, e.g. MockMvc).
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        // Ways in don't need the old session, and a stale one (e.g. after the demo reset wiped sessions) mustn't
+        // block them: sign-in replaces it.
+        if (path.equals("/auth/login") || path.equals("/auth/csrf") || path.equals("/actuator/health")
+                || path.equals("/dev/demo/accounts") || path.equals("/dev/demo/sign-in")) {
             chain.doFilter(request, response);
             return;
         }

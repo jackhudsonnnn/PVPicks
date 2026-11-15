@@ -19,8 +19,10 @@ play-by-play, so they stay "Coming soon" (ADR 0005).
 | NFL | `GET /nfl/v1/stats?game_ids[]=…&per_page=100` | Only players who recorded something; stats a player didn't record are `null`. |
 
 Active players come from `GET /v1/players/active` and
-`GET /nfl/v1/players/active`. They're refreshed at most once a day, and
-players seen in a game are added too.
+`GET /nfl/v1/players/active`. Each league's list is re-fetched every
+`PVPICKS_SPORTS_PLAYERS_INTERVAL` (default 10 minutes), and players seen in a
+game are added too. Every page is recorded like any other response. A full
+refresh is about 25 requests (NBA about 5 pages, NFL about 20).
 
 ## Polling
 
@@ -33,7 +35,12 @@ this order:
    in both leagues.
 2. Finished games, every 15 minutes for six hours after their start, so late
    stat corrections land.
-3. Otherwise, the next page of a league's active-player list (daily).
+3. Otherwise, the next page of a league's active-player list, when a
+   refresh is due or in progress. While games are live and a refresh is due,
+   every fourth request goes to it instead, so a game day can't starve it.
+   On the trial's 5 requests a minute that's a full refresh about every half
+   hour during games (and live stats about a quarter slower); on All-Star it
+   takes a few minutes.
 
 A rate-limited response pauses polling for a minute. Scores and player stats
 share the plan's request budget. With the 5-requests-a-minute trial, that's

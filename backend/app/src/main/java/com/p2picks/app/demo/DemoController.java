@@ -30,11 +30,14 @@ class DemoController {
     private final JdbcTemplate jdbc;
     private final PasswordlessSignIn signIn;
     private final DemoReset reset;
+    private final org.springframework.beans.factory.ObjectProvider<DemoBots> bots;
 
-    DemoController(JdbcTemplate jdbc, PasswordlessSignIn signIn, DemoReset reset) {
+    DemoController(JdbcTemplate jdbc, PasswordlessSignIn signIn, DemoReset reset,
+            org.springframework.beans.factory.ObjectProvider<DemoBots> bots) {
         this.jdbc = jdbc;
         this.signIn = signIn;
         this.reset = reset;
+        this.bots = bots;
     }
 
     /** The main accounts, then demo users matching {@code q} (by username prefix), at most 20. */
@@ -80,16 +83,24 @@ class DemoController {
         };
     }
 
-    /** What the demo world holds now; the Dev page shows its Reset section when this answers. */
+    /** What the demo world holds now, and what the bots have done; the Dev page shows its section when this answers. */
     @GetMapping("/dev/demo")
     ResponseEntity<?> status() {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(jdbc.queryForObject("""
+        DemoReset.Summary world = jdbc.queryForObject("""
                 SELECT (SELECT count(*) FROM users WHERE status = 'ACTIVE') AS users,
                        (SELECT count(*) FROM follows) AS follows,
                        (SELECT count(*) FROM blocks) AS blocks,
                        (SELECT count(*) FROM tables WHERE archived_at IS NULL) AS tables
                 """, (rs, row) -> new DemoReset.Summary(rs.getInt("users"), rs.getInt("follows"),
-                        rs.getInt("blocks"), rs.getInt("tables"))));
+                        rs.getInt("blocks"), rs.getInt("tables")));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("users", world.users());
+        body.put("follows", world.follows());
+        body.put("blocks", world.blocks());
+        body.put("tables", world.tables());
+        DemoBots running = bots.getIfAvailable();
+        body.put("bots", running == null ? null : running.status());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
     }
 
     /** Wipes app data and reseeds the demo world; every session ends, the caller's included. */

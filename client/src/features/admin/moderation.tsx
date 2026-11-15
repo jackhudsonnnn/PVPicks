@@ -18,6 +18,7 @@ import {
   type ModerationPerson,
   type ModerationReport,
 } from "./api";
+import { LoadingList } from "@/components/loading";
 
 const REASONS: Record<ModerationReport["reason"], string> = {
   harassment: "Harassment",
@@ -78,7 +79,7 @@ export function Moderation({ user }: { user: User }) {
           />
         </div>
         {reports.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading reports…</p>
+          <LoadingList label="Loading reports" rows={3} rowClassName="h-24" />
         ) : reports.isError ? (
           <p role="alert">{backendErrorMessage(reports.error)}</p>
         ) : reports.data.length === 0 ? (
@@ -143,7 +144,7 @@ export function Moderation({ user }: { user: User }) {
           Strikes and frozen accounts
         </h2>
         {flagged.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingList label="Loading flagged accounts" rows={2} rowClassName="h-12" />
         ) : flagged.isError ? (
           <p role="alert">{backendErrorMessage(flagged.error)}</p>
         ) : flagged.data.length === 0 ? (

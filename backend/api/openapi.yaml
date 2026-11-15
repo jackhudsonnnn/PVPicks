@@ -4043,6 +4043,20 @@ components:
         follows: {type: integer}
         blocks: {type: integer}
         tables: {type: integer, description: Unarchived tables.}
+        bots:
+          description: >-
+            GET only. What the bots have done since they started or the last
+            reset; null when bots are off.
+          type: [object, 'null']
+          required: [since, lastTick, queued, done]
+          properties:
+            since: {type: string, format: date-time}
+            lastTick: {type: [string, 'null'], format: date-time}
+            queued: {type: integer}
+            done:
+              type: object
+              description: Count per action and outcome, e.g. "pick updated".
+              additionalProperties: {type: integer}
     DemoAccount:
       type: object
       required: [id, username, hue, role, frozen]

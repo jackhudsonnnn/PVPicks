@@ -10,8 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class DebtCapService {
-    enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED }
+public class DebtCapService {
+    public enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED }
     static class OutstandingDebt extends RuntimeException {}
 
     private final JdbcTemplate jdbc;

@@ -107,8 +107,11 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         jdbc.update("UPDATE users SET status = 'FROZEN' WHERE id = ?", userId);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> developmentSessions.signInWithoutPassword(userId, null))
                 .isInstanceOf(DevelopmentSessions.Frozen.class);
-        // The demo's picker endpoints exist only with the demo on; here they're open but absent.
+        // The demo's picker endpoints exist only with the demo on; here they're open but absent. A stale session
+        // cookie (e.g. after a demo reset wiped sessions) doesn't turn them into a 401.
         mvc.perform(get("/dev/demo/accounts")).andExpect(status().isNotFound());
+        mvc.perform(get("/dev/demo/accounts").cookie(new Cookie("session", "stale.token.value")))
+                .andExpect(status().isNotFound());
     }
 
     @Test

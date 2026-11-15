@@ -26,13 +26,16 @@ export function ActionStatus({
   /** What to check before clearing, e.g. "Check your tables first." */
   checkText: string;
 }) {
-  if (!actions.storageError && !actions.message && !actions.pending) return null;
+  // While this tab is sending the action, its saved copy is just bookkeeping: the outcome is only unknown once
+  // the request ends without an answer (or the page loads with one left over).
+  const unknown = !!actions.pending && !actions.busy;
+  if (!actions.storageError && !actions.message && !unknown) return null;
   const blocked = actions.busy || !!actions.storageError;
   return (
     <div className="space-y-2">
       {actions.storageError && <p role="alert">{actions.storageError} Actions are disabled.</p>}
       {actions.message && <p role="alert">{actions.message}</p>}
-      {actions.pending ? (
+      {unknown ? (
         <div className="space-y-2 rounded-lg border bg-surface p-3">
           <p>
             {pendingText} Retry the same action before making other changes; it may have been

@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-final class U2PickSettler {
+public final class U2PickSettler {
     public enum Rule { ANYONE, NON_PARTICIPANTS, HOSTS, ME }
 
     private U2PickSettler() {}

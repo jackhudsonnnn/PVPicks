@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { BackendError, backendErrorMessage } from "./api-client";
 
@@ -15,7 +16,10 @@ export function useRetryableMutation<Intent>({
 }: {
   storageKey: string;
   intentSchema: z.ZodType<Intent>;
-  /** Performs the action; may return a message to show on success instead of the default. */
+  /**
+   * Performs the action; may return a note worth telling the user (shown as a toast). Without one, success is
+   * silent: the refreshed screen shows what changed.
+   */
   execute: (intent: Intent, key: string) => Promise<string | void>;
   refresh: () => Promise<void>;
   expire: () => void;
@@ -53,6 +57,7 @@ export function useRetryableMutation<Intent>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
   const [message, setMessage] = useState<string | null>(null);
+  const [succeeded, setSucceeded] = useState(false);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
 
@@ -80,10 +85,12 @@ export function useRetryableMutation<Intent>({
     locked.current = true;
     setBusy(true);
     setMessage(null);
+    setSucceeded(false);
     try {
       const note = await execute(pending.intent, pending.key);
       if (persist(null)) {
-        setMessage(note || "Action completed. Refreshing.");
+        setSucceeded(true);
+        if (note) toast.success(note);
         void refresh();
       }
     } catch (error) {
@@ -99,7 +106,7 @@ export function useRetryableMutation<Intent>({
         } else if (persist(null)) {
           if (error.status === 401) expire();
           else {
-            setMessage(errorMessage(error));
+            toast.error(errorMessage(error));
             void refresh();
           }
         } else if (error.status === 401) expire();
@@ -115,8 +122,13 @@ export function useRetryableMutation<Intent>({
   }
 
   return {
-    /** Hides the last result message. */
-    dismiss: () => setMessage(null),
+    /** Hides the last result (message, and the success flag). */
+    dismiss: () => {
+      setMessage(null);
+      setSucceeded(false);
+    },
+    /** The last action went through; for screens that show their own "done" state. */
+    succeeded,
     pending: saved.pending,
     storageError: saved.error,
     message,
@@ -131,9 +143,7 @@ export function useRetryableMutation<Intent>({
     },
     clearAfterReview: () => {
       if (!busy && saved.pending && persist(null)) {
-        setMessage(
-          `Saved action cleared. Refresh and verify ${checkDescription} before making changes.`,
-        );
+        toast(`Saved action cleared. Check ${checkDescription} before making changes.`);
         void refresh();
       }
     },

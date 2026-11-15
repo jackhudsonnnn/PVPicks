@@ -72,9 +72,10 @@ current code, not an estimated delivery date.
 - See the <a href="/docs/source/frontend-roadmap.md" download>frontend roadmap</a>
   for integration work.
 
-- Demo world (planned, being built; see [Demo world](/demo-data)): about 200
-  demo users with behavior profiles, live bots, passwordless dev sign-in,
-  seeded personas and a Reset on the Dev page.
+- Demo world (implemented; see [Demo world](/demo-data)): 200 demo users
+  with behavior profiles played by bots, seeded main accounts and history,
+  always-live demo games, passwordless dev sign-in and a Reset on the Dev
+  page. Not yet: player stats on demo games.
 
 ## 6. Security, operations & launch — planned
 

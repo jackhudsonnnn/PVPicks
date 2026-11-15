@@ -213,7 +213,8 @@ describe("U2Pick betting", () => {
         settledBy: "hosts",
       },
     );
-    expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
+    // Success is silent; the action is done once its saved retry is cleared.
+    await waitFor(() => expect(localStorage.getItem(`p2picks:bet-action:${user.id}`)).toBeNull());
   });
 
   it("proposes a Total Disaster on a live game; the server builds the question", async () => {
@@ -354,7 +355,8 @@ describe("U2Pick betting", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Retry same action" }));
     await waitFor(() => expect(mutationRequest).toHaveBeenCalledTimes(2));
     expect(vi.mocked(mutationRequest).mock.calls[1]?.[2]).toBe(key);
-    expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
+    // Success is silent; the action is done once its saved retry is cleared.
+    await waitFor(() => expect(localStorage.getItem(`p2picks:bet-action:${user.id}`)).toBeNull());
   });
 
   it("disables proposing and picking when betting permission is revoked", async () => {
@@ -386,7 +388,8 @@ describe("U2Pick betting", () => {
         { winningChoice: "Yes" },
       ),
     );
-    expect(await screen.findByText(/Action completed/)).toBeInTheDocument();
+    // Success is silent; the action is done once its saved retry is cleared.
+    await waitFor(() => expect(localStorage.getItem(`p2picks:bet-action:${user.id}`)).toBeNull());
     await callIt("None of these (wash)");
     await waitFor(() =>
       expect(mutationRequest).toHaveBeenLastCalledWith(

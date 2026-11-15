@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class BetLockService {
-    enum Outcome { LOCKED, NOT_DUE, ALREADY_LOCKED, NOT_FOUND }
+public class BetLockService {
+    public enum Outcome { LOCKED, NOT_DUE, ALREADY_LOCKED, NOT_FOUND }
 
     static class ParticipantsChanged extends RuntimeException {
         ParticipantsChanged() {

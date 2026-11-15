@@ -14,14 +14,14 @@ vi.mock("./api", async (importOriginal) => ({
 
 const user = { id: "123e4567-e89b-42d3-a456-426614174000", username: "dev", hue: 1 };
 
-const endSession = vi.fn();
+const onReset = vi.fn();
 
 function renderPage() {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <DevPage user={user} endSession={endSession} />
+      <DevPage user={user} onReset={onReset} />
     </QueryClientProvider>,
   );
 }
@@ -81,17 +81,21 @@ describe("dev data page", () => {
     expect(await screen.findByText(/Dev data is off/)).toBeInTheDocument();
   });
 
-  it("resets the demo world after confirming, which ends the session", async () => {
+  it("asks the app to reset the demo world only after confirming", async () => {
     vi.mocked(getDevSports).mockResolvedValue(null);
-    vi.mocked(getDemo).mockResolvedValue({ users: 204, follows: 1400, blocks: 7, tables: 18 });
+    vi.mocked(getDemo).mockResolvedValue({
+      users: 204,
+      follows: 1400,
+      blocks: 7,
+      tables: 18,
+      bots: { since: "", lastTick: "", queued: 3, done: { "pick updated": 12 } },
+    });
     renderPage();
     expect(await screen.findByText(/204 people, 18 tables/)).toBeInTheDocument();
+    expect(screen.getByText("pick updated × 12")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Reset data/ }));
-    expect(resetDemo).not.toHaveBeenCalled();
+    expect(onReset).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: "Reset" }));
-    await waitFor(() => expect(resetDemo).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(endSession).toHaveBeenCalledWith("The demo world was reset. Pick an account."),
-    );
+    await waitFor(() => expect(onReset).toHaveBeenCalled());
   });
 });

@@ -24,7 +24,7 @@ class DemoProfileTest {
     void parametersAreValidated() {
         assertThatThrownBy(() -> DemoProfile.DEFAULT.with(p -> p.joinBetChance(1.5)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> DemoProfile.DEFAULT.with(p -> p.wager(2_000, 500)))
+        assertThatThrownBy(() -> DemoProfile.DEFAULT.with(p -> p.wager(500, 100)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

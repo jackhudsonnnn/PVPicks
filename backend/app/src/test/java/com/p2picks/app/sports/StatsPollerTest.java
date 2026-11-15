@@ -45,4 +45,13 @@ class StatsPollerTest {
         assertThat(StatsPoller.batch(List.of(DONE), fetched, NOW)).isEmpty();
         assertThat(StatsPoller.batch(List.of(nfl, DONE), fetched, NOW)).containsExactly(nfl);
     }
+
+    @Test
+    void activePlayersRefreshEveryInterval() {
+        Instant now = Instant.parse("2026-11-15T03:00:00Z");
+        java.time.Duration tenMinutes = java.time.Duration.ofMinutes(10);
+        assertThat(StatsPoller.refreshDue(null, now, tenMinutes)).isTrue();
+        assertThat(StatsPoller.refreshDue(now.minusSeconds(599), now, tenMinutes)).isFalse();
+        assertThat(StatsPoller.refreshDue(now.minusSeconds(600), now, tenMinutes)).isTrue();
+    }
 }
