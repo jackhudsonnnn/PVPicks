@@ -132,9 +132,6 @@ function SettleCard({
       </div>
       <div className="flex items-baseline justify-between gap-2">
         <Net cents={net} className="scoreboard text-3xl leading-none" />
-        {summary.awaitingReceipt && (
-          <span className="text-[10px] text-status-pending">Awaiting receipt</span>
-        )}
       </div>
       {group.pendingReviewRevision && (
         <p className="text-[11px] font-semibold text-status-pending">Balance changed: review</p>
