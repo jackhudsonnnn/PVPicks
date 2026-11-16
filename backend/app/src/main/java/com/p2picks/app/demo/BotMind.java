@@ -59,7 +59,8 @@ final class BotMind {
     static String pick(Random random, DemoProfile.PickStyle style, String mode, BigDecimal line, List<String> choices,
             Map<String, Integer> counts) {
         boolean spread = mode.equals("give_and_take");
-        boolean total = mode.equals("total_disaster");
+        // Over/under modes list "over" first; it plays as the favorite.
+        boolean total = mode.equals("total_disaster") || mode.equals("prop_hunt");
         // Spread: the home side is the favorite when its line is negative. Total: "over" plays as the favorite.
         String favorite = spread ? choices.get(line != null && line.signum() < 0 ? 0 : 1)
                 : total ? choices.get(0) : mostPicked(random, choices, counts);

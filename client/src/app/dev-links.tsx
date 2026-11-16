@@ -8,10 +8,12 @@ import { cn } from "@/lib/utils";
  * backend at /docs/, which the dev server proxies, so they open on the app's own address in a new tab). Shown
  * only when the backend is a dev backend, signed in or not.
  */
-export function DevLinks({ active }: { active: boolean }) {
+export function DevLinks({ active, compact = false }: { active: boolean; compact?: boolean }) {
+  // Compact in the phone header, which has to fit 320px with the points pill and sign-out.
+  const size = compact && "size-8";
   return (
-    <span className="flex items-center">
-      <Button asChild size="icon" variant="ghost" className={cn(active && "text-primary")}>
+    <span className="flex shrink-0 items-center">
+      <Button asChild size="icon" variant="ghost" className={cn(size, active && "text-primary")}>
         <Link
           to="/dev"
           aria-label="Dev data"
@@ -21,7 +23,7 @@ export function DevLinks({ active }: { active: boolean }) {
           <FlaskConical />
         </Link>
       </Button>
-      <Button asChild size="icon" variant="ghost">
+      <Button asChild size="icon" variant="ghost" className={cn(size)}>
         <a
           href="/docs/"
           target="_blank"

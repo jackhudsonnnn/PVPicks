@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
 import { MODES, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
+import { cn } from "@/lib/utils";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 
 import {
@@ -85,7 +86,7 @@ export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
     return () => cancelAnimationFrame(id);
   }, [hash]);
   return (
-    <div className="mx-auto max-w-5xl space-y-14 px-4 py-6 md:px-8 md:py-10">
+    <div className="mx-auto max-w-5xl space-y-14 py-6 md:py-10">
       <div className="space-y-4">
         <PageHeader eyebrow="No house. No vig." title="How to play" />
         <nav aria-label="Guide sections" className="flex flex-wrap gap-2">
@@ -105,9 +106,9 @@ export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
       {/* Lifecycle, with the payout example as the last step's explainer */}
       <section id="lifecycle" className="scroll-mt-20 space-y-5">
         <h2 className="text-4xl font-black uppercase">Bet lifecycle</h2>
-        <ol className="grid gap-3 md:grid-cols-4">
+        <CardRow label="Bet lifecycle" as="ol">
           {STATUS_ORDER.map((id, i) => (
-            <li key={id} className="rounded-xl border bg-surface p-5">
+            <li key={id} className={cn(CARD, "rounded-xl border bg-surface p-5")}>
               <div className="flex items-center justify-between">
                 <StatusBadge status={STATUSES[id].id} />
                 <span className="scoreboard text-3xl text-muted-foreground/40">0{i + 1}</span>
@@ -117,7 +118,7 @@ export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
               </p>
             </li>
           ))}
-        </ol>
+        </CardRow>
 
         <div className="grid gap-6 rounded-2xl border bg-surface p-6 md:grid-cols-[1fr_auto_1fr] md:items-center md:p-8">
           <div>
@@ -181,9 +182,9 @@ function SocialSection() {
           ban it entirely, so check where you live.
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <CardRow label="Like a home game">
         {SOCIAL_POINTS.map(({ icon: Icon, title, text }) => (
-          <div key={title} className="rounded-xl border bg-surface p-5">
+          <div key={title} className={cn(CARD, "rounded-xl border bg-surface p-5")}>
             <div className="flex items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
                 <Icon className="size-4" />
@@ -193,7 +194,7 @@ function SocialSection() {
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{text}</p>
           </div>
         ))}
-      </div>
+      </CardRow>
     </section>
   );
 }
@@ -212,7 +213,7 @@ function SettlingUpSection() {
           pressure.
         </p>
       </div>
-      <IconCards items={SETTLE_POINTS} />
+      <IconCards items={SETTLE_POINTS} label="Settling up" />
     </section>
   );
 }
@@ -231,7 +232,7 @@ function QuickPicksGuide() {
           is your table, and points never move between tables.
         </p>
       </div>
-      <IconCards items={QUICK_PICK_POINTS} />
+      <IconCards items={QUICK_PICK_POINTS} label="Quick Picks" />
       <div className="flex gap-4 rounded-xl border bg-surface p-5">
         <Megaphone className="size-5 shrink-0 text-primary" />
         <div className="space-y-1">
@@ -269,16 +270,47 @@ function SafetySection() {
           or remove their account. You can follow your report's status in Preferences, Safety.
         </p>
       </div>
-      <IconCards items={SAFETY_POINTS} />
+      <IconCards items={SAFETY_POINTS} label="Safety" />
     </section>
   );
 }
 
-function IconCards({ items }: { items: { icon: typeof Flag; title: string; text: string }[] }) {
+/** A card in a {@link CardRow}: fills its share of the row, but never narrower than 15rem. */
+const CARD = "min-w-[15rem] flex-1 basis-0 snap-start";
+
+/**
+ * A row of guide cards that scrolls sideways instead of squeezing: the cards share the width while they fit at
+ * 15rem or more, then the row scrolls with snapping.
+ */
+function CardRow({
+  label,
+  as = "div",
+  children,
+}: {
+  label: string;
+  as?: "div" | "ol";
+  children: React.ReactNode;
+}) {
+  const List = as;
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <ScrollContainer isHorizontal isVisible={false} aria-label={label} className="snap-x">
+      {/* Fills the row, but never shrinks below its cards' minimum, so the row scrolls instead. */}
+      <List className="flex min-w-full gap-3 pb-2">{children}</List>
+    </ScrollContainer>
+  );
+}
+
+function IconCards({
+  items,
+  label,
+}: {
+  items: { icon: typeof Flag; title: string; text: string }[];
+  label: string;
+}) {
+  return (
+    <CardRow label={label}>
       {items.map(({ icon: Icon, title, text }) => (
-        <div key={title} className="rounded-xl border bg-surface p-5">
+        <div key={title} className={cn(CARD, "rounded-xl border bg-surface p-5")}>
           <div className="flex items-center gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
               <Icon className="size-4" />
@@ -288,7 +320,7 @@ function IconCards({ items }: { items: { icon: typeof Flag; title: string; text:
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{text}</p>
         </div>
       ))}
-    </div>
+    </CardRow>
   );
 }
 
@@ -311,9 +343,9 @@ function MoneySection() {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <CardRow label="Points and money">
         {MONEY_POINTS.map(({ icon: Icon, title, text }) => (
-          <div key={title} className="rounded-xl border bg-surface p-5">
+          <div key={title} className={cn(CARD, "rounded-xl border bg-surface p-5")}>
             <div className="flex items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
                 <Icon className="size-4" />
@@ -323,7 +355,7 @@ function MoneySection() {
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{text}</p>
           </div>
         ))}
-      </div>
+      </CardRow>
 
       <div className="flex flex-col gap-4 rounded-xl border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>

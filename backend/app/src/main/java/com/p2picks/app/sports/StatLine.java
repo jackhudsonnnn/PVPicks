@@ -46,8 +46,8 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
 
     /**
      * NFL row from {@code /nfl/v1/stats}. The provider sends null for stats a player didn't record (a known
-     * deviation from its spec), which count as zero. "Touchdowns" are the player's own rushing and receiving
-     * touchdowns; passing touchdowns are credited to the receiver's score, not the passer's.
+     * deviation from its spec), which count as zero. "Touchdowns" are every touchdown the player scored: rushing,
+     * receiving, returns, fumble recoveries and interceptions; passing touchdowns go to the receiver, not the passer.
      */
     static StatLine nfl(JsonNode row) {
         FeedPlayer player = FeedPlayer.from(League.NFL, row.path("player"), row.path("team"));
@@ -58,7 +58,11 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
         stats.put("rushing_yards", count(row, "rushing_yards"));
         stats.put("receiving_yards", count(row, "receiving_yards"));
         stats.put("receptions", count(row, "receptions"));
-        stats.put("touchdowns", count(row, "rushing_touchdowns") + count(row, "receiving_touchdowns"));
+        // Every touchdown the player scored himself (owner decision, 2026-11-15): rushing, receiving, kick and punt
+        // returns, fumble recoveries and interceptions. Passing touchdowns go to the receiver.
+        stats.put("touchdowns", count(row, "rushing_touchdowns") + count(row, "receiving_touchdowns")
+                + count(row, "kick_return_touchdowns") + count(row, "punt_return_touchdowns")
+                + count(row, "fumbles_touchdowns") + count(row, "interception_touchdowns"));
         return new StatLine(League.NFL, game, player, true, stats);
     }
 

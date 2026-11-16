@@ -22,6 +22,8 @@ export function previewText(message: PreviewMessage | null, author: string | nul
       return `${who} sent a ticket`;
     case "settlement":
       return "Points settled";
+    case "poll":
+      return `${who} started a poll: ${message.text ?? ""}`;
     case "system":
       return message.text ?? "";
   }

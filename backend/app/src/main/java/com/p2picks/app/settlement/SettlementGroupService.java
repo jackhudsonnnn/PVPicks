@@ -94,6 +94,8 @@ class SettlementGroupService {
                                 group.pendingReviewRevision(),
                                 ReceiptActions.forGroup(open, actor, other, now, reviewPending)));
                     });
+                    // People you're square with (0.00) go last; otherwise newest activity first, as read.
+                    groups.sort(Comparator.comparing(group -> group.netCents().signum() == 0));
                     return new Groups(true, player, List.copyOf(groups));
                 }, actor, UUID.fromString(jwt.getId()), includeHistory);
     }

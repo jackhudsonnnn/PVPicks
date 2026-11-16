@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Home, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
+import { BookOpen, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { ScrollContainer } from "@/components/scroll-container";
@@ -19,11 +19,61 @@ import { userKey } from "@/lib/query-keys";
 import { useDevAvailable } from "@/features/devdata";
 import { DevLinks } from "./dev-links";
 
+/** Custom SVG Icon for Home that inherits parent text color via fill="currentColor" */
+function HomeSvgIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 1000 1000"
+      fill="currentColor"
+      className={className}
+    >
+      {/* Main Upper P-Shape */}
+      <path
+        d="
+        M 10,800
+        L 235,535
+        C 265,500 305,480 355,480
+        L 740,480
+        C 790,480 830,445 830,400
+        C 830,355 790,320 740,320
+        L 240,320
+        C 210,320 185,330 168,348
+        C 172,328 182,308 198,288
+        L 285,185
+        C 312,153 345,140 390,140
+        L 790,140
+        C 905,140 990,235 990,355
+        C 990,475 905,570 790,570
+        L 365,570
+        C 335,570 312,582 292,606
+        L 206,800
+        Z
+      "
+      />
+      {/* Bottom Right Accent Bar */}
+      <path
+        d="
+        M 300,800
+        L 395,688
+        C 418,660 448,648 485,648
+        L 865,648
+        C 890,648 910,640 924,625
+        C 918,645 906,665 890,685
+        L 835,750
+        C 812,778 782,800 740,800
+        Z
+      "
+      />
+    </svg>
+  );
+}
+
 const NAV = [
-  { to: "/", label: "Home", short: "Home", icon: Home },
-  { to: "/tickets", label: "Tickets", short: "Tickets", icon: Ticket },
   { to: "/friends", label: "Friends", short: "Friends", icon: Users },
-  { to: "/how-to-play", label: "How to play", short: "Guide", icon: BookOpen },
+  { to: "/tickets", label: "Tickets", short: "Tickets", icon: Ticket },
+  { to: "/", label: "Home", short: "", icon: HomeSvgIcon },
+  { to: "/how-to-play", label: "Guide", short: "Guide", icon: BookOpen },
   { to: "/preferences", label: "Preferences", short: "Prefs", icon: SlidersHorizontal },
 ];
 
@@ -31,8 +81,8 @@ const isActive = (pathname: string, to: string) =>
   to === "/" ? pathname === "/" : pathname.startsWith(to);
 
 /**
- * Net of your open settle-ups: positive means you're owed. Same query and key as the Friends page's settle-ups,
- * so both stay in step; the settlements feed refreshes it.
+- Net of your open settle-ups: positive means you're owed. Same query and key as the Friends page's settle-ups,
+- so both stay in step; the settlements feed refreshes it.
  */
 function PointsPill({ user }: { user: User }) {
   const queryClient = useQueryClient();
@@ -152,8 +202,8 @@ function SidebarTables({ user, pathname }: { user: User; pathname: string }) {
 }
 
 /**
- * The signed-in frame: a sidebar on desktop (navigation, your tables, net points), a top bar and bottom tab bar on
- * phones, and the score ticker everywhere except a table page.
+- The signed-in frame: a sidebar on desktop (navigation, your tables, net points), a top bar and bottom tab bar on
+- phones, and the score ticker everywhere except a table page.
  */
 export function AppShell({
   user,
@@ -171,40 +221,48 @@ export function AppShell({
   children: ReactNode;
 }) {
   const isTable = pathname.startsWith("/tables/");
-  const devLink = useDevAvailable(user.id) ? (
-    <DevLinks active={isActive(pathname, "/dev")} />
-  ) : undefined;
+  const devAvailable = useDevAvailable(user.id);
+  const devActive = isActive(pathname, "/dev");
   return (
     <div
       className={cn(
-        "min-h-dvh bg-field [--app-bottom-height:4rem] md:[--app-bottom-height:0rem]",
+        // Never wider than the screen: a sideways scroll lets phones zoom out and shift the page.
+        "min-h-dvh overflow-x-clip bg-field [--app-bottom-height:4rem] nav:[--app-bottom-height:0rem]",
         isTable
-          ? "[--app-top-height:3.5rem] md:[--app-top-height:0rem]"
-          : "[--app-top-height:6rem] md:[--app-top-height:2.5rem]",
+          ? "[--app-top-height:3.5rem] nav:[--app-top-height:0rem]"
+          : "[--app-top-height:6rem] nav:[--app-top-height:2.5rem]",
       )}
     >
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar nav:flex">
         <div className="flex h-16 items-center justify-between pl-5 pr-3">
-          <Logo badge={devLink} />
+          <Logo badge={devAvailable && <DevLinks active={devActive} />} />
           <SignOutButton onSignOut={onSignOut} busy={signingOut} />
         </div>
         <nav aria-label="Main" className="flex flex-col gap-1 px-3 py-2">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              aria-current={isActive(pathname, to) ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
-                isActive(pathname, to)
-                  ? "bg-sidebar-accent text-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-              )}
-            >
-              <Icon className={cn("size-4", isActive(pathname, to) && "text-primary")} />
-              {label}
-            </Link>
-          ))}
+          {NAV.map(({ to, label, icon: Icon }) => {
+            const active = isActive(pathname, to);
+            const isHome = to === "/";
+            return (
+              <Link
+                key={to}
+                to={to}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-foreground"
+                    : isHome
+                      ? "text-white hover:bg-sidebar-accent/60 hover:text-white"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                )}
+              >
+                <Icon
+                  className={cn("size-4", active ? "text-primary" : isHome ? "text-white" : "")}
+                />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
         <SidebarTables user={user} pathname={pathname} />
         <div className="mt-auto border-t p-4">
@@ -222,10 +280,10 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="sticky top-0 z-30 md:ml-64">
-        <header className="glass-bar flex h-14 items-center justify-between border-b px-4 md:hidden">
-          <Logo badge={devLink} />
-          <div className="flex items-center gap-1">
+      <div className="sticky top-0 z-30 nav:ml-64">
+        <header className="glass-bar flex h-14 items-center justify-between gap-2 border-b px-3 nav:hidden">
+          <Logo badge={devAvailable && <DevLinks active={devActive} compact />} />
+          <div className="flex shrink-0 items-center gap-1">
             <PointsPill user={user} />
             <SignOutButton onSignOut={onSignOut} busy={signingOut} />
           </div>
@@ -233,25 +291,34 @@ export function AppShell({
         {!isTable && <ScoreTicker user={user} expire={expire} />}
       </div>
 
-      <main className={cn("md:pl-64", !isTable && "pb-20 md:pb-0")}>{children}</main>
+      <main className={cn("nav:pl-64", !isTable && "pb-20 nav:pb-0")}>{children}</main>
 
       <nav
         aria-label="Main (phone)"
-        className="glass-bar fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t md:hidden"
+        className="glass-bar fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t nav:hidden"
       >
-        {NAV.map(({ to, short, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className={cn(
-              "relative flex flex-col items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider",
-              isActive(pathname, to) ? "text-primary" : "text-muted-foreground",
-            )}
-          >
-            <Icon className="size-5" />
-            {short}
-          </Link>
-        ))}
+        {NAV.map(({ to, short, icon: Icon }) => {
+          const active = isActive(pathname, to);
+          const isHome = to === "/";
+          return (
+            <Link
+              key={to}
+              to={to}
+              className={cn(
+                "relative flex flex-col items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider",
+                active ? "text-primary" : isHome ? "text-white" : "text-muted-foreground",
+              )}
+            >
+              <Icon
+                className={cn(
+                  isHome ? "w-10 h-7" : "size-5",
+                  active ? "text-primary" : isHome ? "text-white" : "",
+                )}
+              />
+              {short}
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

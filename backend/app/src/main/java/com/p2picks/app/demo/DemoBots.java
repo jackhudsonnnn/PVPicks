@@ -14,6 +14,7 @@ import com.p2picks.app.chat.ReactionService;
 import com.p2picks.app.demo.DemoRoster.DemoUser;
 import com.p2picks.app.moderation.ReportService;
 import com.p2picks.app.security.PasswordlessSignIn;
+import com.p2picks.app.sports.PlayerStatsLookup;
 import com.p2picks.app.settlement.SettlementReceiptService;
 import com.p2picks.app.settlement.SettlementReviewService;
 import com.p2picks.app.settlement.TablePointsSettlementService;
@@ -81,6 +82,7 @@ public class DemoBots {
     private final SettlementReceiptService receipts;
     private final SettlementReviewService reviews;
     private final TablePointsSettlementService pointsSettlement;
+    private final PlayerStatsLookup playerStats;
 
     private final Map<UUID, DemoUser> bots = DemoRoster.users().stream()
             .collect(Collectors.toMap(DemoUser::id, Function.identity()));
@@ -101,7 +103,8 @@ public class DemoBots {
             U2PickProposalService u2picks, SportsProposalService sportsBets, U2PickResolutionService results,
             SocialMutationService social, InvitationResponseService invitations, ChatSendService chat,
             ReactionService reactions, GifCatalog gifs, ReportService reports, SettlementReceiptService receipts,
-            SettlementReviewService reviews, TablePointsSettlementService pointsSettlement) {
+            SettlementReviewService reviews, TablePointsSettlementService pointsSettlement,
+            PlayerStatsLookup playerStats) {
         this.jdbc = jdbc;
         this.json = json;
         this.clock = clock;
@@ -120,6 +123,7 @@ public class DemoBots {
         this.receipts = receipts;
         this.reviews = reviews;
         this.pointsSettlement = pointsSettlement;
+        this.playerStats = playerStats;
         this.since = clock.instant();
     }
 
@@ -317,15 +321,14 @@ public class DemoBots {
             int window = 90 + random.nextInt(511);
             // Only the modes this bot likes (all when its profile names none) that the table allows.
             Set<String> liked = bot.profile().modes();
-            List<String> scoreModes = List.of("total_disaster", "give_and_take").stream()
+            List<String> sportsModes = SPORTS_MODES.stream()
                     .filter(mode -> liked.isEmpty() || liked.contains(mode)).toList();
             boolean u2pick = table.u2pickEnabled() && (liked.isEmpty() || liked.contains("u2pick"));
-            if (!games.isEmpty() && !scoreModes.isEmpty() && (!u2pick || random.nextDouble() < 0.6)) {
+            if (!games.isEmpty() && !sportsModes.isEmpty() && (!u2pick || random.nextDouble() < 0.6)) {
                 Game game = DemoLines.any(random, games);
-                boolean total = DemoLines.any(random, scoreModes).equals("total_disaster");
-                BigDecimal line = total ? totalLine(game) : spreadLine();
-                var proposal = new SportsProposalService.Proposal(total ? "total_disaster" : "give_and_take",
-                        game.id(), line, random.nextBoolean(), forFun ? 0 : wager, window, forFun);
+                SportsProposalService.Proposal proposal = sportsProposal(game, DemoLines.any(random, sportsModes),
+                        forFun ? 0 : wager, window, forFun);
+                if (proposal == null) return "SKIPPED";
                 return act(bot.id(), jwt -> sportsBets.create(jwt, member.table(), proposal, key()).outcome().name());
             }
             if (!u2pick) return "SKIPPED";
@@ -336,6 +339,51 @@ public class DemoBots {
                     random.nextDouble() < 0.7 ? U2PickSettler.Rule.HOSTS : U2PickSettler.Rule.ANYONE);
             return act(bot.id(), jwt -> u2picks.create(jwt, member.table(), proposal, key()).outcome().name());
         });
+    }
+
+    private static final List<String> SPORTS_MODES = List.of("total_disaster", "give_and_take", "either_or",
+            "prop_hunt", "king_of_the_hill", "scorcerer");
+
+    /**
+     * A sports proposal in {@code mode} on {@code game}, with sensible terms: lines near the pace, player lines and
+     * targets a little above the players' current numbers. Null when the game can't take that mode (Scorcerer off
+     * NFL or before kickoff, a player mode before the game has players).
+     */
+    private SportsProposalService.Proposal sportsProposal(Game game, String mode, long wager, int window,
+            boolean forFun) {
+        boolean overtime = random.nextBoolean();
+        return switch (mode) {
+            case "total_disaster", "give_and_take" -> new SportsProposalService.Proposal(mode, game.id(),
+                    mode.equals("total_disaster") ? totalLine(game) : spreadLine(), overtime, wager, window, forFun);
+            case "scorcerer" -> game.league().equals("NFL") && game.status().equals("LIVE")
+                    ? new SportsProposalService.Proposal(mode, game.id(), null, true, wager, window, forFun, null,
+                            List.of())
+                    : null;
+            default -> {
+                List<PlayerStatsLookup.GamePlayer> roster = playerStats.players(game.id()).stream()
+                        .filter(PlayerStatsLookup.GamePlayer::played).toList();
+                if (roster.size() < 2) yield null;
+                var statKeys = com.p2picks.app.sports.StatLine.STATS
+                        .get(com.p2picks.app.sports.League.valueOf(game.league())).stream()
+                        .map(com.p2picks.app.sports.StatLine.Stat::key).toList();
+                String stat = DemoLines.any(random, statKeys);
+                List<PlayerStatsLookup.GamePlayer> shuffled = new ArrayList<>(roster);
+                java.util.Collections.shuffle(shuffled, random);
+                PlayerStatsLookup.GamePlayer first = shuffled.get(0);
+                PlayerStatsLookup.GamePlayer second = shuffled.get(1);
+                int top = Math.max(first.stat(stat), second.stat(stat));
+                yield switch (mode) {
+                    case "either_or" -> new SportsProposalService.Proposal(mode, game.id(), null, overtime, wager,
+                            window, forFun, stat, List.of(first.id(), second.id()));
+                    case "prop_hunt" -> new SportsProposalService.Proposal(mode, game.id(),
+                            BigDecimal.valueOf(first.stat(stat) + 1 + random.nextInt(6)).add(new BigDecimal("0.5")),
+                            overtime, wager, window, forFun, stat, List.of(first.id()));
+                    default -> new SportsProposalService.Proposal(mode, game.id(),
+                            BigDecimal.valueOf(top + 2 + random.nextInt(8)), overtime, wager, window, forFun, stat,
+                            List.of(first.id(), second.id()));
+                };
+            }
+        };
     }
 
     /** Totals in half points (no pushes): a typical full game before it starts, the pace so far once it's live. */

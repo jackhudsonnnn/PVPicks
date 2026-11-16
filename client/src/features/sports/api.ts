@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BackendError, request } from "@/lib/api-client";
+import { BackendError, read, request } from "@/lib/api-client";
 import { timeLabel } from "@/lib/time";
 
 const team = z.object({
@@ -49,4 +49,28 @@ export function tickerStatus(game: TickerGame): string {
     case "SCHEDULED":
       return timeLabel(game.startsAt);
   }
+}
+
+const gamePlayerSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  position: z.string().nullable(),
+  team: z.string().nullable(),
+  played: z.boolean(),
+  stats: z.record(z.string(), z.number().int()),
+});
+const gamePlayersSchema = z.object({
+  stats: z.array(z.object({ key: z.string().min(1), label: z.string().min(1) })),
+  players: z.array(gamePlayerSchema),
+});
+
+export type GamePlayer = z.infer<typeof gamePlayerSchema>;
+export type GamePlayers = z.infer<typeof gamePlayersSchema>;
+
+/** A game's pickable players with their current stats, and the league's stats, for the player modes. */
+export async function getGamePlayers(gameId: string, signal?: AbortSignal): Promise<GamePlayers> {
+  return read(
+    await request(`/games/${encodeURIComponent(gameId)}/players`, signal ? { signal } : undefined),
+    gamePlayersSchema,
+  );
 }

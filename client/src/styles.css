@@ -10,6 +10,13 @@
  * bet-slip tickets with perforated notches. All colors in oklch.
  */
 
+@theme {
+  /* The sidebar navigation from here (1100px); narrower, the phone header and tab bar. */
+  --breakpoint-nav: 68.75rem;
+  /* The table page shows the felt and the side panel together from here (1455px); narrower, they're tabs. */
+  --breakpoint-split: 90.9375rem;
+}
+
 @theme inline {
   --font-display: "Big Shoulders Display", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -88,7 +95,7 @@
 :root {
   --radius: 0.75rem;
 
-  /* DraftKings-inspired: near-black charcoal, signature green, orange accent */
+  /* near-black charcoal, signature green, orange accent */
   --background: oklch(0.17 0 0);
   --foreground: oklch(0.98 0 0);
   --surface: oklch(0.215 0 0);
@@ -374,4 +381,14 @@
 .reduce-motion .ticker-dup,
 .reduce-motion [data-ticker-repeat="true"] {
   display: none;
+}
+
+/* Toasts sit just above the phone tab bar (h-16) wherever it shows (below the nav breakpoint, 1100px), and near the bottom beside the sidebar. */
+:root {
+  --toast-bottom: calc(4rem + 12px);
+}
+@media (min-width: 68.75rem) {
+  :root {
+    --toast-bottom: 24px;
+  }
 }

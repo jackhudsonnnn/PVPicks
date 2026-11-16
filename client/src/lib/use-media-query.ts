@@ -17,5 +17,8 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
-/** Tailwind's `lg` breakpoint, where Home shows its Tickets column. */
-export const DESKTOP = "(min-width: 1024px)";
+/**
+ * Where Home shows its Tickets box: beside the tables from Tailwind's `lg` (1024px), and below them on narrower
+ * screens that are tall enough for both (790px). Shorter screens use the Tickets tab.
+ */
+export const HOME_TICKETS = "(min-width: 1024px), (min-height: 790px)";

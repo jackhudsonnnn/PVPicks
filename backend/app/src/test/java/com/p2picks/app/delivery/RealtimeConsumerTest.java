@@ -193,6 +193,7 @@ class RealtimeConsumerTest {
                 Map.entry(OutboxEvent.BET_LOCKED, Map.of("tableId", TABLE, "betId", BET)),
                 Map.entry(OutboxEvent.SETTLEMENT_CREATED, Map.of("tableId", TABLE, "settlementId", SETTLEMENT)),
                 Map.entry(OutboxEvent.CHAT_REACTION_CHANGED, Map.of("tableId", TABLE)),
+                Map.entry(OutboxEvent.CHAT_POLL_VOTED, Map.of("tableId", TABLE, "messageId", MEMBER)),
                 Map.entry(OutboxEvent.TABLE_PROFILE_CHANGED, Map.of("tableId", TABLE)),
                 Map.entry(OutboxEvent.TABLE_MEMBER_PERMISSION_CHANGED, Map.of("tableId", TABLE, "userId", MEMBER)),
                 Map.entry(OutboxEvent.USER_PROFILE_CHANGED, Map.of("userId", MEMBER)));

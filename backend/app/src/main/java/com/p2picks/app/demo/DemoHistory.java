@@ -299,6 +299,10 @@ public class DemoHistory {
         }
 
         void resolveU2Pick(UUID bet, UUID host) {
+            // One-sided or empty bets already washed at lock (domain rules, "Wash triggers").
+            if (!"PENDING".equals(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet))) {
+                return;
+            }
             List<String> picked = jdbc.queryForList("SELECT choice FROM picks WHERE bet_id = ?", String.class, bet);
             if (picked.isEmpty()) return;
             u2pickResults.resolve(as(host), bet, DemoLines.any(random, picked), key());
@@ -419,7 +423,8 @@ public class DemoHistory {
                     SELECT id FROM games WHERE provider_id LIKE 'DEV-demo-%' AND status = 'LIVE'
                     """, String.class);
             int made = 0;
-            for (int i = 0; i < count * 2 && made < count; i++) {
+            // Bets where everyone picked the same side wash at lock, so it takes a few more tries to get there.
+            for (int i = 0; i < count * 6 && made < count; i++) {
                 TableInfo table = DemoLines.any(random, tables);
                 Game game = null;
                 if (!live.isEmpty() && made % 3 == 0) {
@@ -433,6 +438,10 @@ public class DemoHistory {
                 }
                 UUID bet = play(user, table, game);
                 if (bet == null) continue;
+                // Washed at lock (one side only): it stays as a recent wash and doesn't count.
+                if (!"PENDING".equals(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet))) {
+                    continue;
+                }
                 made++;
                 Instant createdAt = now.minus(Duration.ofMinutes(20 + random.nextInt(280)));
                 Instant locksAt = createdAt.plus(Duration.ofSeconds(120 + random.nextInt(480)));

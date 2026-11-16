@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,12 +34,21 @@ public class BetLockService {
     private final DebtQuery debt;
     private final SecureRandom random = new SecureRandom();
     private final Outbox outbox;
+    private final BetResolutionWriter writer;
+    private final ObjectProvider<LockWashRule> modeRules;
 
-    BetLockService(JdbcTemplate jdbc, DebtQuery debt, Outbox outbox) {
+    BetLockService(JdbcTemplate jdbc, DebtQuery debt, Outbox outbox, BetResolutionWriter writer,
+            ObjectProvider<LockWashRule> modeRules) {
         this.jdbc = jdbc;
         this.debt = debt;
         this.outbox = outbox;
+        this.writer = writer;
+        this.modeRules = modeRules;
     }
+
+    /** General lock washes, for every mode. */
+    static final String NOBODY_PICKED = "Nobody picked";
+    static final String ONE_OPTION = "Everyone picked the same option";
 
     @Transactional
     public Outcome lock(UUID betId) {
@@ -122,7 +132,25 @@ public class BetLockService {
             throw new IllegalStateException("Locked bet changed");
         }
         outbox.append(OutboxEvent.BET_LOCKED, betId, Map.of("tableId", tableId, "betId", betId));
+        // A bet nobody can win or lose washes right away rather than waiting on a result (domain rules, "Wash
+        // triggers"): no picks, or every pick on one option. Then any mode-specific lock rule.
+        String wash = generalLockWash(betId);
+        if (wash == null) {
+            wash = modeRules.orderedStream().map(modeRule -> modeRule.washAtLock(betId, bet.mode()))
+                    .flatMap(java.util.Optional::stream).findFirst().orElse(null);
+        }
+        if (wash != null) {
+            writer.apply(new BetResolutionWriter.LockedBet(betId, tableId, bet.wager(), bet.forFun(), List.of(), null,
+                    List.of()), null, wash, null, false);
+        }
         return Outcome.LOCKED;
+    }
+
+    private String generalLockWash(UUID betId) {
+        List<String> choices = jdbc.queryForList("SELECT DISTINCT choice FROM picks WHERE bet_id = ?", String.class,
+                betId);
+        if (choices.isEmpty()) return NOBODY_PICKED;
+        return choices.size() == 1 ? ONE_OPTION : null;
     }
 
     private record Bet(String status, String mode, boolean due, long wager, boolean forFun) {}

@@ -1,17 +1,19 @@
 # Player stats
 
 The player modes (Either Or, Prop Hunt, King Of The Hill) resolve on live
-per-player game stats. This page describes where those stats come from, how
-they're stored, and the edge cases a mode must handle. Implemented: polling,
-storage and history. Not yet implemented: the player modes themselves.
+per-player game stats, and Scorcerer (NFL) on the score history. This page
+describes where that data comes from, how it's stored, how each mode reads it,
+and the edge cases they handle. All of it is implemented.
 
 ## Source and plan
 
 BallDontLie serves per-player game stats for both leagues on the **All-Star**
 plan ($9.99/month per league). The stats update during games, so they work
 for live bets. GOAT is needed only for play-by-play, sportsbook odds and
-player props, and advanced stats. Choose Their Fate and Scorcerer need
-play-by-play, so they stay "Coming soon" (ADR 0005).
+player props, and advanced stats. Choose Their Fate (how a drive or
+possession ends) needs play-by-play, so it stays "Coming soon" (ADR 0005).
+Scorcerer works on All-Star for the NFL by reading score jumps (below); NBA
+baskets come too fast for that.
 
 Every endpoint the app calls (games, player stats, active players) is on
 All-Star, so switching from the trial is configuration only:
@@ -75,7 +77,7 @@ same keys.
 | NFL | `rushing_yards` | Rushing Yards | `rushing_yards` |
 | NFL | `receiving_yards` | Receiving Yards | `receiving_yards` |
 | NFL | `receptions` | Receptions | `receptions` |
-| NFL | `touchdowns` | Touchdowns | `rushing_touchdowns` + `receiving_touchdowns` |
+| NFL | `touchdowns` | Touchdowns | `rushing_touchdowns` + `receiving_touchdowns` + `kick_return_touchdowns` + `punt_return_touchdowns` + `fumbles_touchdowns` + `interception_touchdowns` |
 
 Rules every mode can rely on:
 
@@ -85,12 +87,9 @@ Rules every mode can rely on:
   digit. An NFL player played if the provider lists a row for them (it lists
   only players who did something). A player-prop bet on someone who didn't
   play washes.
-- **Touchdowns are the player's own scores:** rushing plus receiving.
-  Passing touchdowns count for the receiver, not the passer. Return,
-  fumble-recovery and defensive touchdowns (`kick_return_touchdowns`,
-  `punt_return_touchdowns`, `fumbles_touchdowns`, `interception_touchdowns`)
-  are **not** counted yet. Decide this before building a "did X score a TD"
-  prop.
+- **Touchdowns are every touchdown the player scored** (owner decision,
+  2026-11-15): rushing, receiving, kick and punt returns, fumble recoveries and
+  interceptions. Passing touchdowns count for the receiver, not the passer.
 - **Whole game.** Totals cover the whole game. Whether overtime counts is the
   proposer's choice per bet. The stats endpoint doesn't split overtime out,
   so player-prop bets that exclude overtime need a cutoff snapshot (see
@@ -122,7 +121,7 @@ fixtures, and are never read by the running app.
 
 ## Samples
 
-Saved responses live in `recordings/sports/samples/` (git-ignored, so on your
+Saved responses live in `dev/sports/samples/` (git-ignored, so on your
 machine only). Trimmed fixtures are checked against the provider's OpenAPI
 specs in `backend/app/src/test/resources/fixtures/balldontlie/`
 (`nba-stats.json`, `nfl-stats.json`).
@@ -150,8 +149,35 @@ An NFL row, trimmed. The provider sends `null` for anything not recorded:
 It maps to `receiving_yards: 54`, `receptions: 4` and `touchdowns: 1`, with
 everything else 0.
 
+## How the modes read it
+
+Both players in Either Or and King Of The Hill come from the bet's game. The
+proposal sheet lists the game's players with their current numbers
+(`GET /games/{id}/players`: both teams' active players plus anyone in the
+game's stats). The server builds the question and choices from the stored
+players; two players with the same name are told apart by team.
+
+| Mode | Choices | Settles | Washes |
+|---|---|---|---|
+| Either Or | The two players | After Final plus the 20-minute grace: whoever has more | Tie; a player didn't play |
+| Prop Hunt | Over / Under the line | After Final plus the grace | The line must start above the player's number, and passing it before lock washes; push on a whole line; didn't play |
+| King Of The Hill | The two players, then Neither | As soon as someone reaches the target (mid-game); Neither after Final plus the grace | The target must start above both; reaching it before lock washes; both reaching it in the same update; didn't play (for Neither) |
+| Scorcerer (NFL) | Touchdown, Field goal, Safety, No more scoring | When the first score after lock is seen; No more scoring after Final plus the grace | Two scores in one update, or a jump that isn't one scoring play |
+
+**Overtime counts** off: values are the last observed before the game was
+first seen in overtime, and a target reached in overtime doesn't count.
+
+**Scorcerer** compares each stored score update with the one before. One team
+rising by 6–8 is a touchdown (with its try), 3 a field goal, 2 a safety. An
+extra point or two-point try that arrives after lock for a touchdown scored
+before it (within 5 minutes, same team) isn't the next score. Code:
+`bets/PlayerOutcome`, `bets/ScorcererOutcome`, `bets/PlayerLockRules`,
+`sports/PlayerStatsLookup`.
+
 ## Testing player behavior
 
 Dev scenario files and recorded chunks feed made-up or replayed games through
 the same pipeline as live data, so you can check how a mode resolves without
-waiting for a real game. See [Dev sports data](/dev-sports-data).
+waiting for a real game. The recorded chunks include full NBA and NFL games
+with live player stats. See [Dev sports data](/dev-sports-data). The demo's
+always-live games also have made-up box scores ([Demo world](/demo-data)).

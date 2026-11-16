@@ -218,11 +218,11 @@ function TableWorkspace({
           // The table page fills the screen, like the felt in a card room.
           <TablePage key={tableId} user={user} tableId={tableId} expire={expire} />
         ) : (
-          // Home is wider on desktop for its Tickets column.
+          // Home (its Tickets column) and the guide (its card rows) are wider on desktop.
           <div
             className={cn(
               "mx-auto space-y-6 px-4 py-8 md:px-8",
-              pathname === "/" ? "max-w-6xl" : "max-w-4xl",
+              pathname === "/" || pathname === "/how-to-play" ? "max-w-6xl" : "max-w-4xl",
             )}
           >
             {pathname === "/" ? (

@@ -39,6 +39,7 @@ const intentSchema = z.discriminatedUnion("kind", [
     tableId: uuid,
     hostsOnlyBets: z.boolean().optional(),
     u2pickEnabled: z.boolean().optional(),
+    pollsEnabled: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal("remainder"),
@@ -53,7 +54,7 @@ const intentSchema = z.discriminatedUnion("kind", [
     kind: z.literal("permission"),
     tableId: uuid,
     userId: uuid,
-    permission: z.enum(["bets", "text", "react", "gifs"]),
+    permission: z.enum(["bets", "text", "react", "gifs", "polls"]),
     enabled: z.boolean(),
   }),
   z.object({ kind: z.literal("quickpicks"), tableId: uuid, enabled: z.boolean() }),
@@ -135,6 +136,7 @@ export function useTableActions(
               ...(intent.u2pickEnabled === undefined
                 ? {}
                 : { u2pickEnabled: intent.u2pickEnabled }),
+              ...(intent.pollsEnabled === undefined ? {} : { pollsEnabled: intent.pollsEnabled }),
             },
             key,
           );

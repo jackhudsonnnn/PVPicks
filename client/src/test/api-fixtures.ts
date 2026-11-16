@@ -15,6 +15,7 @@ export const table = {
   remainderRule: "host",
   hostsOnlyBets: false,
   u2pickEnabled: true,
+  pollsEnabled: true,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -72,4 +73,8 @@ export const modeAvailability = new Map<string, boolean>([
   ["u2pick", true],
   ["total_disaster", true],
   ["give_and_take", true],
+  ["either_or", true],
+  ["prop_hunt", true],
+  ["king_of_the_hill", true],
+  ["scorcerer", true],
 ]);

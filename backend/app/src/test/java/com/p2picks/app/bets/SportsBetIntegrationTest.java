@@ -184,11 +184,117 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         UUID canceled = UUID.fromString(json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"),
                 aliceSession, csrf, proposal("total_disaster", "200.5"))).andExpect(status().isCreated()).andReturn()
                 .getResponse().getContentAsString()).path("id").asText());
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?)", canceled, alice, canceled, bob);
+        jdbc.update("""
+                INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Over 200.5'), (?, ?, 'Under 200.5')
+                """, canceled, alice, canceled, bob);
         jdbc.update("UPDATE bets SET locks_at = now() - interval '1 second' WHERE id = ?", canceled);
         locks.lock(canceled);
         jdbc.update("UPDATE games SET status = 'POSTPONED', provider_state = 'canceled' WHERE id = ?", gameId);
         assertThat(resolutions.resolve(canceled, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
         assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
                 canceled)).isEqualTo("WASHED:Game canceled or postponed");
+    }
+
+    private void player(String id, String first, String last, String team) {
+        jdbc.update("""
+                INSERT INTO players (id, league, provider_id, first_name, last_name, position, team_abbreviation,
+                                     active, updated_at)
+                VALUES (?, 'NBA', ?, ?, ?, 'G', ?, true, now())
+                """, id, id.substring(4), first, last, team);
+    }
+
+    /** A stat update as the feed would store it: the current line plus a history snapshot. */
+    private void points(String playerId, int points, Instant at) {
+        String stats = "{\"points\": " + points + "}";
+        jdbc.update("""
+                INSERT INTO player_game_stats (game_id, player_id, team_abbreviation, played, stats, observed_at)
+                VALUES (?, ?, NULL, true, ?::jsonb, ?)
+                ON CONFLICT (game_id, player_id) DO UPDATE SET stats = EXCLUDED.stats, observed_at = EXCLUDED.observed_at
+                """, gameId, playerId, stats, java.sql.Timestamp.from(at));
+        jdbc.update("""
+                INSERT INTO player_stat_snapshots (game_id, player_id, observed_at, played, stats)
+                VALUES (?, ?, ?, true, ?::jsonb)
+                """, gameId, playerId, java.sql.Timestamp.from(at), stats);
+    }
+
+    private UUID propose(Cookie session, Csrf csrf, String mode, String config, int expectedStatus) throws Exception {
+        String body = """
+                {"modeId":"%s","gameId":"%s","config":%s,"includesOvertime":true,
+                 "wagerCents":100,"durationSec":600,"forFun":false}""".formatted(mode, gameId, config);
+        String response = mvc.perform(send(post("/tables/" + table + "/bets"), session, csrf, body))
+                .andExpect(status().is(expectedStatus)).andReturn().getResponse().getContentAsString();
+        return expectedStatus == 201 ? UUID.fromString(json.readTree(response).path("id").asText()) : null;
+    }
+
+    private void picks(UUID bet, String aliceChoice, String bobChoice) {
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?)", bet, alice, bet, bob);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, ?), (?, ?, ?)",
+                bet, alice, aliceChoice, bet, bob, bobChoice);
+        jdbc.update("UPDATE bets SET locks_at = now() - interval '1 second' WHERE id = ?", bet);
+    }
+
+    private String state(UUID bet) {
+        return jdbc.queryForObject("SELECT status || ':' || coalesce(winning_choice, wash_reason, '') FROM bets WHERE id = ?",
+                String.class, bet);
+    }
+
+    @Test
+    void playerModesProposeFromTheGamesPlayersWashAtLockAndResolveFromStoredStats() throws Exception {
+        seed("pm", Instant.now().minusSeconds(1800));
+        jdbc.update("UPDATE games SET status = 'LIVE' WHERE id = ?", gameId);
+        player("NBA-pm1", "Ann", "Archer", "BOS");
+        player("NBA-pm2", "Ben", "Baker", "NYK");
+        Instant start = Instant.now().minusSeconds(1200);
+        points("NBA-pm1", 20, start);
+        points("NBA-pm2", 10, start);
+        Cookie aliceSession = loginAs("pma");
+        Csrf csrf = csrf();
+
+        JsonNode roster = json.readTree(mvc.perform(get("/games/" + gameId + "/players").cookie(aliceSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(roster.path("players").size()).isEqualTo(2);
+        assertThat(roster.path("stats").get(0).path("key").asText()).isEqualTo("points");
+
+        // Prop Hunt: the line must start above the player's number; crossing it before lock washes.
+        propose(aliceSession, csrf, "prop_hunt", "{\"line\":15.5,\"stat\":\"points\",\"players\":[\"NBA-pm1\"]}", 409);
+        UUID prop = propose(aliceSession, csrf, "prop_hunt",
+                "{\"line\":24.5,\"stat\":\"points\",\"players\":[\"NBA-pm1\"]}", 201);
+        assertThat(jdbc.queryForObject("SELECT question FROM bets WHERE id = ?", String.class, prop))
+                .isEqualTo("Ann Archer points: over or under 24.5?");
+        picks(prop, "Over 24.5", "Under 24.5");
+        points("NBA-pm1", 25, Instant.now().minusSeconds(60));
+        locks.lock(prop);
+        assertThat(state(prop)).isEqualTo("WASHED:" + PlayerLockRules.LINE_REACHED);
+
+        // King Of The Hill settles the moment someone reaches the target, mid-game.
+        UUID hill = propose(aliceSession, csrf, "king_of_the_hill",
+                "{\"line\":30,\"stat\":\"points\",\"players\":[\"NBA-pm1\",\"NBA-pm2\"]}", 201);
+        assertThat(jdbc.queryForObject("SELECT choices::text FROM bets WHERE id = ?", String.class, hill))
+                .isEqualTo("[\"Ann Archer\", \"Ben Baker\", \"Neither\"]");
+        picks(hill, "Ann Archer", "Ben Baker");
+        locks.lock(hill);
+        assertThat(state(hill)).isEqualTo("PENDING:");
+        assertThat(resolutions.resolve(hill, Instant.now())).isEqualTo(SportsResolutionService.Outcome.WAITING);
+        points("NBA-pm2", 31, Instant.now());
+        assertThat(resolutions.resolve(hill, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
+        assertThat(state(hill)).isEqualTo("SETTLED:Ben Baker");
+
+        // Either Or settles after Final plus the grace period.
+        UUID either = propose(aliceSession, csrf, "either_or",
+                "{\"stat\":\"points\",\"players\":[\"NBA-pm1\",\"NBA-pm2\"]}", 201);
+        picks(either, "Ann Archer", "Ben Baker");
+        locks.lock(either);
+        points("NBA-pm1", 40, Instant.now());
+        finishGame(110, 100, Instant.now().minus(SportsOutcome.GRACE).minusSeconds(1));
+        assertThat(resolutions.resolve(either, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
+        assertThat(state(either)).isEqualTo("SETTLED:Ann Archer");
+    }
+
+    @Test
+    void scorcererIsNflOnly() throws Exception {
+        seed("sc", Instant.now().plusSeconds(3600));
+        Cookie aliceSession = loginAs("sca");
+        propose(aliceSession, csrf(), "scorcerer", "{}", 409);
     }
 }

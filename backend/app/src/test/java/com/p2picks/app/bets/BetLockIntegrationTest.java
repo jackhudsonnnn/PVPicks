@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.p2picks.app.IntegrationTestSupport;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,44 @@ import org.springframework.transaction.support.TransactionTemplate;
 class BetLockIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private BetLockService betLocks;
+
+    @Test
+    void picksThatCantProduceAWinnerOrLoserWashAtLock() {
+        UUID host = UUID.randomUUID();
+        UUID player = UUID.randomUUID();
+        UUID table = UUID.randomUUID();
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, 'lockwashhost', 1, ?, 'PLAYER', 'ACTIVE'), (?, 'lockwashuser', 1, ?, 'PLAYER', 'ACTIVE')
+                """, host, hash, player, hash);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Washes', 'T', 'KW2WQA')", table);
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
+                table, host, table, player);
+        UUID nobody = insertDebtBet(table, player, host, "ACTIVE", false, false, false, 100, 0);
+        UUID oneSide = insertDebtBet(table, player, host, "ACTIVE", false, true, false, 100, 0);
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", oneSide, host);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes')", oneSide, host);
+        UUID contested = insertDebtBet(table, player, host, "ACTIVE", false, true, false, 100, 0);
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", contested, host);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'No')", contested, host);
+        for (UUID bet : List.of(nobody, oneSide, contested)) {
+            assertThat(betLocks.lock(bet)).isEqualTo(BetLockService.Outcome.LOCKED);
+        }
+        assertThat(state(nobody)).isEqualTo("WASHED:" + BetLockService.NOBODY_PICKED);
+        assertThat(state(oneSide)).isEqualTo("WASHED:" + BetLockService.ONE_OPTION);
+        assertThat(state(contested)).isEqualTo("PENDING:");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ledger_entries WHERE bet_id IN (?, ?)", Integer.class,
+                nobody, oneSide)).as("a wash moves no points").isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM outbox WHERE event_type = 'bet.resolved.v1' AND aggregate_id IN (?, ?)
+                """, Integer.class, nobody.toString(), oneSide.toString())).as("announced like any wash").isEqualTo(2);
+    }
+
+    private String state(UUID bet) {
+        return jdbc.queryForObject("SELECT status || ':' || coalesce(wash_reason, '') FROM bets WHERE id = ?",
+                String.class, bet);
+    }
 
     @Test
     void betLockSnapshotsAndRechecksEligibilityWithoutLosingParticipation() {
@@ -110,6 +149,11 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
         UUID first = insertDebtBet(firstTable, player, host, "ACTIVE", false, true, false, 100, 0);
         UUID second = insertDebtBet(secondTable, player, host, "ACTIVE", false, true, false, 100, 0);
         jdbc.update("UPDATE bets SET mode = 'either_or', game_id = 'game-1' WHERE id = ?", second);
+        // The host takes the other side of both, so neither washes at lock and both stay Pending exposure.
+        for (UUID bet : List.of(first, second)) {
+            jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", bet, host);
+            jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'No')", bet, host);
+        }
         var start = new java.util.concurrent.CountDownLatch(1);
         var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
         try {
@@ -124,10 +168,10 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
             start.countDown();
             assertThat(one.get(10, TimeUnit.SECONDS)).isEqualTo(BetLockService.Outcome.LOCKED);
             assertThat(two.get(10, TimeUnit.SECONDS)).isEqualTo(BetLockService.Outcome.LOCKED);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id IN (?, ?)",
-                    Integer.class, first, second)).isEqualTo(1);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id IN (?, ?)",
-                    Integer.class, first, second)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id IN (?, ?) AND user_id = ?",
+                    Integer.class, first, second, player)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id IN (?, ?) AND user_id = ?",
+                    Integer.class, first, second, player)).isEqualTo(2);
         } finally {
             start.countDown();
             executor.shutdownNow();

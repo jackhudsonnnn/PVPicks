@@ -44,7 +44,8 @@ wait 20 minutes after Final, as live).
 |---|---|---|
 | `dev/sports/scenarios/<name>.json` | Scenario files | Yes |
 | `dev/sports/chunks/<name>/chunk.json` and `responses/` | Recorded chunks | No: cut from provider data, like the recordings |
-| `recordings/sports/<league>/<New York date>/` | Raw recordings chunks are cut from | No |
+| `dev/sports/samples/<league>/` | One response from each GOAT-only endpoint (play-by-play, odds, props, box scores), sampled once during the trial | No: provider data |
+| `recordings/sports/<league>/<New York date>/` | Raw recordings chunks are cut from; a day's folder is removed once its games are cut | No |
 
 Compose mounts `dev/sports` read-only at `/dev-sports` and sets
 `PVPICKS_DEV_SPORTS_DIR`. Leave it unset to turn dev data off.
@@ -121,21 +122,29 @@ scripts/cut-sports-chunk.py --league nba --from 2026-11-14T03:23:00Z --minutes 2
 ```
 
 A chunk keeps the recorded responses. Replay parses them with the live
-mapping and uses the latest games and stats response at each point. Player
-stats appear only in recordings made since stats recording started
-(2026-11-14). Cut so far, scores only:
+mapping and uses the latest games and stats response at each point. A stats
+response can cover two games; replay keeps each file's own game.
 
-| Chunk | What happens |
+Every finished game recorded since stats recording started is cut twice, with
+live player stats: a **full game** chunk (tip-off to 25 minutes after Final, so
+bets settle inside the replay; play it at 8×) and a **fourth-quarter** chunk.
+Names are `<league>-<New York date MMDD>-<away>-<home>-full` or `-q4`:
+
+| Games | Notes |
 |---|---|
-| `atl-chi-overtime` | ATL @ CHI tied 110-110 late, overtime, CHI 125-117. Regulation total 220, final 242. |
-| `uta-hou-close-finish` | UTA @ HOU, HOU up 2 with 5 minutes left, wins 125-118. |
+| NBA Nov 14: DEN @ NOP 116-108, DAL @ CLE 117-127, DET @ MIA 117-137, BKN @ MEM 110-129, CHI @ MIN 117-106 | About a stats response a minute. |
+| NBA Nov 15: IND @ PHI 124-131 | Stats every few minutes (a busy NFL Sunday shared the budget). |
+| NFL Nov 15: NE @ DET 10-35 | The only early game, so stats nearly every 30 seconds: the best one for player props. |
+| NFL Nov 15: KC @ ATL 35-13, HOU @ CLE 24-27, MIN @ GB 30-10, JAX @ TEN 40-23, MIA @ IND 22-24, CAR @ NO 20-17, BUF @ NYJ 31-12 | Eight games at once, so stats every 1–2 minutes. HOU @ CLE, MIA @ IND and CAR @ NO are close finishes. |
 
-Chunks cut from recordings made since 2026-11-14 include player stats; none
-have been cut yet.
+The NFL fourth-quarter chunks are the last ~50 minutes before Final (NFL
+responses carry no period). The two older chunks, `atl-chi-overtime` (tied
+110-110 late, overtime, CHI 125-117) and `uta-hou-close-finish` (HOU wins
+125-118), have scores only.
 
 ## Limits
 
-- Play-by-play modes (Choose Their Fate, Scorcerer) aren't covered: they need
-  GOAT play-by-play, and scenarios don't model plays.
+- Choose Their Fate isn't covered: it needs GOAT play-by-play. Scorcerer
+  reads score jumps, so scenarios and chunks both drive it.
 - Dev games stay in the database. Delete them by hand
   (`DELETE ... WHERE provider_id LIKE 'DEV-%'`) only if no bets reference them.

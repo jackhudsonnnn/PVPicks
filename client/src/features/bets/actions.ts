@@ -14,9 +14,22 @@ const proposalSchema = z.object({
 });
 /** A score-mode proposal; the server builds the question and choices from the game. */
 const sportsProposalSchema = z.object({
-  modeId: z.enum(["total_disaster", "give_and_take"]),
+  modeId: z.enum([
+    "total_disaster",
+    "give_and_take",
+    "either_or",
+    "prop_hunt",
+    "king_of_the_hill",
+    "scorcerer",
+  ]),
   gameId: z.string().regex(/^(NBA|NFL)-[A-Za-z0-9_-]+$/),
-  line: z.number().refine((n) => Number.isInteger(n * 2), "Half-point steps"),
+  /** The total or spread, a Prop Hunt line or a King Of The Hill target; null for Either Or and Scorcerer. */
+  line: z
+    .number()
+    .refine((n) => Number.isInteger(n * 2), "Half-point steps")
+    .nullable(),
+  stat: z.string().min(1).nullable().default(null),
+  players: z.array(z.string().min(1)).max(2).default([]),
   includesOvertime: z.boolean(),
   wagerCents: z.number().int().min(0).max(1000),
   durationSec: z.number().int().min(30).max(600),
@@ -55,12 +68,17 @@ export async function executeBetAction(userId: string, intent: BetIntent, key: s
     );
     await readProposedBet(response, intent.tableId, userId, "u2pick");
   } else if (intent.kind === "propose-sports") {
-    const { line, ...rest } = intent.proposal;
+    const { line, stat, players, ...rest } = intent.proposal;
+    const config = {
+      ...(line === null ? {} : { line }),
+      ...(stat === null ? {} : { stat }),
+      ...(players.length === 0 ? {} : { players }),
+    };
     const response = await mutationRequest(
       `/tables/${encodeURIComponent(intent.tableId)}/bets`,
       "POST",
       key,
-      { ...rest, config: { line } },
+      { ...rest, config },
     );
     await readProposedBet(response, intent.tableId, userId, intent.proposal.modeId);
   } else if (intent.kind === "override") {

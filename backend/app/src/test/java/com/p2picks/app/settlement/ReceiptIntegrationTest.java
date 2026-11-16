@@ -431,6 +431,32 @@ class ReceiptIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void settleGroupsListPeopleYouAreSquareWithLast() throws Exception {
+        UUID host = UUID.randomUUID();
+        UUID owes = UUID.randomUUID();
+        UUID square = UUID.randomUUID();
+        UUID table = UUID.randomUUID();
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, 'orderhost', 1, ?, 'PLAYER', 'ACTIVE'),
+                (?, 'orderowes', 1, ?, 'PLAYER', 'ACTIVE'),
+                (?, 'ordersquare', 1, ?, 'PLAYER', 'ACTIVE')
+                """, host, hash, owes, hash, square, hash);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Order', 'T', 'R7D3QA')", table);
+        insertDebtReceipt(table, host, owes, host, 300, "unpaid");
+        // Newer, so newest-first alone would list it first; it's settled, so it goes last.
+        insertDebtReceipt(table, host, square, host, 200, "paid");
+        JsonNode groups = json.readTree(mvc.perform(get("/people/settle-groups").cookie(loginAs("orderhost"))
+                        .param("includeHistory", "true")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(groups.size()).isEqualTo(2);
+        assertThat(groups.get(0).path("otherUserId").asText()).isEqualTo(owes.toString());
+        assertThat(groups.get(1).path("otherUserId").asText()).isEqualTo(square.toString());
+        assertThat(groups.get(1).path("netCents").asLong()).isZero();
+    }
+
+    @Test
     void groupHttpAppliesActionsAndPreservesHistory() throws Exception {
         UUID host = UUID.randomUUID();
         UUID peer = UUID.randomUUID();

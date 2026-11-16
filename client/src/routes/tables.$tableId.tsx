@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const Route = createFileRoute("/tables/$tableId")({
   head: () => ({
     meta: [
@@ -17,9 +19,14 @@ export const Route = createFileRoute("/tables/$tableId")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  // ?tab=peers opens the Peers (members) tab, e.g. from a ticket's player avatars.
-  validateSearch: (search: Record<string, unknown>): { tab?: "peers" } =>
-    search["tab"] === "peers" ? { tab: "peers" } : {},
+  // ?tab=peers opens the Peers (members) tab, e.g. from a ticket's player avatars; ?profile=<user id> opens that
+  // person's profile, e.g. from a ticket's proposer.
+  validateSearch: (search: Record<string, unknown>): { tab?: "peers"; profile?: string } => ({
+    ...(search["tab"] === "peers" ? { tab: "peers" as const } : {}),
+    ...(typeof search["profile"] === "string" && UUID.test(search["profile"])
+      ? { profile: search["profile"] }
+      : {}),
+  }),
   // The root renders App for every path; this route only provides the path and page metadata.
   component: () => null,
 });

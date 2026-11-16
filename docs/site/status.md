@@ -22,20 +22,27 @@ planned operations, so it isn't an inventory of what exists.
 
 - Create (names up to 14 characters), edit, delete (with a 90-day read-only
   chat archive).
-- Members, invitations, hosts, per-member permissions, the leftover-cents
-  rule and betting settings.
+- Members, invitations, hosts, per-member permissions (bets, texts,
+  reactions, GIFs, polls), the leftover-cents rule, betting settings and the
+  polls switch.
 - Quick Pick switches and code rotation; subscriptions and copying aren't
   built.
-- Chat: paged history, text and GIFs, reactions, unread position, bet and
-  settlement cards. Live tomatoes.
+- Chat: paged history, text and GIFs, polls (hosts can turn them off per
+  table or per member), reactions, unread position, bet and settlement cards.
+  Live tomatoes.
 
 **Betting and settle-ups**
 
 - U2Pick: propose, pick, lock at the deadline (the lock worker), call the
   result or wash.
-- Score modes on NBA and NFL games: Total Disaster and Give And Take, before
-  or during a game. They settle from the feed 20 minutes after Final, and
-  hosts can wash or set a result until points are settled.
+- Sports modes on NBA and NFL games, before or during a game: the score modes
+  (Total Disaster, Give And Take), the player modes (Either Or, Prop Hunt,
+  King Of The Hill) and Scorcerer (NFL). They settle from the feed (most 20
+  minutes after Final, King Of The Hill and Scorcerer as soon as it's
+  decided), and hosts can wash or set a result until points are settled.
+- Wash triggers at lock (nobody picked, everyone on one option, a line or
+  target already reached) and at resolution (nobody picked the winner, ties,
+  pushes, a player who didn't play), listed in the domain rules.
 - Ledger, host points settlement, receipts (individual and per person) with
   private balance-change reviews. The server says which receipt actions you
   can take.
@@ -45,8 +52,9 @@ planned operations, so it isn't an inventory of what exists.
 - The BallDontLie NBA and NFL feed: games, game history, players and
   per-game player stats with history, the live ticker, and raw-response
   recordings for replay (see [Player stats](/player-stats)).
-- Dev sports data: live-edited scenario files and recorded chunks, played as
-  DEV games from the Dev page (see [Dev sports data](/dev-sports-data)).
+- Dev sports data: live-edited scenario files and recorded chunks (full NBA
+  and NFL games with live player stats), played as DEV games from the Dev
+  page (see [Dev sports data](/dev-sports-data)).
 
 **Delivery**
 
@@ -74,10 +82,10 @@ planned operations, so it isn't an inventory of what exists.
 ## Not yet available
 
 - Quick Pick subscriptions and copying results between tables.
-- The player-stat modes (Either Or, Prop Hunt, King Of The Hill), and the
-  play-by-play modes (Choose Their Fate, Scorcerer), which need GOAT.
-- Player stats on demo games and in recorded chunks. Stats have been recorded
-  since 2026-11-14.
+- Choose Their Fate, which needs GOAT play-by-play, and Scorcerer for the
+  NBA.
+- More mode-specific wash triggers (planned by the owner; see the domain
+  rules, "Wash triggers").
 - Registration, and LAN or production security and deployment.
 
 Picks are stored in plaintext. The [roadmap](/roadmap) tracks what's next.

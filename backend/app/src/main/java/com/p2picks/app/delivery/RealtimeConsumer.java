@@ -82,7 +82,7 @@ class RealtimeConsumer {
             case SETTLEMENT_LINE_CHANGED -> routes.settlements(Set.of(uuid(payload, "payerId"), uuid(payload, "payeeId")));
             case SETTLEMENT_GROUP_CHANGED, SETTLEMENT_NET_CHANGED ->
                     routes.settlements(Set.of(uuid(payload, "userId"), uuid(payload, "otherUserId")));
-            case CHAT_MESSAGE_CREATED, CHAT_REACTION_CHANGED ->
+            case CHAT_MESSAGE_CREATED, CHAT_REACTION_CHANGED, CHAT_POLL_VOTED ->
                     routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.CHAT, Invalidation.CHAT_CHANGED,
                             null, null);
             case TABLE_CREATED -> routes.personal(audiences.tableMembers(uuid(payload, "tableId")),

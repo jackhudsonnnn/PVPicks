@@ -18,9 +18,10 @@ and current decisions remain the working references.
 - Debt cap is off by default; changing it requires zero debt. Proposal, pick
   and lock transactions enforce the cap.
 
-U2Pick and the score modes (Total Disaster, Give And Take) are available over
-HTTP and in the frontend, with points settlement and receipts. The player-stat
-modes are planned.
+Every mode but Choose Their Fate is available over HTTP and in the frontend:
+U2Pick, the score modes, the player modes and Scorcerer (NFL), with points
+settlement and receipts. When a bet washes, at lock or at resolution, is listed
+in the domain rules ("Wash triggers").
 
 ## Sports outcomes
 

@@ -12,11 +12,16 @@ const tableSchema = z.object({
   remainderRule: z.enum(["host", "proposer", "earliest", "random"]),
   hostsOnlyBets: z.boolean(),
   u2pickEnabled: z.boolean(),
+  /** Whether members can start new chat polls (existing polls stay open either way). */
+  pollsEnabled: z.boolean(),
   quickPicksEnabled: z.boolean(),
   quickPickSharing: z.boolean(),
   quickPickCode: z.string().optional(),
   subscribedTo: z.array(z.guid()),
-  disabledPermissions: z.record(z.string(), z.array(z.enum(["bets", "text", "react", "gifs"]))),
+  disabledPermissions: z.record(
+    z.string(),
+    z.array(z.enum(["bets", "text", "react", "gifs", "polls"])),
+  ),
 });
 
 export type Table = z.infer<typeof tableSchema>;
@@ -52,7 +57,7 @@ export type MemberOutcome = z.infer<typeof outcomeSchema>;
 /** A member's points at a table: what the next settlement moves, and that minus their locked wagers. */
 export type TableBalance = z.infer<typeof balanceSchema>;
 type TableArchive = z.infer<typeof archiveSchema>;
-export type Permission = "bets" | "text" | "react" | "gifs";
+export type Permission = "bets" | "text" | "react" | "gifs" | "polls";
 export type RemainderRule = "host" | "proposer" | "earliest" | "random";
 
 function tablePath(tableId: string) {
@@ -87,7 +92,7 @@ export async function updateTableProfile(
 
 export async function updateTableSettings(
   tableId: string,
-  change: { hostsOnlyBets?: boolean; u2pickEnabled?: boolean },
+  change: { hostsOnlyBets?: boolean; u2pickEnabled?: boolean; pollsEnabled?: boolean },
   key: string,
 ) {
   await mutationRequest(`${tablePath(tableId)}/settings`, "PATCH", key, change);

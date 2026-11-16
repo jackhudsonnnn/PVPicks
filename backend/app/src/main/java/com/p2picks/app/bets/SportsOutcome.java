@@ -27,23 +27,42 @@ final class SportsOutcome {
         record Wash(String reason) implements Result {}
     }
 
-    /** A sports bet's settled terms. {@code choices} are in the order the proposal built them. */
-    record Terms(String mode, BigDecimal line, boolean includesOvertime, List<String> choices) {}
+    /**
+     * A sports bet's settled terms. {@code choices} are in the order the proposal built them; {@code stat} and
+     * {@code players} are for the player modes; {@code lockedAt} is when picks locked (null while Active).
+     */
+    record Terms(String mode, BigDecimal line, boolean includesOvertime, List<String> choices, String stat,
+                 List<String> players, java.time.Instant lockedAt) {
+        Terms(String mode, BigDecimal line, boolean includesOvertime, List<String> choices) {
+            this(mode, line, includesOvertime, choices, null, List.of(), null);
+        }
+    }
 
     private SportsOutcome() {}
 
-    static Result decide(Terms terms, GameLookup.Game game, Instant suspendedSince, Instant now) {
+    /**
+     * What a canceled, postponed or suspended game means for any sports bet: a wash, a wait, or null when the
+     * game is going ahead (scheduled, live or final).
+     */
+    static Result interruption(GameLookup.Game game, Instant suspendedSince, Instant now) {
         if (game == null) return new Result.Wait();
-        if (game.status() == GameStatus.POSTPONED) {
-            if ("suspended".equals(game.providerState())) {
-                return suspendedSince != null && !now.isBefore(suspendedSince.plus(SUSPENSION_LIMIT))
-                        ? new Result.Wash("Game suspended for more than 48 hours") : new Result.Wait();
-            }
-            return new Result.Wash("Game canceled or postponed");
+        if (game.status() != GameStatus.POSTPONED) return null;
+        if ("suspended".equals(game.providerState())) {
+            return suspendedSince != null && !now.isBefore(suspendedSince.plus(SUSPENSION_LIMIT))
+                    ? new Result.Wash("Game suspended for more than 48 hours") : new Result.Wait();
         }
-        if (game.status() != GameStatus.FINAL || game.finalAt() == null || now.isBefore(game.finalAt().plus(GRACE))) {
-            return new Result.Wait();
-        }
+        return new Result.Wash("Game canceled or postponed");
+    }
+
+    /** Final, and the grace period for stat corrections has passed. */
+    static boolean settledFinal(GameLookup.Game game, Instant now) {
+        return game.status() == GameStatus.FINAL && game.finalAt() != null && !now.isBefore(game.finalAt().plus(GRACE));
+    }
+
+    static Result decide(Terms terms, GameLookup.Game game, Instant suspendedSince, Instant now) {
+        Result interrupted = interruption(game, suspendedSince, now);
+        if (interrupted != null) return interrupted;
+        if (!settledFinal(game, now)) return new Result.Wait();
         Integer home = terms.includesOvertime() ? game.home().score() : game.home().regulationScore();
         Integer away = terms.includesOvertime() ? game.away().score() : game.away().regulationScore();
         if (home == null || away == null) return new Result.Wait();

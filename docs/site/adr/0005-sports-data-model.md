@@ -1,9 +1,10 @@
 # ADR 0005: Sports data model, ingestion and replay
 
-- Status: accepted; partly implemented (2026-11-14): raw recordings, saved
-  provider specs with contract tests, game history, players and player stats.
-  Dev replay (scenario files and recorded chunks, 2026-11-14) works too. Not
-  yet: the per-league plan setting.
+- Status: accepted; partly implemented: raw recordings, saved provider specs
+  with contract tests, game history, players and player stats (2026-11-14);
+  dev replay (scenario files and recorded chunks); the player modes and
+  Scorcerer reading the stored stats and score history (2026-11-15). Not yet:
+  the per-league plan setting.
 - Date: 2026-11-13
 
 ## Context

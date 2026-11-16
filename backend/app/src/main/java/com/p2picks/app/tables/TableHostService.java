@@ -79,7 +79,7 @@ class TableHostService {
             }
             jdbc.update("""
                     UPDATE table_members SET role = ?, can_bet = true, can_text = true,
-                        can_react = true, can_send_gifs = true WHERE table_id = ? AND user_id = ?
+                        can_react = true, can_send_gifs = true, can_poll = true WHERE table_id = ? AND user_id = ?
                     """, host ? "HOST" : "MEMBER", tableId, targetId);
             if (!host) {
                 jdbc.update("""

@@ -62,3 +62,79 @@ export function scoreLine(game: TickerGame, status: string) {
   const score = (s: number | null) => (s === null ? "" : ` ${s}`);
   return `${game.away.abbreviation}${score(game.away.score)} @ ${game.home.abbreviation}${score(game.home.score)} · ${status}`;
 }
+
+/** Player modes: both players from the bet's game (server: SportsProposalService). */
+export type PlayerMode = "either_or" | "prop_hunt" | "king_of_the_hill";
+const PLAYER_MODES: readonly PlayerMode[] = ["either_or", "prop_hunt", "king_of_the_hill"];
+export const isPlayerMode = (mode: string): mode is PlayerMode =>
+  (PLAYER_MODES as readonly string[]).includes(mode);
+
+/** Scorcerer: how the next NFL score is made. NFL only, read from score jumps. */
+export const SCORCERER_CHOICES = ["Touchdown", "Field goal", "Safety", "No more scoring"];
+
+/** Every mode that binds to a game. */
+export type SportsMode = ScoreMode | PlayerMode | "scorcerer";
+export const isSportsMode = (mode: string): mode is SportsMode =>
+  isScoreMode(mode) || isPlayerMode(mode) || mode === "scorcerer";
+
+/** How many players a player mode takes. */
+export const playerCount = (mode: PlayerMode) => (mode === "prop_hunt" ? 1 : 2);
+
+type Named = { name: string; team: string | null };
+
+/** Display names as choices; two players with the same name are told apart by team (as the server does). */
+export function playerNames(players: Named[]) {
+  const names = players.map((p) => p.name);
+  return names.length === 2 && names[0]?.toLowerCase() === names[1]?.toLowerCase()
+    ? players.map((p) => `${p.name} (${p.team ?? "?"})`)
+    : names;
+}
+
+/** The question and choices the server builds for a player mode or Scorcerer. */
+export function playerTerms(
+  mode: PlayerMode | "scorcerer",
+  statLabel: string,
+  players: Named[],
+  line: number,
+  home: string,
+  away: string,
+) {
+  if (mode === "scorcerer")
+    return {
+      question: `${away} @ ${home}: how is the next score made?`,
+      choices: SCORCERER_CHOICES,
+    };
+  const stat = statLabel.toLowerCase();
+  const names = playerNames(players);
+  if (mode === "either_or")
+    return { question: `Who gets more ${stat}: ${names[0]} or ${names[1]}?`, choices: names };
+  if (mode === "prop_hunt")
+    return {
+      question: `${names[0]} ${stat}: over or under ${line}?`,
+      choices: [`Over ${line}`, `Under ${line}`],
+    };
+  return {
+    question: `First to ${line} ${stat}: ${names[0]} or ${names[1]}?`,
+    choices: [names[0] ?? "", names[1] ?? "", "Neither"],
+  };
+}
+
+/**
+ * A line (Prop Hunt) or target (King Of The Hill) that starts just above the players' current numbers: the server
+ * requires it to be above them (domain rules, "Wash triggers").
+ */
+export function startingLine(mode: PlayerMode, current: number[]) {
+  const top = Math.max(0, ...current);
+  return mode === "prop_hunt" ? top + 0.5 : top + 1;
+}
+
+/** Why a player-mode proposal can't be sent yet, or null. Mirrors the server's checks. */
+export function playerProblem(mode: PlayerMode, players: { stat: number }[], line: number) {
+  if (players.length < playerCount(mode))
+    return playerCount(mode) === 1 ? "Pick a player." : "Pick two players.";
+  if (mode === "prop_hunt" && players[0] && players[0].stat >= line)
+    return "The line must be above the player's current number.";
+  if (mode === "king_of_the_hill" && players.some((p) => p.stat >= line))
+    return "The target must be above both players' current numbers.";
+  return null;
+}

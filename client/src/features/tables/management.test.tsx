@@ -85,6 +85,7 @@ const table: Table = {
   remainderRule: "host",
   hostsOnlyBets: false,
   u2pickEnabled: true,
+  pollsEnabled: true,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],

@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { z } from "zod";
 import { backendErrorMessage, idSchema } from "@/lib/api-client";
 import { useRetryableMutation } from "@/lib/mutation";
-import { sendChatMessage, setReaction } from "./api";
+import { createPoll, sendChatMessage, setReaction, setVote } from "./api";
 
 const uuid = idSchema;
 const intentSchema = z.discriminatedUnion("kind", [
@@ -15,6 +15,18 @@ const intentSchema = z.discriminatedUnion("kind", [
     ]),
   }),
   z.object({
+    kind: z.literal("poll"),
+    tableId: uuid,
+    question: z.string().min(1).max(800),
+    options: z.array(z.string().min(1).max(320)).min(2).max(6),
+  }),
+  z.object({
+    kind: z.literal("vote"),
+    tableId: uuid,
+    messageId: uuid,
+    option: z.number().int().min(0).max(5).nullable(),
+  }),
+  z.object({
     kind: z.literal("react"),
     tableId: uuid,
     messageId: uuid,
@@ -24,7 +36,7 @@ const intentSchema = z.discriminatedUnion("kind", [
 
 type ChatIntent = z.infer<typeof intentSchema>;
 
-/** Sending and reacting, with the same retry-key safety as bets and receipts. */
+/** Sending, polls and reacting, with the same retry-key safety as bets and receipts. */
 export function useChatActions(
   userId: string,
   refresh: (intent: ChatIntent | null) => Promise<void>,
@@ -47,6 +59,13 @@ export function useChatActions(
     execute: async (intent, key) => {
       last.current = intent;
       if (intent.kind === "send") await sendChatMessage(intent.tableId, intent.message, key);
+      else if (intent.kind === "poll")
+        await createPoll(
+          intent.tableId,
+          { question: intent.question, options: intent.options },
+          key,
+        );
+      else if (intent.kind === "vote") await setVote(intent.messageId, intent.option, key);
       else await setReaction(intent.messageId, intent.emoji, key);
     },
   });

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { backendErrorMessage } from "@/lib/api-client";
-import { type User, PersonName } from "@/features/people";
+import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SettlementReceipts } from "@/features/settlements";
@@ -188,20 +188,23 @@ function PersonRow({
   const disabled = actions.busy || !!actions.pending || !!actions.storageError;
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-surface p-3">
-      <span>
-        <span className="font-semibold">
-          <PersonName id={id} user={user} expire={expire} queryKey={names} />
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {blocked
-            ? "Blocked"
-            : following && followsYou
-              ? "Friends"
-              : followsYou
-                ? "Follows you"
-                : following
-                  ? "You follow them"
-                  : ""}
+      <span className="flex min-w-0 items-center gap-3">
+        <PersonAvatar id={id} user={user} expire={expire} queryKey={names} size="md" />
+        <span className="min-w-0">
+          <span className="font-semibold">
+            <PersonName id={id} user={user} expire={expire} queryKey={names} />
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            {blocked
+              ? "Blocked"
+              : following && followsYou
+                ? "Friends"
+                : followsYou
+                  ? "Follows you"
+                  : following
+                    ? "You follow them"
+                    : ""}
+          </span>
         </span>
       </span>
       <span className="flex flex-wrap gap-2">

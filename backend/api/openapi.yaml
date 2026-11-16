@@ -286,14 +286,22 @@ paths:
       operationId: proposeBet
       summary: Propose a bet at a table
       description: >-
-        Dev implementation for U2Pick and the score modes (total_disaster,
-        give_and_take); other sports modes are not implemented. For score
-        modes the client sends gameId, config.line (half-point steps: the
-        total for total_disaster, the home team's spread for give_and_take)
-        and includesOvertime (default true); the server builds the question
-        and choices from the stored game. A game bet can be proposed until its
-        game is Final, canceled or postponed (409 game_unavailable); picks
-        lock at the window's end or the game's start, whichever is first.
+        Dev implementation for U2Pick and every sports mode except
+        choose_their_fate. Sports modes send gameId and includesOvertime
+        (default true; ignored by scorcerer) and a config: score modes
+        config.line in half points (the total for total_disaster, the home
+        team's spread for give_and_take); player modes config.stat (a key
+        from GET /games/{gameId}/players) and config.players (player ids from
+        that game: one for prop_hunt, two for either_or and king_of_the_hill)
+        plus config.line for prop_hunt (half points, above the player's
+        current number) and king_of_the_hill (a whole-number target above
+        both players' numbers); scorcerer (NFL only) takes no config. The
+        server builds the question and choices from the stored game and
+        players. Terms the game can't take answer 409 invalid_terms. A game
+        bet can be proposed until its game is Final, canceled or postponed
+        (409 game_unavailable); picks lock at the window's end or the game's
+        start, whichever is first, and some picks wash at lock (domain rules,
+        "Wash triggers").
         The server checks table permissions, wager rules and debt cap, and
         assigns the bet identity and lock time. The
         proposer is the visible author but does not join the bet automatically.
@@ -840,6 +848,11 @@ paths:
                   type: boolean
                 u2pickEnabled:
                   type: boolean
+                pollsEnabled:
+                  type: boolean
+                  description: >-
+                    Whether members can start new chat polls. Turning it off
+                    doesn't close existing polls; they keep taking votes.
       responses:
         '200':
           description: Updated table.
@@ -1067,7 +1080,7 @@ paths:
               properties:
                 permission:
                   type: string
-                  enum: [bets, text, react, gifs]
+                  enum: [bets, text, react, gifs, polls]
                 enabled:
                   type: boolean
       responses:
@@ -1359,6 +1372,112 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /tables/{tableId}/polls:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+    post:
+      operationId: createChatPoll
+      summary: Start a poll in a table's chat
+      description: >-
+        The caller must be a current member of a non-archived table with the
+        polls permission, and the table must have polls on (403 polls_off).
+        The question (1–200 code points) and 2–6 options (1–80 code points
+        each, different ignoring case) are trimmed like text messages. A
+        matching retry returns the original 201 representation. The poll never
+        closes.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [question, options]
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                options:
+                  type: array
+                  minItems: 2
+                  maxItems: 6
+                  items:
+                    type: string
+                    minLength: 1
+      responses:
+        '201':
+          description: Poll created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /messages/{messageId}/vote:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    put:
+      operationId: putMyPollVote
+      summary: Vote for one option of a poll, or change the vote
+      description: >-
+        Any current member of the poll's non-archived table can vote, even
+        when polls are off or their polls permission is disabled (those only
+        stop new polls). Polls by authors the caller blocked are hidden and
+        return 404. A matching retry returns 204 without reapplying.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [option]
+              properties:
+                option:
+                  type: integer
+                  minimum: 0
+                  maximum: 5
+                  description: Index into the poll's options.
+      responses:
+        '204':
+          description: Vote recorded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: removeMyPollVote
+      summary: Remove the current user's vote
+      description: Same access and retry rules as PUT. No request body is accepted.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Vote removed, or there was none.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /messages/{messageId}/reaction:
     parameters:
       - $ref: '#/components/parameters/MessageId'
@@ -1368,8 +1487,8 @@ paths:
       description: >-
         Dev accepts exactly one Unicode RGI emoji sequence as defined by
         ICU4J 76.1 (Emoji 16.0). The caller must be a current member of a
-        non-archived table with react permission. Only visible text, GIF and
-        bet messages can be reacted to. Text and GIF messages from authors
+        non-archived table with react permission. Only visible text, GIF,
+        poll and bet messages can be reacted to. Text and GIF messages from authors
         blocked by the caller are hidden; bet cards remain visible. Missing,
         inaccessible and non-reactable messages return the same 404. A matching
         retry returns 204 without reapplying, after rechecking current access;
@@ -1570,7 +1689,8 @@ paths:
         response fails with 409 and code group_net_out_of_range. Individual
         receipt history and settlement-review reads remain available.
         With includeHistory=true, a closed group can still contain an
-        unreviewed warning.
+        unreviewed warning. Groups with a nonzero net come first, newest
+        activity first; groups at a zero net come last.
       parameters:
         - name: includeHistory
           in: query
@@ -2276,6 +2396,54 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /games/{gameId}/players:
+    get:
+      operationId: listGamePlayers
+      summary: A game's pickable players with current stats, for the player modes
+      description: >-
+        Both teams' active players plus anyone seen in the game's stats, by
+        team then name, with each player's current canonical stats; and the
+        league's stats in the order the proposal sheet offers them.
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Players and stats.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stats, players]
+                properties:
+                  stats:
+                    type: array
+                    items:
+                      type: object
+                      required: [key, label]
+                      properties:
+                        key: {type: string}
+                        label: {type: string}
+                  players:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, team, played, stats]
+                      properties:
+                        id: {type: string}
+                        name: {type: string}
+                        position: {type: [string, 'null']}
+                        team: {type: [string, 'null']}
+                        played: {type: boolean}
+                        stats:
+                          type: object
+                          additionalProperties: {type: integer}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /games:
     get:
       operationId: listGames
@@ -3310,7 +3478,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [text, gif, bet, system, settlement]
+          enum: [text, gif, bet, system, settlement, poll]
         createdAt:
           type: string
           format: date-time
@@ -3403,7 +3571,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [text, gif, bet, system, settlement]
+          enum: [text, gif, bet, system, settlement, poll]
         createdAt:
           type: string
           format: date-time
@@ -3424,6 +3592,8 @@ components:
           format: uuid
         settlementSummary:
           $ref: '#/components/schemas/ChatSettlementSummary'
+        poll:
+          $ref: '#/components/schemas/ChatPoll'
         reactions:
           type: array
           items:
@@ -3446,6 +3616,7 @@ components:
             betId: false
             settlementId: false
             settlementSummary: false
+            poll: false
         - required: [authorId, gifId]
           properties:
             kind: { const: gif }
@@ -3455,6 +3626,7 @@ components:
             betId: false
             settlementId: false
             settlementSummary: false
+            poll: false
         - required: [authorId, betId]
           properties:
             kind: { const: bet }
@@ -3464,6 +3636,7 @@ components:
             gifId: false
             settlementId: false
             settlementSummary: false
+            poll: false
         - required: [text]
           properties:
             kind: { const: system }
@@ -3473,6 +3646,7 @@ components:
             betId: false
             settlementId: false
             settlementSummary: false
+            poll: false
         - required: [settlementId, settlementSummary]
           properties:
             kind: { const: settlement }
@@ -3482,6 +3656,48 @@ components:
             text: false
             gifId: false
             betId: false
+            poll: false
+        - required: [authorId, text, poll]
+          description: A poll; its question is the text.
+          properties:
+            kind: { const: poll }
+            authorId: true
+            text: true
+            poll: true
+            gifId: false
+            betId: false
+            settlementId: false
+            settlementSummary: false
+    ChatPoll:
+      type: object
+      additionalProperties: false
+      required: [options, votes]
+      description: >-
+        A poll's options and every vote from a non-deleted member, oldest
+        first. Votes are visible to everyone at the table; polls never close.
+      properties:
+        options:
+          type: array
+          minItems: 2
+          maxItems: 6
+          items:
+            type: string
+            minLength: 1
+        votes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [userId, option]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              option:
+                type: integer
+                minimum: 0
+                maximum: 5
+                description: Index into options.
     ChatSettlementSummary:
       type: object
       additionalProperties: false
@@ -3559,7 +3775,7 @@ components:
     Table:
       type: object
       additionalProperties: false
-      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
+      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
       properties:
         id:
           type: string
@@ -3587,6 +3803,9 @@ components:
           type: boolean
         u2pickEnabled:
           type: boolean
+        pollsEnabled:
+          type: boolean
+          description: Whether members can start new chat polls.
         quickPickCode:
           description: Present only for current table hosts.
           $ref: '#/components/schemas/QuickPickCode'
@@ -3607,7 +3826,7 @@ components:
             uniqueItems: true
             items:
               type: string
-              enum: [bets, text, react, gifs]
+              enum: [bets, text, react, gifs, polls]
     DebtCap:
       type: object
       additionalProperties: false

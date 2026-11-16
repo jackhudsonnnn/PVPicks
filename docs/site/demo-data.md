@@ -96,7 +96,7 @@ they do:
 | When | What | Where |
 |---|---|---|
 | An open bet they can see | Join it (`joinBetChance`), picking a side by `pickStyle`, before it locks | Tables with newbie, intermediate or pro |
-| At their own pace, or to top up | Propose a score bet on a live or upcoming game (dev or real), or a canned U2Pick | The pro's tables only, so intermediate keeps a quiet history |
+| At their own pace, or to top up | Propose a sports bet on a live or upcoming game (dev or real) in any mode they like (`modes`): score modes, Either Or, Prop Hunt, King Of The Hill (games with players), Scorcerer (live NFL); or a canned U2Pick | The pro's tables only, so intermediate keeps a quiet history |
 | A U2Pick locked 5–30 minutes ago | Call the result, if its settler rule allows them | Tables with a main account |
 | Six or more bets waiting for points settlement | The demo host settles the table's points, at most hourly | Tables a demo user hosts |
 | Online | Chat (`messagesPerHour`, `gifChance`), react to recent messages (`reactionChance`) | Tables with a main account |
@@ -123,6 +123,12 @@ through the real dev game sync, so score bets on them lock and settle like any
 other, and they're marked DEV. A game's state is a pure function of the clock,
 so there's nothing to save and a restart picks up mid-game. NBA games end
 around 115 a side and NFL around 24, never tied (no overtime in the demo).
+
+Each club has a fixed roster of eight made-up players, and every live or
+finished demo game has a box score built from the same minute-by-minute
+scoring: points (NBA) or touchdowns (NFL) follow the score, and the other
+stats grow with the clock. So the player modes and Scorcerer work on demo
+games at any hour.
 
 Finished dev games leave the ticker an hour after they end. The scenario files
 and recorded chunks on the Dev page still work alongside them (see
@@ -170,7 +176,5 @@ user triggers off only inside its own transaction.
 
 ## Not covered
 
-- Player stats on demo games, so Either Or, Prop Hunt and King Of The Hill
-  have no live demo data yet (they aren't built either).
 - Bot state is in memory: a backend restart starts the bots over (the world
   and games are unaffected).

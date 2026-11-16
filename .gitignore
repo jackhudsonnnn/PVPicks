@@ -2,3 +2,5 @@
 /recordings/
 # Dev chunks are cut from recordings, so they're provider data too; scenario files are committed.
 /dev/sports/chunks/
+# One response from each GOAT-only endpoint (play-by-play, odds, props, box scores): provider data too.
+/dev/sports/samples/

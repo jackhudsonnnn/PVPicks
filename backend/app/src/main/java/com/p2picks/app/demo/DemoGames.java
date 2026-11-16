@@ -1,6 +1,9 @@
 package com.p2picks.app.demo;
 
 import com.p2picks.app.sports.FeedGame;
+import com.p2picks.app.sports.FeedPlayer;
+import com.p2picks.app.sports.StatLine;
+import com.p2picks.app.sports.StatsSync;
 import com.p2picks.app.sports.GameStatus;
 import com.p2picks.app.sports.GameSync;
 import com.p2picks.app.sports.League;
@@ -9,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -56,10 +60,12 @@ public class DemoGames {
             new Club("DAL", "Dallas", "Cowboys"), new Club("GB", "Green Bay", "Packers"));
 
     private final GameSync sync;
+    private final StatsSync stats;
     private final Clock clock;
 
-    DemoGames(GameSync sync, Clock clock) {
+    DemoGames(GameSync sync, StatsSync stats, Clock clock) {
         this.sync = sync;
+        this.stats = stats;
         this.clock = clock;
     }
 
@@ -72,6 +78,13 @@ public class DemoGames {
                 games.computeIfAbsent(slot.league(), league -> new ArrayList<>()).add(game(slot, loop(slot, now), now));
             }
             games.forEach((league, list) -> sync.recordDev(league, list, now));
+            // Box scores for the player modes, from the same minute-by-minute scoring.
+            for (Slot slot : SLOTS) {
+                long n = loop(slot, now);
+                FeedGame game = game(slot, n, now);
+                if (game.status() == GameStatus.SCHEDULED) continue;
+                stats.recordGame(game.id(), box(slot, n, now), now);
+            }
         } catch (RuntimeException exception) {
             log.warn("Demo games tick failed", exception);
         }
@@ -79,6 +92,79 @@ public class DemoGames {
 
     static long loop(Slot slot, Instant at) {
         return Math.floorDiv(Duration.between(ANCHOR.plus(slot.offset()), at).toSeconds(), LOOP.toSeconds());
+    }
+
+    private static final String[] FIRST = {"Jalen", "Marcus", "Tyrese", "Devin", "Isaiah", "Caleb", "Darius",
+        "Malik", "Andre", "Jordan", "Trey", "Cam", "Xavier", "Zion", "Ty", "Nico"};
+    private static final String[] LAST = {"Holloway", "Brightwater", "Okafor", "Lindqvist", "Ramsey", "Delacroix",
+        "Whitfield", "Abernathy", "Castellano", "Mbeki", "Sorensen", "Prescott", "Vasquez", "Thornbury", "Kowalski"};
+    private static final String[] NBA_POSITIONS = {"G", "G", "F", "F", "C", "G", "F", "C"};
+    private static final String[] NFL_POSITIONS = {"QB", "RB", "WR", "WR", "TE", "RB", "WR", "K"};
+    /** Each player's share of the team's production, best first. */
+    private static final double[] SHARE = {0.24, 0.18, 0.15, 0.12, 0.10, 0.09, 0.07, 0.05};
+
+    /** A club's demo roster: the same eight made-up players every game, with stable ids. */
+    static List<FeedPlayer> roster(League league, String club) {
+        Random random = new Random(club.hashCode() * 31L + league.ordinal());
+        List<FeedPlayer> players = new ArrayList<>();
+        for (int i = 0; i < SHARE.length; i++) {
+            players.add(new FeedPlayer(league, "DEV-demo-" + club + "-" + (i + 1), FIRST[random.nextInt(FIRST.length)],
+                    LAST[random.nextInt(LAST.length)], (league == League.NBA ? NBA_POSITIONS : NFL_POSITIONS)[i], club));
+        }
+        return players;
+    }
+
+    /** Both teams' lines in loop {@code n} as it stands at {@code at}; empty before tip-off. */
+    static List<StatLine> box(Slot slot, long n, Instant at) {
+        Instant tipOff = ANCHOR.plus(slot.offset()).plus(LOOP.multipliedBy(n)).plus(PREGAME);
+        if (at.isBefore(tipOff)) return List.of();
+        Random random = new Random(slot.name().hashCode() * 1_000_003L + n);
+        List<Club> clubs = slot.league() == League.NBA ? NBA : NFL;
+        Club home = clubs.get(random.nextInt(clubs.size()));
+        Club away;
+        do {
+            away = clubs.get(random.nextInt(clubs.size()));
+        } while (away.equals(home));
+        int minutes = (int) LIVE.toMinutes();
+        int[][] scored = scoring(slot.league(), random, minutes);
+        int upTo = (int) Math.min(Duration.between(tipOff, at).toMinutes(), minutes);
+        String providerId = "DEV-demo-" + slot.name() + "-" + n;
+        List<StatLine> lines = new ArrayList<>();
+        Club[] sides = {home, away};
+        for (int side = 0; side < 2; side++) {
+            int points = 0;
+            int touchdowns = 0;
+            for (int m = 0; m < upTo; m++) {
+                points += scored[side][m];
+                if (scored[side][m] >= 6) touchdowns++;
+            }
+            List<FeedPlayer> players = roster(slot.league(), sides[side].abbreviation());
+            for (int i = 0; i < players.size(); i++) {
+                double share = SHARE[i];
+                Map<String, Integer> line = new LinkedHashMap<>();
+                if (slot.league() == League.NBA) {
+                    int playerPoints = (int) Math.round(points * share);
+                    line.put("points", playerPoints);
+                    line.put("rebounds", (int) Math.round(upTo * share * 0.6));
+                    line.put("assists", (int) Math.round(upTo * share * 0.4));
+                    line.put("threes", playerPoints / 9);
+                    line.put("stocks", (int) Math.round(upTo * share * 0.12));
+                } else {
+                    String position = players.get(i).position();
+                    line.put("passing_yards", position.equals("QB") ? points * 8 + upTo * 2 : 0);
+                    line.put("rushing_yards", position.equals("RB") ? (int) Math.round(upTo * share * 6) : 0);
+                    boolean catches = position.equals("WR") || position.equals("TE") || position.equals("RB");
+                    line.put("receiving_yards", catches ? (int) Math.round(upTo * share * 8) : 0);
+                    line.put("receptions", catches ? (int) Math.round(upTo * share * 0.6) : 0);
+                    // Touchdowns go round-robin to the backs and receivers (players 2-5).
+                    int scorers = 4;
+                    line.put("touchdowns", i >= 1 && i <= scorers ? touchdowns / scorers
+                            + (touchdowns % scorers >= i ? 1 : 0) : 0);
+                }
+                lines.add(new StatLine(slot.league(), providerId, players.get(i), true, line));
+            }
+        }
+        return lines;
     }
 
     /** The slot's game in loop {@code n}, as it stands at {@code at}. */

@@ -124,6 +124,7 @@ const table = {
   remainderRule: "host" as const,
   hostsOnlyBets: false,
   u2pickEnabled: true,
+  pollsEnabled: true,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -313,7 +314,7 @@ describe("backend app", () => {
     renderApp();
     const ticket = await openTicket("Who wins?");
     expect(ticket.getByRole("button", { name: "Yes", pressed: true })).toBeInTheDocument();
-    expect(ticket.getByText("Picks stay private until lock")).toBeInTheDocument();
+    expect(ticket.getByRole("link", { name: table.name })).toBeInTheDocument();
     expect(ticket.getByText("1.25")).toBeInTheDocument();
     expect(ticket.queryByText(/\d+ · \d+%/)).not.toBeInTheDocument();
     fireEvent.click(ticket.getByRole("button", { name: "Details" }));
@@ -373,6 +374,7 @@ describe("backend app", () => {
     const locked: Bet = {
       ...bet,
       status: "PENDING",
+      proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
       noGuessUserIds: [],
       remainderRule: "host",
@@ -390,19 +392,24 @@ describe("backend app", () => {
     renderApp();
     const ticket = await openTicket("Who wins?");
     fireEvent.click(ticket.getByRole("button", { name: "Details" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(`Profile ${memberId}:`);
-    expect(screen.getByRole("alert")).toHaveTextContent("unavailable");
+    // Details names the person twice (proposer and pick), and each name shows the lookup error.
+    const alerts = await screen.findAllByRole("alert");
+    for (const alert of alerts) {
+      expect(alert).toHaveTextContent(`Profile ${memberId}:`);
+      expect(alert).toHaveTextContent("unavailable");
+    }
     expect(screen.getByText("Who wins?", { selector: "h3" })).toBeInTheDocument();
     available = true;
-    fireEvent.click(screen.getByRole("button", { name: "Retry profile" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Retry profile" })[0]!);
     const details = screen.getAllByRole("dialog").at(-1)!;
-    expect(await within(details).findByText("player")).toBeInTheDocument();
+    expect(await within(details).findAllByText("player")).not.toHaveLength(0);
   });
 
   it("expires the session when a profile lookup returns 401", async () => {
     const locked: Bet = {
       ...bet,
       status: "PENDING",
+      proposerId: "123e4567-e89b-42d3-a456-426614174003",
       picks: [{ userId: "123e4567-e89b-42d3-a456-426614174003", choice: "No" }],
       noGuessUserIds: [],
       remainderRule: "host",
@@ -414,7 +421,7 @@ describe("backend app", () => {
     vi.mocked(listTableBets).mockResolvedValue([locked]);
     vi.mocked(getProfile).mockRejectedValue(new BackendError("expired", 401));
     renderApp();
-    // The ticket's avatars look the person up.
+    // The ticket's proposer avatar looks the person up.
     await openTicket("Who wins?");
     expect(await screen.findByText(/session expired/i)).toBeInTheDocument();
   });
@@ -425,6 +432,7 @@ describe("backend app", () => {
     const locked: Bet = {
       ...bet,
       status: "PENDING",
+      proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
       noGuessUserIds: [],
       remainderRule: "host",

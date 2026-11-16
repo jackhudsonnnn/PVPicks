@@ -40,7 +40,7 @@ subscribing connection only.
 |---|---|---|---|
 | `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`: refetch the table; `tomatoes.changed`: refetch `GET /tables/{id}/tomatoes` (from `table.tomato.thrown`) | `table.profile.changed`, `table.settings.changed`, `table.remainder.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
 | `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`; `settlement.created` (list) |
-| `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed` |
+| `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed`, `chat.poll.voted` |
 | `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.line.changed`, `settlement.group.changed`, `settlement.net.changed` |
 | `/user/queue/me` | The user only | `tables.changed`, `invitations.changed` (no IDs) or `profile.changed` with the user ID | see below |
 | `/user/queue/ticker` | Every signed-in player | `ticker.changed`, no IDs; refetch `GET /ticker` | `sports.games.changed` (one per feed poll that changed a game) |

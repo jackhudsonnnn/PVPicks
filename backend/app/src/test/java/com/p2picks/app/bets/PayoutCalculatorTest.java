@@ -46,6 +46,7 @@ class PayoutCalculatorTest {
                 .isEqualTo(new Result.Washed(WashReason.INSUFFICIENT_PLAYERS));
         assertThat(settle(List.of(p(1, "pass"), p(2, "pass")), 100, false, "pass", EARLIEST_RULE))
                 .isEqualTo(new Result.Washed(WashReason.SAME_SIDE));
+        // The general resolution wash: a 3+ option bet whose picks left the winning option empty.
         assertThat(settle(both, 100, false, "neither", EARLIEST_RULE))
                 .isEqualTo(new Result.Washed(WashReason.NO_WINNER));
     }

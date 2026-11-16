@@ -31,6 +31,7 @@ class BetMutationController {
     private static final Set<String> SPORTS_FIELDS =
             Set.of("modeId", "gameId", "config", "includesOvertime", "wagerCents", "durationSec", "forFun",
                     "question", "choices");
+    private static final Set<String> SPORTS_CONFIG = Set.of("line", "stat", "players");
     private final U2PickProposalService proposals;
     private final SportsProposalService sportsProposals;
     private final BetPickService picks;
@@ -78,18 +79,26 @@ class BetMutationController {
         SportsProposalService.Proposal proposal;
         try {
             if (!input.isObject() || !onlyFields(input, SPORTS_FIELDS) || !input.path("gameId").isTextual()
-                    || !(input.get("config") instanceof ObjectNode config) || config.size() != 1
-                    || !config.path("line").isNumber()
+                    || !(input.get("config") instanceof ObjectNode config) || !onlyFields(config, SPORTS_CONFIG)
+                    || (config.has("line") && !config.path("line").isNumber())
+                    || (config.has("stat") && !config.path("stat").isTextual())
+                    || (config.has("players") && !config.path("players").isArray())
                     || (input.has("includesOvertime") && !input.path("includesOvertime").isBoolean())
                     || !input.path("wagerCents").isIntegralNumber() || !input.path("wagerCents").canConvertToLong()
                     || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()
                     || !input.path("forFun").isBoolean()) {
                 throw new IllegalArgumentException("Invalid proposal");
             }
+            List<String> players = new ArrayList<>();
+            for (JsonNode player : config.path("players")) {
+                if (!player.isTextual()) throw new IllegalArgumentException("Invalid player");
+                players.add(player.textValue());
+            }
             proposal = new SportsProposalService.Proposal(input.path("modeId").textValue(),
-                    input.path("gameId").textValue(), config.path("line").decimalValue(),
+                    input.path("gameId").textValue(), config.has("line") ? config.path("line").decimalValue() : null,
                     input.path("includesOvertime").asBoolean(true), input.path("wagerCents").longValue(),
-                    input.path("durationSec").intValue(), input.path("forFun").booleanValue());
+                    input.path("durationSec").intValue(), input.path("forFun").booleanValue(),
+                    config.has("stat") ? config.path("stat").textValue() : null, players);
         } catch (IllegalArgumentException exception) {
             return error(400, "bad_request", "Invalid sports proposal.");
         }
@@ -98,6 +107,8 @@ class BetMutationController {
             return created(jwt, result.outcome().name(), result.betId());
         } catch (BetProposalWriter.ModeUnavailable exception) {
             return error(409, "game_unavailable", "That game can't take new bets.");
+        } catch (SportsProposalService.InvalidTerms exception) {
+            return error(409, "invalid_terms", exception.getMessage() + ".");
         } catch (BetProposalWriter.DebtCapExceeded exception) {
             return error(409, "debt_cap_exceeded", "This proposal would exceed the debt cap.");
         } catch (MutationAuthentication.ExpiredSession exception) {

@@ -91,9 +91,11 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const navigate = useNavigate();
   const peopleKey = userKey(user.id, "people");
   const betsKey = userKey(user.id, table.id, "bets");
-  const requestedTab = useRouterState({
-    select: (state) => (state.location.search as { tab?: string } | undefined)?.tab,
+  const search = useRouterState({
+    select: (state) => state.location.search as { tab?: string; profile?: string } | undefined,
   });
+  const requestedTab = search?.tab;
+  const requestedProfile = search?.profile;
   const [tab, setTab] = useState<TabId>(requestedTab === "peers" ? "peers" : "table");
   const [focusId, setFocusId] = useState<string | undefined>();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -105,11 +107,20 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
     setTab("peers");
     setOpenId(null);
   }, [requestedTab]);
-  // Switching tabs yourself drops ?tab, so the same link opens Peers again next time.
+  // A ticket's proposer avatar links here with ?profile=<id>, even from this page's own ticket dialog.
+  useEffect(() => {
+    if (!requestedProfile) return;
+    setProfileId(requestedProfile);
+    setOpenId(null);
+  }, [requestedProfile]);
+  // Switching tabs or closing the profile yourself drops the search, so the same link works again next time.
+  const clearSearch = () => {
+    if (requestedTab || requestedProfile)
+      void navigate({ to: "/tables/$tableId", params: { tableId: table.id }, replace: true });
+  };
   const chooseTab = (next: TabId) => {
     setTab(next);
-    if (requestedTab)
-      void navigate({ to: "/tables/$tableId", params: { tableId: table.id }, replace: true });
+    clearSearch();
   };
 
   const bets = useQuery({
@@ -191,7 +202,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
     <div className="flex h-[calc(100dvh-var(--app-top-height)-var(--app-bottom-height))] min-h-0 flex-col overflow-hidden">
       <div className="glass-bar grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b px-3 py-2 md:gap-3 md:px-6 md:py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Button asChild variant="ghost" size="icon" className="-ml-2 shrink-0 md:hidden">
+          <Button asChild variant="ghost" size="icon" className="-ml-2 shrink-0 nav:hidden">
             <Link to="/" aria-label="Back">
               <ArrowLeft />
             </Link>
@@ -223,7 +234,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
 
       <SegmentedTabs
         ariaLabel="Table sections"
-        className="shrink-0 rounded-none border-b md:hidden"
+        className="shrink-0 rounded-none border-b split:hidden"
         tabs={tabs}
         value={view}
         onChange={chooseTab}
@@ -234,7 +245,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
           role="region"
           aria-label="Table"
           className={cn(
-            "relative min-h-0 min-w-0 flex-1 overflow-hidden px-2 md:block md:px-8",
+            "relative min-h-0 min-w-0 flex-1 overflow-hidden px-2 split:block md:px-8",
             view === "table" ? "block" : "hidden",
           )}
         >
@@ -276,14 +287,14 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
 
         <aside
           className={cn(
-            "min-h-0 w-full flex-col border-l bg-sidebar/60 md:flex md:w-[360px] md:shrink-0 lg:w-[400px]",
+            "min-h-0 w-full flex-col bg-sidebar/60 split:flex split:w-[400px] split:shrink-0 split:border-l",
             view !== "table" ? "flex" : "hidden",
           )}
         >
           <SegmentedTabs
             size="sm"
             ariaLabel="Side panel"
-            className="hidden rounded-none border-b bg-transparent md:grid"
+            className="hidden rounded-none border-b bg-transparent split:grid"
             tabs={sideTabs}
             value={view === "table" ? "chat" : view}
             onChange={chooseTab}
@@ -355,7 +366,11 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
         peopleKey={peopleKey}
         social={socialActions}
         onOpenBet={openBet}
-        onOpenChange={(open) => !open && setProfileId(null)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setProfileId(null);
+          clearSearch();
+        }}
       />
       <TomatoLayer tableId={table.id} user={user} expire={expire} peopleKey={peopleKey} />
       <Dialog open={!!opened} onOpenChange={(open) => !open && setOpenId(null)}>

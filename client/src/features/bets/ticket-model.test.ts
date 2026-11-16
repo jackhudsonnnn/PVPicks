@@ -97,11 +97,12 @@ describe("ticket model", () => {
   it("explains what tapping a choice does", () => {
     expect(
       activeHint({ ...active, myPick: null, myParticipation: "not_joined" }, true, "1.50"),
-    ).toBe("Tap a choice to join. 1.50 pts goes in the pot when picks lock.");
+    ).toBe("1.50 pts goes in the pot when picks lock.");
     expect(activeHint(active, false, "1.50")).toMatch(/turned off betting/);
-    expect(
-      activeHint({ ...active, myPick: null, myParticipation: "no_guess" }, true, "1.50"),
-    ).toMatch(/not made a guess/);
+    expect(activeHint({ ...active, myPick: null, myParticipation: "no_guess" }, true, "1.50")).toBe(
+      "Tap a choice to get in the pot.",
+    );
+    expect(activeHint(active, true, "1.50")).toBe("Tap again to clear your guess.");
   });
 });
 
@@ -115,6 +116,7 @@ describe("who can propose", () => {
     remainderRule: "host",
     hostsOnlyBets: false,
     u2pickEnabled: true,
+    pollsEnabled: true,
     quickPicksEnabled: false,
     quickPickSharing: false,
     subscribedTo: [],

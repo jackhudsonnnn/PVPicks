@@ -40,14 +40,11 @@ class SportsBetLoader {
     /** A sports bet's game and terms read without locks, to decide whether locking is worthwhile; null if absent. */
     Peek peek(UUID betId) {
         List<Peek> peeks = jdbc.query("""
-                SELECT mode, game_id, status, choices::text, config::text, includes_overtime FROM bets WHERE id = ?
-                """, (rs, n) -> {
-                    List<String> choices = strings(rs.getString("choices"));
-                    return new Peek(rs.getString("game_id"), rs.getString("status"),
-                            new SportsOutcome.Terms(rs.getString("mode"),
-                                    read(rs.getString("config")).path("line").decimalValue(),
-                                    !Boolean.FALSE.equals(rs.getObject("includes_overtime")), choices));
-                }, betId);
+                SELECT mode, game_id, status, choices::text, config::text, includes_overtime, locked_at
+                FROM bets WHERE id = ?
+                """, (rs, n) -> new Peek(rs.getString("game_id"), rs.getString("status"),
+                        terms(rs.getString("mode"), rs.getString("config"), rs.getObject("includes_overtime"),
+                                strings(rs.getString("choices")), rs.getTimestamp("locked_at"))), betId);
         return peeks.isEmpty() ? null : peeks.getFirst();
     }
 
@@ -79,13 +76,14 @@ class SportsBetLoader {
         }
         Row row = jdbc.queryForObject("""
                 SELECT mode, game_id, status, points_settled_at IS NOT NULL AS settled, choices::text, config::text,
-                       wager_cents, is_4fun, includes_overtime, remainder_rule, remainder_host_id, proposer_id
+                       wager_cents, is_4fun, includes_overtime, remainder_rule, remainder_host_id, proposer_id,
+                       locked_at
                 FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
                 """, (rs, n) -> new Row(rs.getString("mode"), rs.getString("game_id"), rs.getString("status"),
                 rs.getBoolean("settled"), rs.getString("choices"), rs.getString("config"), rs.getLong("wager_cents"),
                 rs.getBoolean("is_4fun"), (Boolean) rs.getObject("includes_overtime"),
                 rs.getString("remainder_rule"), rs.getObject("remainder_host_id", UUID.class),
-                rs.getObject("proposer_id", UUID.class)), betId, tableId);
+                rs.getObject("proposer_id", UUID.class), rs.getTimestamp("locked_at")), betId, tableId);
         List<PayoutCalculator.Participant> participants = jdbc.query("""
                 SELECT bp.user_id, p.choice FROM bet_participants bp
                 LEFT JOIN picks p ON p.bet_id = bp.bet_id AND p.user_id = bp.user_id
@@ -112,11 +110,21 @@ class SportsBetLoader {
             };
             remainder = new PayoutCalculator.Remainder(mode, recipient);
         }
-        BigDecimal line = read(row.config()).path("line").decimalValue();
         return new Loaded(new BetResolutionWriter.LockedBet(betId, tableId, row.wagerCents(), row.forFun(), choices,
                 remainder, participants), row.mode(), row.gameId(), row.status(), row.settled(),
-                new SportsOutcome.Terms(row.mode(), line, !Boolean.FALSE.equals(row.includesOvertime()), choices),
-                row.proposerId());
+                terms(row.mode(), row.config(), row.includesOvertime(), choices, row.lockedAt()), row.proposerId());
+    }
+
+    /** A bet's terms from its stored columns: the line (or target), stat and players live in {@code config}. */
+    private SportsOutcome.Terms terms(String mode, String config, Object includesOvertime, List<String> choices,
+            java.sql.Timestamp lockedAt) {
+        JsonNode node = read(config);
+        List<String> players = new ArrayList<>();
+        for (JsonNode player : node.path("players")) players.add(player.textValue());
+        return new SportsOutcome.Terms(mode, node.has("line") ? node.path("line").decimalValue() : null,
+                !Boolean.FALSE.equals(includesOvertime), choices,
+                node.has("stat") ? node.path("stat").textValue() : null, List.copyOf(players),
+                lockedAt == null ? null : lockedAt.toInstant());
     }
 
     private List<String> strings(String serialized) {
@@ -135,5 +143,5 @@ class SportsBetLoader {
 
     private record Row(String mode, String gameId, String status, boolean settled, String choices, String config,
                        long wagerCents, boolean forFun, Boolean includesOvertime, String remainderRule,
-                       UUID remainderHostId, UUID proposerId) {}
+                       UUID remainderHostId, UUID proposerId, java.sql.Timestamp lockedAt) {}
 }

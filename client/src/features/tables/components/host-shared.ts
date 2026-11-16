@@ -1,6 +1,14 @@
 /** Types and settings shared by the Host and About panels. */
 import { type ComponentType } from "react";
-import { Images, Lock, MessageSquareText, PenLine, SmilePlus, Ticket } from "lucide-react";
+import {
+  ChartBar,
+  Images,
+  Lock,
+  MessageSquareText,
+  PenLine,
+  SmilePlus,
+  Ticket,
+} from "lucide-react";
 import { type Bet, type BetActions } from "@/features/bets";
 import type { Table, Permission, RemainderRule, TableBalance } from "@/features/tables/api";
 import { type User } from "@/features/people";
@@ -38,6 +46,7 @@ export const PERMISSIONS: {
     icon: SmilePlus,
   },
   { id: "gifs", label: "GIFs", description: "Send GIFs.", icon: Images },
+  { id: "polls", label: "Polls", description: "Start polls in the chat.", icon: ChartBar },
 ];
 
 export const REMAINDER: { id: RemainderRule; label: string; description: string }[] = [
@@ -65,6 +74,13 @@ export const SWITCHES = [
     description: "Custom bets with your own question and options.",
     icon: PenLine,
     isOn: (t: Table) => t.u2pickEnabled,
+  },
+  {
+    id: "pollsEnabled",
+    label: "Allow polls",
+    description: "Members can start polls in the chat. Existing polls stay open.",
+    icon: ChartBar,
+    isOn: (t: Table) => t.pollsEnabled,
   },
 ] as const;
 

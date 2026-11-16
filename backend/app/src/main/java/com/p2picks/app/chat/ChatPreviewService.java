@@ -48,7 +48,7 @@ class ChatPreviewService {
                 ) member_table ON true
                 LEFT JOIN LATERAL (
                     SELECT m.id, m.kind, m.created_at, m.author_id,
-                           CASE WHEN m.kind IN ('text', 'system') THEN %s END AS text
+                           CASE WHEN m.kind IN ('text', 'system', 'poll') THEN %s END AS text
                     FROM chat_messages m
                     LEFT JOIN users author ON author.id = m.author_id
                     LEFT JOIN users subject ON subject.id = m.system_subject_id

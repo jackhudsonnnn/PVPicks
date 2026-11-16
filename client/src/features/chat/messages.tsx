@@ -1,14 +1,14 @@
-/** Chat message rows: text and GIF bubbles, bet and settlement cards, and reactions. */
+/** Chat message rows: text and GIF bubbles, bet, settlement and poll cards, and reactions. */
 import { useState } from "react";
-import { ChevronRight, Scale, SmilePlus } from "lucide-react";
+import { ChartBar, Check, ChevronRight, Scale, SmilePlus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { StatusBadge, MODES, statusOf } from "@/features/bets";
 import { useGifs } from "./gifs";
 import { cn } from "@/lib/utils";
-import { type User, PersonAvatar, usePerson, PersonName } from "@/features/people";
+import { type User, AvatarStack, PersonAvatar, usePerson, PersonName } from "@/features/people";
 import { SafetyMenu, type SocialActions } from "@/features/social";
 import { type ChatMessage } from "./api";
-import { QUICK_REACTIONS, reactionChips } from "./model";
+import { QUICK_REACTIONS, pollResults, reactionChips } from "./model";
 import { formatPoints } from "@/features/settlements";
 import { timeLabel } from "@/lib/time";
 
@@ -22,6 +22,9 @@ interface RowProps {
   social?: SocialActions | undefined;
   canReact: boolean;
   onReact: (emoji: string) => void;
+  /** Whether you can vote on polls right now (not in archives or while an action is pending). */
+  canVote: boolean;
+  onVote: (option: number) => void;
 }
 
 export function MessageRow({ message, ...props }: RowProps & { message: ChatMessage }) {
@@ -35,6 +38,7 @@ export function MessageRow({ message, ...props }: RowProps & { message: ChatMess
   }
   if (message.kind === "settlement") return <SettlementCard message={message} {...props} />;
   if (message.kind === "bet") return <BetCard message={message} {...props} />;
+  if (message.kind === "poll") return <PollCard message={message} {...props} />;
   return <Bubble message={message} {...props} />;
 }
 
@@ -169,6 +173,122 @@ function BetCard({
           </span>
         </button>
         {canReact && <ReactButton message={message} user={user} onReact={onReact} />}
+      </div>
+      <ReactionChips
+        message={message}
+        user={user}
+        names={names}
+        expire={expire}
+        canReact={canReact}
+        onReact={onReact}
+      />
+    </div>
+  );
+}
+
+/**
+ * A poll: tap an option to vote, tap it again to take the vote back. Results and voters are visible to everyone,
+ * and polls never close.
+ */
+function PollCard({
+  message,
+  user,
+  expire,
+  names,
+  tableId,
+  social,
+  canReact,
+  onReact,
+  canVote,
+  onVote,
+}: RowProps & { message: Extract<ChatMessage, { kind: "poll" }> }) {
+  const person = usePerson(message.authorId, user, expire, names);
+  const name = person?.name ?? "…";
+  const results = pollResults(message, user.id);
+  const mineByAuthor = message.authorId === user.id;
+  return (
+    <div>
+      <div className="flex items-start gap-1">
+        <section
+          aria-label={`Poll: ${message.text}`}
+          className="min-w-0 flex-1 rounded-xl border bg-surface p-3"
+        >
+          <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            <ChartBar className="size-3.5 text-primary" /> {mineByAuthor ? "You" : name} · Poll ·{" "}
+            {timeLabel(message.createdAt)}
+          </p>
+          <p className="mt-1 break-words text-sm font-semibold leading-snug">{message.text}</p>
+          <ul className="mt-2 space-y-1.5">
+            {results.options.map((option, index) => {
+              const chosen = results.mine === index;
+              const share = results.total ? option.voters.length / results.total : 0;
+              return (
+                <li key={index}>
+                  <button
+                    type="button"
+                    disabled={!canVote}
+                    aria-pressed={chosen}
+                    aria-label={`${option.label}: ${option.voters.length} ${
+                      option.voters.length === 1 ? "vote" : "votes"
+                    }${chosen ? ", your vote" : ""}`}
+                    onClick={() => onVote(index)}
+                    className={cn(
+                      "relative w-full overflow-hidden rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-default",
+                      chosen ? "border-primary/70" : "enabled:hover:border-primary/40",
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "absolute inset-y-0 left-0 transition-[width]",
+                        chosen ? "bg-primary/20" : "bg-muted",
+                      )}
+                      style={{ width: `${Math.round(share * 100)}%` }}
+                    />
+                    <span className="relative flex items-center gap-2">
+                      {chosen && <Check className="size-3.5 shrink-0 text-primary" />}
+                      <span className="min-w-0 flex-1 break-words">{option.label}</span>
+                      {option.voters.length > 0 && (
+                        <AvatarStack
+                          ids={option.voters}
+                          max={3}
+                          user={user}
+                          expire={expire}
+                          queryKey={names}
+                        />
+                      )}
+                      <span className="scoreboard shrink-0 text-xs">{option.voters.length}</span>
+                    </span>
+                  </button>
+                  {option.voters.length > 0 && (
+                    <p className="mt-0.5 px-1 text-[11px] text-muted-foreground">
+                      {option.voters.map((id, i) => (
+                        <span key={id}>
+                          {i > 0 && ", "}
+                          <PersonName id={id} user={user} expire={expire} queryKey={names} />
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {results.total} {results.total === 1 ? "vote" : "votes"}
+            {canVote && (results.mine === null ? " · Tap to vote" : " · Tap your vote to undo")}
+          </p>
+        </section>
+        {canReact && <ReactButton message={message} user={user} onReact={onReact} />}
+        {!mineByAuthor && social && (
+          <SafetyMenu
+            userId={message.authorId}
+            name={name}
+            viewerId={user.id}
+            actions={social}
+            context={{ tableId, messageId: message.id, messageText: `Poll: ${message.text}` }}
+          />
+        )}
       </div>
       <ReactionChips
         message={message}

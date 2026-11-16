@@ -65,10 +65,9 @@ export function activeHint(bet: Bet, canBet: boolean, wager: string) {
   const stake = bet.forFun
     ? "4fun: no points at stake."
     : `${wager} pts goes in the pot when picks lock.`;
-  if (bet.myParticipation === "not_joined") return `Tap a choice to join. ${stake}`;
-  if (bet.myParticipation === "no_guess")
-    return "You have not made a guess. Tap a choice to get in the pot.";
-  return "Picks stay hidden until the timer runs out. Tap again to clear your guess.";
+  if (bet.myParticipation === "not_joined") return stake;
+  if (bet.myParticipation === "no_guess") return "Tap a choice to get in the pot.";
+  return "Tap again to clear your guess.";
 }
 
 /** Why the viewer can't propose any bet at this table, or null when they can. The server rechecks. */

@@ -39,14 +39,22 @@ import { proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
 import {
   canPush,
   DEFAULT_LINE,
+  isPlayerMode,
   isScoreMode,
+  isSportsMode,
   LINE_LIMITS,
+  playerProblem,
+  playerTerms,
   proposableGames,
   scoreTerms,
+  startingLine,
   stepLine,
+  type PlayerMode,
   type ScoreMode,
+  type SportsMode,
 } from "@/features/bets/sports-model";
-import { tickerStatus, type TickerGame, useTicker } from "@/features/sports";
+import { tickerStatus, type TickerGame, useGamePlayers, useTicker } from "@/features/sports";
+import { PlayerSetup } from "./player-setup";
 import { LoadingList } from "@/components/loading";
 
 /**
@@ -82,10 +90,22 @@ export function ProposeBetSheet({
   const [league, setLeague] = useState<TickerGame["league"]>("NBA");
   const [line, setLine] = useState(0);
   const [overtime, setOvertime] = useState(true);
+  const [stat, setStat] = useState<string | null>(null);
+  const [playerIds, setPlayerIds] = useState<string[]>([]);
   const ticker = useTicker(user.id);
-  const games = proposableGames(ticker.data);
-  const game = games.find((g) => g.id === gameId);
+  const sportsMode: SportsMode | null = mode && isSportsMode(mode.id) ? mode.id : null;
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
+  const playerMode: PlayerMode | null = mode && isPlayerMode(mode.id) ? mode.id : null;
+  // Scorcerer reads NFL score jumps, so it only offers NFL games.
+  const leagues: TickerGame["league"][] = sportsMode === "scorcerer" ? ["NFL"] : ["NBA", "NFL"];
+  const games = proposableGames(ticker.data).filter((g) => leagues.includes(g.league));
+  const game = games.find((g) => g.id === gameId);
+  const roster = useGamePlayers(user.id, playerMode ? (game?.id ?? null) : null);
+  const statKey = stat ?? roster.data?.stats[0]?.key ?? null;
+  const picked = playerIds
+    .map((id) => roster.data?.players.find((p) => p.id === id))
+    .filter((p) => p !== undefined);
+  const pickedStats = picked.map((p) => ({ stat: statKey ? (p.stats[statKey] ?? 0) : 0 }));
   const block = proposeBlock(table, user.id);
   const availability = useModeAvailability();
   const busy = actions.busy || !!actions.pending || !!actions.storageError;
@@ -95,23 +115,53 @@ export function ProposeBetSheet({
       ? (u2pickBlock(table) ?? customBetProblem(question, options))
       : !game
         ? "Pick a game."
-        : null;
+        : playerMode
+          ? playerProblem(playerMode, pickedStats, line)
+          : null;
 
   function pickGame(next: TickerGame) {
     setGameId(next.id);
     // A new league gets that league's default line; the same league keeps yours.
     if (scoreMode && (!game || game.league !== next.league))
       setLine(DEFAULT_LINE[next.league][scoreMode]);
+    // Players and stats belong to a game, so a new game starts the player setup over.
+    if (playerMode && next.id !== gameId) {
+      setPlayerIds([]);
+      setStat(null);
+    }
   }
 
   function pickMode(next: ModeDef) {
     setMode(next);
-    if (isScoreMode(next.id)) {
-      const first = games.find((g) => g.league === league) ?? games[0];
+    setPlayerIds([]);
+    setStat(null);
+    if (isSportsMode(next.id)) {
+      const allowed = next.id === "scorcerer" ? ["NFL"] : ["NBA", "NFL"];
+      const open = proposableGames(ticker.data).filter((g) => allowed.includes(g.league));
+      const startLeague = allowed.includes(league) ? league : "NFL";
+      const first = open.find((g) => g.league === startLeague) ?? open[0];
       setGameId(first?.id ?? null);
-      if (first) setLeague(first.league);
-      setLine(DEFAULT_LINE[first?.league ?? league][next.id]);
+      setLeague(first?.league ?? startLeague);
+      if (isScoreMode(next.id)) setLine(DEFAULT_LINE[first?.league ?? startLeague][next.id]);
     }
+  }
+
+  /** New players or a new stat: move the line or target just above them when it no longer is. */
+  function choosePlayers(ids: string[], nextStat = statKey) {
+    setPlayerIds(ids);
+    if (!playerMode || !nextStat) return;
+    const current = ids
+      .map((id) => roster.data?.players.find((p) => p.id === id)?.stats[nextStat] ?? 0)
+      .filter((v) => v !== undefined);
+    if (
+      playerProblem(
+        playerMode,
+        current.map((v) => ({ stat: v })),
+        line,
+      )?.startsWith("The ")
+    )
+      setLine(startingLine(playerMode, current));
+    else if (playerMode !== "either_or" && line === 0) setLine(startingLine(playerMode, current));
   }
 
   const previewBet: Bet = useMemo(() => {
@@ -128,12 +178,27 @@ export function ProposeBetSheet({
             includesOvertime: overtime,
             ...scoreTerms(scoreMode, line, game.home.abbreviation, game.away.abbreviation),
           }
-        : {
-            modeId: "u2pick" as const,
-            config: {},
-            question: question.trim() || "Your question shows up here",
-            choices: cleanOptions(options),
-          }),
+        : sportsMode && game
+          ? {
+              modeId: sportsMode,
+              config: {},
+              gameId: game.id,
+              ...(sportsMode === "scorcerer" ? {} : { includesOvertime: overtime }),
+              ...playerTerms(
+                sportsMode as PlayerMode | "scorcerer",
+                roster.data?.stats.find((s) => s.key === statKey)?.label ?? "",
+                picked,
+                line,
+                game.home.abbreviation,
+                game.away.abbreviation,
+              ),
+            }
+          : {
+              modeId: "u2pick" as const,
+              config: {},
+              question: question.trim() || "Your question shows up here",
+              choices: cleanOptions(options),
+            }),
       wagerCents: forFun ? 0 : wager,
       forFun,
       status: "ACTIVE",
@@ -160,9 +225,12 @@ export function ProposeBetSheet({
     timer,
     settledBy,
     scoreMode,
+    sportsMode,
     game,
     line,
     overtime,
+    statKey,
+    playerIds,
   ]);
 
   function reset() {
@@ -176,18 +244,27 @@ export function ProposeBetSheet({
     setPreviewing(false);
     setGameId(null);
     setOvertime(true);
+    setStat(null);
+    setPlayerIds([]);
   }
 
   function submit() {
     if (!mode || problem || block || busy) return;
-    if (scoreMode && game) {
+    if (sportsMode && game) {
       actions.start({
         kind: "propose-sports",
         tableId: table.id,
         proposal: {
-          modeId: scoreMode,
+          modeId: sportsMode,
           gameId: game.id,
-          line,
+          line:
+            sportsMode === "either_or" || sportsMode === "scorcerer"
+              ? null
+              : sportsMode === "king_of_the_hill"
+                ? Math.round(line)
+                : line,
+          stat: playerMode ? statKey : null,
+          players: playerMode ? playerIds : [],
           includesOvertime: overtime,
           wagerCents: forFun ? 0 : wager,
           durationSec: timer,
@@ -272,16 +349,13 @@ export function ProposeBetSheet({
             <ModeGrid table={table} availability={availability} block={block} onPick={pickMode} />
           ) : (
             <div className="space-y-6">
-              {scoreMode ? (
+              {sportsMode ? (
                 <>
                   <Section label="Game">
                     <SegmentedTabs<TickerGame["league"]>
                       size="sm"
                       ariaLabel="League"
-                      tabs={[
-                        { id: "NBA", label: "NBA" },
-                        { id: "NFL", label: "NFL" },
-                      ]}
+                      tabs={leagues.map((l) => ({ id: l, label: l }))}
                       value={league}
                       onChange={setLeague}
                     />
@@ -336,36 +410,66 @@ export function ProposeBetSheet({
                       </div>
                     )}
                   </Section>
-                  <Section label="Setup">
-                    <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
-                      {scoreMode === "total_disaster"
-                        ? "Total points line"
-                        : `${game?.home.abbreviation ?? "Home"} spread`}
-                      <Stepper
-                        value={line}
-                        step={0.5}
-                        min={LINE_LIMITS[scoreMode].min}
-                        max={LINE_LIMITS[scoreMode].max}
-                        label={
-                          scoreMode === "total_disaster" ? "Total points line" : "Home team spread"
-                        }
-                        format={(v) =>
-                          scoreMode === "give_and_take" && v > 0 ? `+${v}` : String(v)
-                        }
-                        onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
-                      />
-                      {canPush(line) && (
-                        <span className="font-normal">
-                          A whole-number line can land exactly on the score; that washes the bet.
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
+                  {playerMode && game && (
+                    <PlayerSetup
+                      mode={playerMode}
+                      roster={roster.data}
+                      stat={statKey}
+                      onStat={(next) => {
+                        setStat(next);
+                        choosePlayers(playerIds, next);
+                      }}
+                      playerIds={playerIds}
+                      onPlayers={(ids) => choosePlayers(ids)}
+                      line={line}
+                      onLine={setLine}
+                    />
+                  )}
+                  {sportsMode === "scorcerer" && (
+                    <p className="text-sm text-muted-foreground">
+                      Picks are on how the first score after picks lock is made: a touchdown, a
+                      field goal, a safety, or no more scoring before the end. If two scores land
+                      between updates, the bet washes.
+                    </p>
+                  )}
+                  {scoreMode && (
+                    <Section label="Setup">
+                      <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+                        {scoreMode === "total_disaster"
+                          ? "Total points line"
+                          : `${game?.home.abbreviation ?? "Home"} spread`}
+                        <Stepper
+                          value={line}
+                          step={0.5}
+                          min={LINE_LIMITS[scoreMode].min}
+                          max={LINE_LIMITS[scoreMode].max}
+                          label={
+                            scoreMode === "total_disaster"
+                              ? "Total points line"
+                              : "Home team spread"
+                          }
+                          format={(v) =>
+                            scoreMode === "give_and_take" && v > 0 ? `+${v}` : String(v)
+                          }
+                          onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
+                        />
+                        {canPush(line) && (
+                          <span className="font-normal">
+                            A whole-number line can land exactly on the score; that washes the bet.
+                          </span>
+                        )}
+                      </div>
+                    </Section>
+                  )}
+                  {(scoreMode || (playerMode && game)) && (
+                    <div className="flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
                       <span className="min-w-0">
                         <span className="block text-sm font-semibold">Overtime counts</span>
                         <span className="block text-xs text-muted-foreground">
                           {overtime
-                            ? "Points scored in overtime count."
+                            ? scoreMode
+                              ? "Points scored in overtime count."
+                              : "Stats in overtime count."
                             : "Decided at the end of regulation."}
                         </span>
                       </span>
@@ -375,7 +479,7 @@ export function ProposeBetSheet({
                         aria-label="Overtime counts"
                       />
                     </div>
-                  </Section>
+                  )}
                 </>
               ) : (
                 <U2PickEditor

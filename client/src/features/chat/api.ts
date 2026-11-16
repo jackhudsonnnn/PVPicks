@@ -33,6 +33,18 @@ const messageSchema = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("system"), text: z.string().min(1) }),
   z.object({
     ...base,
+    kind: z.literal("poll"),
+    authorId: uuid,
+    /** The question. */
+    text: z.string().min(1),
+    poll: z.object({
+      options: z.array(z.string().min(1)).min(2).max(6),
+      /** Every vote, oldest first; one per person, and polls never close. */
+      votes: z.array(z.object({ userId: uuid, option: z.number().int().min(0).max(5) })),
+    }),
+  }),
+  z.object({
+    ...base,
     kind: z.literal("settlement"),
     settlementId: uuid,
     settlementSummary: z.object({
@@ -48,7 +60,7 @@ const previewSchema = z.object({
   message: z
     .object({
       id: uuid,
-      kind: z.enum(["text", "gif", "bet", "system", "settlement"]),
+      kind: z.enum(["text", "gif", "bet", "system", "settlement", "poll"]),
       createdAt: timestamp,
       authorId: uuid.optional(),
       text: z.string().min(1).optional(),
@@ -123,6 +135,22 @@ export async function sendChatMessage(
   key: string,
 ): Promise<void> {
   await mutationRequest(`/tables/${tablePath(tableId)}/messages`, "POST", key, message);
+}
+
+export async function createPoll(
+  tableId: string,
+  poll: { question: string; options: string[] },
+  key: string,
+): Promise<void> {
+  await mutationRequest(`/tables/${tablePath(tableId)}/polls`, "POST", key, poll);
+}
+
+/** Votes for one option (0-based), or removes your vote with null. */
+export async function setVote(messageId: string, option: number | null, key: string) {
+  if (!uuid.safeParse(messageId).success) throw new BackendError("Poll not found.", 404);
+  const path = `/messages/${encodeURIComponent(messageId)}/vote`;
+  if (option === null) await mutationRequest(path, "DELETE", key);
+  else await mutationRequest(path, "PUT", key, { option });
 }
 
 export async function setReaction(messageId: string, emoji: string | null, key: string) {

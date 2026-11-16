@@ -26,11 +26,14 @@ public class ChatWindowService {
     public record SettlementSummary(UUID hostId, List<SettlementLine> lines) {}
     /** What a bet card shows without loading the bet: its question, mode and status now. */
     public record BetSummary(String question, String modeId, String status) {}
+    record Vote(UUID userId, int option) {}
+    /** A poll's options and every visible vote; the question is the message's text. Polls never close. */
+    public record Poll(List<String> options, List<Vote> votes) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Message(UUID id, UUID tableId, String kind, OffsetDateTime createdAt, UUID authorId,
             String text, String gifId, UUID betId, UUID settlementId, BetSummary bet,
-            SettlementSummary settlementSummary, List<Reaction> reactions) {}
+            SettlementSummary settlementSummary, Poll poll, List<Reaction> reactions) {}
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -86,7 +89,11 @@ public class ChatWindowService {
                 SELECT viewer.id AS viewer_id, access.id AS access_id, anchor.message_order AS anchor_order,
                        m.id, m.table_id, m.kind, m.created_at, m.author_id,
                        %s AS text, m.gif_id, m.bet_id,
-                       m.settlement_id, m.message_order, s.host_id,
+                       m.settlement_id, m.message_order, s.host_id, m.poll_options,
+                       COALESCE((SELECT jsonb_agg(jsonb_build_object('userId', v.user_id, 'option', v.option_index)
+                                                  ORDER BY v.voted_at, v.user_id)
+                                 FROM poll_votes v JOIN users voter ON voter.id = v.user_id
+                                 WHERE v.message_id = m.id AND voter.status <> 'DELETED'), '[]'::jsonb)::text AS votes,
                        bet.question AS bet_question, bet.mode AS bet_mode, bet.status AS bet_status,
                        COALESCE((SELECT jsonb_agg(jsonb_build_object('userId', r.user_id, 'emoji', r.emoji)
                                                   ORDER BY r.user_id)
@@ -139,12 +146,23 @@ public class ChatWindowService {
             messages.add(new Message(id, tableId, rs.getString("kind"),
                     rs.getObject("created_at", OffsetDateTime.class), rs.getObject("author_id", UUID.class),
                     rs.getString("text"), rs.getString("gif_id"), rs.getObject("bet_id", UUID.class),
-                    rs.getObject("settlement_id", UUID.class), bet, summary,
+                    rs.getObject("settlement_id", UUID.class), bet, summary, poll(rs),
                     parseReactions(rs.getString("reactions"))));
         } while (rs.next());
         return new Result(true, true, true, new Window(List.copyOf(messages),
                 hasOlder ? cursors.encode(userId, tableId, first) : null,
                 messages.isEmpty() ? null : cursors.encode(userId, tableId, last)));
+    }
+
+    private Poll poll(ResultSet rs) throws SQLException {
+        java.sql.Array options = rs.getArray("poll_options");
+        if (options == null) return null;
+        try {
+            return new Poll(List.of((String[]) options.getArray()),
+                    json.readValue(rs.getString("votes"), new TypeReference<List<Vote>>() {}));
+        } catch (JsonProcessingException exception) {
+            throw new SQLException("Invalid poll projection", exception);
+        }
     }
 
     private List<Reaction> parseReactions(String value) throws SQLException {

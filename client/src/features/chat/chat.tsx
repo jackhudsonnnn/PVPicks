@@ -12,7 +12,7 @@ import { ActionStatus } from "@/components/action-status";
 import { userKey } from "@/lib/query-keys";
 import { markRead, type ChatMessage } from "./api";
 import { useChatActions } from "./actions";
-import { canReactTo, nextReaction } from "./model";
+import { canReactTo, nextReaction, nextVote } from "./model";
 import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
 import { tableChatFeed } from "@/lib/realtime-connection";
 import { useBackendChat } from "./use-chat";
@@ -20,7 +20,7 @@ import { MessageRow } from "./messages";
 import { Composer } from "./composer";
 import { LoadingChat } from "@/components/loading";
 
-/** A table's chat: paged history, text and GIF sending, reactions and read position, updated live. */
+/** A table's chat: paged history, text, GIFs and polls, reactions, votes and read position, updated live. */
 export function TableChat({
   user,
   table,
@@ -33,7 +33,7 @@ export function TableChat({
   fill = false,
 }: {
   user: User;
-  table: Pick<Table, "id" | "disabledPermissions">;
+  table: Pick<Table, "id" | "disabledPermissions" | "pollsEnabled">;
   expire: () => void;
   /** Opens a bet's ticket from its card. */
   onOpenBet?: (betId: string) => void;
@@ -60,7 +60,8 @@ export function TableChat({
   const actions = useChatActions(
     user.id,
     async (intent) => {
-      if (intent?.kind === "react") await chat.refreshAround(intent.messageId);
+      if (intent?.kind === "react" || intent?.kind === "vote")
+        await chat.refreshAround(intent.messageId);
       else await chat.refresh();
     },
     expire,
@@ -99,7 +100,11 @@ export function TableChat({
         pendingText={
           actions.pending?.intent.kind === "send"
             ? "A message may not have been sent."
-            : "A reaction may not have been saved."
+            : actions.pending?.intent.kind === "poll"
+              ? "A poll may not have been posted."
+              : actions.pending?.intent.kind === "vote"
+                ? "A vote may not have been saved."
+                : "A reaction may not have been saved."
         }
         checkText="Check the chat first."
       />
@@ -151,6 +156,16 @@ export function TableChat({
                     canReact={
                       !readOnly && !disabled.includes("react") && !blocked && canReactTo(message)
                     }
+                    canVote={!readOnly && !blocked}
+                    onVote={(option) =>
+                      message.kind === "poll" &&
+                      actions.start({
+                        kind: "vote",
+                        tableId: table.id,
+                        messageId: message.id,
+                        option: nextVote(message, user.id, option),
+                      })
+                    }
                     onReact={(emoji) =>
                       actions.start({
                         kind: "react",
@@ -180,8 +195,10 @@ export function TableChat({
         <Composer
           canText={!disabled.includes("text")}
           canGif={!disabled.includes("gifs")}
+          canPoll={table.pollsEnabled && !disabled.includes("polls")}
           blocked={blocked}
           send={(message) => actions.start({ kind: "send", tableId: table.id, message })}
+          startPoll={(poll) => actions.start({ kind: "poll", tableId: table.id, ...poll })}
         />
       )}
     </section>

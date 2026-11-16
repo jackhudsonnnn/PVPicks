@@ -34,7 +34,7 @@ export const STATUSES: Record<Bet["status"], StatusInfo> = {
   SETTLED: {
     id: "resolved",
     label: "Resolved",
-    hint: "A winning choice was called. Points move when a host settles the table.",
+    hint: "A winning choice was called + payouts.",
     explainer:
       "A winning choice emerges. Losers' pot is split evenly among the winners when a host settles the table's points.",
   },

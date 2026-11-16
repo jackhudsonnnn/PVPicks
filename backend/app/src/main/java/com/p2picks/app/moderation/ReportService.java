@@ -51,9 +51,11 @@ public class ReportService {
         }
         if (report.messageId() != null) {
             List<String> content = jdbc.query("""
-                    SELECT CASE kind WHEN 'gif' THEN 'GIF ' || gif_id ELSE text END AS content
+                    SELECT CASE kind WHEN 'gif' THEN 'GIF ' || gif_id
+                        WHEN 'poll' THEN 'Poll: ' || text || ' (' || array_to_string(poll_options, ' / ') || ')'
+                        ELSE text END AS content
                     FROM chat_messages
-                    WHERE id = ? AND table_id = ? AND author_id = ? AND kind IN ('text', 'gif')
+                    WHERE id = ? AND table_id = ? AND author_id = ? AND kind IN ('text', 'gif', 'poll')
                     """, (rs, row) -> rs.getString("content"), report.messageId(), report.tableId(),
                     report.targetId());
             if (content.isEmpty()) return Outcome.INVALID;

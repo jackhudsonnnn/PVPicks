@@ -1,7 +1,7 @@
 # Frontend
 
-The app (`src/app/app.tsx`) signs in to the dev backend. On desktop a sidebar holds Home, Tickets, Friends, How to play and
-Preferences, your tables, and your net settle-up points; phones get a top bar
+The app (`src/app/app.tsx`) signs in to the dev backend. From 1100px wide (the `nav` breakpoint) a sidebar holds Home, Tickets, Friends, How to play and
+Preferences, your tables, and your net settle-up points; narrower screens get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The design came from an
 earlier prototype (git tag `prototype-ui`).
@@ -26,14 +26,18 @@ earlier prototype (git tag `prototype-ui`).
     column sits beside them in a scrolling box of the same height. Both
     boxes have transparent backgrounds. It lists every bet at your tables: live first,
     then pending, resolved and washed, newest first within each. It loads
-    more as you scroll, and "All tickets" opens the Tickets page. Phones use
-    the Tickets page instead.
+    more as you scroll, and "All tickets" opens the Tickets page. Below
+    1024px the table cards become a sideways-scrolling row, and screens at
+    least 790px tall show the same Tickets box below them. Shorter screens
+    use the Tickets page instead
+    (`HOME_TICKETS` in `src/lib/use-media-query.ts`).
   - "New table" opens a dialog: a name of up to 14 characters, an icon, and
     people who follow you.
   - Below the row are deleted tables whose chat you can still read for 90
     days (read-only, at `/archives/<id>`).
 - **Friends:** settle-ups first, as a sideways-scrolling row with one card
-  per person.
+  per person: people with an open balance first (newest activity first), and
+  people you're square with (0.00) last. The server sends them in that order.
   - A card shows your open net with that person: red when you pay them, green
     when they pay you. It also says how many tables and open receipts that
     covers, and whether a payment awaits confirmation.
@@ -49,7 +53,8 @@ earlier prototype (git tag `prototype-ui`).
 - **Table page:** a card-room felt with members seated around it (each
   showing their points at the table and, for the focused bet, their pick) and
   the open bets fanned as cards in the middle; tap the front card to open its
-  ticket. A side panel (tabs on phones) holds Chat, Peers (everyone's Settle
+  ticket. A side panel beside the felt from 1455px wide (the `split`
+  breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's Settle
   and True points at the table) and Host (or About for members): points
   settlement, members, roles, permissions and table settings. The page loads
   only the table's live bets; older ones load when opened. Tapping a person
@@ -57,13 +62,19 @@ earlier prototype (git tag `prototype-ui`).
   there, newest first, a page at a time.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
-  dropdown), paged. A ticket says which table it's from and links to it; its
-  player avatars open that table's Peers tab, and Details links to the table.
+  dropdown), paged. Under the question a ticket shows "Proposed by" with the
+  proposer's avatar and name (opening their profile at that table,
+  `?profile=<id>`); the time is in Details. The footer shows the table's emoji
+  and name (linking to it) beside the wager and picks or pot, on every
+  ticket.
 
-- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (U2Pick, Total
-  Disaster or Give And Take; the player and play-by-play modes show as coming
-  soon), set up a U2Pick or pick one of today's games and set the line and
-  whether overtime counts, the wager (+0.01/+0.10/+1.00 steps,
+- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
+  Choose Their Fate, which shows as coming soon), set up a U2Pick, or pick one
+  of today's games (NFL only for Scorcerer) and set the terms: the line
+  (score modes); the stat, one or two players from that game (listed with
+  their current number) and the line or target, which starts just above them
+  (player modes, `bets/components/player-setup.tsx`); and whether overtime
+  counts. Then the wager (+0.01/+0.10/+1.00 steps,
   0.10 to 10.00, or 4fun) and the pick window, preview the ticket, send. On a
   ticket, tap a choice to pick (you confirm first), tap it again to clear it,
   and use "Call it" on a locked ticket if its settler rule allows you. Sports
@@ -78,6 +89,10 @@ earlier prototype (git tag `prototype-ui`).
   message, and moves your read position forward as new messages reach the
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
   bet's question, mode and current status, also in deleted tables' archives.
+  The poll button (shown when the table has polls on and you have the polls
+  permission) posts a question with 2–6 options; poll cards show each
+  option's count, bar and voters, and tapping an option votes, changes or
+  removes your vote.
 
 - **Dev and docs icons** (dev backend only): beside the logo, in the app and
   on the sign-in page. The document icon opens these docs in a new tab, on the
@@ -137,7 +152,9 @@ saved action; they reconcile from the server's reads. Storage failure disables
 actions. The retry box appears only once an outcome is unknown, never while
 an action is still being sent, so the page doesn't jump on every action.
 
-What you're told about an action is a toast, not text on the page. Errors show
+What you're told about an action is a toast, not text on the page. Wherever
+the tab bar shows, toasts sit just above it, never over it (`--toast-bottom` in
+`styles.css`). Errors show
 as toasts; successes are silent (the screen updating is the confirmation)
 unless there's something worth saying, like "Unblocked. Follows are not
 restored." Loading never shows text either: lists, pages, chat, the ticker and

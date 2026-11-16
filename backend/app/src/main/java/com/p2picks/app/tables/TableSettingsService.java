@@ -16,8 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class TableSettingsService {
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
-    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled) {}
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled) {}
+    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled) {}
+    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled) {}
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
@@ -40,10 +40,10 @@ class TableSettingsService {
         if (!authentication.lockActive(jwt)) return Outcome.UNAUTHORIZED;
         authentication.requireUnexpired(jwt);
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, polls_enabled FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
-                """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled")),
-                tableId);
+                """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled"),
+                rs.getBoolean("polls_enabled")), tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return Outcome.NOT_FOUND;
@@ -56,7 +56,7 @@ class TableSettingsService {
         if (!roles.getFirst().equals("HOST")) return Outcome.FORBIDDEN;
 
         IdempotencyGuard.Claim claim = idempotency.claim(userId, key, "table.settings.update.v1",
-                tableId + "|" + changes.hostsOnlyBets() + "|" + changes.u2pickEnabled(),
+                tableId + "|" + changes.hostsOnlyBets() + "|" + changes.u2pickEnabled() + "|" + changes.pollsEnabled(),
                 IdempotencyGuard.SuccessStatus.OK);
         authentication.requireUnexpired(jwt);
         if (claim == IdempotencyGuard.Claim.CONFLICT) return Outcome.CONFLICT;
@@ -67,11 +67,14 @@ class TableSettingsService {
                 && changes.hostsOnlyBets() != current.hostsOnlyBets();
         boolean u2pickChanged = changes.u2pickEnabled() != null
                 && changes.u2pickEnabled() != current.u2pickEnabled();
-        if (hostsChanged || u2pickChanged) {
+        boolean pollsChanged = changes.pollsEnabled() != null
+                && changes.pollsEnabled() != current.pollsEnabled();
+        if (hostsChanged || u2pickChanged || pollsChanged) {
             jdbc.update("""
                     UPDATE tables SET hosts_only_bets = COALESCE(?, hosts_only_bets),
-                        u2pick_enabled = COALESCE(?, u2pick_enabled) WHERE id = ?
-                    """, changes.hostsOnlyBets(), changes.u2pickEnabled(), tableId);
+                        u2pick_enabled = COALESCE(?, u2pick_enabled), polls_enabled = COALESCE(?, polls_enabled)
+                    WHERE id = ?
+                    """, changes.hostsOnlyBets(), changes.u2pickEnabled(), changes.pollsEnabled(), tableId);
             if (hostsChanged) {
                 chatMessages.system(tableId, changes.hostsOnlyBets()
                         ? "Only hosts can propose new bets" : "Host-only bet proposals turned off");
@@ -79,6 +82,9 @@ class TableSettingsService {
             if (u2pickChanged) {
                 chatMessages.system(tableId, changes.u2pickEnabled()
                         ? "U2Pick custom bets turned on" : "U2Pick custom bets turned off");
+            }
+            if (pollsChanged) {
+                chatMessages.system(tableId, changes.pollsEnabled() ? "Polls turned on" : "Polls turned off");
             }
             outbox.append(OutboxEvent.TABLE_SETTINGS_CHANGED, tableId, Map.of("tableId", tableId));
         }

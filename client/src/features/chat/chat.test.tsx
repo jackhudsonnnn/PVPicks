@@ -5,11 +5,13 @@ import { getProfile } from "@/features/people/api";
 import type { Table } from "@/features/tables/api";
 import { TableChat } from "./chat";
 import {
+  createPoll,
   getChatUnread,
   getChatWindow,
   markRead,
   sendChatMessage,
   setReaction,
+  setVote,
   type ChatMessage,
 } from "./api";
 import type { Invalidation } from "@/lib/realtime-connection";
@@ -26,6 +28,8 @@ vi.mock("./api", async (importOriginal) => ({
   markRead: vi.fn(),
   sendChatMessage: vi.fn(),
   setReaction: vi.fn(),
+  createPoll: vi.fn(),
+  setVote: vi.fn(),
 }));
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
 vi.mock("@/lib/realtime", () => ({
@@ -46,6 +50,7 @@ const table: Table = {
   remainderRule: "host",
   hostsOnlyBets: false,
   u2pickEnabled: true,
+  pollsEnabled: true,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -88,6 +93,8 @@ beforeEach(() => {
   vi.mocked(markRead).mockResolvedValue();
   vi.mocked(sendChatMessage).mockResolvedValue();
   vi.mocked(setReaction).mockResolvedValue();
+  vi.mocked(createPoll).mockResolvedValue();
+  vi.mocked(setVote).mockResolvedValue();
 });
 
 describe("table chat", () => {
@@ -272,5 +279,88 @@ describe("table chat", () => {
       }),
     );
     expect(await screen.findByText("hello 3")).toBeInTheDocument();
+  });
+
+  describe("polls", () => {
+    const poll = message(5, {
+      kind: "poll",
+      text: "Pizza or tacos?",
+      poll: { options: ["Pizza", "Tacos"], votes: [{ userId: friend, option: 1 }] },
+    } as Partial<ChatMessage>);
+
+    it("shows the tally and voters, and votes, changes and removes your vote", async () => {
+      vi.mocked(getChatWindow).mockResolvedValue({
+        items: [poll],
+        previousCursor: null,
+        nextCursor: "after-5",
+      });
+      renderChat();
+      const tacos = await screen.findByRole("button", { name: "Tacos: 1 vote" });
+      expect(tacos).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Pizza: 0 votes" }));
+      await waitFor(() => expect(setVote).toHaveBeenCalledWith(poll.id, 0, expect.any(String)));
+
+      vi.mocked(getChatWindow).mockResolvedValue({
+        items: [
+          message(5, {
+            ...poll,
+            poll: {
+              options: ["Pizza", "Tacos"],
+              votes: [
+                { userId: friend, option: 1 },
+                { userId: me.id, option: 0 },
+              ],
+            },
+          } as Partial<ChatMessage>),
+        ],
+        previousCursor: null,
+        nextCursor: "after-5",
+      });
+      act(() => feeds.get(`/user/queue/tables/${table.id}/chat`)?.({} as Invalidation));
+      const mine = await screen.findByRole("button", { name: "Pizza: 1 vote, your vote" });
+      fireEvent.click(mine);
+      await waitFor(() => expect(setVote).toHaveBeenCalledWith(poll.id, null, expect.any(String)));
+    });
+
+    it("starts a poll from the composer, and hides the button when polls are off or not allowed", async () => {
+      const { unmount } = renderChat();
+      fireEvent.click(await screen.findByRole("button", { name: "Start a poll" }));
+      fireEvent.change(screen.getByRole("textbox", { name: "Question" }), {
+        target: { value: " Where next? " },
+      });
+      fireEvent.change(screen.getByRole("textbox", { name: "Option 1" }), {
+        target: { value: "Bar" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Post poll" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("at least two options");
+      fireEvent.change(screen.getByRole("textbox", { name: "Option 2" }), {
+        target: { value: "bar " },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Post poll" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("different");
+      fireEvent.click(screen.getByRole("button", { name: /Add option/ }));
+      fireEvent.change(screen.getByRole("textbox", { name: "Option 2" }), {
+        target: { value: "Diner" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Post poll" }));
+      await waitFor(() =>
+        expect(createPoll).toHaveBeenCalledWith(
+          table.id,
+          { question: "Where next?", options: ["Bar", "Diner"] },
+          expect.any(String),
+        ),
+      );
+      // Posting the poll doesn't also submit the (empty) message box.
+      expect(screen.queryByText("Write a message first.")).not.toBeInTheDocument();
+      unmount();
+
+      const off = renderChat({ pollsEnabled: false });
+      await screen.findByText("hello 1");
+      expect(screen.queryByRole("button", { name: "Start a poll" })).not.toBeInTheDocument();
+      off.unmount();
+      renderChat({ disabledPermissions: { [me.id]: ["polls"] } });
+      await screen.findByText("hello 1");
+      expect(screen.queryByRole("button", { name: "Start a poll" })).not.toBeInTheDocument();
+    });
   });
 });

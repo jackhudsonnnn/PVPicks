@@ -55,7 +55,7 @@ public class ReactionService {
                 SELECT m.id FROM chat_messages m
                 JOIN users viewer ON viewer.id = ?
                 LEFT JOIN users author ON author.id = m.author_id
-                WHERE m.id = ? AND m.table_id = ? AND m.kind IN ('text', 'gif', 'bet')
+                WHERE m.id = ? AND m.table_id = ? AND m.kind IN ('text', 'gif', 'bet', 'poll')
                   AND %s FOR SHARE OF m
                 """).formatted(ChatVisibility.VISIBLE),
                 (rs, row) -> rs.getObject("id", UUID.class), userId, messageId, tableId);

@@ -18,7 +18,8 @@ class TablePermissionService {
         BETS("bets", "can_bet"),
         TEXT("text", "can_text"),
         REACT("react", "can_react"),
-        GIFS("gifs", "can_send_gifs");
+        GIFS("gifs", "can_send_gifs"),
+        POLLS("polls", "can_poll");
 
         private final String value;
         private final String column;

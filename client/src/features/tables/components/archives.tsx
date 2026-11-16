@@ -87,7 +87,7 @@ export function ArchivedTable({
           </div>
           <TableChat
             user={user}
-            table={{ id: archive.id, disabledPermissions: {} }}
+            table={{ id: archive.id, disabledPermissions: {}, pollsEnabled: false }}
             expire={expire}
             onRead={() => {}}
             readOnly

@@ -25,19 +25,24 @@ class TableSettingsController {
         this.tableReads = tableReads;
     }
 
+    private static final java.util.List<String> SETTINGS = java.util.List.of("hostsOnlyBets", "u2pickEnabled",
+            "pollsEnabled");
+
+    private static Boolean flag(JsonNode input, String name) {
+        return input.has(name) ? input.get(name).booleanValue() : null;
+    }
+
     @PatchMapping("/tables/{tableId}/settings")
     ResponseEntity<?> update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tableId,
             @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody JsonNode input) {
         if (!IdempotencyGuard.validKey(key)) return error(400, "bad_request", "A valid Idempotency-Key is required.");
-        if (!input.isObject() || input.isEmpty() || input.size() > 2
-                || input.has("hostsOnlyBets") && !input.get("hostsOnlyBets").isBoolean()
-                || input.has("u2pickEnabled") && !input.get("u2pickEnabled").isBoolean()
-                || input.size() != (input.has("hostsOnlyBets") ? 1 : 0) + (input.has("u2pickEnabled") ? 1 : 0)) {
+        if (!input.isObject() || input.isEmpty()
+                || input.size() != SETTINGS.stream().filter(input::has).count()
+                || SETTINGS.stream().anyMatch(name -> input.has(name) && !input.get(name).isBoolean())) {
             return error(400, "bad_request", "Invalid table settings.");
         }
-        var changes = new TableSettingsService.Changes(
-                input.has("hostsOnlyBets") ? input.get("hostsOnlyBets").booleanValue() : null,
-                input.has("u2pickEnabled") ? input.get("u2pickEnabled").booleanValue() : null);
+        var changes = new TableSettingsService.Changes(flag(input, "hostsOnlyBets"), flag(input, "u2pickEnabled"),
+                flag(input, "pollsEnabled"));
         try {
             return switch (settings.update(jwt, tableId, changes, key)) {
                 case UPDATED, REPLAYED -> tableReads.get(jwt, tableId);

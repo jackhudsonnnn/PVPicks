@@ -1,4 +1,4 @@
-/** The chat input: text, and a GIF picker that sends on tap. */
+/** The chat input: text, a GIF picker that sends on tap, and the poll button. */
 import { useState } from "react";
 import { MessageSquareOff, Search, SendHorizontal } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -9,17 +9,23 @@ import { SegmentedTabs } from "@/components/segmented-tabs";
 import { searchGifs, useGifs } from "./gifs";
 import { textProblem } from "./model";
 import { LoadingList } from "@/components/loading";
+import { PollDialog } from "./poll-dialog";
 
 export function Composer({
   canText,
   canGif,
+  canPoll,
   blocked,
   send,
+  startPoll,
 }: {
   canText: boolean;
   canGif: boolean;
+  /** Whether the table has polls on and you have the poll permission. */
+  canPoll: boolean;
   blocked: boolean;
   send: (message: { kind: "text"; text: string } | { kind: "gif"; gifId: string }) => void;
+  startPoll: (poll: { question: string; options: string[] }) => void;
 }) {
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
@@ -33,7 +39,7 @@ export function Composer({
     setText("");
   }
 
-  if (!canText && !canGif) {
+  if (!canText && !canGif && !canPoll) {
     return (
       <p className="flex items-center justify-center gap-2 border-t bg-sidebar p-4 text-center text-xs text-muted-foreground">
         <MessageSquareOff className="size-4 shrink-0" /> A host turned off chat for you at this
@@ -52,6 +58,7 @@ export function Composer({
         {canGif && (
           <GifPicker disabled={blocked} onPick={(gifId) => send({ kind: "gif", gifId })} />
         )}
+        {canPoll && <PollDialog disabled={blocked} onCreate={startPoll} />}
         <Input
           aria-label="Message"
           placeholder={canText ? "Talk trash…" : "A host turned off texts for you"}

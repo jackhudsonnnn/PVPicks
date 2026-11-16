@@ -3,7 +3,6 @@ import { ActionStatus } from "@/components/action-status";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
-import { Button } from "@/components/ui/button";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
@@ -42,26 +41,14 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
 
   return (
     <section className="space-y-4" aria-labelledby="settlements-heading">
-      <div className="flex items-center justify-between gap-3">
-        <h2
-          id="settlements-heading"
-          className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground"
-        >
-          Settle-ups
-        </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={groups.isFetching}
-          onClick={() => void queryClient.invalidateQueries({ queryKey: key })}
-        >
-          Refresh receipts
-        </Button>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Net of your open settle-ups with each person. These actions track payments between players;
-        they don't move money.
-      </p>
+      {/* No refresh button: the settlements feed reloads this on every receipt change and on reconnect. */}
+      <h2
+        id="settlements-heading"
+        className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground"
+      >
+        Settle-ups
+      </h2>
+      <p className="text-sm text-muted-foreground">Net of your open settle-ups with each person.</p>
       <ActionStatus
         actions={actions}
         pendingText="A settlement action may not have been saved."

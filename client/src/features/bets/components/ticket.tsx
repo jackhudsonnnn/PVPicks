@@ -14,11 +14,10 @@ import {
 import { MODES } from "@/features/bets/modes";
 import { StatusBadge } from "./status-badge";
 import { formatCents } from "@/lib/money";
-import { timeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
 import type { Table } from "@/features/tables";
-import { type User, AvatarStack, usePerson } from "@/features/people";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { BetDetailsDialog } from "./bet-details";
 import type { BetActions } from "./bet-controls";
 import { useNow } from "@/lib/use-now";
@@ -29,7 +28,6 @@ import {
   choiceTallies,
   formatClock,
   myResultCents,
-  participantIds,
   potCents,
   secondsLeft,
   ticketStatus,
@@ -68,7 +66,6 @@ export function BetTicket({
   const tallies = choiceTallies(bet);
   const pot = potCents(bet);
   const result = myResultCents(bet, user.id);
-  const players = participantIds(bet);
   const canBet = !table.disabledPermissions[user.id]?.includes("bets");
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
   const canPick = status === "active" && canBet && left > 0 && !blocked;
@@ -125,22 +122,42 @@ export function BetTicket({
         <h3 className="break-words font-display text-2xl font-bold leading-tight">
           {bet.question}
         </h3>
-        <div className="-mt-2 flex items-center justify-between gap-2">
-          <p className="min-w-0 text-xs text-ticket-muted">
-            Proposed by {proposer?.name ?? "…"} in{" "}
-            {preview ? (
-              <span className="font-semibold text-ticket-foreground">{table.name}</span>
-            ) : (
-              <Link
-                to="/tables/$tableId"
-                params={{ tableId: table.id }}
-                className="font-semibold text-ticket-foreground underline underline-offset-2"
-              >
-                {table.name}
-              </Link>
-            )}{" "}
-            at {timeLabel(bet.createdAt)}
-          </p>
+        <div className="-mt-2 flex items-start justify-between gap-2">
+          <div className="min-w-0 space-y-1.5 text-xs text-ticket-muted">
+            <p className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0">Proposed by</span>
+              {preview ? (
+                <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ticket-foreground">
+                  <PersonAvatar
+                    id={bet.proposerId}
+                    size="xs"
+                    user={user}
+                    expire={expire}
+                    queryKey={peopleKey}
+                  />
+                  <span className="truncate">{proposer?.name ?? "…"}</span>
+                </span>
+              ) : (
+                <Link
+                  to="/tables/$tableId"
+                  params={{ tableId: table.id }}
+                  search={{ profile: bet.proposerId }}
+                  aria-label={`${proposer?.name ?? "Proposer"}'s profile`}
+                  className="flex min-w-0 items-center gap-1.5 font-semibold text-ticket-foreground hover:underline"
+                >
+                  <PersonAvatar
+                    id={bet.proposerId}
+                    size="xs"
+                    user={user}
+                    expire={expire}
+                    queryKey={peopleKey}
+                  />
+                  <span className="truncate">{proposer?.name ?? "…"}</span>
+                </Link>
+              )}
+            </p>
+          </div>
+
           <BetDetailsDialog
             bet={bet}
             table={table}
@@ -221,8 +238,7 @@ export function BetTicket({
         {status === "pending" && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-status-pending/20 px-3 py-2 text-xs font-medium">
             <span className="flex items-center gap-2">
-              <Lock className="size-3.5" /> Locked ·{" "}
-              {sports ? "waiting on the game" : "picks are in"}
+              <Lock className="size-3.5" /> Locked
             </span>
             {sports ? (
               canOverride ? (
@@ -288,27 +304,26 @@ export function BetTicket({
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-ticket-foreground/10 pt-3">
-          {players && players.length > 0 ? (
-            preview ? (
-              <AvatarStack ids={players} user={user} expire={expire} queryKey={peopleKey} />
+        <div className="flex items-center justify-between gap-3 border-t border-ticket-foreground/10 pt-3">
+          <p className="flex min-w-0 items-center gap-1.5 text-xs">
+            <span
+              aria-hidden
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-ticket-foreground/10 text-sm"
+            >
+              {table.emoji}
+            </span>
+            {preview ? (
+              <span className="truncate font-semibold text-ticket-foreground">{table.name}</span>
             ) : (
               <Link
                 to="/tables/$tableId"
                 params={{ tableId: table.id }}
-                search={{ tab: "peers" }}
-                aria-label="See peers at this table"
-                title="See peers at this table"
-                className="rounded-full transition-opacity hover:opacity-80"
+                className="truncate font-semibold text-ticket-foreground underline underline-offset-2"
               >
-                <AvatarStack ids={players} user={user} expire={expire} queryKey={peopleKey} />
+                {table.name}
               </Link>
-            )
-          ) : (
-            <span className="text-xs text-ticket-muted">
-              {status === "active" ? "Picks stay private until lock" : "Nobody joined"}
-            </span>
-          )}
+            )}
+          </p>
           <dl className="flex gap-4 text-right font-mono text-[11px] uppercase tracking-wider text-ticket-muted">
             <div>
               <dt>Wager</dt>

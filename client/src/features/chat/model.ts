@@ -8,6 +8,9 @@ import type { ChatMessage } from "./api";
  */
 
 const TEXT_LIMIT = 2000;
+export const POLL_QUESTION_LIMIT = 200;
+export const POLL_OPTION_LIMIT = 80;
+export const POLL_MAX_OPTIONS = 6;
 export { QUICK_REACTIONS };
 
 /** Appends a newer window, skipping messages already loaded. */
@@ -52,7 +55,12 @@ export function mergeRange(loaded: ChatMessage[], items: ChatMessage[]): ChatMes
 }
 
 export function canReactTo(message: ChatMessage) {
-  return message.kind === "text" || message.kind === "gif" || message.kind === "bet";
+  return (
+    message.kind === "text" ||
+    message.kind === "gif" ||
+    message.kind === "bet" ||
+    message.kind === "poll"
+  );
 }
 
 /** Reaction chips for a message, most popular first. */
@@ -77,4 +85,39 @@ export function textProblem(text: string): string | null {
   if ([...trimmed].length > TEXT_LIMIT)
     return `Keep messages to ${TEXT_LIMIT} characters or fewer.`;
   return null;
+}
+
+type Poll = Extract<ChatMessage, { kind: "poll" }>;
+
+/** Each option with its voters (oldest vote first), plus the viewer's own choice. */
+export function pollResults(message: Poll, me: string) {
+  const options = message.poll.options.map((label) => ({ label, voters: [] as string[] }));
+  for (const vote of message.poll.votes) options[vote.option]?.voters.push(vote.userId);
+  const mine = message.poll.votes.find((vote) => vote.userId === me)?.option ?? null;
+  return { options, total: message.poll.votes.length, mine };
+}
+
+/** Choosing your current option removes your vote; anything else sets or changes it. */
+export function nextVote(message: Poll, me: string, option: number): number | null {
+  return pollResults(message, me).mine === option ? null : option;
+}
+
+/** The trimmed poll to send, or why it can't be sent. Blank option rows are ignored. */
+export function pollDraft(
+  question: string,
+  options: string[],
+): { question: string; options: string[] } | { problem: string } {
+  const q = question.trim();
+  if (!q) return { problem: "Ask a question first." };
+  if ([...q].length > POLL_QUESTION_LIMIT)
+    return { problem: `Keep the question to ${POLL_QUESTION_LIMIT} characters or fewer.` };
+  const filled = options.map((o) => o.trim()).filter(Boolean);
+  if (filled.length < 2) return { problem: "Add at least two options." };
+  if (filled.length > POLL_MAX_OPTIONS)
+    return { problem: `A poll has at most ${POLL_MAX_OPTIONS} options.` };
+  if (filled.some((o) => [...o].length > POLL_OPTION_LIMIT))
+    return { problem: `Keep each option to ${POLL_OPTION_LIMIT} characters or fewer.` };
+  if (new Set(filled.map((o) => o.toLowerCase())).size !== filled.length)
+    return { problem: "Each option has to be different." };
+  return { question: q, options: filled };
 }

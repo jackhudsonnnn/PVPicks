@@ -15,7 +15,7 @@ are examples rather than a list of implemented tests.
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
 | Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
-| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
+| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message; one changeable vote per user/poll, polls gated by the table switch and the polls permission. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx`, `PollIntegrationTest` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
 
 Paths in the table are relative to `client/src/features/`. Review the
 backend test guidance before declaring the contract complete.
@@ -39,7 +39,7 @@ Owner decisions, 2026-11-14:
   - It's blocked until you're square: no Active or Pending bet you proposed or
     joined, no unsettled table points, and no open receipts.
   - It then removes personal data: profile, relationships, invite
-    preferences, chat text and GIFs, reactions, read positions, feedback,
+    preferences, chat text, GIFs and polls, reactions, poll votes, read positions, feedback,
     debt cap, memberships and archive access, invitations and tomatoes.
   - The account becomes "Deleted user", which bets, the ledger and receipts
     keep referencing. Moderation records (reports, strikes) are kept.
@@ -76,6 +76,44 @@ A receipt group whose net exceeds the 64-bit range still fails with
 
 "No guess" is the only reserved choice text. The prototype's `__no_guess__`
 marker was dropped (V33).
+
+## Wash triggers
+
+A wash ends a bet with no points moving. Triggers run at two moments, general
+ones first, then the bet's mode. Hosts can still override a sports bet's
+outcome (including a wash) until points are settled.
+
+**At lock** (when picks close; the bet goes straight to Washed, never Pending).
+Picks from accounts that can't bet (frozen, betting permission off, over their
+debt cap) are dropped first. "No guess" isn't a pick.
+
+| Trigger | Modes | Wash reason | Status |
+|---|---|---|---|
+| Nobody picked | All | "Nobody picked" | Implemented |
+| Every pick is on one option (including a single picker) | All | "Everyone picked the same option" | Implemented |
+| The player already passed the line before lock | Prop Hunt | "Line reached before picks locked" | Implemented |
+| Either player already reached the target before lock | King Of The Hill | "Target reached before picks locked" | Implemented |
+
+**At resolution** (when the result is known).
+
+| Trigger | Modes | Wash reason | Status |
+|---|---|---|---|
+| Nobody picked the winning option (only possible with 3+ options, since a 2-option bet with both sides picked always has a winner) | All | "Nobody picked the winning choice" | Implemented |
+| Push on a whole-number line | Total Disaster, Give And Take, Prop Hunt | "Push" | Implemented |
+| Tie | Either Or | "Tie" | Implemented |
+| Both players first reach the target in the same update | King Of The Hill | "Both reached it in the same update" | Implemented |
+| A player in the bet didn't play | Either Or, Prop Hunt, King Of The Hill | "A player in the bet didn't play" | Implemented |
+| Two scores land between updates, or a score jump that isn't one scoring play | Scorcerer | "Couldn't tell the scoring play" | Implemented |
+| Game canceled or postponed | Sports | "Game canceled or postponed" | Implemented |
+| Game suspended more than 48 hours | Sports | "Game suspended for more than 48 hours" | Implemented |
+
+**Planned:** more refined, mode-specific triggers are coming (owner,
+2026-11-15), for example a tie on a moneyline bet. Add each one to these
+tables, at lock or at resolution, with its reason and tests.
+
+In code: the general lock washes are in `bets/BetLockService`; mode lock rules
+implement `bets/LockWashRule`; resolution washes are in
+`bets/PayoutCalculator` (general) and the mode's resolver.
 
 ## Proposal, pick and lock
 
@@ -482,12 +520,36 @@ must coordinate compatible user-before-table locking and recheck state after
 locking; deletion must also prevent a visible author from becoming deleted
 concurrently with the reaction. Storage does not enforce this protocol.
 
+### Polls
+
+A poll is a chat message (`kind = 'poll'`): a question (the message text, 1–200
+code points) and 2–6 options (1–80 code points each, different ignoring case),
+all trimmed like text. Owner decisions (2026-11-15):
+
+- **Who can start one.** A member with the polls permission (`can_poll`, on by
+  default; hosts always have it), while the table has polls on
+  (`tables.polls_enabled`, on by default). Hosts switch both: the permission per
+  member (`PUT /tables/{id}/members/{userId}/permissions`, `polls`) and the
+  table switch (`PATCH /tables/{id}/settings`, `pollsEnabled`, which posts a
+  system message). Polls off answers 403 `polls_off`; the permission off, 403
+  `forbidden`.
+- **Voting.** Every current member can vote, one option each, and change or
+  remove the vote at any time (`PUT`/`DELETE /messages/{id}/vote`). Polls
+  never close. Turning polls off or taking the permission stops new polls
+  only; existing polls keep taking votes.
+- **Visibility.** Results and voter names are visible to everyone at the
+  table, always. A blocked author's polls are hidden like their texts; deleted
+  users' votes are hidden like reactions, and account deletion removes their
+  polls and votes. Polls can be reacted to and reported.
+- A changed vote writes `chat.poll.voted.v1`, delivered as `chat.changed` on
+  the table's chat feed.
+
 Chat read positions advance monotonically to visible messages. Matching
 retries recheck access and visibility without reapplying the update.
 
 The per-user idempotency guard protects table creation and membership requests,
 table profile/host/permission/remainder/betting-setting changes, settings updates,
-feedback, invitation responses, reactions, chat sending and last-read,
+feedback, invitation responses, reactions, chat sending, polls and votes, last-read,
 and follow/block mutations. It rechecks active account and session, serializes
 the update and retry claim, and fingerprints canonical requests using a separate
 keyed HMAC. Matching retries do not reapply the update;
@@ -630,12 +692,14 @@ records. The outbox records events but does not deliver them; future
 consumers must recheck invitation eligibility before exposing or delivering an
 event that may have been cancelled after it was written.
 
-## Sports outcomes and host overrides — partly implemented
+## Sports outcomes and host overrides
 
-Implemented for the score modes, Total Disaster and Give And Take (dev,
-2026-11-14): proposals on a stored game, locking, automatic results and washes
-from the feed, and the host override. The player and play-by-play modes are
-not implemented. Sports bets resolve from the feed (ADR 0004, ADR 0005).
+Implemented (dev) for the score modes (2026-11-14), and for the player modes
+and Scorcerer (2026-11-15): proposals on a stored game, locking, automatic
+results and washes from the feed, and the host override. Choose Their Fate
+needs GOAT play-by-play and is not implemented. Sports bets resolve from the
+feed (ADR 0004, ADR 0005); [Player stats](/player-stats) has how each player
+mode and Scorcerer decides.
 
 Implementation notes:
 

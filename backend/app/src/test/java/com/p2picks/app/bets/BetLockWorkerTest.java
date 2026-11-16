@@ -40,7 +40,8 @@ class BetLockWorkerTest {
         var manager = new DataSourceTransactionManager(source);
         transaction = new TransactionTemplate(manager);
         worker = new BetLockWorker(jdbc,
-                new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper())), manager);
+                new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules()), manager);
     }
 
     @Test
@@ -54,7 +55,7 @@ class BetLockWorkerTest {
         UUID broken = bet(brokenTable, frozen, "u2pick", "3 minutes");
         jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", broken, frozen);
         jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes')", broken, frozen);
-        UUID sports = bet(table, host, "either_or", "2 minutes");
+        UUID sports = bet(table, host, "choose_their_fate", "2 minutes");
         for (int i = 0; i < 101; i++) bet(table, host, "u2pick", "1 minute");
         UUID future = UUID.randomUUID();
         jdbc.update("""
@@ -64,22 +65,27 @@ class BetLockWorkerTest {
                         clock_timestamp() + interval '1 hour')
                 """, future, table, host);
         worker.poll();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM bets WHERE table_id = ? AND status = 'PENDING'",
-                Integer.class, table)).isEqualTo(101);
+        // They lock; with no picks they wash at once ("Nobody picked").
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM bets WHERE table_id = ? AND status = 'WASHED' AND locked_at IS NOT NULL
+                """, Integer.class, table)).isEqualTo(101);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, broken)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, sports)).isEqualTo("ACTIVE");
-        var locks = new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()));
+        var locks = new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules());
         assertThatThrownBy(() -> transaction.executeWithoutResult(ignored -> locks.lock(sports, Set.of("u2pick"))))
                 .isInstanceOf(BetLockService.UnsupportedMode.class);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, future)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM bets WHERE table_id = ? AND status = 'PENDING'
+                SELECT count(*) FROM bets WHERE table_id = ? AND status = 'WASHED'
                   AND remainder_rule = 'host' AND remainder_host_id = ?
                 """, Integer.class, table, host)).isEqualTo(101);
         member(brokenTable, host, "HOST");
         worker.poll();
-        assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, broken)).isEqualTo("PENDING");
+        // The frozen player's pick is dropped at lock, leaving nobody: it washes.
+        assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
+                broken)).isEqualTo("WASHED:" + BetLockService.NOBODY_PICKED);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, broken))
                 .isEqualTo(1);
@@ -150,7 +156,9 @@ class BetLockWorkerTest {
             scan.get(10, TimeUnit.SECONDS);
             assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet)).isEqualTo("ACTIVE");
             worker.poll();
-            assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet)).isEqualTo("PENDING");
+            // It locked with the late pick counted: a single pick is one option, so it washes at lock.
+            assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
+                    bet)).isEqualTo("WASHED:" + BetLockService.ONE_OPTION);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, bet)).isEqualTo(1);
         } finally {
             release.countDown();
@@ -180,11 +188,13 @@ class BetLockWorkerTest {
             assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
             worker.poll();
             assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, blocked)).isEqualTo("ACTIVE");
-            assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, available)).isEqualTo("PENDING");
+            assertThat(jdbc.queryForObject("SELECT locked_at IS NOT NULL FROM bets WHERE id = ?", Boolean.class,
+                    available)).isTrue();
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);
             worker.poll();
-            assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, blocked)).isEqualTo("PENDING");
+            assertThat(jdbc.queryForObject("SELECT locked_at IS NOT NULL FROM bets WHERE id = ?", Boolean.class,
+                    blocked)).isTrue();
         } finally {
             release.countDown();
             executor.shutdownNow();
@@ -198,7 +208,8 @@ class BetLockWorkerTest {
                 "test", "test");
         var failingJdbc = new JdbcTemplate(missing);
         var failing = new BetLockWorker(failingJdbc,
-                new BetLockService(failingJdbc, new DebtQuery(failingJdbc), new Outbox(failingJdbc, new ObjectMapper())),
+                new BetLockService(failingJdbc, new DebtQuery(failingJdbc), new Outbox(failingJdbc, new ObjectMapper()),
+                new BetResolutionWriter(failingJdbc, new Outbox(failingJdbc, new ObjectMapper())), noModeRules()),
                 new DataSourceTransactionManager(missing));
         assertThatThrownBy(failing::poll).isInstanceOf(DataAccessException.class);
     }
@@ -240,5 +251,9 @@ class BetLockWorkerTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(exception);
         }
+    }
+
+    private static org.springframework.beans.factory.ObjectProvider<LockWashRule> noModeRules() {
+        return new org.springframework.beans.factory.support.StaticListableBeanFactory().getBeanProvider(LockWashRule.class);
     }
 }

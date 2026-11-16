@@ -25,6 +25,7 @@ public enum OutboxEvent {
 
     CHAT_MESSAGE_CREATED("chat", "chat.message.created.v1"),
     CHAT_REACTION_CHANGED("chat", "chat.reaction.changed.v1"),
+    CHAT_POLL_VOTED("chat", "chat.poll.voted.v1"),
 
     BET_CREATED("bet", "bet.created.v1"),
     BET_PICK_COUNT_CHANGED("bet", "bet.pick_count.changed.v1"),

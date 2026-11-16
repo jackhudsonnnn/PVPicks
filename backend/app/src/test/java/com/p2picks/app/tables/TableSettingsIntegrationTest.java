@@ -782,11 +782,11 @@ class TableSettingsIntegrationTest extends IntegrationTestSupport {
         try {
             var one = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return tableSettings.update(firstJwt, table, new TableSettingsService.Changes(true, null), "one");
+                return tableSettings.update(firstJwt, table, new TableSettingsService.Changes(true, null, null), "one");
             });
             var two = executor.submit(() -> {
                 if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Start timed out");
-                return tableSettings.update(secondJwt, table, new TableSettingsService.Changes(null, false), "two");
+                return tableSettings.update(secondJwt, table, new TableSettingsService.Changes(null, false, null), "two");
             });
             start.countDown();
             assertThat(one.get(10, TimeUnit.SECONDS)).isEqualTo(TableSettingsService.Outcome.UPDATED);
@@ -833,7 +833,7 @@ class TableSettingsIntegrationTest extends IntegrationTestSupport {
                     .subject(host.toString()).claim("jti", validated.getId())
                     .issuedAt(java.time.Instant.now().minusSeconds(1)).expiresAt(expiry).build();
             var update = executor.submit(() -> tableSettings.update(expiring, table,
-                    new TableSettingsService.Changes(true, false), "expiry"));
+                    new TableSettingsService.Changes(true, false, null), "expiry"));
             long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(2500);
             boolean waiting = false;
             while (!waiting && System.nanoTime() < deadline) {

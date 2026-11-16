@@ -54,9 +54,9 @@ class TableReadController {
         UUID sessionId = UUID.fromString(jwt.getId());
         return jdbc.query("""
                 SELECT t.id, t.name, t.emoji, t.remainder_rule, t.hosts_only_bets,
-                       t.u2pick_enabled, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
+                       t.u2pick_enabled, t.polls_enabled, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
                        me.role AS viewer_role, member.user_id AS member_id, member.role AS member_role,
-                       member.can_bet, member.can_text, member.can_react, member.can_send_gifs,
+                       member.can_bet, member.can_text, member.can_react, member.can_send_gifs, member.can_poll,
                        ARRAY(SELECT q.source_table_id::text FROM quickpick_subscriptions q
                              WHERE q.subscriber_table_id = t.id ORDER BY q.source_table_id) AS subscriptions
                 FROM auth_sessions session
@@ -100,7 +100,7 @@ class TableReadController {
 
     private record TableView(
             UUID id, String name, String emoji, List<UUID> memberIds, List<UUID> hostIds,
-            String remainderRule, boolean hostsOnlyBets, boolean u2pickEnabled,
+            String remainderRule, boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
             @JsonInclude(JsonInclude.Include.NON_NULL) String quickPickCode,
             boolean quickPicksEnabled, boolean quickPickSharing, List<UUID> subscribedTo,
             Map<String, List<String>> disabledPermissions) {}
@@ -112,6 +112,7 @@ class TableReadController {
         private final String remainderRule;
         private final boolean hostsOnlyBets;
         private final boolean u2pickEnabled;
+        private final boolean pollsEnabled;
         private final String quickPickCode;
         private final boolean quickPicksEnabled;
         private final boolean quickPickSharing;
@@ -128,6 +129,7 @@ class TableReadController {
             remainderRule = rs.getString("remainder_rule");
             hostsOnlyBets = rs.getBoolean("hosts_only_bets");
             u2pickEnabled = rs.getBoolean("u2pick_enabled");
+            pollsEnabled = rs.getBoolean("polls_enabled");
             viewerIsHost = rs.getString("viewer_role").equals("HOST");
             quickPickCode = viewerIsHost ? rs.getString("quickpick_code") : null;
             quickPicksEnabled = rs.getBoolean("quickpicks_enabled");
@@ -148,6 +150,7 @@ class TableReadController {
                 if (!rs.getBoolean("can_text")) disabled.add("text");
                 if (!rs.getBoolean("can_react")) disabled.add("react");
                 if (!rs.getBoolean("can_send_gifs")) disabled.add("gifs");
+                if (!rs.getBoolean("can_poll")) disabled.add("polls");
                 if (!disabled.isEmpty()) disabledPermissions.put(memberId.toString(), List.copyOf(disabled));
             }
         }
@@ -157,7 +160,7 @@ class TableReadController {
                 throw new IllegalStateException("Table has no host: " + id);
             }
             return new TableView(id, name, emoji, List.copyOf(memberIds), List.copyOf(hostIds),
-                    remainderRule, hostsOnlyBets, u2pickEnabled, quickPickCode, quickPicksEnabled,
+                    remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, quickPickCode, quickPicksEnabled,
                     quickPickSharing, subscribedTo, Map.copyOf(disabledPermissions));
         }
     }

@@ -7,6 +7,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       className="toaster group"
       theme="dark"
+      // Above the phone tab bar, never over it (styles.css sets --toast-bottom per breakpoint). Sonner switches
+      // to its mobile layout below 600px, so both offsets point at the same variable.
+      offset={{ bottom: "var(--toast-bottom)" }}
+      mobileOffset={{ bottom: "var(--toast-bottom)" }}
       toastOptions={{
         classNames: {
           toast:

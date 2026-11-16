@@ -5,6 +5,9 @@ import {
   canReactTo,
   mergeRange,
   nextReaction,
+  nextVote,
+  pollDraft,
+  pollResults,
   prependOlder,
   reactionChips,
   textProblem,
@@ -93,5 +96,46 @@ describe("text messages", () => {
     expect(textProblem(" hi ")).toBeNull();
     expect(textProblem("😀".repeat(2000))).toBeNull();
     expect(textProblem("a".repeat(2001))).toMatch(/2000/);
+  });
+});
+
+describe("polls", () => {
+  const me = "123e4567-e89b-42d3-a456-426614174000";
+  const other = "123e4567-e89b-42d3-a456-426614174001";
+  const poll = {
+    id: "123e4567-e89b-42d3-a456-426614174009",
+    tableId: "123e4567-e89b-42d3-a456-426614174002",
+    createdAt: "2026-11-13T12:00:00Z",
+    kind: "poll" as const,
+    authorId: other,
+    text: "Q?",
+    poll: {
+      options: ["A", "B", "C"],
+      votes: [
+        { userId: other, option: 2 },
+        { userId: me, option: 0 },
+      ],
+    },
+  };
+
+  it("groups voters by option and finds your vote", () => {
+    const results = pollResults(poll, me);
+    expect(results.options.map((o) => o.voters)).toEqual([[me], [], [other]]);
+    expect(results.total).toBe(2);
+    expect(results.mine).toBe(0);
+    expect(pollResults(poll, "someone-else").mine).toBeNull();
+  });
+
+  it("toggles your vote off when you pick it again", () => {
+    expect(nextVote(poll, me, 0)).toBeNull();
+    expect(nextVote(poll, me, 1)).toBe(1);
+  });
+
+  it("validates and trims a draft", () => {
+    expect(pollDraft("  ", ["a", "b"])).toEqual({ problem: "Ask a question first." });
+    expect(pollDraft("Q", ["a", " "])).toEqual({ problem: "Add at least two options." });
+    expect(pollDraft("Q", ["Yes", "yes"])).toEqual({ problem: "Each option has to be different." });
+    expect(pollDraft("Q", ["x".repeat(81), "b"])).toHaveProperty("problem");
+    expect(pollDraft(" Q ", [" a ", "", "b"])).toEqual({ question: "Q", options: ["a", "b"] });
   });
 });

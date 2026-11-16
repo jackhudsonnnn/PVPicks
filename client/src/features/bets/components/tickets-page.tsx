@@ -133,7 +133,7 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
         <EmptyState boxed>Nothing here yet.</EmptyState>
       ) : (
         <div className="space-y-4">
-          <div className="columns-1 gap-4 sm:columns-2">
+          <div className="gap-4 [columns:20rem_2]">
             <AnimatedList key={key.join(":")}>
               {shown.map((bet) => {
                 const table = byId.get(bet.tableId);

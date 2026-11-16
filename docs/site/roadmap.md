@@ -5,10 +5,10 @@ proceeds in parallel where dependencies allow; nothing here has a date.
 
 ## Betting
 
-- **Next:** the player-stat modes (Either Or, Prop Hunt, King Of The Hill) on
-  the stored player stats. One product decision is open first: whether
-  "touchdowns" counts return, fumble and interception touchdowns
-  ([Player stats](/player-stats)).
+- **Next:** the refined, mode-specific wash triggers the owner is writing
+  (for example a tie on a moneyline bet); add each to the domain rules' "Wash
+  triggers" tables.
+- Choose Their Fate, and Scorcerer for the NBA, need GOAT play-by-play.
 - Quick Pick subscriptions and copying results between tables; end-to-end
   debt-cap enforcement across copies.
 - Maybe: a host setting for who may override sports results; showing
@@ -26,8 +26,8 @@ proceeds in parallel where dependencies allow; nothing here has a date.
 - Check the recordings: how fast stats update, how a player who didn't play
   appears, corrections after Final, and NFL status and quarter handling on a
   live Sunday.
-- Cut chunks with player stats (`scripts/cut-sports-chunk.py`), and add player
-  stats to the demo games.
+- Cut today's remaining games into chunks once they finish, then remove that
+  day's raw recordings.
 
 ## Social and tables
 
