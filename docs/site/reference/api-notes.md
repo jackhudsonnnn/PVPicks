@@ -121,8 +121,10 @@ destinations.
   and it was a table's last host, the oldest active member is promoted (or the
   table is archived). A realtime table-view invalidation for host changes is
   still missing.
-- Reports, feedback and admin: `POST /reports` (a daily limit per reporter)
-  feeds the moderation queue: `GET /admin/reports`, `GET /admin/users/flagged`,
+- Reports, feedback and admin: `POST /reports` (one open report per person,
+  a repeat updates it; 20 new a day and 10 calls an hour per reporter)
+  feeds the moderation queue: `GET /admin/reports`, `GET /admin/users/flagged`
+  and `GET /admin/players` page 50 at a time (`{items, nextCursor}`),
   dismiss or strike a report (the third strike freezes the account and ends
   its sessions), unfreeze, clear strikes. Repeated actions answer
   `already_handled`. `POST /feedback` is limited to 5 an hour per account, and has no moderation reads or
@@ -202,6 +204,15 @@ destinations.
   `combined`, `margin`, `player:<id>`, `home_td`, `home_fg`, `away_td`,
   `away_fg`); `BetLiveStats` reads them back with the current values.
 
+- `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one
+  person, `{open, closed, nextCursor}`. Every open receipt comes in full (you
+  need them all to settle); closed ones (paid or forgiven) page 20 at a time,
+  and a cursor's page has no open ones.
+- `EndpointCoverageTest` keeps the contract honest: every served endpoint is
+  in `openapi.yaml`, and every operation there is served except the planned
+  Quick Pick subscribe and wash operations. Dev-only `/dev/**` endpoints may
+  be absent in tests, and the developer docs (`/docs`) are outside the
+  contract.
 - `GET /tables/{id}/members?q=&cursor=`: members of one of your tables whose
   username contains `q`, by username, 50 at a time (404 for non-members).
   Creating tables (10 an hour), adding members (30 calls an hour) and member

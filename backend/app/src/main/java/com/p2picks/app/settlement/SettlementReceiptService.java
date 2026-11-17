@@ -1,9 +1,9 @@
 package com.p2picks.app.settlement;
 
+import com.p2picks.app.common.PageCursor;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,7 +27,10 @@ public class SettlementReceiptService {
         }
     }
 
-    record History(boolean authenticated, boolean player, List<Line> lines) {}
+    /** Closed receipts page this many at a time; open ones always come in full (you need them all to settle). */
+    static final int PAGE = 20;
+
+    record History(boolean authenticated, boolean player, List<Line> open, List<Line> closed, String nextCursor) {}
 
     private final JdbcTemplate jdbc;
 
@@ -35,31 +38,50 @@ public class SettlementReceiptService {
         this.jdbc = jdbc;
     }
 
-    /** Your receipts with one person (optionally at one table): open first, then newest first. */
-    History history(Jwt jwt, UUID otherId, UUID tableId) {
-        return jdbc.query("""
-                WITH viewer AS (
-                    SELECT u.id, u.role FROM users u JOIN auth_sessions s ON s.user_id = u.id
-                    WHERE u.id = ? AND s.id = ? AND u.status = 'ACTIVE'
-                      AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
-                )
-                SELECT viewer.role AS viewer_role, l.*
-                FROM viewer LEFT JOIN settlement_lines l ON
-                    ((l.payer_id = viewer.id AND l.payee_id = ?)
-                      OR (l.payee_id = viewer.id AND l.payer_id = ?))
-                    AND (?::uuid IS NULL OR l.table_id = ?)
-                    AND viewer.role = 'PLAYER'
-                ORDER BY CASE WHEN l.status = 'unpaid' THEN 0 ELSE 1 END, l.created_at DESC, l.id DESC
-                """, rs -> {
-                    if (!rs.next()) return new History(false, false, List.of());
-                    boolean player = "PLAYER".equals(rs.getString("viewer_role"));
-                    List<Line> lines = new ArrayList<>();
-                    do {
-                        if (rs.getObject("id", UUID.class) != null) lines.add(line(rs));
-                    } while (rs.next());
-                    return new History(true, player, List.copyOf(lines));
-                }, UUID.fromString(jwt.getSubject()), UUID.fromString(jwt.getId()), otherId, otherId, tableId,
-                tableId);
+    /**
+     * Your receipts with one person (optionally at one table): every open one, newest first, and the closed ones
+     * (paid or forgiven) newest first, {@link #PAGE} at a time. A cursor continues the closed list and leaves the open
+     * one empty. Throws IllegalArgumentException (or DateTimeParseException) on a bad cursor.
+     */
+    History history(Jwt jwt, UUID otherId, UUID tableId, String cursor) {
+        OffsetDateTime before = null;
+        UUID beforeId = null;
+        if (cursor != null) {
+            List<String> parts = PageCursor.decode(cursor, 2);
+            before = OffsetDateTime.parse(parts.get(0));
+            beforeId = UUID.fromString(parts.get(1));
+        }
+        UUID viewer = UUID.fromString(jwt.getSubject());
+        List<String> roles = jdbc.queryForList("""
+                SELECT u.role FROM users u JOIN auth_sessions s ON s.user_id = u.id
+                WHERE u.id = ? AND s.id = ? AND u.status = 'ACTIVE'
+                  AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
+                """, String.class, viewer, UUID.fromString(jwt.getId()));
+        if (roles.isEmpty()) return new History(false, false, List.of(), List.of(), null);
+        if (!roles.getFirst().equals("PLAYER")) return new History(true, false, List.of(), List.of(), null);
+        String pair = """
+                SELECT l.* FROM settlement_lines l
+                WHERE ((l.payer_id = ? AND l.payee_id = ?) OR (l.payee_id = ? AND l.payer_id = ?))
+                  AND (?::uuid IS NULL OR l.table_id = ?)
+                """;
+        List<Line> open = cursor != null ? List.of() : jdbc.query(pair + """
+                  AND l.status = 'unpaid'
+                ORDER BY l.created_at DESC, l.id DESC
+                """, (rs, row) -> line(rs), viewer, otherId, viewer, otherId, tableId, tableId);
+        List<Line> closed = jdbc.query(pair + """
+                  AND l.status <> 'unpaid'
+                  AND (?::timestamptz IS NULL OR (l.created_at, l.id) < (?::timestamptz, ?::uuid))
+                ORDER BY l.created_at DESC, l.id DESC
+                LIMIT ?
+                """, (rs, row) -> line(rs), viewer, otherId, viewer, otherId, tableId, tableId, before, before,
+                beforeId, PAGE + 1);
+        String next = null;
+        if (closed.size() > PAGE) {
+            closed = closed.subList(0, PAGE);
+            Line last = closed.getLast();
+            next = PageCursor.encode(last.createdAt(), last.id());
+        }
+        return new History(true, true, List.copyOf(open), List.copyOf(closed), next);
     }
 
     static Line line(ResultSet rs) throws SQLException {

@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
 import { cn } from "@/lib/utils";
-import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
+import { backendErrorMessage } from "@/lib/api-client";
 import type { Table } from "@/features/tables";
 import { type User } from "@/features/people";
 import { type SocialActions } from "@/features/social";
 import { ActionStatus } from "@/components/action-status";
 import { userKey } from "@/lib/query-keys";
-import { markRead, type ChatMessage } from "./api";
+import { type ChatMessage } from "./api";
+import { useMarkRead } from "./use-mark-read";
 import { useChatActions } from "./actions";
 import { canReactTo, nextReaction, nextVote } from "./model";
 import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
@@ -28,7 +29,6 @@ export function TableChat({
   onOpenBet,
   onSelectUser,
   social,
-  onRead,
   readOnly = false,
   fill = false,
 }: {
@@ -41,8 +41,6 @@ export function TableChat({
   onSelectUser?: (userId: string) => void;
   /** Report and Block on other people's messages; omitted in archives. */
   social?: SocialActions | undefined;
-  /** Called after the read position moves, so unread counts can refresh. */
-  onRead: () => void;
   /** A deleted table's archive: history only, no sending, reactions, read position or live updates. */
   readOnly?: boolean;
   /** Fill the parent's height (side panel) instead of capping the history at 60% of the screen. */
@@ -70,12 +68,7 @@ export function TableChat({
   const blocked = actions.busy || !!actions.pending || !!actions.storageError;
   const names = userKey(user.id, "people");
 
-  useMarkRead(
-    table.id,
-    !readOnly && state.atEnd ? state.messages.at(-1)?.id : undefined,
-    onRead,
-    expire,
-  );
+  useMarkRead(table.id, !readOnly && state.atEnd ? state.messages.at(-1)?.id : undefined, expire);
   const scroller = useChatScroll(state.messages);
 
   if (state.status === "loading") return <LoadingChat />;
@@ -203,30 +196,6 @@ export function TableChat({
       )}
     </section>
   );
-}
-
-/** Advances the read position to the newest message on screen, once per message. */
-function useMarkRead(
-  tableId: string,
-  latestId: string | undefined,
-  onRead: () => void,
-  expire: () => void,
-) {
-  const marked = useRef<string | null>(null);
-  const callbacks = useRef({ onRead, expire });
-  callbacks.current = { onRead, expire };
-  useEffect(() => {
-    if (!latestId || marked.current === latestId) return;
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    marked.current = latestId;
-    markRead(tableId, latestId, crypto.randomUUID())
-      .then(() => callbacks.current.onRead())
-      .catch((error: unknown) => {
-        // The position only moves forward and the next message retries it; only a lost session matters.
-        if (isUnauthorized(error)) callbacks.current.expire();
-        else marked.current = null;
-      });
-  }, [tableId, latestId]);
 }
 
 /** Keeps the view pinned to the newest message and preserves position when older history loads. */

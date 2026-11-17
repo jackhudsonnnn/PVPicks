@@ -115,7 +115,8 @@ earlier prototype (git tag `prototype-ui`).
   time, so only those rows load. The page loads only the table's live bets; older
   ones load when opened. Tapping a person
   shows their record at the table (computed by the server) and their bets
-  there, newest first, a page at a time.
+  there, newest first, a page at a time, and your receipts with them at that
+  table: every open one, then closed ones 20 at a time.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
   dropdown under the status tabs: full width on phones, at the right on wider
@@ -195,10 +196,12 @@ earlier prototype (git tag `prototype-ui`).
   bet or chat.
   - **Players:** create a player account and show its one-time setup link
     with a QR code, or issue a new setup or reset link. Links are shown once.
+    Newest first, 50 at a time with "Load more".
   - **Account:** change the admin's password.
   - **Moderation:** open reports, with the reported message, to dismiss or
     strike (the third strike freezes the account and signs it out), plus
     players with strikes or frozen accounts, to unfreeze or clear strikes.
+    Both lists load 50 at a time with "Load more".
   - **Site health:** database and cache status.
 - **Account deletion:** Preferences → Account → "Delete my account", with
   your password (`demo` for demo accounts). It's refused, with the reason, until you're square (no open

@@ -42,14 +42,6 @@ class SettlementGroupController {
         this.settles = settles;
     }
 
-    @GetMapping("/people/settlement-reviews")
-    ResponseEntity<?> pendingReviews(@AuthenticationPrincipal Jwt jwt) {
-        var result = reviews.listPending(jwt);
-        if (!result.authenticated()) return unauthorized();
-        if (!result.player()) return forbidden();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.reviews());
-    }
-
     @GetMapping("/people/settle-groups")
     ResponseEntity<?> list(@AuthenticationPrincipal Jwt jwt) {
         var result = groups.read(jwt);

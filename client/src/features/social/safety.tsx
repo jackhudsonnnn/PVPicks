@@ -122,8 +122,8 @@ export function ReportDialog({
                 </DialogTitle>
                 <DialogDescription>
                   {context?.messageText
-                    ? "About this message. A copy goes with your report."
-                    : "Tell us what's going on. Reports are private."}
+                    ? "About this message. A copy goes with your report. Reporting them again before the team reviews it updates your report."
+                    : "Tell us what's going on. Reports are private. Reporting them again before the team reviews it updates your report."}
                 </DialogDescription>
               </DialogHeader>
               {context?.messageText && (

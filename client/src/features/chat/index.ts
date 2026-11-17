@@ -1,4 +1,3 @@
-/** Chat: table chat (windows, sending, reactions, GIFs) and its unread count. Other code imports this feature only from here. */
-export { getChatUnread } from "./api";
+/** Chat: table chat (windows, sending, reactions, GIFs). Other code imports this feature only from here. */
 export { TableChat } from "./chat";
 export { previewText, useChatPreview } from "./previews";

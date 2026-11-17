@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { LoadMore } from "@/components/load-more";
 import QRCode from "qrcode";
 import { Copy, KeyRound, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,13 @@ type Shown = SetupCode & { username: string };
 export function Players({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const key = userKey(user.id, "admin-players");
-  const players = useQuery({ queryKey: key, queryFn: ({ signal }) => listPlayers(signal) });
+  const players = useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam, signal }) => listPlayers(pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
+  });
+  const playerList = players.data?.pages.flatMap((page) => page.items) ?? [];
   const [username, setUsername] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,11 +99,11 @@ export function Players({ user }: { user: User }) {
         <LoadingList label="Loading players" rows={3} rowClassName="h-12" />
       ) : players.isError ? (
         <p role="alert">{backendErrorMessage(players.error)}</p>
-      ) : players.data.length === 0 ? (
+      ) : playerList.length === 0 ? (
         <p className="text-sm text-muted-foreground">No players yet.</p>
       ) : (
         <ul className="divide-y rounded-lg border bg-surface">
-          {players.data.map((player) => (
+          {playerList.map((player) => (
             <li
               key={player.id}
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
@@ -120,6 +127,14 @@ export function Players({ user }: { user: User }) {
               </Button>
             </li>
           ))}
+          {players.hasNextPage && (
+            <li className="px-4 py-3">
+              <LoadMore
+                loading={players.isFetchingNextPage}
+                onLoad={() => void players.fetchNextPage()}
+              />
+            </li>
+          )}
         </ul>
       )}
     </section>

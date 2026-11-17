@@ -1,5 +1,6 @@
 package com.p2picks.app.accounts;
 
+import com.p2picks.app.common.PageCursor;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.AccountSetupCodes;
 import com.p2picks.app.security.MutationAuthentication;
@@ -19,6 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 class PlayerProvisioning {
+    /** The admin's player list pages this many at a time. */
+    static final int PAGE = 50;
+
+    record Page(List<Player> items, String nextCursor) {}
+
     record Player(UUID id, String username, String status, boolean passwordSet, OffsetDateTime codeExpiresAt,
                   OffsetDateTime createdAt) {}
 
@@ -48,18 +54,34 @@ class PlayerProvisioning {
         this.codes = codes;
     }
 
-    /** Players, newest first, with whether they've set a password and when their live code (if any) expires. */
-    List<Player> players() {
-        return jdbc.query("""
+    /**
+     * Players, newest first, {@link #PAGE} at a time, with whether they've set a password and when their live code
+     * (if any) expires. Throws IllegalArgumentException on a bad cursor.
+     */
+    Page players(String cursor) {
+        OffsetDateTime before = null;
+        UUID beforeId = null;
+        if (cursor != null) {
+            List<String> parts = PageCursor.decode(cursor, 2);
+            before = OffsetDateTime.parse(parts.get(0));
+            beforeId = UUID.fromString(parts.get(1));
+        }
+        List<Player> rows = jdbc.query("""
                 SELECT u.id, u.username::text AS username, u.status, u.password_hash LIKE '$2%' AS password_set,
                        u.created_at,
                        (SELECT max(c.expires_at) FROM account_setup_codes c
                         WHERE c.user_id = u.id AND c.used_at IS NULL AND c.expires_at > now()) AS code_expires_at
                 FROM users u WHERE u.role = 'PLAYER' AND u.status <> 'DELETED'
-                ORDER BY u.created_at DESC, u.username
+                  AND (?::timestamptz IS NULL OR (u.created_at, u.id) < (?::timestamptz, ?::uuid))
+                ORDER BY u.created_at DESC, u.id DESC
+                LIMIT ?
                 """, (rs, row) -> new Player(rs.getObject("id", UUID.class), rs.getString("username"),
                 rs.getString("status"), rs.getBoolean("password_set"),
-                rs.getObject("code_expires_at", OffsetDateTime.class), rs.getObject("created_at", OffsetDateTime.class)));
+                rs.getObject("code_expires_at", OffsetDateTime.class), rs.getObject("created_at", OffsetDateTime.class)),
+                before, before, beforeId, PAGE + 1);
+        if (rows.size() <= PAGE) return new Page(rows, null);
+        Player last = rows.get(PAGE - 1);
+        return new Page(rows.subList(0, PAGE), PageCursor.encode(last.createdAt(), last.id()));
     }
 
     @Transactional

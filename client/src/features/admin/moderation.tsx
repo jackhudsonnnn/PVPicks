@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { LoadMore } from "@/components/load-more";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { EmptyState } from "@/components/empty-state";
@@ -37,16 +38,22 @@ export function Moderation({ user }: { user: User }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"open" | "all">("open");
   const key = userKey(user.id, "moderation");
-  const reports = useQuery({
+  const reports = useInfiniteQuery({
     queryKey: [...key, "reports", filter],
-    queryFn: ({ signal }) => listReports(filter === "all", signal),
+    queryFn: ({ pageParam, signal }) => listReports(filter === "all", pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
     retry: false,
   });
-  const flagged = useQuery({
+  const flagged = useInfiniteQuery({
     queryKey: [...key, "flagged"],
-    queryFn: ({ signal }) => listFlagged(signal),
+    queryFn: ({ pageParam, signal }) => listFlagged(pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
     retry: false,
   });
+  const reportList = reports.data?.pages.flatMap((page) => page.items) ?? [];
+  const flaggedList = flagged.data?.pages.flatMap((page) => page.items) ?? [];
   const act = useMutation({
     mutationFn: async (run: () => Promise<{ strikes: number; frozen: boolean } | null | void>) =>
       run(),
@@ -82,13 +89,13 @@ export function Moderation({ user }: { user: User }) {
           <LoadingList label="Loading reports" rows={3} rowClassName="h-24" />
         ) : reports.isError ? (
           <p role="alert">{backendErrorMessage(reports.error)}</p>
-        ) : reports.data.length === 0 ? (
+        ) : reportList.length === 0 ? (
           <EmptyState boxed className="p-6">
             {filter === "open" ? "No open reports." : "No reports yet."}
           </EmptyState>
         ) : (
           <ul className="space-y-3">
-            {reports.data.map((report) => (
+            {reportList.map((report) => (
               <li key={report.id} className="space-y-2 rounded-xl border bg-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">
@@ -135,6 +142,14 @@ export function Moderation({ user }: { user: User }) {
                 )}
               </li>
             ))}
+            {reports.hasNextPage && (
+              <li>
+                <LoadMore
+                  loading={reports.isFetchingNextPage}
+                  onLoad={() => void reports.fetchNextPage()}
+                />
+              </li>
+            )}
           </ul>
         )}
       </section>
@@ -147,13 +162,13 @@ export function Moderation({ user }: { user: User }) {
           <LoadingList label="Loading flagged accounts" rows={2} rowClassName="h-12" />
         ) : flagged.isError ? (
           <p role="alert">{backendErrorMessage(flagged.error)}</p>
-        ) : flagged.data.length === 0 ? (
+        ) : flaggedList.length === 0 ? (
           <EmptyState boxed className="p-6">
             Nobody has strikes.
           </EmptyState>
         ) : (
           <ul className="divide-y rounded-xl border bg-surface">
-            {flagged.data.map((person) => (
+            {flaggedList.map((person) => (
               <li key={person.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <span>
                   <Name person={person} />
@@ -183,6 +198,14 @@ export function Moderation({ user }: { user: User }) {
                 </span>
               </li>
             ))}
+            {flagged.hasNextPage && (
+              <li className="p-3">
+                <LoadMore
+                  loading={flagged.isFetchingNextPage}
+                  onLoad={() => void flagged.fetchNextPage()}
+                />
+              </li>
+            )}
           </ul>
         )}
       </section>

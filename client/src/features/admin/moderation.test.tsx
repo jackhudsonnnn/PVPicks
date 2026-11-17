@@ -49,8 +49,11 @@ function renderQueue() {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(listReports).mockResolvedValue([report]);
-  vi.mocked(listFlagged).mockResolvedValue([{ ...target, status: "FROZEN", strikes: 3 }]);
+  vi.mocked(listReports).mockResolvedValue({ items: [report], nextCursor: null });
+  vi.mocked(listFlagged).mockResolvedValue({
+    items: [{ ...target, status: "FROZEN", strikes: 3 }],
+    nextCursor: null,
+  });
 });
 
 describe("moderation", () => {

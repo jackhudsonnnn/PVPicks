@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Ban, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -295,7 +295,7 @@ function SafetyButtons({
   );
 }
 
-/** Your receipts with this person from this table, newest first. */
+/** Your receipts with this person from this table: open ones first, then closed ones, newest first and paged. */
 function Receipts({
   otherId,
   tableId,
@@ -307,16 +307,19 @@ function Receipts({
   user: User;
   expire: () => void;
 }) {
-  const query = useQuery({
-    queryKey: [...userKey(user.id, "settlements"), "history", otherId],
-    queryFn: ({ signal }) => receiptHistory(user.id, otherId, signal),
+  const query = useInfiniteQuery({
+    queryKey: [...userKey(user.id, "settlements"), "history", otherId, tableId],
+    queryFn: ({ pageParam, signal }) =>
+      receiptHistory(user.id, otherId, { tableId, cursor: pageParam }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
     retry: false,
   });
   useExpireOnUnauthorized([query.error], expire);
   if (query.isPending)
     return <LoadingList label="Loading receipts" rows={2} rowClassName="h-14" className="py-4" />;
   if (query.isError) return <p role="alert">{backendErrorMessage(query.error)}</p>;
-  const lines = query.data.filter((line) => line.tableId === tableId);
+  const lines = query.data.pages.flatMap((page) => [...page.open, ...page.closed]);
   if (lines.length === 0)
     return <EmptyState className="py-8">No receipts between you here.</EmptyState>;
   return (
@@ -337,6 +340,11 @@ function Receipts({
           </li>
         );
       })}
+      {query.hasNextPage && (
+        <li className="p-3">
+          <LoadMore loading={query.isFetchingNextPage} onLoad={() => void query.fetchNextPage()} />
+        </li>
+      )}
     </ul>
   );
 }

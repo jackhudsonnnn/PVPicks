@@ -10,14 +10,17 @@ planned operations, so it isn't an inventory of what exists.
 
 - Sign-in with an eight-hour HttpOnly cookie session, CSRF and same-origin
   checks. Failed sign-ins are throttled per account name and per address
-  (Redis), and chat, bets, search, follows, feedback and realtime
-  subscriptions are rate limited.
+  (Redis), and so are wrong passwords when changing your password or deleting
+  your account. Chat, bets, search, follows, feedback, reports, tables and
+  realtime subscriptions are rate limited, and every write counts toward a
+  120-a-minute ceiling per account.
 - Accounts from the admin: create a player with a one-time setup link (and
   QR code), reset links, and change password. No registration. In dev, a passwordless picker over the demo accounts (see
   [Demo world](/demo-data)).
 - Profile (username, color), invite preferences and debt cap.
 - Follows, blocks, user search and lookup.
-- Reports go to an admin moderation queue. Admins dismiss or strike them;
+- Reports go to an admin moderation queue (one open report per person;
+  reporting again updates it). Admins dismiss or strike them;
   three strikes freeze the account (signed out, can't sign in).
 - Account deletion once you're square. Host recovery: the oldest active
   member takes over, or the table is archived.

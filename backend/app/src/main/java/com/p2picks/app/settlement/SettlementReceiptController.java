@@ -25,9 +25,9 @@ class SettlementReceiptController {
     @GetMapping("/users/{userId}/settlements")
     ResponseEntity<?> history(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId,
             @RequestParam MultiValueMap<String, String> parameters) {
-        if (parameters.size() > 1 || parameters.values().stream().anyMatch(values -> values.size() != 1)
-                || parameters.keySet().stream().anyMatch(key -> !key.equals("tableId"))) {
-            return error(400, "bad_request", "Provide at most one valid table ID.");
+        if (parameters.values().stream().anyMatch(values -> values.size() != 1)
+                || parameters.keySet().stream().anyMatch(key -> !key.equals("tableId") && !key.equals("cursor"))) {
+            return error(400, "bad_request", "Provide at most one valid table ID and cursor.");
         }
         UUID tableId = null;
         if (parameters.containsKey("tableId")) {
@@ -39,10 +39,19 @@ class SettlementReceiptController {
                 return error(400, "bad_request", "Provide at most one valid table ID.");
             }
         }
-        var result = receipts.history(jwt, userId, tableId);
+        SettlementReceiptService.History result;
+        try {
+            result = receipts.history(jwt, userId, tableId, parameters.getFirst("cursor"));
+        } catch (IllegalArgumentException | java.time.format.DateTimeParseException invalid) {
+            return error(400, "bad_request", "Invalid cursor.");
+        }
         if (!result.authenticated()) return unauthorized();
         if (!result.player()) return forbidden();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.lines());
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("open", result.open());
+        body.put("closed", result.closed());
+        body.put("nextCursor", result.nextCursor());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
     }
 
     private static ResponseEntity<Map<String, String>> unauthorized() {

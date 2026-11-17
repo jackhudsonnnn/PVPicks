@@ -23,17 +23,43 @@ const reportSchema = z.object({
 export type ModerationPerson = z.infer<typeof person>;
 export type ModerationReport = z.infer<typeof reportSchema>;
 
-export async function listReports(all: boolean, signal?: AbortSignal): Promise<ModerationReport[]> {
+/** A page of an admin list (50 at most); pass `nextCursor` back for the next one. */
+export interface AdminPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+const page = <T extends z.ZodTypeAny>(item: T) =>
+  z.object({ items: z.array(item).max(50), nextCursor: z.string().min(1).nullable() });
+
+const withCursor = (path: string, cursor: string | null) =>
+  cursor === null
+    ? path
+    : `${path}${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`;
+
+/** The moderation queue, newest first, 50 at a time. */
+export async function listReports(
+  all: boolean,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<AdminPage<ModerationReport>> {
   return read(
-    await request(`/admin/reports?status=${all ? "all" : "open"}`, signal ? { signal } : undefined),
-    z.array(reportSchema),
+    await request(
+      withCursor(`/admin/reports?status=${all ? "all" : "open"}`, cursor),
+      signal ? { signal } : undefined,
+    ),
+    page(reportSchema),
   );
 }
 
-export async function listFlagged(signal?: AbortSignal): Promise<ModerationPerson[]> {
+/** Frozen first, then most strikes, then by name, 50 at a time. */
+export async function listFlagged(
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<AdminPage<ModerationPerson>> {
   return read(
-    await request("/admin/users/flagged", signal ? { signal } : undefined),
-    z.array(person),
+    await request(withCursor("/admin/users/flagged", cursor), signal ? { signal } : undefined),
+    page(person),
   );
 }
 
@@ -85,10 +111,14 @@ const playerSchema = z.object({
 export type SetupCode = z.infer<typeof setupCode>;
 export type AdminPlayer = z.infer<typeof playerSchema>;
 
-export async function listPlayers(signal?: AbortSignal): Promise<AdminPlayer[]> {
+/** Players, newest first, 50 at a time. */
+export async function listPlayers(
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<AdminPage<AdminPlayer>> {
   return read(
-    await request("/admin/players", signal ? { signal } : undefined),
-    z.array(playerSchema),
+    await request(withCursor("/admin/players", cursor), signal ? { signal } : undefined),
+    page(playerSchema),
   );
 }
 

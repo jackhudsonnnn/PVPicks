@@ -139,24 +139,51 @@ export async function listSettlementGroups(
   return groups;
 }
 
-/** Your receipts with one person, open first, then newest first. */
+/** Receipts with one person: every open one, then closed ones a page (20) at a time. */
+export interface ReceiptPage {
+  open: SettlementLine[];
+  closed: SettlementLine[];
+  nextCursor: string | null;
+}
+
+/**
+ * Your receipts with one person, optionally at one table: all open ones (newest first) and the first 20 closed ones;
+ * pass `cursor` for the next closed ones (their page has no open ones).
+ */
 export async function receiptHistory(
   actor: string,
   other: string,
+  options: { tableId?: string; cursor?: string | null } = {},
   signal?: AbortSignal,
-): Promise<SettlementLine[]> {
+): Promise<ReceiptPage> {
   validId(actor);
   validId(other);
-  const lines = await readExact(
+  if (options.tableId !== undefined) validId(options.tableId);
+  const query = new URLSearchParams();
+  if (options.tableId !== undefined) query.set("tableId", options.tableId);
+  if (options.cursor) query.set("cursor", options.cursor);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const page = await readExact(
     await request(
-      `/users/${encodeURIComponent(other)}/settlements`,
+      `/users/${encodeURIComponent(other)}/settlements${suffix}`,
       signal ? { signal } : undefined,
     ),
-    z.array(lineSchema),
+    z.object({
+      open: z.array(lineSchema),
+      closed: z.array(lineSchema).max(20),
+      nextCursor: z.string().min(1).nullable(),
+    }),
   );
-  if (actor === other || lines.some((line) => !directLine(line, actor, other)))
+  const lines = [...page.open, ...page.closed];
+  if (
+    actor === other ||
+    lines.some((line) => !directLine(line, actor, other)) ||
+    page.open.some((line) => line.status !== "unpaid") ||
+    page.closed.some((line) => line.status === "unpaid") ||
+    (options.tableId !== undefined && lines.some((line) => line.tableId !== options.tableId))
+  )
     throw new BackendError("The backend returned an unexpected response.");
-  return lines;
+  return page;
 }
 
 /** Every settle with one person, newest first, a page at a time. */

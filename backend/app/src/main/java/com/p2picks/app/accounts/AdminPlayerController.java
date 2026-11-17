@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -32,8 +33,16 @@ class AdminPlayerController {
     }
 
     @GetMapping("/admin/players")
-    ResponseEntity<?> list() {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(players.players());
+    ResponseEntity<?> list(@RequestParam(required = false) String cursor) {
+        try {
+            PlayerProvisioning.Page page = players.players(cursor);
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("items", page.items());
+            body.put("nextCursor", page.nextCursor());
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+        } catch (IllegalArgumentException | java.time.format.DateTimeParseException invalid) {
+            return error(400, "bad_request", "Invalid cursor.");
+        }
     }
 
     @PostMapping("/admin/players")

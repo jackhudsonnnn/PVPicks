@@ -666,7 +666,7 @@ public class DemoBots {
             if (net < 0) {
                 chosen = receipts.stream().map(Receipt::id).toList();
                 kind = "sent";
-                wait = style == DemoProfile.SettleStyle.SLOW || style == DemoProfile.SettleStyle.DISPUTES
+                wait = style == DemoProfile.SettleStyle.SLOW || style == DemoProfile.SettleStyle.REJECTS
                         ? Duration.ofMinutes(60 + fixed.nextInt(300)) : Duration.ofMinutes(1 + fixed.nextInt(10));
             } else if (net == 0) {
                 chosen = receipts.stream().map(Receipt::id).toList();
@@ -693,7 +693,7 @@ public class DemoBots {
                     UUID settle = rs.getObject("id", UUID.class);
                     DemoUser receiver = bots.get(rs.getObject("other_id", UUID.class));
                     Random fixed = new Random(settle.hashCode());
-                    if (receiver == null || receiver.profile().settleStyle() != DemoProfile.SettleStyle.DISPUTES
+                    if (receiver == null || receiver.profile().settleStyle() != DemoProfile.SettleStyle.REJECTS
                             || fixed.nextDouble() >= 0.4
                             || now.isBefore(rs.getTimestamp("created_at").toInstant()
                                     .plus(Duration.ofMinutes(2 + fixed.nextInt(20))))

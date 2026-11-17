@@ -27,14 +27,28 @@ class AdminModerationController {
     }
 
     @GetMapping("/admin/reports")
-    ResponseEntity<?> reports(@RequestParam(defaultValue = "open") String status) {
+    ResponseEntity<?> reports(@RequestParam(defaultValue = "open") String status,
+            @RequestParam(required = false) String cursor) {
         if (!status.equals("open") && !status.equals("all")) return error(400, "bad_request", "status is open or all.");
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(moderation.reports(status.equals("all")));
+        return page(() -> moderation.reports(status.equals("all"), cursor));
     }
 
     @GetMapping("/admin/users/flagged")
-    ResponseEntity<?> flagged() {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(moderation.flagged());
+    ResponseEntity<?> flagged(@RequestParam(required = false) String cursor) {
+        return page(() -> moderation.flagged(cursor));
+    }
+
+    /** A page as {items, nextCursor}; a cursor that isn't ours is a 400. */
+    private static ResponseEntity<?> page(Supplier<ModerationService.Page<?>> read) {
+        try {
+            ModerationService.Page<?> page = read.get();
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("items", page.items());
+            body.put("nextCursor", page.nextCursor());
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);
+        } catch (IllegalArgumentException | java.time.format.DateTimeParseException invalid) {
+            return error(400, "bad_request", "Invalid cursor.");
+        }
     }
 
     @PostMapping("/admin/reports/{reportId}/dismiss")

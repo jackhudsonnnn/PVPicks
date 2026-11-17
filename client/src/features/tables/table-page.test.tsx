@@ -98,7 +98,7 @@ function wrap(children: ReactNode) {
 
 function Chat() {
   const social = useSocialActions(me.id, async () => {}, expire);
-  return <TableChat user={me} table={table} expire={expire} social={social} onRead={() => {}} />;
+  return <TableChat user={me} table={table} expire={expire} social={social} />;
 }
 
 function Profile({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {

@@ -74,7 +74,7 @@ const expire = vi.fn();
 function renderChat(override: Partial<Table> = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <TableChat user={me} table={{ ...table, ...override }} expire={expire} onRead={() => {}} />
+      <TableChat user={me} table={{ ...table, ...override }} expire={expire} />
     </QueryClientProvider>,
   );
 }

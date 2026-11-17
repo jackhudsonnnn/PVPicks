@@ -64,7 +64,7 @@ variation from a fixed seed, so a reset rebuilds the same world.
 | Chat | `messagesPerHour` | 0.5 | Messages in each of their tables while online. |
 | | `gifChance`, `reactionChance` | 0.15, 0.2 | GIFs instead of text; reacting to messages. |
 | | `trashTalkChance` | 0.3 | A canned line after a win or loss. |
-| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `FORGIVES` or `DISPUTES` when settling up. |
+| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `FORGIVES` or `REJECTS` when settling up. |
 | | `activeHours` | all day | When they act (New York time; the same start and end means all day). |
 | | `onlineChance` | 0.9 | Share of their active hours they're actually around. |
 
@@ -76,7 +76,7 @@ Archetypes (each changes only what's listed):
 | Degen | `joinBetChance` 0.9, `proposalsPerHour` 1.5, `wager` 5–10, `messagesPerHour` 1.5. |
 | Lurker | `joinBetChance` 0.2, `messagesPerHour` 0.05. |
 | Sharp | `pickStyle` `FAVORITE`, `settleStyle` `PROMPT`, `trashTalkChance` 0.05. |
-| Troll | `trashTalkChance` 0.8, `blockChance` 0.1, `reportChance` 0.1, `settleStyle` `DISPUTES`. |
+| Troll | `trashTalkChance` 0.8, `blockChance` 0.1, `reportChance` 0.1, `settleStyle` `REJECTS`. |
 | Friendly | `followBackChance` 0.95, `inviteAcceptChance` 0.9, `settleStyle` `FORGIVES`. |
 | Maniac | The crowd only, never drawn for regulars: `joinBetChance` 0.95, `proposalsPerHour` 2, `wager` 5–10, `reactionSeconds` 3–30, `messagesPerHour` 4, `gifChance` 0.25, `reactionChance` 0.3, `trashTalkChance` 0.9, `onlineChance` 1, and `blockChance` and `reportChance` 0 so the noise stays in the table instead of the moderation queue. |
 
@@ -131,7 +131,7 @@ they do:
 | Someone follows them (after the bots started) | Follow (`followBackChance`) | Anywhere |
 | An invitation | Accept (`inviteAcceptChance`) or decline | Anywhere |
 | Now and then | Follow someone (`followsPerDay`): other demo users, sometimes the pro | Anywhere |
-| Open receipts with someone | Send them all when they owe (`PROMPT` within minutes, `SLOW` and `DISPUTES` within hours), mark an even pair received, and sometimes forgive what's owed to them (`FORGIVES`). A `DISPUTES` receiver sometimes rejects a send a few minutes in. | Anywhere |
+| Open receipts with someone | Send them all when they owe (`PROMPT` within minutes, `SLOW` and `REJECTS` within hours), mark an even pair received, and sometimes forgive what's owed to them (`FORGIVES`). A `REJECTS` receiver sometimes rejects a send a few minutes in. | Anywhere |
 
 The seeded world stays as seeded: follows that existed before the bots
 started never get followed back, and newbie only gets bots if you put him in

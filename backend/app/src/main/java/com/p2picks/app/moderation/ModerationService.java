@@ -2,6 +2,7 @@ package com.p2picks.app.moderation;
 
 import com.p2picks.app.accounts.AccountStatus;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.PageCursor;
 import com.p2picks.app.security.MutationAuthentication;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -19,12 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class ModerationService {
     static final int STRIKES_TO_FREEZE = 3;
+    /** Admin lists page this many rows at a time. */
+    static final int PAGE = 50;
 
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, NOT_FOUND, ALREADY_HANDLED }
 
     record Person(UUID id, String username, String status, int strikes) {}
     record ReportView(UUID id, String reason, String note, String status, OffsetDateTime createdAt, Person reporter,
                       Person target, UUID tableId, String tableName, String messageSnapshot) {}
+    record Page<T>(List<T> items, String nextCursor) {}
     record StrikeResult(Outcome outcome, int strikes, boolean frozen) {}
 
     private final JdbcTemplate jdbc;
@@ -40,9 +44,16 @@ class ModerationService {
         this.accounts = accounts;
     }
 
-    /** Reports newest first; open ones only unless `all`. */
-    List<ReportView> reports(boolean all) {
-        return jdbc.query("""
+    /** Reports newest first, {@link #PAGE} at a time; open ones only unless `all`. Throws on a bad cursor. */
+    Page<ReportView> reports(boolean all, String cursor) {
+        OffsetDateTime before = null;
+        UUID beforeId = null;
+        if (cursor != null) {
+            List<String> parts = PageCursor.decode(cursor, 2);
+            before = OffsetDateTime.parse(parts.get(0));
+            beforeId = UUID.fromString(parts.get(1));
+        }
+        List<ReportView> rows = jdbc.query("""
                 SELECT r.id, r.reason, r.note, r.status, r.created_at, r.table_id, t.name AS table_name,
                        r.message_snapshot,
                        r.reporter_id, rep.username::text AS reporter_name, rep.status AS reporter_status,
@@ -55,9 +66,10 @@ class ModerationService {
                 LEFT JOIN admin_user_flags rf ON rf.user_id = r.reporter_id
                 LEFT JOIN admin_user_flags tf ON tf.user_id = r.target_id
                 LEFT JOIN tables t ON t.id = r.table_id
-                WHERE ? OR r.status = 'OPEN'
-                ORDER BY r.created_at DESC, r.id
-                LIMIT 200
+                WHERE (? OR r.status = 'OPEN')
+                  AND (?::timestamptz IS NULL OR (r.created_at, r.id) < (?::timestamptz, ?::uuid))
+                ORDER BY r.created_at DESC, r.id DESC
+                LIMIT ?
                 """, (rs, row) -> new ReportView(rs.getObject("id", UUID.class), rs.getString("reason"),
                         rs.getString("note"), rs.getString("status"),
                         rs.getObject("created_at", OffsetDateTime.class),
@@ -66,18 +78,45 @@ class ModerationService {
                         new Person(rs.getObject("target_id", UUID.class), rs.getString("target_name"),
                                 rs.getString("target_status"), rs.getInt("target_strikes")),
                         rs.getObject("table_id", UUID.class), rs.getString("table_name"),
-                        rs.getString("message_snapshot")), all);
+                        rs.getString("message_snapshot")), all, before, before, beforeId, PAGE + 1);
+        if (rows.size() <= PAGE) return new Page<>(rows, null);
+        ReportView last = rows.get(PAGE - 1);
+        return new Page<>(rows.subList(0, PAGE), PageCursor.encode(last.createdAt(), last.id()));
     }
 
-    /** Players with strikes or a frozen account, for the admin's people list. */
-    List<Person> flagged() {
-        return jdbc.query("""
-                SELECT u.id, u.username::text AS username, u.status, COALESCE(f.strike_count, 0) AS strikes
-                FROM users u LEFT JOIN admin_user_flags f ON f.user_id = u.id
-                WHERE u.role = 'PLAYER' AND u.status <> 'DELETED' AND (u.status = 'FROZEN' OR f.strike_count > 0)
-                ORDER BY u.status DESC, strikes DESC, u.username
+    /**
+     * Players with strikes or a frozen account, for the admin's people list: frozen first, then most strikes, then by
+     * username, {@link #PAGE} at a time. Throws on a bad cursor.
+     */
+    Page<Person> flagged(String cursor) {
+        Integer frozenRank = null;
+        Integer strikesRank = null;
+        String afterName = null;
+        if (cursor != null) {
+            List<String> parts = PageCursor.decode(cursor, 3);
+            frozenRank = Integer.valueOf(parts.get(0));
+            strikesRank = Integer.valueOf(parts.get(1));
+            afterName = parts.get(2);
+        }
+        List<Person> rows = jdbc.query("""
+                SELECT id, username, status, strikes FROM (
+                    SELECT u.id, u.username::text AS username, u.status, COALESCE(f.strike_count, 0) AS strikes,
+                           CASE WHEN u.status = 'FROZEN' THEN 0 ELSE 1 END AS frozen_rank,
+                           -COALESCE(f.strike_count, 0) AS strikes_rank
+                    FROM users u LEFT JOIN admin_user_flags f ON f.user_id = u.id
+                    WHERE u.role = 'PLAYER' AND u.status <> 'DELETED'
+                      AND (u.status = 'FROZEN' OR f.strike_count > 0)
+                ) flagged
+                WHERE ?::int IS NULL OR (frozen_rank, strikes_rank, username) > (?::int, ?::int, ?::text)
+                ORDER BY frozen_rank, strikes_rank, username
+                LIMIT ?
                 """, (rs, row) -> new Person(rs.getObject("id", UUID.class), rs.getString("username"),
-                        rs.getString("status"), rs.getInt("strikes")));
+                        rs.getString("status"), rs.getInt("strikes")),
+                frozenRank, frozenRank, strikesRank, afterName, PAGE + 1);
+        if (rows.size() <= PAGE) return new Page<>(rows, null);
+        Person last = rows.get(PAGE - 1);
+        return new Page<>(rows.subList(0, PAGE), PageCursor.encode(last.status().equals("FROZEN") ? 0 : 1,
+                -last.strikes(), last.username()));
     }
 
     @Transactional

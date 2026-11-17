@@ -90,13 +90,35 @@ class ReportsAndTomatoesIntegrationTest extends IntegrationTestSupport {
         assertThat(jdbc.queryForObject("SELECT note || '|' || message_snapshot FROM reports WHERE reporter_id = ?",
                 String.class, alice)).isEqualTo("mean|rude");
 
-        for (int i = 1; i < ReportService.DAILY_LIMIT; i++) {
-            mvc.perform(postJson("/reports", session, csrf, "report-more-" + i, """
-                    {"targetId":"%s","reason":"spam","note":""}""".formatted(carol))).andExpect(status().isCreated());
+        // Reporting bob again while the report is open updates it: new reason and note, the message kept when no
+        // table is given.
+        mvc.perform(postJson("/reports", session, csrf, "report-again", """
+                {"targetId":"%s","reason":"spam","note":"still at it"}""".formatted(bob)))
+                .andExpect(status().isCreated());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reports WHERE reporter_id = ?", Integer.class, alice))
+                .as("still one open report per person").isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT reason || '|' || note || '|' || message_snapshot FROM reports WHERE reporter_id = ?
+                """, String.class, alice)).isEqualTo("spam|still at it|rude");
+        jdbc.update("UPDATE reports SET status = 'DISMISSED' WHERE reporter_id = ?", alice);
+        mvc.perform(postJson("/reports", session, csrf, "report-after-dismiss", """
+                {"targetId":"%s","reason":"spam","note":""}""".formatted(bob))).andExpect(status().isCreated());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reports WHERE reporter_id = ?", Integer.class, alice))
+                .as("a handled report doesn't block a new one").isEqualTo(2);
+
+        // 20 new reports a rolling day: fill the day with handled ones, then a new person is refused but an update
+        // to the open report isn't.
+        for (int i = 2; i < ReportService.DAILY_LIMIT; i++) {
+            jdbc.update("""
+                    INSERT INTO reports (id, reporter_id, target_id, reason, note, status)
+                    VALUES (?, ?, ?, 'spam', '', 'RESOLVED')
+                    """, UUID.randomUUID(), alice, carol);
         }
         mvc.perform(postJson("/reports", session, csrf, "report-over", """
                 {"targetId":"%s","reason":"spam","note":""}""".formatted(carol)))
                 .andExpect(status().isTooManyRequests());
+        mvc.perform(postJson("/reports", session, csrf, "report-update-at-limit", """
+                {"targetId":"%s","reason":"offensive","note":""}""".formatted(bob))).andExpect(status().isCreated());
     }
 
     @Test

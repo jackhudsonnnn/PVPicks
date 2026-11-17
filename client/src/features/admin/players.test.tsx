@@ -37,7 +37,7 @@ beforeEach(() => vi.resetAllMocks());
 
 describe("admin players", () => {
   it("creates a player and shows the one-time setup link with a QR code", async () => {
-    vi.mocked(listPlayers).mockResolvedValue([player("dana", true)]);
+    vi.mocked(listPlayers).mockResolvedValue({ items: [player("dana", true)], nextCursor: null });
     vi.mocked(createPlayer).mockResolvedValue({
       id: "123e4567-e89b-42d3-a456-426614174009",
       username: "newbie",
@@ -62,7 +62,7 @@ describe("admin players", () => {
   });
 
   it("issues a reset link and explains a taken username", async () => {
-    vi.mocked(listPlayers).mockResolvedValue([player("dana", true)]);
+    vi.mocked(listPlayers).mockResolvedValue({ items: [player("dana", true)], nextCursor: null });
     vi.mocked(issuePlayerCode).mockResolvedValue({
       setupCode: "ZyXwVuTsRqPoNmLkJiHgFe",
       purpose: "RESET",
@@ -79,5 +79,19 @@ describe("admin players", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("That username is taken."),
     );
+  });
+
+  it("loads the next page of players from the server", async () => {
+    vi.mocked(listPlayers).mockImplementation(async (cursor) =>
+      cursor === null
+        ? { items: [player("dana", true)], nextCursor: "page-2" }
+        : { items: [player("eli", false)], nextCursor: null },
+    );
+    renderPlayers();
+    expect(await screen.findByText("dana")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("eli")).toBeInTheDocument();
+    expect(listPlayers).toHaveBeenLastCalledWith("page-2", expect.anything());
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
   });
 });

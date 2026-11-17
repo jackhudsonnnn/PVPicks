@@ -9,6 +9,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Players' reports. A player has at most one open report per person: reporting them again while it's open updates
+ * that report (reason, note, and the attached message when one is given) instead of adding another. New reports are
+ * capped per rolling day here and per hour by {@code RateLimits}.
+ */
 @Service
 public class ReportService {
     /** Reports one player may file per rolling day; more is far beyond honest use. */
@@ -61,10 +66,13 @@ public class ReportService {
             if (content.isEmpty()) return Outcome.INVALID;
             snapshot = content.getFirst();
         }
+        boolean updating = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM reports WHERE reporter_id = ? AND target_id = ? AND status = 'OPEN')
+                """, Boolean.class, reporter, report.targetId()));
         Integer recent = jdbc.queryForObject("""
                 SELECT count(*) FROM reports WHERE reporter_id = ? AND created_at > now() - interval '1 day'
                 """, Integer.class, reporter);
-        if (recent != null && recent >= DAILY_LIMIT) return Outcome.RATE_LIMITED;
+        if (!updating && recent != null && recent >= DAILY_LIMIT) return Outcome.RATE_LIMITED;
         IdempotencyGuard.Claim claim = idempotency.claim(reporter, key, "report.submit.v1", report.canonical(),
                 IdempotencyGuard.SuccessStatus.CREATED);
         authentication.requireUnexpired(jwt);
@@ -73,6 +81,14 @@ public class ReportService {
         jdbc.update("""
                 INSERT INTO reports (id, reporter_id, target_id, reason, note, table_id, message_id, message_snapshot)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (reporter_id, target_id) WHERE status = 'OPEN' DO UPDATE SET
+                    reason = EXCLUDED.reason,
+                    note = EXCLUDED.note,
+                    table_id = CASE WHEN EXCLUDED.table_id IS NULL THEN reports.table_id ELSE EXCLUDED.table_id END,
+                    message_id = CASE WHEN EXCLUDED.table_id IS NULL THEN reports.message_id
+                        ELSE EXCLUDED.message_id END,
+                    message_snapshot = CASE WHEN EXCLUDED.table_id IS NULL THEN reports.message_snapshot
+                        ELSE EXCLUDED.message_snapshot END
                 """, UUID.randomUUID(), reporter, report.targetId(), report.reason(), report.note(), report.tableId(),
                 report.messageId(), snapshot);
         authentication.requireUnexpired(jwt);

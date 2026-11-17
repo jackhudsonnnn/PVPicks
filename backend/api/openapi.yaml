@@ -230,21 +230,6 @@ paths:
                 $ref: '#/components/schemas/CurrentUser'
         '401':
           $ref: '#/components/responses/Unauthorized'
-    delete:
-      operationId: deleteMe
-      summary: Delete the current account
-      description: >-
-        Erases personal data, retains ledger history as Deleted user, and
-        transfers hosted tables according to the deletion rules.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '204':
-          description: Account deleted and session ended.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
   /me/profile:
     patch:
       operationId: updateMyProfile
@@ -1923,28 +1908,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
-  /people/settlement-reviews:
-    get:
-      operationId: listPendingSettlementReviews
-      summary: List the caller's pending balance-change warnings
-      description: >-
-        Dev implementation.
-        Returns only the caller's unreviewed warnings for direct receipt parties,
-        including after all receipts close. This read does not calculate group
-        nets and remains available when a group total is out of range.
-      responses:
-        '200':
-          description: The caller's pending warnings, most recently updated first.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PendingSettlementReview'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
   /users/{userId}/settlement-review:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -2396,8 +2359,11 @@ paths:
         Dev implementation. The target must be another player. tableId must be
         a non-archived table the caller is a member of; messageId requires
         tableId and must be a text or GIF message the target wrote there (its
-        content is kept with the report). At most 20 reports per caller per
-        rolling day (429). Reports are stored for a future moderation queue.
+        content is kept with the report). One open report per caller per
+        target: reporting the same person again while your report is open
+        updates it (reason and note, and the attached table and message when
+        tableId is given) instead of adding another. At most 10 report calls
+        an hour and 20 new reports per rolling day per caller (429).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2444,7 +2410,7 @@ paths:
         Stores feedback for the authenticated user. Text and an optional link
         are trimmed using JavaScript whitespace rules. NUL and unpaired
         surrogates are rejected because PostgreSQL cannot store them safely.
-        The dev endpoint does not implement rate limiting or moderation reads.
+        At most 5 an hour per caller (429).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2466,38 +2432,6 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
-  /users/{userId}/history:
-    parameters:
-      - $ref: '#/components/parameters/UserId'
-    get:
-      operationId: getUserBetHistory
-      summary: Read a user's visible bet history
-      description: Only return bets that the caller is authorized to see.
-      parameters:
-        - $ref: '#/components/parameters/OptionalTableId'
-        - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: A page of bet history.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [items, nextCursor]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Bet'
-                  nextCursor:
-                    type: [string, 'null']
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
   /users/{userId}/settlements:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -2506,20 +2440,35 @@ paths:
       summary: Read authorized settlement receipts for a user
       description: >-
         Dev implementation.
-        Return only receipts the caller is authorized to see, including
-        completed and archived-table history. Optionally filter by table.
-        An unrelated or unknown user yields an empty list.
+        Your receipts with this person, including archived-table history,
+        optionally at one table. Every open (unpaid) receipt comes in full,
+        newest first; closed ones (paid or forgiven) come newest first, 20 at
+        a time. Pass nextCursor to continue the closed list; that response's
+        open list is empty. An unrelated or unknown user yields empty lists.
       parameters:
         - $ref: '#/components/parameters/OptionalTableId'
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Settlement receipts.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SettlementLine'
+                type: object
+                additionalProperties: false
+                required: [open, closed, nextCursor]
+                properties:
+                  open:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SettlementLine'
+                  closed:
+                    type: array
+                    maxItems: 20
+                    items:
+                      $ref: '#/components/schemas/SettlementLine'
+                  nextCursor:
+                    type: [string, 'null']
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2661,35 +2610,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-  /games:
-    get:
-      operationId: listGames
-      summary: Get the sports schedule and current snapshots
-      parameters:
-        - name: date
-          in: query
-          required: true
-          description: >-
-            Calendar date of the scheduled start in America/New_York,
-            including daylight-saving transitions.
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: Available games on the requested date.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Game'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '503':
-          $ref: '#/components/responses/Unavailable'
   /users:
     get:
       operationId: searchUsers
@@ -2774,7 +2694,9 @@ paths:
         kept. Tables you hosted pass to their earliest-joined active member, or
         are archived if nobody active is left. Ends every session and clears the
         session cookie. Not idempotency-keyed: after success a retry can only
-        fail authentication.
+        fail authentication. Wrong passwords count toward the sign-in
+        throttle (per account and per address); over it, 429 even with the
+        right password until the window ends.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -2796,6 +2718,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: The password doesn't match (code `wrong_password`).
+        '429':
+          $ref: '#/components/responses/RateLimited'
           content:
             application/json:
               schema:
@@ -2821,7 +2745,7 @@ paths:
       operationId: listReports
       summary: The moderation queue
       description: >-
-        Admin only. Reports newest first (at most 200), open ones unless
+        Admin only. Reports newest first, 50 at a time, open ones unless
         status=all, with both people's current status and strikes and the
         reported message as it was when reported.
       parameters:
@@ -2832,15 +2756,26 @@ paths:
             type: string
             enum: [open, all]
             default: open
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: Reports.
+          description: A page of reports.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ModerationReport'
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: '#/components/schemas/ModerationReport'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2919,15 +2854,28 @@ paths:
     get:
       operationId: listFlaggedUsers
       summary: Players with strikes or a frozen account
+      description: Admin only. Frozen first, then most strikes, then by username, 50 at a time.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: People, frozen first.
+          description: A page of people.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ModerationPerson'
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: '#/components/schemas/ModerationPerson'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2937,35 +2885,48 @@ paths:
       operationId: listPlayers
       summary: Player accounts, newest first
       description: >-
-        Whether each has set a password, and when their live setup or reset
-        code expires (codes themselves are never shown again).
+        Admin only, 50 at a time. Whether each has set a password, and when
+        their live setup or reset code expires (codes themselves are never
+        shown again).
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: Players.
+          description: A page of players.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  required: [id, username, status, passwordSet, codeExpiresAt, createdAt]
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    username:
-                      type: string
-                    status:
-                      type: string
-                      enum: [ACTIVE, FROZEN]
-                    passwordSet:
-                      type: boolean
-                    codeExpiresAt:
-                      type: [string, 'null']
-                      format: date-time
-                    createdAt:
-                      type: string
-                      format: date-time
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  nextCursor:
+                    type: [string, 'null']
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      type: object
+                      required: [id, username, status, passwordSet, codeExpiresAt, createdAt]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        username:
+                          type: string
+                        status:
+                          type: string
+                          enum: [ACTIVE, FROZEN]
+                        passwordSet:
+                          type: boolean
+                        codeExpiresAt:
+                          type: [string, 'null']
+                          format: date-time
+                        createdAt:
+                          type: string
+                          format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3498,33 +3459,6 @@ components:
         score:
           type: [integer, 'null']
           minimum: 0
-    Game:
-      type: object
-      additionalProperties: false
-      required: [id, league, status, startsAt, home, away, observedAt]
-      properties:
-        id:
-          type: string
-        league:
-          type: string
-          enum: [NBA, NFL]
-        status:
-          type: string
-          enum: [SCHEDULED, LIVE, FINAL, POSTPONED]
-        startsAt:
-          type: string
-          format: date-time
-        period:
-          type: [integer, 'null']
-        clock:
-          type: [string, 'null']
-        home:
-          $ref: '#/components/schemas/GameTeam'
-        away:
-          $ref: '#/components/schemas/GameTeam'
-        observedAt:
-          type: string
-          format: date-time
     GameTeam:
       type: object
       additionalProperties: false
@@ -3820,18 +3754,6 @@ components:
           description: Sent settles between the two still inside their reject window, newest first.
           items:
             $ref: '#/components/schemas/Settle'
-    PendingSettlementReview:
-      type: object
-      additionalProperties: false
-      required: [otherUserId, pendingReviewRevision]
-      properties:
-        otherUserId:
-          type: string
-          format: uuid
-        pendingReviewRevision:
-          type: string
-          format: uuid
-          description: The caller's current unreviewed warning for this person.
     SettlementReview:
       type: object
       additionalProperties: false

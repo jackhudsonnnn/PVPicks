@@ -140,8 +140,9 @@ fast, disposable home anyway.
 
 `common.RateLimiter` (fixed windows, one atomic Lua `INCR`+`PEXPIRE`) and
 `common.RateLimits`, a `HandlerInterceptor` with per-route budgets per
-account (per address before sign-in). Over the limit: 429 `rate_limited`
-with `Retry-After`. Like the login throttle, it fails open when Redis is
+account (per address before sign-in), plus one backstop: every write
+(`POST`, `PUT`, `PATCH`, `DELETE`) counts toward 120 a minute per account,
+whatever its own rule. Over a limit: 429 `rate_limited` with `Retry-After`. Like the login throttle, it fails open when Redis is
 down. `pvpicks.rate-limits.enabled=false` turns it off; the shared
 integration-test context does, and `RateLimitsIntegrationTest` tests the
 limits directly.
@@ -157,14 +158,25 @@ limits directly.
 | User search | `GET /users` | 30 a minute |
 | Follows, blocks | `POST`/`DELETE /follows/*`, `/blocks/*` | 30 a minute each |
 | Feedback | `POST /feedback` | 5 an hour |
+| Reports | `POST /reports` | 10 an hour |
 | New tables | `POST /tables` | 10 an hour |
 | Adding members or sending requests | `POST /tables/*/members` | 30 an hour (each call up to 100 people) |
 | Member search | `GET /tables/*/members` | 60 a minute |
 | WebSocket subscriptions | STOMP `SUBSCRIBE` (`delivery.SubscriptionGuard`) | 120 a minute, refused before the authorization queries |
+| Every write (backstop) | `POST`/`PUT`/`PATCH`/`DELETE /**` | 120 a minute |
+
+Write endpoints without a rule of their own are listed in
+`RateLimits.EXEMPT`, each with the reason the backstop is enough (host- or
+admin-only, once per item, your own setting, or a limit kept elsewhere).
+`EndpointCoverageTest` fails when a write endpoint has neither a rule nor an
+exemption, so a new endpoint has to choose. The chat writes your read position at most
+every 3 seconds, so a busy table can't spend the backstop on its own.
 
 Two limits stay in PostgreSQL because their rows are business records:
-reports allow a few per day (`moderation/ReportService.java`), and tomatoes
-have a cooldown (`tables/TomatoService.java`). In the `lan` profile Caddy
+reports allow 20 new a day and one open report per person
+(`moderation/ReportService.java`), and tomatoes have a cooldown
+(`tables/TomatoService.java`). Password checks outside sign-in (changing
+your password, deleting your account) share the sign-in throttle. In the `lan` profile Caddy
 forwards each phone's address, so per-address limits see real clients. In
 dev, every browser shares the Vite proxy's address.
 

@@ -88,7 +88,7 @@ class PlayerSetupIntegrationTest extends IntegrationTestSupport {
         JsonNode listed = json.readTree(mvc.perform(get("/admin/players").cookie(admin)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         JsonNode mine = null;
-        for (JsonNode player : listed) if (player.path("username").asText().equals(username)) mine = player;
+        for (JsonNode player : listed.path("items")) if (player.path("username").asText().equals(username)) mine = player;
         assertThat(mine).isNotNull();
         assertThat(mine.path("passwordSet").asBoolean()).isTrue();
         assertThat(mine.has("setupCode")).isFalse();

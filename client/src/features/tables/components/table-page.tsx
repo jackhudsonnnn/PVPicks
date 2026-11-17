@@ -21,12 +21,12 @@ import { ActionStatus } from "@/components/action-status";
 import { AboutPanel, HostPanel } from "./host-panel";
 import { ProfileDialog, useSocialActions } from "@/features/social";
 import { TomatoLayer } from "./tomatoes";
-import { TableChat, getChatUnread } from "@/features/chat";
+import { TableChat } from "@/features/chat";
 import { Felt } from "./felt";
 import { PeersPanel } from "./peers";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
-import { tableBetsFeed, tableChatFeed, tableViewFeed } from "@/lib/realtime-connection";
+import { tableBetsFeed, tableViewFeed } from "@/lib/realtime-connection";
 import { arrangeSeats, openBets } from "@/features/tables/seating";
 import { useTableActions } from "@/features/tables/actions";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
@@ -137,16 +137,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   useRealtimeFeed(tableBetsFeed(table.id), () => {
     void queryClient.invalidateQueries({ queryKey: betsKey });
   });
-  const unreadKey = userKey(user.id, table.id, "chat-unread");
-  const unread = useQuery({
-    queryKey: unreadKey,
-    queryFn: ({ signal }) => getChatUnread(table.id, signal),
-    retry: false,
-  });
-  useRealtimeFeed(tableChatFeed(table.id), () => {
-    void queryClient.invalidateQueries({ queryKey: unreadKey });
-  });
-  const unauthorized = useExpireOnUnauthorized([bets.error, balances.error, unread.error], expire);
+  const unauthorized = useExpireOnUnauthorized([bets.error, balances.error], expire);
 
   const betActions = useBetActions(
     user.id,
@@ -190,10 +181,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
   const opened = useBet(user.id, table.id, openId, bets.data, expire);
   const { seated } = arrangeSeats(table.memberIds, user.id, focused);
-  const unreadCount = unread.data?.unreadCount ?? 0;
-  const tabs = TABS.filter((t) =>
-    t.id === "host" ? hosting : t.id === "about" ? !hosting : true,
-  ).map((t) => (t.id === "chat" && unreadCount > 0 ? { ...t, label: `Chat (${unreadCount})` } : t));
+  const tabs = TABS.filter((t) => (t.id === "host" ? hosting : t.id === "about" ? !hosting : true));
   const sideTabs = tabs.filter((t) => t.id !== "table");
   // Falls back to chat if your host role changes while its tab is open.
   const view: TabId = (tab === "host" && !hosting) || (tab === "about" && hosting) ? "chat" : tab;
@@ -343,7 +331,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
               onOpenBet={openBet}
               onSelectUser={setProfileId}
               social={socialActions}
-              onRead={() => void queryClient.invalidateQueries({ queryKey: unreadKey })}
             />
           )}
         </aside>

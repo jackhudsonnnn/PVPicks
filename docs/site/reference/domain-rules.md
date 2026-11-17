@@ -27,8 +27,14 @@ remain frontend tests rather than being artificially ported.
 
 Owner decisions, 2026-11-14:
 
-- **Moderation queue.** Admins see reports (`GET /admin/reports`) with the
-  reported message as it was when reported. They dismiss each one, or resolve
+- **Reports.** A player has at most one open report per person. Reporting
+  someone again while it's open updates it (reason and note, and the attached
+  message when one is given) instead of filing another, so one player can't
+  flood the queue about one person. New reports are capped at 20 a rolling
+  day per reporter, and report calls at 10 an hour (owner decision,
+  2026-11-17).
+- **Moderation queue.** Admins see reports (`GET /admin/reports`, 50 a page)
+  with the reported message as it was when reported. They dismiss each one, or resolve
   it with a strike against the reported player. Strikes stop at three, and
   reaching three freezes the account (again after an unfreeze). Clearing
   strikes doesn't unfreeze, and unfreezing doesn't clear strikes. Admin
@@ -36,7 +42,9 @@ Owner decisions, 2026-11-14:
 - **Frozen accounts can't sign in.** Freezing ends every session at once.
   After a correct password, sign-in answers 403 `account_frozen`. Bets, picks
   and receipts are untouched. Hosted tables follow host recovery.
-- **Account deletion** (`POST /me/delete`, with your password):
+- **Account deletion** (`POST /me/delete`, with your password; wrong
+  passwords count toward the sign-in throttle, so a stolen session can't
+  guess it):
   - It's blocked until you're square: no Active or Pending bet you proposed or
     joined, no unsettled table points, and no open receipts.
   - It then removes personal data: profile, relationships, invite

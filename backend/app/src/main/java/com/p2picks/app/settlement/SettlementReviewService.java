@@ -2,7 +2,6 @@ package com.p2picks.app.settlement;
 
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettlementReviewService {
     public enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST }
     record Review(boolean authenticated, boolean player, boolean accessible, UUID pendingReviewRevision) {}
-    record PendingReview(UUID otherUserId, UUID pendingReviewRevision) {}
-    record PendingReviews(boolean authenticated, boolean player, List<PendingReview> reviews) {}
     public static class StaleReview extends RuntimeException {}
     public static class ReviewRequired extends RuntimeException {}
 
@@ -30,35 +27,6 @@ public class SettlementReviewService {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
-    }
-
-    PendingReviews listPending(Jwt jwt) {
-        UUID actor = UUID.fromString(jwt.getSubject());
-        return jdbc.query("""
-                SELECT viewer.role, review.other_user_id, review.revision
-                FROM users viewer JOIN auth_sessions session ON session.user_id = viewer.id
-                LEFT JOIN settlement_pair_reviews review ON review.user_id = viewer.id
-                    AND review.reviewed_at IS NULL AND viewer.role = 'PLAYER'
-                    AND EXISTS (
-                        SELECT 1 FROM settlement_lines l
-                        WHERE (l.payer_id = viewer.id AND l.payee_id = review.other_user_id)
-                           OR (l.payee_id = viewer.id AND l.payer_id = review.other_user_id)
-                    )
-                WHERE viewer.id = ? AND session.id = ? AND viewer.status = 'ACTIVE'
-                  AND session.revoked_at IS NULL AND session.expires_at > clock_timestamp()
-                ORDER BY review.updated_at DESC, review.other_user_id
-                """, rs -> {
-                    if (!rs.next()) return new PendingReviews(false, false, List.of());
-                    boolean player = "PLAYER".equals(rs.getString("role"));
-                    List<PendingReview> pending = new ArrayList<>();
-                    do {
-                        UUID other = rs.getObject("other_user_id", UUID.class);
-                        if (other != null) {
-                            pending.add(new PendingReview(other, rs.getObject("revision", UUID.class)));
-                        }
-                    } while (rs.next());
-                    return new PendingReviews(true, player, List.copyOf(pending));
-                }, actor, UUID.fromString(jwt.getId()));
     }
 
     Review read(Jwt jwt, UUID other) {

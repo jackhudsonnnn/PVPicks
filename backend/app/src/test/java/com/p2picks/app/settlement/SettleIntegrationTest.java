@@ -202,7 +202,7 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         String first = reviewRevision(p.playerCookie(), p.host());
         assertThat(first).isNotNull();
         assertThat(reviewRevision(p.hostCookie(), p.player())).isEqualTo(first);
-        assertThat(pendingReviews(outsiderCookie)).isEmpty();
+        assertThat(settleGroups(outsiderCookie)).isEmpty();
         mvc.perform(get("/users/" + p.host() + "/settlement-review").cookie(outsiderCookie))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/people/" + p.host() + "/settles").cookie(outsiderCookie)).andExpect(status().isNotFound());
@@ -217,7 +217,7 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         assertThat(body(blocked).path("code").asText()).isEqualTo("settlement_review_required");
         assertThat(ackReview(p.playerCookie(), p.csrf(), p.host(), first, "ack").getResponse().getStatus())
                 .isEqualTo(204);
-        assertThat(pendingReviews(p.playerCookie())).isEmpty();
+        assertThat(reviewRevision(p.playerCookie(), p.host())).as("acknowledged").isNull();
         assertThat(settleHttp(p.playerCookie(), p.csrf(), p.host(), "sent", open, "after-ack").getResponse()
                 .getStatus()).isEqualTo(201);
         assertThat(reviewRevision(p.hostCookie(), p.player())).as("the host's review is their own").isEqualTo(first);
@@ -302,14 +302,34 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         mvc.perform(get("/people/" + busy.player() + "/settles")).andExpect(status().isUnauthorized());
     }
 
-    private JsonNode pendingReviews(Cookie cookie) throws Exception {
-        MvcResult result = mvc.perform(get("/people/settlement-reviews").cookie(cookie))
-                .andExpect(status().isOk()).andReturn();
-        JsonNode reviews = body(result);
-        for (JsonNode review : reviews) {
-            assertThat(OpenApiSchemas.load("PendingSettlementReview").validate(review)).isEmpty();
+    @Test
+    void receiptsWithSomeoneListEveryOpenOneAndPageTheClosedOnes() throws Exception {
+        Pair p = pair();
+        List<UUID> open = new ArrayList<>();
+        for (int i = 0; i < 3; i++) open.add(insertDebtReceipt(p.table(), p.host(), p.player(), p.host(), 100, "unpaid"));
+        List<UUID> closed = new ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            closed.add(insertDebtReceipt(p.table(), p.host(), p.player(), p.host(), 100,
+                    i % 2 == 0 ? "paid" : "forgiven"));
         }
-        return reviews;
+        String path = "/users/" + p.host() + "/settlements";
+        JsonNode first = body(mvc.perform(get(path).cookie(p.playerCookie())).andExpect(status().isOk()).andReturn());
+        assertThat(first.path("open").size()).isEqualTo(3);
+        assertThat(first.path("closed").size()).isEqualTo(20);
+        first.path("open").forEach(line -> assertThat(line.path("status").asText()).isEqualTo("unpaid"));
+        var lineSchema = OpenApiSchemas.load("SettlementLine");
+        first.path("closed").forEach(line -> assertThat(lineSchema.validate(line)).isEmpty());
+        String cursor = first.path("nextCursor").asText();
+        JsonNode second = body(mvc.perform(get(path).param("cursor", cursor).cookie(p.playerCookie()))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(second.path("open").size()).as("open ones come only on the first page").isZero();
+        assertThat(second.path("closed").size()).isEqualTo(5);
+        assertThat(second.path("nextCursor").isNull()).isTrue();
+        List<String> seen = new ArrayList<>();
+        for (JsonNode page : List.of(first, second)) page.path("closed").forEach(l -> seen.add(l.path("id").asText()));
+        assertThat(seen).doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(closed.stream().map(UUID::toString).toList());
+        mvc.perform(get(path).param("cursor", "bad").cookie(p.playerCookie())).andExpect(status().isBadRequest());
     }
 
     private MvcResult ackReview(Cookie cookie, Csrf csrf, UUID other, String revision, String key) throws Exception {

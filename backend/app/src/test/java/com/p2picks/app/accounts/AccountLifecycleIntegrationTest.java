@@ -3,12 +3,14 @@ package com.p2picks.app.accounts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.IntegrationTestSupport;
 import com.p2picks.app.OpenApiSchemas;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.Test;
@@ -70,15 +72,15 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
         Cookie adminSession = loginAs("mladm");
         Cookie hostSession = loginAs("mlhost");
         Csrf csrf = csrf();
+        // One open report per reporter per target, so each reporter's next report waits until the last is handled.
         UUID first = report(early, host);
-        UUID second = report(late, host);
-        UUID third = report(early, host);
         UUID dismissed = report(late, host);
 
         mvc.perform(get("/admin/reports").cookie(hostSession)).andExpect(status().isForbidden());
-        JsonNode queue = json.readTree(mvc.perform(get("/admin/reports").cookie(adminSession))
+        JsonNode page = json.readTree(mvc.perform(get("/admin/reports").cookie(adminSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        assertThat(queue.size()).isGreaterThanOrEqualTo(4);
+        JsonNode queue = page.path("items");
+        assertThat(queue.size()).isGreaterThanOrEqualTo(2);
         assertThat(queue.toString()).contains("mlhost");
         var reportSchema = OpenApiSchemas.load("ModerationReport");
         queue.forEach(report -> assertThat(reportSchema.validate(report)).isEmpty());
@@ -87,10 +89,12 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isNoContent());
         mvc.perform(mutate(post("/admin/reports/" + dismissed + "/strike"), adminSession, csrf))
                 .andExpect(status().isConflict());
-        for (UUID id : new UUID[] {first, second}) {
-            mvc.perform(mutate(post("/admin/reports/" + id + "/strike"), adminSession, csrf))
-                    .andExpect(status().isOk());
-        }
+        mvc.perform(mutate(post("/admin/reports/" + first + "/strike"), adminSession, csrf))
+                .andExpect(status().isOk());
+        UUID second = report(late, host);
+        mvc.perform(mutate(post("/admin/reports/" + second + "/strike"), adminSession, csrf))
+                .andExpect(status().isOk());
+        UUID third = report(early, host);
         assertThat(jdbc.queryForObject("SELECT status FROM users WHERE id = ?", String.class, host))
                 .isEqualTo("ACTIVE");
         JsonNode freeze = json.readTree(mvc.perform(mutate(post("/admin/reports/" + third + "/strike"), adminSession,
@@ -115,7 +119,7 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
                 """, Integer.class, table, early)).isEqualTo(1);
         JsonNode flagged = json.readTree(mvc.perform(get("/admin/users/flagged").cookie(adminSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        assertThat(flagged.toString()).contains("\"status\":\"FROZEN\"").contains("\"strikes\":3");
+        assertThat(flagged.path("items").toString()).contains("\"status\":\"FROZEN\"").contains("\"strikes\":3");
 
         // Unfreezing restores sign-in, not hosting; clearing strikes doesn't touch the status.
         mvc.perform(mutate(post("/admin/users/" + host + "/clear-strikes"), adminSession, csrf))
@@ -175,5 +179,74 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
                 table)).isTrue();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM table_archive_members WHERE table_id = ?",
                 Integer.class, table)).as("the frozen members can still read the archive").isEqualTo(2);
+    }
+
+    @Test
+    void wrongPasswordsOnDeletionShareTheSignInThrottle() throws Exception {
+        seed("dt");
+        Cookie hostSession = loginAs("dthost");
+        Csrf csrf = csrf();
+        String address = "10.77." + (int) (Math.random() * 250) + "." + (int) (Math.random() * 250);
+        for (int i = 0; i < 10; i++) {
+            mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
+                    .with(request -> {
+                        request.setRemoteAddr(address);
+                        return request;
+                    }).content("{\"password\":\"guess " + i + "\"}")).andExpect(status().isForbidden());
+        }
+        mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
+                .with(request -> {
+                    request.setRemoteAddr(address);
+                    return request;
+                }).content("{\"password\":\"a secure test password\"}"))
+                .andExpect(status().isTooManyRequests()).andExpect(header().exists("Retry-After"));
+        assertThat(jdbc.queryForObject("SELECT status FROM users WHERE id = ?", String.class, host))
+                .as("refused even with the right password").isEqualTo("ACTIVE");
+    }
+
+    /** Walks an admin list's pages; each holds at most 50 and no row repeats. */
+    private List<String> walk(Cookie admin, String path) throws Exception {
+        List<String> ids = new java.util.ArrayList<>();
+        String cursor = null;
+        do {
+            String url = path + (cursor == null ? "" : (path.contains("?") ? "&" : "?") + "cursor=" + cursor);
+            JsonNode page = json.readTree(mvc.perform(get(url).cookie(admin)).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString());
+            assertThat(page.path("items").size()).isLessThanOrEqualTo(50);
+            page.path("items").forEach(item -> ids.add(item.path("id").asText()));
+            cursor = page.path("nextCursor").isNull() ? null : page.path("nextCursor").asText();
+        } while (cursor != null);
+        assertThat(ids).doesNotHaveDuplicates();
+        return ids;
+    }
+
+    @Test
+    void adminListsPageFiftyAtATime() throws Exception {
+        seed("pg");
+        Cookie adminSession = loginAs("pgadm");
+        for (int i = 0; i < 55; i++) {
+            jdbc.update("""
+                    INSERT INTO reports (id, reporter_id, target_id, reason, note, status, created_at)
+                    VALUES (?, ?, ?, 'spam', '', 'RESOLVED', now() - make_interval(secs => ?))
+                    """, UUID.randomUUID(), early, host, i);
+        }
+        List<String> reports = walk(adminSession, "/admin/reports?status=all");
+        assertThat(reports).hasSize(jdbc.queryForObject("SELECT count(*) FROM reports", Integer.class))
+                .hasSizeGreaterThan(50);
+        List<String> players = walk(adminSession, "/admin/players");
+        assertThat(players).hasSize(jdbc.queryForObject(
+                "SELECT count(*) FROM users WHERE role = 'PLAYER' AND status <> 'DELETED'", Integer.class));
+        jdbc.update("""
+                INSERT INTO admin_user_flags (user_id, strike_count) VALUES (?, 2), (?, 1)
+                ON CONFLICT (user_id) DO UPDATE SET strike_count = EXCLUDED.strike_count
+                """, host, early);
+        List<String> flagged = walk(adminSession, "/admin/users/flagged");
+        assertThat(flagged.indexOf(host.toString())).as("more strikes first")
+                .isLessThan(flagged.indexOf(early.toString()));
+
+        for (String path : List.of("/admin/reports?cursor=nope", "/admin/players?cursor=bm9wZQ",
+                "/admin/users/flagged?cursor=YXxifGM")) {
+            mvc.perform(get(path).cookie(adminSession)).andExpect(status().isBadRequest());
+        }
     }
 }

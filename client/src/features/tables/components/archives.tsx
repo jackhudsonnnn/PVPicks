@@ -89,7 +89,6 @@ export function ArchivedTable({
             user={user}
             table={{ id: archive.id, disabledPermissions: {}, pollsEnabled: false }}
             expire={expire}
-            onRead={() => {}}
             readOnly
           />
         </>

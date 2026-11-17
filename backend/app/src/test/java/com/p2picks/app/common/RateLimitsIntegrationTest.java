@@ -65,6 +65,32 @@ class RateLimitsIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void theBackstopCountsEveryWriteOnTopOfItsOwnRule() throws Exception {
+        String bucket = "test.writes." + UUID.randomUUID();
+        RateLimits.Interceptor interceptor = new RateLimits.Interceptor(limiter,
+                List.of(new RateLimits.Rule(bucket + ".chat", Set.of("POST"), "/tables/*/messages", 10,
+                        Duration.ofMinutes(1))),
+                new RateLimits.Rule(bucket, Set.of("POST", "PUT", "PATCH", "DELETE"), "/**", 3,
+                        Duration.ofMinutes(1)));
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("t")
+                .header("alg", "HS256").subject(UUID.randomUUID().toString()).build()));
+        String table = "/tables/" + UUID.randomUUID();
+        assertThat(interceptor.preHandle(request("POST", table + "/messages"), new MockHttpServletResponse(), null))
+                .as("a ruled write counts toward both").isTrue();
+        assertThat(interceptor.preHandle(request("PATCH", table), new MockHttpServletResponse(), null)).isTrue();
+        assertThat(interceptor.preHandle(request("PUT", table + "/last-read"), new MockHttpServletResponse(), null))
+                .isTrue();
+        for (int i = 0; i < 5; i++) {
+            assertThat(interceptor.preHandle(request("GET", table), new MockHttpServletResponse(), null))
+                    .as("reads aren't counted").isTrue();
+        }
+        MockHttpServletResponse limited = new MockHttpServletResponse();
+        assertThat(interceptor.preHandle(request("DELETE", table), limited, null)).isFalse();
+        assertThat(limited.getStatus()).isEqualTo(429);
+        assertThat(RateLimits.BACKSTOP.limit()).isEqualTo(RateLimits.WRITES_PER_MINUTE);
+    }
+
+    @Test
     void creatingTablesAndAddingMembersArePaced() throws Exception {
         RateLimits.Interceptor interceptor = new RateLimits.Interceptor(limiter, RateLimits.RULES);
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("t")

@@ -22,8 +22,10 @@ cover.
   - `accounts.PlayerSetupIntegrationTest`: admin-created players, setup and
     reset codes (single use, a newer code cancels the older), password rules
     and changing your password.
-  - `common.RateLimitsIntegrationTest`: the Redis limiter and the per-route
-    interceptor. The shared context turns rate limits off
+  - `common.RateLimitsIntegrationTest`: the Redis limiter, the per-route
+    interceptor and the write backstop. `EndpointCoverageTest` checks every
+    served endpoint against `openapi.yaml` and every write endpoint against
+    the rate rules or `RateLimits.EXEMPT`. The shared context turns rate limits off
     (`pvpicks.rate-limits.enabled=false`), so feature tests aren't limited.
   - `users`, `social`, `chat`, `feedback`: profile, search/lookup,
     relationships, invitations, chat windows, sending, reactions and read state.

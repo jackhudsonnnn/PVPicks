@@ -64,7 +64,13 @@ describe("settlement API", () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(groups))
-      .mockResolvedValueOnce(json([{ ...line, payerId: other, payeeId: revision }]))
+      .mockResolvedValueOnce(
+        json({
+          open: [{ ...line, payerId: other, payeeId: revision }],
+          closed: [],
+          nextCursor: null,
+        }),
+      )
       .mockResolvedValueOnce(
         json({ items: [{ ...settle, senderId: revision }], nextCursor: null }),
       );
@@ -75,6 +81,27 @@ describe("settlement API", () => {
     expect(fetch.mock.calls[0]?.[0]).toBe("/api/people/settle-groups");
     await expect(receiptHistory(actor, other)).rejects.toThrow("unexpected response");
     await expect(listSettles(actor, other, null)).rejects.toThrow("unexpected response");
+  });
+
+  it("reads receipts with someone at one table, open ones in full and closed ones paged", async () => {
+    const closed = { ...line, id: revision, status: "paid" };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json({ open: [line], closed: [closed], nextCursor: "next" }))
+      .mockResolvedValueOnce(json({ open: [], closed: [], nextCursor: null }))
+      .mockResolvedValueOnce(json({ open: [closed], closed: [], nextCursor: null }));
+    vi.stubGlobal("fetch", fetch);
+    const page = await receiptHistory(actor, other, { tableId: line.tableId });
+    expect(page.open).toHaveLength(1);
+    expect(page.nextCursor).toBe("next");
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      `/api/users/${other}/settlements?tableId=${line.tableId}`,
+    );
+    await receiptHistory(actor, other, { tableId: line.tableId, cursor: "next" });
+    expect(fetch.mock.calls[1]?.[0]).toBe(
+      `/api/users/${other}/settlements?tableId=${line.tableId}&cursor=next`,
+    );
+    await expect(receiptHistory(actor, other)).rejects.toThrow("unexpected response");
   });
 
   it("settles and rejects with fresh CSRF and the supplied retry keys", async () => {
