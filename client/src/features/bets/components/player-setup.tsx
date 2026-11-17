@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { LoadingList } from "@/components/loading";
-import type { GamePlayer, GamePlayers } from "@/features/sports";
+import { byPosition, type GamePlayer, type GamePlayers } from "@/features/sports";
 import { canPush, playerCount, type PlayerMode } from "@/features/bets/sports-model";
 import { Section, Stepper } from "./form-parts";
 
@@ -74,10 +74,11 @@ export function PlayerSetup({
               <SelectValue placeholder="Choose a player" />
             </SelectTrigger>
             <SelectContent>
-              {roster.players
+              {byPosition(roster.players)
                 .filter((p) => !playerIds.includes(p.id) || playerIds[slot] === p.id)
                 .map((p) => (
                   <SelectItem key={p.id} value={p.id}>
+                    {p.position ? `${p.position} · ` : ""}
                     {p.name} · {p.team ?? "?"} · {current(p)} {statLabel.toLowerCase()}
                   </SelectItem>
                 ))}

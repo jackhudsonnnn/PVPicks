@@ -92,13 +92,16 @@ final class DevSources {
             gameIds.put(key, feed.providerId());
         }
         Map<String, List<StatLine>> lines = new LinkedHashMap<>();
-        Set<String> known = StatLine.STATS.get(league).stream().map(StatLine.Stat::key).collect(Collectors.toSet());
+        Set<String> known = new java.util.LinkedHashSet<>(
+                StatLine.STATS.get(league).stream().map(StatLine.Stat::key).toList());
+        // NFL kickers' field goals and extra points, which Scorcerer needs to explain the score.
+        if (league == League.NFL) known.addAll(StatLine.NFL_SCORING);
         for (ObjectNode player : players.values()) {
             String key = player.path("id").asText();
             String game = gameIds.get(player.path("game").asText());
             if (game == null) throw new IllegalArgumentException("Player " + key + " names an unknown game");
             Map<String, Integer> stats = new LinkedHashMap<>();
-            for (StatLine.Stat stat : StatLine.STATS.get(league)) stats.put(stat.key(), 0);
+            for (String stat : known) stats.put(stat, 0);
             player.path("stats").properties().forEach(entry -> {
                 if (!known.contains(entry.getKey())) {
                     throw new IllegalArgumentException("Unknown " + league + " stat \"" + entry.getKey()

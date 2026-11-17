@@ -25,8 +25,11 @@ public class PasswordlessSignIn {
     private final DevelopmentSessions sessions;
     private final CsrfTokenRepository csrfTokens;
     private final JwtDecoder decoder;
+    private final SessionCookies cookies;
 
-    PasswordlessSignIn(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JwtDecoder decoder) {
+    PasswordlessSignIn(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JwtDecoder decoder,
+            SessionCookies cookies) {
+        this.cookies = cookies;
         this.sessions = sessions;
         this.csrfTokens = csrfTokens;
         this.decoder = decoder;
@@ -58,14 +61,14 @@ public class PasswordlessSignIn {
             return Result.FROZEN;
         }
         if (token == null) return Result.NO_SUCH_ACCOUNT;
-        response.addHeader(HttpHeaders.SET_COOKIE, SessionCookies.session(token, Duration.ofHours(8)));
+        response.addHeader(HttpHeaders.SET_COOKIE, this.cookies.session(token, Duration.ofHours(8)));
         csrfTokens.saveToken(null, request, response);
         return Result.SIGNED_IN;
     }
 
     /** Ends the caller's cookie session and rotates the CSRF token, e.g. after a reset wiped every session. */
     public void signOut(HttpServletRequest request, HttpServletResponse response) {
-        response.addHeader(HttpHeaders.SET_COOKIE, SessionCookies.cleared());
+        response.addHeader(HttpHeaders.SET_COOKIE, cookies.cleared());
         csrfTokens.saveToken(null, request, response);
     }
 }

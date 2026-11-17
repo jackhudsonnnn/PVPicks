@@ -33,7 +33,8 @@ final class JwtCookieFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         // Ways in don't need the old session, and a stale one (e.g. after the demo reset wiped sessions) mustn't
         // block them: sign-in replaces it. The dev endpoints (dev only) work without a session.
-        if (path.equals("/auth/login") || path.equals("/auth/csrf") || path.equals("/actuator/health")
+        if (path.equals("/auth/login") || path.equals("/auth/setup") || path.equals("/auth/csrf")
+                || path.equals("/actuator/health")
                 || path.startsWith("/dev/")) {
             chain.doFilter(request, response);
             return;

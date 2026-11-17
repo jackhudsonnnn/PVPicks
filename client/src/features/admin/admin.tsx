@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Moderation } from "./moderation";
+import { Players } from "./players";
+import { ChangePasswordSection } from "@/features/auth";
 import { backendErrorMessage, read, request } from "@/lib/api-client";
 import type { User } from "@/features/people";
 import { userKey } from "@/lib/query-keys";
@@ -29,7 +31,7 @@ async function getAdminHealth(signal?: AbortSignal) {
  * only: the moderation queue and dependency health.
  */
 export function AdminWorkspace({ user, logout }: { user: User; logout: () => Promise<void> }) {
-  const [tab, setTab] = useState<"moderation" | "health">("moderation");
+  const [tab, setTab] = useState<"moderation" | "players" | "health" | "account">("moderation");
   return (
     <div className="min-h-dvh bg-field">
       <header className="glass-bar flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-8">
@@ -46,18 +48,29 @@ export function AdminWorkspace({ user, logout }: { user: User; logout: () => Pro
       </header>
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-8">
         <p className="rounded-lg border bg-surface p-3 text-sm text-muted-foreground">
-          Admin accounts manage the platform and can't join tables, bet or chat.
+          Admin accounts manage the platform and can't join tables, bet or chat. To play, create
+          yourself a player account under Players.
         </p>
         <SegmentedTabs
           ariaLabel="Admin tools"
           tabs={[
             { id: "moderation", label: "Moderation" },
+            { id: "players", label: "Players" },
             { id: "health", label: "Site health" },
+            { id: "account", label: "Account" },
           ]}
           value={tab}
           onChange={setTab}
         />
-        {tab === "moderation" ? <Moderation user={user} /> : <SiteHealth user={user} />}
+        {tab === "moderation" ? (
+          <Moderation user={user} />
+        ) : tab === "players" ? (
+          <Players user={user} />
+        ) : tab === "health" ? (
+          <SiteHealth user={user} />
+        ) : (
+          <ChangePasswordSection username={user.username} />
+        )}
       </main>
     </div>
   );

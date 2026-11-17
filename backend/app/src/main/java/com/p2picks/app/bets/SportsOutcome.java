@@ -17,6 +17,9 @@ final class SportsOutcome {
     static final Duration GRACE = Duration.ofMinutes(20);
     /** A suspended game that hasn't finished by then washes. */
     static final Duration SUSPENSION_LIMIT = Duration.ofHours(48);
+    /** A bet still without an automatic result this long after its game's scheduled start washes. */
+    static final Duration NO_RESULT_LIMIT = Duration.ofHours(48);
+    static final String NO_RESULT = "No result from the feed";
 
     sealed interface Result {
         /** Not decidable yet; check again later. */
@@ -39,6 +42,35 @@ final class SportsOutcome {
     }
 
     private SportsOutcome() {}
+
+    /**
+     * Turns an endless wait into a wash: a game stuck in an unknown or live state, or player stats that never
+     * arrive, would otherwise leave the bet Pending until a host steps in (domain rules, "Wash triggers"). Measured
+     * from the game's current scheduled start, so a rescheduled game gets its full window; suspended games keep their
+     * own 48-hour rule. Without a stored game, it counts from when picks locked.
+     */
+    static Result orNoResult(Result result, GameLookup.Game game, Instant lockedAt, Instant now) {
+        if (!(result instanceof Result.Wait)) return result;
+        if (game != null && game.status() == GameStatus.POSTPONED && "suspended".equals(game.providerState())) {
+            return result;
+        }
+        Instant from = game != null ? game.startsAt() : lockedAt;
+        return from != null && !now.isBefore(from.plus(NO_RESULT_LIMIT)) ? new Result.Wash(NO_RESULT) : result;
+    }
+
+    /**
+     * The combined score that counts for a Total Disaster bet right now: the whole game, or with "Overtime counts"
+     * off and regulation over, the regulation total. Missing scores (before the game starts) count as 0.
+     */
+    static int combinedScore(GameLookup.Game game, boolean includesOvertime) {
+        Integer home = includesOvertime ? null : game.home().regulationScore();
+        Integer away = includesOvertime ? null : game.away().regulationScore();
+        if (home == null || away == null) {
+            home = game.home().score();
+            away = game.away().score();
+        }
+        return (home == null ? 0 : home) + (away == null ? 0 : away);
+    }
 
     /**
      * What a canceled, postponed or suspended game means for any sports bet: a wash, a wait, or null when the

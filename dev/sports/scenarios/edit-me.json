@@ -1,6 +1,6 @@
 {
   "title": "Edit me: one NFL game",
-  "description": "A live NFL game with two players and no script. Change any score, status or stat in this file and save; the next tick (every 2 s) picks it up. Set \"status\": \"FINAL\" to end it (score bets settle 20 minutes after Final).",
+  "description": "A live NFL game with a few players and no script. Change any score, status or stat in this file and save; the next tick (every 2 s) picks it up. Set \"status\": \"FINAL\" to end it (score bets settle 20 minutes after Final). For Scorcerer, keep each team's touchdowns, the kicker's field_goals and extra_points in step with its score (6 per touchdown, 3 per field goal, 1 per extra point; anything left over is 2-point plays).",
   "league": "NFL",
   "games": [
     {
@@ -31,6 +31,42 @@
       "lastName": "Runner",
       "position": "RB",
       "stats": { "rushing_yards": 48, "receptions": 1, "receiving_yards": 9, "touchdowns": 1 }
+    },
+    {
+      "id": "rb2",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Back",
+      "position": "RB",
+      "stats": { "rushing_yards": 55, "touchdowns": 2 }
+    },
+    {
+      "id": "k1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Kicker",
+      "position": "K",
+      "stats": { "field_goals": 1, "extra_points": 2 }
+    },
+    {
+      "id": "wr2",
+      "game": "g1",
+      "team": "GB",
+      "firstName": "Dev",
+      "lastName": "Wideout",
+      "position": "WR",
+      "stats": { "receiving_yards": 70, "receptions": 4, "touchdowns": 1 }
+    },
+    {
+      "id": "k2",
+      "game": "g1",
+      "team": "GB",
+      "firstName": "Dev",
+      "lastName": "Boot",
+      "position": "K",
+      "stats": { "field_goals": 0, "extra_points": 2 }
     }
   ]
 }

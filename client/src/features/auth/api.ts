@@ -29,6 +29,30 @@ export async function signIn(username: string, password: string): Promise<Curren
   return user;
 }
 
+/** Redeems a setup or reset code (from the admin's link) and signs in as that account. */
+export async function redeemSetupCode(code: string, password: string): Promise<CurrentUser> {
+  const token = await csrf();
+  await request("/auth/setup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": token },
+    body: JSON.stringify({ code, password }),
+  });
+  const user = await currentUser();
+  if (!user)
+    throw new BackendError("The session could not be verified. Please try signing in again.");
+  return user;
+}
+
+/** Changes your own password; your other sessions end. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const token = await csrf();
+  await request("/auth/password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": token },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
 export async function signOut(): Promise<void> {
   const token = await csrf();
   await request("/auth/logout", { method: "POST", headers: { "X-CSRF-TOKEN": token } });

@@ -14,6 +14,7 @@ import { Route as DevRouteImport } from './routes/dev'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as HowToPlayRouteImport } from './routes/how-to-play'
 import { Route as PreferencesRouteImport } from './routes/preferences'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as TicketsRouteImport } from './routes/tickets'
 import { Route as ArchivesTableIdRouteImport } from './routes/archives.$tableId'
 import { Route as TablesTableIdRouteImport } from './routes/tables.$tableId'
@@ -43,6 +44,11 @@ const PreferencesRoute = PreferencesRouteImport.update({
   path: '/preferences',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TicketsRoute = TicketsRouteImport.update({
   id: '/tickets',
   path: '/tickets',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
+  '/setup': typeof SetupRoute
   '/tickets': typeof TicketsRoute
   '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
+  '/setup': typeof SetupRoute
   '/tickets': typeof TicketsRoute
   '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/friends': typeof FriendsRoute
   '/how-to-play': typeof HowToPlayRoute
   '/preferences': typeof PreferencesRoute
+  '/setup': typeof SetupRoute
   '/tickets': typeof TicketsRoute
   '/archives/$tableId': typeof ArchivesTableIdRoute
   '/tables/$tableId': typeof TablesTableIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/friends'
     | '/how-to-play'
     | '/preferences'
+    | '/setup'
     | '/tickets'
     | '/archives/$tableId'
     | '/tables/$tableId'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/friends'
     | '/how-to-play'
     | '/preferences'
+    | '/setup'
     | '/tickets'
     | '/archives/$tableId'
     | '/tables/$tableId'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/friends'
     | '/how-to-play'
     | '/preferences'
+    | '/setup'
     | '/tickets'
     | '/archives/$tableId'
     | '/tables/$tableId'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   FriendsRoute: typeof FriendsRoute
   HowToPlayRoute: typeof HowToPlayRoute
   PreferencesRoute: typeof PreferencesRoute
+  SetupRoute: typeof SetupRoute
   TicketsRoute: typeof TicketsRoute
   ArchivesTableIdRoute: typeof ArchivesTableIdRoute
   TablesTableIdRoute: typeof TablesTableIdRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PreferencesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tickets': {
       id: '/tickets'
       path: '/tickets'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   FriendsRoute: FriendsRoute,
   HowToPlayRoute: HowToPlayRoute,
   PreferencesRoute: PreferencesRoute,
+  SetupRoute: SetupRoute,
   TicketsRoute: TicketsRoute,
   ArchivesTableIdRoute: ArchivesTableIdRoute,
   TablesTableIdRoute: TablesTableIdRoute,

@@ -1,0 +1,78 @@
+package com.p2picks.app.common;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.p2picks.app.IntegrationTestSupport;
+import java.time.Duration;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
+/** The Redis limiter against the test Redis, and the interceptor's matching, keys and 429 response. */
+class RateLimitsIntegrationTest extends IntegrationTestSupport {
+    @Autowired
+    private RateLimiter limiter;
+
+    @AfterEach
+    void clearSecurity() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void countsUsesPerSubjectWithinTheWindow() {
+        String subject = "test:" + UUID.randomUUID();
+        for (int i = 0; i < 3; i++) {
+            assertThat(limiter.acquire("unit", subject, 3, Duration.ofMinutes(1)).allowed()).isTrue();
+        }
+        RateLimiter.Decision blocked = limiter.acquire("unit", subject, 3, Duration.ofMinutes(1));
+        assertThat(blocked.allowed()).isFalse();
+        assertThat(blocked.retryAfterSeconds()).isBetween(1L, 60L);
+        assertThat(limiter.acquire("unit", "test:" + UUID.randomUUID(), 3, Duration.ofMinutes(1)).allowed())
+                .as("another subject has its own budget").isTrue();
+        assertThat(limiter.acquire("other", subject, 3, Duration.ofMinutes(1)).allowed())
+                .as("another bucket has its own budget").isTrue();
+    }
+
+    @Test
+    void theInterceptorLimitsMatchingRequestsPerAccount() throws Exception {
+        RateLimits.Interceptor interceptor = new RateLimits.Interceptor(limiter,
+                List.of(new RateLimits.Rule("test.send." + UUID.randomUUID(), Set.of("POST"), "/tables/*/messages", 2,
+                        Duration.ofMinutes(1))));
+        String user = UUID.randomUUID().toString();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("t")
+                .header("alg", "HS256").subject(user).build()));
+        String path = "/tables/" + UUID.randomUUID() + "/messages";
+        assertThat(interceptor.preHandle(request("POST", path), new MockHttpServletResponse(), null)).isTrue();
+        assertThat(interceptor.preHandle(request("GET", path), new MockHttpServletResponse(), null))
+                .as("other methods aren't counted").isTrue();
+        assertThat(interceptor.preHandle(request("POST", path), new MockHttpServletResponse(), null)).isTrue();
+        MockHttpServletResponse limited = new MockHttpServletResponse();
+        assertThat(interceptor.preHandle(request("POST", "/tables/" + UUID.randomUUID() + "/messages"), limited,
+                null)).as("the budget is per account, across tables").isFalse();
+        assertThat(limited.getStatus()).isEqualTo(429);
+        assertThat(limited.getHeader("Retry-After")).isNotBlank();
+        assertThat(json.readTree(limited.getContentAsString()).path("code").asText()).isEqualTo("rate_limited");
+        assertThat(interceptor.preHandle(request("POST", "/feedback"), new MockHttpServletResponse(), null))
+                .as("unmatched paths pass").isTrue();
+    }
+
+    @Test
+    void everyRuleCoversARealRoute() {
+        assertThat(RateLimits.RULES).allSatisfy(rule -> assertThat(rule.limit()).isPositive());
+        assertThat(RateLimits.RULES).extracting(RateLimits.Rule::bucket).doesNotHaveDuplicates();
+    }
+
+    private static MockHttpServletRequest request(String method, String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+        request.setRemoteAddr("198.51.100.7");
+        return request;
+    }
+}

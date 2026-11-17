@@ -31,15 +31,22 @@ public class SportsResolutionService {
         this.stats = stats;
     }
 
-    /** The automatic result for a bet's terms: score modes, player modes or Scorcerer. */
+    /** The automatic result for a bet's terms, with the no-result wash once the wait has gone on too long. */
     private SportsOutcome.Result decide(SportsOutcome.Terms terms, String gameId, Instant now) {
         GameLookup.Game game = games.find(gameId).orElse(null);
+        return SportsOutcome.orNoResult(decideMode(terms, game, gameId, now), game, terms.lockedAt(), now);
+    }
+
+    /** The automatic result for a bet's terms: score modes, player modes or Scorcerer. */
+    private SportsOutcome.Result decideMode(SportsOutcome.Terms terms, GameLookup.Game game, String gameId,
+            Instant now) {
         Instant suspendedSince = game == null ? null : games.suspendedSince(game.id());
         if (SportsProposalService.PLAYER_MODES.contains(terms.mode())) {
             return PlayerOutcome.decide(terms, game, suspendedSince, now, facts(gameId));
         }
         if (terms.mode().equals(SportsProposalService.SCORCERER)) {
-            return ScorcererOutcome.decide(terms, game, suspendedSince, now, stats.scores(gameId));
+            return ScorcererOutcome.decide(terms, game, suspendedSince, now, stats.scores(gameId), game == null
+                    ? List.of() : stats.scoringTotals(gameId, game.home().abbreviation(), game.away().abbreviation()));
         }
         return SportsOutcome.decide(terms, game, suspendedSince, now);
     }

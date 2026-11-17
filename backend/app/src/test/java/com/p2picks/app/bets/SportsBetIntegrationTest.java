@@ -297,4 +297,60 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         Cookie aliceSession = loginAs("sca");
         propose(aliceSession, csrf(), "scorcerer", "{}", 409);
     }
+
+    @Test
+    void liveTotalsMustStartAboveTheCombinedScoreAndWashIfPassedBeforeLock() throws Exception {
+        seed("tl", Instant.now().minusSeconds(1800));
+        jdbc.update("UPDATE games SET status = 'LIVE', home_score = 60, away_score = 58 WHERE id = ?", gameId);
+        Cookie aliceSession = loginAs("tla");
+        Cookie bobSession = loginAs("tlb");
+        Csrf csrf = csrf();
+
+        JsonNode rejected = json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession, csrf,
+                proposal("total_disaster", "118"))).andExpect(status().isConflict()).andReturn().getResponse()
+                .getContentAsString());
+        assertThat(rejected.path("code").asText()).isEqualTo("invalid_terms");
+        UUID betId = UUID.fromString(json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession,
+                csrf, proposal("total_disaster", "130.5"))).andExpect(status().isCreated()).andReturn().getResponse()
+                .getContentAsString()).path("id").asText());
+        mvc.perform(send(put("/bets/" + betId + "/pick"), aliceSession, csrf, "{\"choice\":\"Over 130.5\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(send(put("/bets/" + betId + "/pick"), bobSession, csrf, "{\"choice\":\"Under 130.5\"}"))
+                .andExpect(status().isNoContent());
+
+        // The score passes the line while picks are still open.
+        jdbc.update("UPDATE games SET home_score = 70, away_score = 62 WHERE id = ?", gameId);
+        jdbc.update("UPDATE bets SET locks_at = now() - interval '1 second' WHERE id = ?", betId);
+        assertThat(locks.lock(betId)).isEqualTo(BetLockService.Outcome.LOCKED);
+        assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
+                betId)).isEqualTo("WASHED:Line reached before picks locked");
+    }
+
+    @Test
+    void aBetWithNoFeedResultWashesFortyEightHoursAfterTheScheduledStart() throws Exception {
+        Instant start = Instant.now().plusSeconds(120);
+        seed("nr", start);
+        Cookie aliceSession = loginAs("nra");
+        Cookie bobSession = loginAs("nrb");
+        Csrf csrf = csrf();
+        UUID betId = UUID.fromString(json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession,
+                csrf, proposal("total_disaster", "224.5"))).andExpect(status().isCreated()).andReturn().getResponse()
+                .getContentAsString()).path("id").asText());
+        mvc.perform(send(put("/bets/" + betId + "/pick"), aliceSession, csrf, "{\"choice\":\"Over 224.5\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(send(put("/bets/" + betId + "/pick"), bobSession, csrf, "{\"choice\":\"Under 224.5\"}"))
+                .andExpect(status().isNoContent());
+        jdbc.update("UPDATE bets SET locks_at = now() - interval '1 second' WHERE id = ?", betId);
+        assertThat(locks.lock(betId)).isEqualTo(BetLockService.Outcome.LOCKED);
+
+        // The game goes live and the feed never reports anything again.
+        jdbc.update("UPDATE games SET status = 'LIVE', home_score = 60, away_score = 58 WHERE id = ?", gameId);
+        assertThat(resolutions.resolve(betId, start.plus(java.time.Duration.ofHours(47))))
+                .isEqualTo(SportsResolutionService.Outcome.WAITING);
+        assertThat(resolutions.resolve(betId, start.plus(java.time.Duration.ofHours(48))))
+                .isEqualTo(SportsResolutionService.Outcome.RESOLVED);
+        assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
+                betId)).isEqualTo("WASHED:No result from the feed");
+        assertThat(delta(betId, alice)).isZero();
+    }
 }

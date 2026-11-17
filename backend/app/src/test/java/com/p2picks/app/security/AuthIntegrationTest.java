@@ -18,6 +18,55 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MvcResult;
 
 class AuthIntegrationTest extends IntegrationTestSupport {
+    @org.springframework.beans.factory.annotation.Autowired
+    private LoginThrottle throttle;
+
+    @Test
+    void failedSignInsAreThrottledPerAccountAndPerAddress() throws Exception {
+        String name = "thr" + Long.toString(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L << 30), 36);
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'PLAYER', 'ACTIVE')",
+                UUID.randomUUID(), name, passwords.encode("a secure test password"));
+        // Unique addresses, so this test doesn't spend the shared 127.0.0.1 budget other tests sign in from.
+        String home = "198.51.100." + java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 255);
+        String elsewhere = "203.0.113." + java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 255);
+
+        assertThat(signIn(name, "wrong", home).getStatus()).isEqualTo(401);
+        assertThat(signIn(name, "a secure test password", home).getStatus())
+                .as("a success clears the account's failures").isEqualTo(204);
+        for (int i = 0; i < 9; i++) throttle.failed(name, home);
+        assertThat(signIn(name, "a secure test password", home).getStatus()).isEqualTo(204);
+
+        for (int i = 0; i < 10; i++) throttle.failed(" " + name.toUpperCase() + " ", home);
+        var blocked = signIn(name, "a secure test password", elsewhere);
+        assertThat(blocked.getStatus()).as("the account limit applies from any address").isEqualTo(429);
+        assertThat(blocked.getHeader("Retry-After")).isEqualTo("900");
+        JsonNode body = json.readTree(blocked.getContentAsString());
+        assertThat(body.path("code").asText()).isEqualTo("rate_limited");
+        assertThat(OpenApiSchemas.load("Error").validate(body)).isEmpty();
+
+        String other = "thr2" + Long.toString(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L << 30), 36);
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'PLAYER', 'ACTIVE')",
+                UUID.randomUUID(), other, passwords.encode("a secure test password"));
+        assertThat(signIn(other, "a secure test password", home).getStatus()).isEqualTo(204);
+        for (int i = 0; i < 50; i++) throttle.failed("spray" + i, home);
+        assertThat(signIn(other, "a secure test password", home).getStatus())
+                .as("the address limit applies to every account").isEqualTo(429);
+        assertThat(signIn(other, "a secure test password", elsewhere).getStatus()).isEqualTo(204);
+    }
+
+    private org.springframework.mock.web.MockHttpServletResponse signIn(String username, String password, String address)
+            throws Exception {
+        Csrf csrf = csrf();
+        return mvc.perform(post("/auth/login").header("Origin", "http://127.0.0.1:8080")
+                        .header("X-CSRF-TOKEN", csrf.token()).cookie(csrf.cookie())
+                        .with(request -> {
+                            request.setRemoteAddr(address);
+                            return request;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("username", username, "password", password))))
+                .andReturn().getResponse();
+    }
     @Test
     void loginRequiresOriginAndCsrfAndLogoutRevokesSession() throws Exception {
         UUID userId = UUID.randomUUID();

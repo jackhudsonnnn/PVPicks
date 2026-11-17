@@ -134,9 +134,17 @@ public class DemoGames {
         for (int side = 0; side < 2; side++) {
             int points = 0;
             int touchdowns = 0;
+            int fieldGoals = 0;
             for (int m = 0; m < upTo; m++) {
-                points += scored[side][m];
-                if (scored[side][m] >= 6) touchdowns++;
+                int minute = scored[side][m];
+                points += minute;
+                // A minute's points are a touchdown with its extra point (7), a field goal (3) and/or a safety (2),
+                // so the kicker's line explains the score the way Scorcerer reads it.
+                if (minute >= 6) {
+                    touchdowns++;
+                    minute -= 7;
+                }
+                if (minute >= 3) fieldGoals++;
             }
             List<FeedPlayer> players = roster(slot.league(), sides[side].abbreviation());
             for (int i = 0; i < players.size(); i++) {
@@ -160,6 +168,9 @@ public class DemoGames {
                     int scorers = 4;
                     line.put("touchdowns", i >= 1 && i <= scorers ? touchdowns / scorers
                             + (touchdowns % scorers >= i ? 1 : 0) : 0);
+                    boolean kicker = position.equals("K");
+                    line.put("field_goals", kicker ? fieldGoals : 0);
+                    line.put("extra_points", kicker ? touchdowns : 0);
                 }
                 lines.add(new StatLine(slot.league(), providerId, players.get(i), true, line));
             }

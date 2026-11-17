@@ -29,6 +29,7 @@ class BetLockSchedulingTest {
         new ApplicationContextRunner().withUserConfiguration(BetLockScheduling.class)
                 .withBean(BetLockWorker.class, () -> worker)
                 .withBean(SportsResolutionWorker.class, () -> mock(SportsResolutionWorker.class))
+                .withBean(U2PickExpiry.class, () -> mock(U2PickExpiry.class))
                 .withPropertyValues("pvpicks.bet-lock-worker.enabled=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(BetLockScheduling.class);

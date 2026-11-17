@@ -20,8 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class AccountController {
     private final AccountDeletionService deletion;
+    private final SessionCookies cookies;
 
-    AccountController(AccountDeletionService deletion) {
+    AccountController(AccountDeletionService deletion, SessionCookies cookies) {
+        this.cookies = cookies;
         this.deletion = deletion;
     }
 
@@ -37,7 +39,7 @@ class AccountController {
         try {
             AccountDeletionService.Result result = deletion.delete(jwt, input.path("password").textValue());
             return switch (result.outcome()) {
-                case DELETED -> ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, SessionCookies.cleared())
+                case DELETED -> ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookies.cleared())
                         .cacheControl(CacheControl.noStore()).build();
                 case UNAUTHORIZED -> error(401, "unauthorized", "Authentication required or credentials invalid.");
                 case WRONG_PASSWORD -> error(403, "wrong_password", "That password doesn't match your account.");

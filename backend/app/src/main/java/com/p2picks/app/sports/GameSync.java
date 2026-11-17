@@ -20,10 +20,12 @@ public class GameSync {
 
     private final JdbcTemplate jdbc;
     private final Outbox outbox;
+    private final TickerCache tickerCache;
 
-    GameSync(JdbcTemplate jdbc, Outbox outbox) {
+    GameSync(JdbcTemplate jdbc, Outbox outbox, TickerCache tickerCache) {
         this.jdbc = jdbc;
         this.outbox = outbox;
+        this.tickerCache = tickerCache;
     }
 
     /**
@@ -57,6 +59,7 @@ public class GameSync {
 
     private void announce(League league, int changed) {
         if (changed > 0) {
+            tickerCache.invalidateAfterCommit();
             outbox.append(OutboxEvent.SPORTS_GAMES_CHANGED, league.name(),
                     Map.of("league", league.name(), "changed", changed));
         }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BackendError, idSchema, mutationRequest, read, request } from "@/lib/api-client";
+import { BackendError, csrf, idSchema, mutationRequest, read, request } from "@/lib/api-client";
 
 const person = z.object({
   id: idSchema,
@@ -67,3 +67,55 @@ export async function changeUser(action: "unfreeze" | "clear-strikes", userId: s
     crypto.randomUUID(),
   );
 }
+
+const setupCode = z.object({
+  setupCode: z.string().min(1),
+  purpose: z.enum(["SETUP", "RESET"]),
+  expiresAt: z.string().datetime({ offset: true }),
+});
+const playerSchema = z.object({
+  id: idSchema,
+  username: z.string(),
+  status: z.enum(["ACTIVE", "FROZEN"]),
+  passwordSet: z.boolean(),
+  codeExpiresAt: z.string().datetime({ offset: true }).nullable(),
+  createdAt: z.string().datetime({ offset: true }),
+});
+
+export type SetupCode = z.infer<typeof setupCode>;
+export type AdminPlayer = z.infer<typeof playerSchema>;
+
+export async function listPlayers(signal?: AbortSignal): Promise<AdminPlayer[]> {
+  return read(
+    await request("/admin/players", signal ? { signal } : undefined),
+    z.array(playerSchema),
+  );
+}
+
+async function post(path: string, body?: object) {
+  const token = await csrf();
+  return request(path, {
+    method: "POST",
+    headers: {
+      "X-CSRF-TOKEN": token,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+/** Creates a player; the response's setup code is shown once and never again. */
+export async function createPlayer(username: string) {
+  return read(
+    await post("/admin/players", { username }),
+    setupCode.extend({ id: idSchema, username: z.string() }),
+  );
+}
+
+/** A new setup (never signed in) or reset code for a player; it cancels their unused one. */
+export async function issuePlayerCode(playerId: string): Promise<SetupCode> {
+  return read(await post(`/admin/players/${encodeURIComponent(playerId)}/code`), setupCode);
+}
+
+/** The link a player opens; the code stays in the fragment, so it never reaches server logs. */
+export const setupLink = (code: string) => `${window.location.origin}/setup#${code}`;

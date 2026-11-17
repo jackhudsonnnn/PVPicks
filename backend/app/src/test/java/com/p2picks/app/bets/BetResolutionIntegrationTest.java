@@ -23,6 +23,43 @@ import org.springframework.transaction.support.TransactionTemplate;
 class BetResolutionIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private U2PickResolutionService u2PickResolution;
+    @Autowired
+    private U2PickExpiry u2PickExpiry;
+
+    @Test
+    void uncalledU2PicksWashSevenDaysAfterLocking() {
+        UUID host = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        UUID table = UUID.randomUUID();
+        String suffix = Long.toString(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L << 30), 36);
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, ?, 1, ?, 'PLAYER', 'ACTIVE'), (?, ?, 1, ?, 'PLAYER', 'ACTIVE')
+                """, host, "exh" + suffix, hash, other, "exo" + suffix, hash);
+        StringBuilder code = new StringBuilder();
+        for (int i = 0; i < 6; i++) {
+            code.append("ABCDEFGHJKMNPQRSTUVWXYZ23456789".charAt(
+                    java.util.concurrent.ThreadLocalRandom.current().nextInt(31)));
+        }
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Expiry', 'T', ?)", table,
+                code.toString());
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
+                table, host, table, other);
+        UUID bet = insertDebtBet(table, other, host, "PENDING", false, true, false, 100, 0);
+        java.time.Instant lockedAt = jdbc.queryForObject("SELECT locked_at FROM bets WHERE id = ?",
+                java.sql.Timestamp.class, bet).toInstant();
+
+        assertThat(u2PickExpiry.expire(bet, lockedAt.plus(U2PickExpiry.LIMIT).minusSeconds(1))).isFalse();
+        assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet)).isEqualTo("PENDING");
+        assertThat(u2PickExpiry.expire(bet, lockedAt.plus(U2PickExpiry.LIMIT))).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
+                bet)).isEqualTo("WASHED:Nobody called the result");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM ledger_entries WHERE bet_id = ?", Integer.class, bet))
+                .isZero();
+        assertThat(u2PickExpiry.expire(bet, lockedAt.plus(U2PickExpiry.LIMIT.multipliedBy(2))))
+                .as("already washed").isFalse();
+    }
 
     @Test
     void u2PickResolutionPostsZeroSumAndHonorsRetries() throws Exception {

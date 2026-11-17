@@ -97,4 +97,33 @@ class SportsOutcomeTest {
         assertThat(SportsOutcome.decide(total("224.5", true), suspended, since, since.plus(Duration.ofHours(48))))
                 .isEqualTo(new SportsOutcome.Result.Wash("Game suspended for more than 48 hours"));
     }
+
+    @Test
+    void anEndlessWaitWashesFortyEightHoursAfterTheScheduledStart() {
+        GameLookup.Game live = game(GameStatus.LIVE, "in_progress", 50, 48, List.of(), List.of());
+        Instant start = live.startsAt();
+        SportsOutcome.Result waiting = new SportsOutcome.Result.Wait();
+        assertThat(SportsOutcome.orNoResult(waiting, live, null, start.plus(Duration.ofHours(48)).minusSeconds(1)))
+                .isEqualTo(waiting);
+        assertThat(SportsOutcome.orNoResult(waiting, live, null, start.plus(Duration.ofHours(48))))
+                .isEqualTo(new SportsOutcome.Result.Wash(SportsOutcome.NO_RESULT));
+        SportsOutcome.Result winner = new SportsOutcome.Result.Winner("Over 224.5");
+        assertThat(SportsOutcome.orNoResult(winner, live, null, start.plus(Duration.ofDays(9)))).isEqualTo(winner);
+        GameLookup.Game suspended = game(GameStatus.POSTPONED, "suspended", 50, 48, List.of(), List.of());
+        assertThat(SportsOutcome.orNoResult(waiting, suspended, null, start.plus(Duration.ofDays(9))))
+                .as("suspensions keep their own rule").isEqualTo(waiting);
+        Instant locked = Instant.parse("2026-11-10T00:00:00Z");
+        assertThat(SportsOutcome.orNoResult(waiting, null, locked, locked.plus(Duration.ofHours(48))))
+                .as("no stored game: counts from the lock").isEqualTo(new SportsOutcome.Result.Wash(SportsOutcome.NO_RESULT));
+    }
+
+    @Test
+    void combinedScoreUsesRegulationOnlyWhenOvertimeIsExcludedAndOver() {
+        GameLookup.Game overtime = game(GameStatus.LIVE, "in_progress", 110, 108, List.of(25, 25, 25, 25, 10),
+                List.of(25, 25, 25, 25, 8));
+        assertThat(SportsOutcome.combinedScore(overtime, true)).isEqualTo(218);
+        assertThat(SportsOutcome.combinedScore(overtime, false)).isEqualTo(200);
+        GameLookup.Game early = game(GameStatus.LIVE, "in_progress", 30, 20, List.of(30), List.of(20));
+        assertThat(SportsOutcome.combinedScore(early, false)).as("regulation not over yet").isEqualTo(50);
+    }
 }

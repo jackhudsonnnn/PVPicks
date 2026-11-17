@@ -29,11 +29,16 @@ class AuthenticationController {
     private final DevelopmentSessions sessions;
     private final CsrfTokenRepository csrfTokens;
     private final JdbcTemplate jdbc;
+    private final LoginThrottle throttle;
+    private final SessionCookies cookies;
 
-    AuthenticationController(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JdbcTemplate jdbc) {
+    AuthenticationController(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JdbcTemplate jdbc,
+            LoginThrottle throttle, SessionCookies cookies) {
         this.sessions = sessions;
         this.csrfTokens = csrfTokens;
         this.jdbc = jdbc;
+        this.throttle = throttle;
+        this.cookies = cookies;
     }
 
     @GetMapping("/auth/csrf")
@@ -51,15 +56,27 @@ class AuthenticationController {
         String previousToken = cookies == null ? null : Arrays.stream(cookies)
                 .filter(cookie -> cookie.getName().equals("session"))
                 .map(Cookie::getValue).findFirst().orElse(null);
+        String username = input.path("username").textValue();
+        String address = request.getRemoteAddr();
+        if (throttle.blocked(username, address)) {
+            return ResponseEntity.status(429).header(HttpHeaders.RETRY_AFTER,
+                            Long.toString(throttle.window().toSeconds()))
+                    .cacheControl(CacheControl.noStore())
+                    .body(Map.of("code", "rate_limited",
+                            "message", "Too many failed sign-in attempts. Try again later."));
+        }
         String token;
         try {
-            token = sessions.login(input.path("username").textValue(), input.path("password").textValue(), previousToken);
+            token = sessions.login(username, input.path("password").textValue(), previousToken);
         } catch (DevelopmentSessions.Frozen frozen) {
+            // The password was right; a frozen account is not a guessing attempt.
             return error(403, "account_frozen", "This account is frozen.");
         }
         if (token == null) {
+            throttle.failed(username, address);
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
+        throttle.succeeded(username);
         response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(token, Duration.ofHours(8)));
         csrfTokens.saveToken(null, request, response);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
@@ -89,7 +106,7 @@ class AuthenticationController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(users.getFirst());
     }
 
-    private static String sessionCookie(String value, Duration maxAge) {
-        return SessionCookies.session(value, maxAge);
+    private String sessionCookie(String value, Duration maxAge) {
+        return cookies.session(value, maxAge);
     }
 }

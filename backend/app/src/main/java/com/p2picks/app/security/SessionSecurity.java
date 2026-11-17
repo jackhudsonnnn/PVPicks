@@ -94,10 +94,11 @@ class SessionSecurity {
     }
 
     @Bean
-    CsrfTokenRepository csrfTokenRepository() {
+    CsrfTokenRepository csrfTokenRepository(SessionCookies cookies) {
         CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
         repository.setHeaderName("X-CSRF-TOKEN");
-        repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict").secure(false));
+        repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict")
+                .secure(cookies.secure()));
         return repository;
     }
 
@@ -105,7 +106,8 @@ class SessionSecurity {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http, JwtDecoder decoder, CsrfTokenRepository csrfRepository, JdbcTemplate jdbc,
             Environment environment,
-            @Value("${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}") String allowedOrigin) throws Exception {
+            @Value("${PVPICKS_ORIGIN:${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}}") String allowedOrigin)
+            throws Exception {
         AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
             response.setStatus(401);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -130,7 +132,8 @@ class SessionSecurity {
                         authorize.requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/setup").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/password").authenticated()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
                             .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
                             .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
@@ -142,7 +145,8 @@ class SessionSecurity {
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
-                .addFilterBefore(new DevOriginFilter(allowedOrigin), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterBefore(new DevOriginFilter(allowedOrigin, environment.acceptsProfiles(
+                        org.springframework.core.env.Profiles.of("lan"))), org.springframework.security.web.csrf.CsrfFilter.class)
                 .addFilterAfter(new JwtCookieFilter(decoder, unauthorized), org.springframework.security.web.csrf.CsrfFilter.class)
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(unauthorized)

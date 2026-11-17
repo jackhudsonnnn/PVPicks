@@ -25,6 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 class SportsIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private GameSync sync;
+    @Autowired
+    private TickerCache tickerCache;
 
     /** The scripted feed (ADR 0004): only automated tests use it. */
     private static final class ScriptedFeed implements GameFeed {
@@ -103,6 +105,7 @@ class SportsIntegrationTest extends IntegrationTestSupport {
         Cookie session = loginAs(name);
 
         jdbc.update("UPDATE sports_feed_status SET last_success_at = now() - interval '1 hour'");
+        tickerCache.invalidate(); // A raw write bypasses GameSync, which is what normally invalidates.
         JsonNode unavailable = json.readTree(mvc.perform(get("/ticker").cookie(session))
                 .andExpect(status().isServiceUnavailable()).andReturn().getResponse().getContentAsString());
         assertThat(unavailable.path("code").asText()).isEqualTo("feed_unavailable");
@@ -117,6 +120,38 @@ class SportsIntegrationTest extends IntegrationTestSupport {
         assertThat(OpenApiSchemas.load("TickerSnapshot").validate(snapshot)).isEmpty();
         assertThat(snapshot.path("games").toString()).contains("NBA-now" + name);
         mvc.perform(get("/ticker")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tickerIsServedFromRedisUntilTheNextCommittedFeedChange() throws Exception {
+        UUID user = UUID.randomUUID();
+        String name = "tc" + Long.toString(ThreadLocalRandom.current().nextLong(1L << 30), 36);
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'PLAYER', 'ACTIVE')",
+                user, name, passwords.encode("a secure test password"));
+        Cookie session = loginAs(name);
+        Instant now = Instant.now();
+        FeedGame live = game(League.NBA, "cache" + name, GameStatus.LIVE, now.minusSeconds(1800), 2, "8:00", 40, 38);
+        sync.record(League.NBA, List.of(live), now);
+        sync.record(League.NFL, List.of(), now);
+        assertThat(tickerScore(session, live.id())).isEqualTo(40);
+
+        // A write that bypasses GameSync is not seen while the entry lives: the read came from Redis.
+        jdbc.update("UPDATE games SET home_score = 41 WHERE id = ?", live.id());
+        assertThat(tickerScore(session, live.id())).isEqualTo(40);
+
+        // A committed feed change starts a new generation, so the next read is current.
+        sync.record(League.NBA, List.of(game(League.NBA, "cache" + name, GameStatus.LIVE, now.minusSeconds(1800), 2,
+                "7:00", 44, 38)), now);
+        assertThat(tickerScore(session, live.id())).isEqualTo(44);
+    }
+
+    private int tickerScore(Cookie session, String gameId) throws Exception {
+        JsonNode snapshot = json.readTree(mvc.perform(get("/ticker").cookie(session))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        for (JsonNode game : snapshot.path("games")) {
+            if (game.path("id").asText().equals(gameId)) return game.path("home").path("score").asInt();
+        }
+        throw new AssertionError("Game " + gameId + " is not on the ticker");
     }
 
     @Test
@@ -180,6 +215,39 @@ class SportsIntegrationTest extends IntegrationTestSupport {
                 .isEqualTo("4@" + start.plusSeconds(60).getEpochSecond() + ",9@" + start.plusSeconds(100).getEpochSecond());
         assertThat(jdbc.queryForObject("SELECT played FROM player_game_stats WHERE player_id = ?", Boolean.class,
                 bench.id())).isFalse();
+    }
+
+    @Autowired
+    private PlayerStatsLookup lookup;
+
+    @Test
+    void teamScoringTotalsSumEachTeamsPlayersAfterEveryObservation() {
+        String id = "t" + ThreadLocalRandom.current().nextLong(1L << 40);
+        Instant start = Instant.parse("2026-11-15T18:00:00Z");
+        sync.record(League.NFL, List.of(new FeedGame(League.NFL, id, GameStatus.LIVE, start, 2, "5:00",
+                team("DET", 10, List.of(7, 3)), team("GB", 7, List.of(7, 0)), "in_progress")), start);
+        String gameId = "NFL-" + id;
+        FeedPlayer back = new FeedPlayer(League.NFL, "rb" + id, "Dev", "Back", "RB", "DET");
+        FeedPlayer kicker = new FeedPlayer(League.NFL, "k" + id, "Dev", "Kicker", "K", "DET");
+        FeedPlayer receiver = new FeedPlayer(League.NFL, "wr" + id, "Dev", "Wideout", "WR", "GB");
+        FeedPlayer boot = new FeedPlayer(League.NFL, "kb" + id, "Dev", "Boot", "K", "GB");
+        stats.recordGame(gameId, List.of(
+                new StatLine(League.NFL, id, back, true, Map.of("touchdowns", 1)),
+                new StatLine(League.NFL, id, kicker, true, Map.of("field_goals", 1, "extra_points", 1)),
+                new StatLine(League.NFL, id, receiver, true, Map.of("touchdowns", 1)),
+                new StatLine(League.NFL, id, boot, true, Map.of("extra_points", 1))), start.plusSeconds(60));
+        stats.recordGame(gameId, List.of(
+                new StatLine(League.NFL, id, back, true, Map.of("touchdowns", 2)),
+                new StatLine(League.NFL, id, kicker, true, Map.of("field_goals", 1, "extra_points", 2))),
+                start.plusSeconds(120));
+
+        List<PlayerStatsLookup.ScoringTotals> totals = lookup.scoringTotals(gameId, "DET", "GB");
+        assertThat(totals).containsExactly(
+                new PlayerStatsLookup.ScoringTotals(start.plusSeconds(60), new PlayerStatsLookup.TeamScoring(1, 1, 1),
+                        new PlayerStatsLookup.TeamScoring(1, 0, 1)),
+                new PlayerStatsLookup.ScoringTotals(start.plusSeconds(120), new PlayerStatsLookup.TeamScoring(2, 1, 2),
+                        new PlayerStatsLookup.TeamScoring(1, 0, 1)));
+        assertThat(totals.getLast().home().points()).isEqualTo(17);
     }
 
     @Test

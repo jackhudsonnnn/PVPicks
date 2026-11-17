@@ -74,7 +74,9 @@ class ProviderContractTest {
             StatLine line = StatLine.nfl(row);
             assertThat(line.played()).isTrue();
             assertThat(line.stats().keySet()).containsExactlyInAnyOrder("passing_yards", "rushing_yards",
-                    "receiving_yards", "receptions", "touchdowns");
+                    "receiving_yards", "receptions", "touchdowns", "field_goals", "extra_points");
+            assertThat(line.stats().get("field_goals")).isEqualTo(row.path("field_goals_made").asInt(0));
+            assertThat(line.stats().get("extra_points")).isEqualTo(row.path("extra_points_made").asInt(0));
             assertThat(line.player().position()).isNotBlank();
         }
         assertThat(StatLine.minutesPlayed("00:00")).isFalse();

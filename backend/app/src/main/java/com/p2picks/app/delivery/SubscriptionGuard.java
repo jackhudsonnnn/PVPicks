@@ -27,12 +27,20 @@ class SubscriptionGuard implements ChannelInterceptor {
             "/user" + RealtimeGateway.SETTLEMENTS_DESTINATION, "/user" + RealtimeGateway.PERSONAL_DESTINATION,
             "/user" + RealtimeGateway.TICKER_DESTINATION);
 
+    /** Subscriptions per account per minute: a table view subscribes to a few feeds, and navigating re-subscribes. */
+    static final int SUBSCRIBE_LIMIT = 120;
+
     private final RealtimeSessions sessions;
     private final RealtimeAccess access;
+    private final com.p2picks.app.common.RateLimiter limiter;
+    private final boolean limited;
 
-    SubscriptionGuard(RealtimeSessions sessions, RealtimeAccess access) {
+    SubscriptionGuard(RealtimeSessions sessions, RealtimeAccess access, com.p2picks.app.common.RateLimiter limiter,
+            @org.springframework.beans.factory.annotation.Value("${pvpicks.rate-limits.enabled:true}") boolean limited) {
         this.sessions = sessions;
         this.access = access;
+        this.limiter = limiter;
+        this.limited = limited;
     }
 
     @Override
@@ -52,6 +60,11 @@ class SubscriptionGuard implements ChannelInterceptor {
 
     private void authorizeSubscription(StompHeaderAccessor stomp) {
         UUID userId = UUID.fromString(login(stomp).getSubject());
+        // Each subscription runs authorization queries, so a runaway client is capped before them.
+        if (limited && !limiter.acquire("ws.subscribe", "user:" + userId, SUBSCRIBE_LIMIT,
+                java.time.Duration.ofMinutes(1)).allowed()) {
+            throw new AccessDeniedException("Too many subscriptions; try again in a minute.");
+        }
         if (sessions.valid(Set.of(stomp.getSessionId())).isEmpty()) {
             throw new AccessDeniedException("The session has ended.");
         }

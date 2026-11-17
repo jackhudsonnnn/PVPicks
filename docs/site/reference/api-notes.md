@@ -9,12 +9,20 @@ destinations.
 ## By area
 
 - Authentication: the dev-only eight-hour cookie session, CSRF flow, login,
-  logout and `/me`. In dev, `/dev/demo/accounts` and `/dev/demo/sign-in` sign
+  logout and `/me`. Failed logins are throttled (429 `rate_limited` with
+  `Retry-After`); the passwordless demo sign-in is not. In dev, `/dev/demo/accounts` and `/dev/demo/sign-in` sign
   in as any demo account without a password; like login, they ignore a stale
   session cookie. In dev, every `/dev/**` path (dev data and the demo) works
   without a session, so the Dev page works signed out. The security filter checks the current database role for
-  `/admin` routes (moderation and site health). Production sign-up, LAN
-  refresh tokens and TLS are still to be designed.
+  `/admin` routes (moderation, players and site health). Accounts come from
+  the admin: `POST /admin/players` creates one with a single-use setup code,
+  `POST /admin/players/{id}/code` issues a new setup or reset code, and
+  `POST /auth/setup` redeems it (sets the password, ends other sessions,
+  signs in). `POST /auth/password` changes your own password. Codes last 24
+  hours, are stored only as hashes and appear once; bad codes and wrong
+  current passwords count toward the sign-in throttle. Production sign-up
+  and refresh tokens are still to be designed; LAN TLS is Caddy's (see
+  [LAN watch party](/lan)).
 - Initial state and read APIs for tables, users, bets, games, follows, blocks,
   invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
@@ -29,7 +37,8 @@ destinations.
 - Dev `GET /ticker` returns today's New York games plus earlier live games,
   live first, and 503 `feed_unavailable` unless every league polled
   successfully within the freshness window (default three minutes).
-  `ticker.changed` on `/user/queue/ticker` invalidates it. The ticker contains
+  `ticker.changed` on `/user/queue/ticker` invalidates it. Responses are
+  cached in Redis for up to five seconds between feed changes. The ticker contains
   no bet activity. `GET /games` remains unimplemented.
   Feed freshness and partial-feed handling still require review.
 - Dev `GET`/`PUT /tables/{id}/last-read` supplies filtered unread count and
@@ -92,7 +101,7 @@ destinations.
   deleted users and blocks in either direction, and includes frozen users
   without exposing status. It uses 50-item username-keyset pages, not a
   snapshot; concurrent renames and visibility changes can affect pagination.
-  Search rate limiting remains unimplemented.
+  Search is limited to 30 a minute per account.
 - Dev individual-user lookup resolves outgoing blocks, including mutual
   blocks, and incoming-only blocks only for shared current table members or
   direct receipt parties. Deleted identities are placeholders only for
@@ -111,7 +120,7 @@ destinations.
   feeds the moderation queue: `GET /admin/reports`, `GET /admin/users/flagged`,
   dismiss or strike a report (the third strike freezes the account and ends
   its sessions), unfreeze, clear strikes. Repeated actions answer
-  `already_handled`. `POST /feedback` has no rate limit, moderation reads or
+  `already_handled`. `POST /feedback` is limited to 5 an hour per account, and has no moderation reads or
   personal-data cleanup, and links stored before V18 aren't revalidated.
   `GET /admin/health` reports PostgreSQL and Redis without connection details;
   Kafka is `NOT_CHECKED` and there are no latency or error metrics.

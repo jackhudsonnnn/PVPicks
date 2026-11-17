@@ -4,6 +4,25 @@ This is a guide to important invariants, not a claim that every rule has an
 implemented service. The detailed [domain rules](/reference/domain-rules)
 and current decisions remain the working references.
 
+## Terms
+
+Use these words exactly when talking about people, so "who can see or do
+this" is never ambiguous.
+
+| Term | Meaning | Scope |
+|---|---|---|
+| **Table** (or **group**) | A set of members who bet together, with its own chat, hosts, balances and settle-ups. "Table" and "group" are synonyms; the app and code say table. | One table |
+| **Member** | Anyone who belongs to a table, hosts included. | One table |
+| **Peer** | Another member of the same table as you. Peerhood is always tied to a table: "I'm Alex's peer at the Sunday table." Two people can be peers at one table and strangers at another. The table's Peers panel lists them. | One table |
+| **Follow** | A one-way link from one account to another. | Account-wide |
+| **Friend** | Two accounts that follow each other (a mutual follow). Friendship doesn't depend on any table: friends need not share one, and peers need not be friends. The Friends page lists them. | Account-wide |
+| **Host** | A member with a table's management powers. A host is still a peer to the other members. | One table |
+
+Table-scoped rules (picks, balances, settle-ups, chat, removal) are about
+peers. Account-scoped rules (invite preferences, follows, blocks, profiles)
+are about friends and follows: the "friends" invite preference, for example,
+means mutual follows, not people you already share a table with.
+
 ## Bets and balances
 
 - Money is integer cents; completed ledger writes must balance to zero.

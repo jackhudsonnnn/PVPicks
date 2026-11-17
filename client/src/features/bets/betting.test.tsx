@@ -257,7 +257,9 @@ describe("U2Pick betting", () => {
     expect(screen.getByText("Pick a player.")).toBeInTheDocument();
     const trigger = screen.getByRole("combobox", { name: "Player" });
     fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: /Ann Archer · BOS · 20 points/ }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: /G · Ann Archer · BOS · 20 points/ }),
+    );
     expect(screen.getByLabelText("Stat line")).toHaveTextContent("20.5");
     fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
     expect(await screen.findByText("Ann Archer points: over or under 20.5?")).toBeInTheDocument();
@@ -274,6 +276,67 @@ describe("U2Pick betting", () => {
         }),
       ),
     );
+  });
+
+  it("switching league starts the player setup over on that league's game", async () => {
+    const nflGame: TickerGame = {
+      ...liveGame,
+      id: "NFL-1",
+      league: "NFL",
+      clock: "Q2 3:00",
+      home: { abbreviation: "PHI", score: 14 },
+      away: { abbreviation: "DAL", score: 7 },
+    };
+    vi.mocked(getTicker).mockResolvedValue([liveGame, nflGame]);
+    vi.mocked(getGamePlayers).mockImplementation(async (gameId) =>
+      gameId === liveGame.id
+        ? {
+            stats: [
+              { key: "points", label: "Points" },
+              { key: "rebounds", label: "Rebounds" },
+            ],
+            players: [
+              {
+                id: "NBA-1",
+                name: "Ann Archer",
+                position: "G",
+                team: "BOS",
+                played: true,
+                stats: {},
+              },
+            ],
+          }
+        : {
+            stats: [{ key: "passing_yards", label: "Passing yards" }],
+            players: [
+              {
+                id: "NFL-9",
+                name: "Cal Carter",
+                position: "QB",
+                team: "PHI",
+                played: true,
+                stats: {},
+              },
+            ],
+          },
+    );
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "Bet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Prop Hunt/ }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Rebounds" }));
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Player" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: /Ann Archer/ }));
+    expect(screen.getByRole("combobox", { name: "Player" })).toHaveTextContent("Ann Archer");
+
+    fireEvent.click(screen.getByRole("tab", { name: "NFL" }));
+    expect(
+      await screen.findByRole("radio", { name: /DAL.*PHI/, checked: true }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("tab", { name: "Passing yards", selected: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Player" })).toHaveTextContent("Choose a player");
+    expect(screen.getByText("Pick a player.")).toBeInTheDocument();
   });
 
   it("proposes a Total Disaster on a live game; the server builds the question", async () => {

@@ -57,7 +57,7 @@ export const MODES: ModeDef[] = [
     name: "Scorcerer",
     tagline: "Call the next score",
     description:
-      "Predict the method of the next scoring play. Keeps things tense between big moments.",
+      "Will the next score be a touchdown or a field goal, or neither before the end? Safeties don't count.",
     icon: Flame,
   },
   {

@@ -27,7 +27,7 @@ class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer {
     private final TaskScheduler heartbeats;
     private final CsrfHandshake csrfHandshake;
 
-    WebSocketConfiguration(@Value("${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}") String allowedOrigin,
+    WebSocketConfiguration(@Value("${PVPICKS_ORIGIN:${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}}") String allowedOrigin,
             SubscriptionGuard guard, RealtimeSessions sessions,
             @Lazy @Qualifier("messageBrokerTaskScheduler") TaskScheduler heartbeats, CsrfHandshake csrfHandshake) {
         this.allowedOrigin = allowedOrigin;

@@ -23,20 +23,22 @@ const config = withMermaid({
         items: [
           { text: "Overview", link: "/" },
           { text: "Getting started", link: "/getting-started" },
-          { text: "Project status", link: "/status" }
+          { text: "Project status", link: "/status" },
+          { text: "Roadmap", link: "/roadmap" },
+          { text: "LAN watch party", link: "/lan" }
         ]
       },
       {
         text: "BUILD THE SYSTEM",
         items: [
           { text: "Architecture", link: "/architecture" },
+          { text: "Kafka & Redis opportunities", link: "/kafka-redis" },
           { text: "Backend", link: "/backend" },
           { text: "Frontend", link: "/frontend" },
           { text: "Domain & privacy", link: "/domain" },
           { text: "Player stats", link: "/player-stats" },
           { text: "Dev sports data", link: "/dev-sports-data" },
-          { text: "Demo world", link: "/demo-data" },
-          { text: "Roadmap", link: "/roadmap" }
+          { text: "Demo world", link: "/demo-data" }
         ]
       },
       {

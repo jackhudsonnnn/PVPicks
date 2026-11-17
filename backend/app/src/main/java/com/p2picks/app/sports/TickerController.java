@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class TickerController {
-    private final TickerService ticker;
+    private final TickerCache ticker;
 
-    TickerController(TickerService ticker) {
+    TickerController(TickerCache ticker) {
         this.ticker = ticker;
     }
 

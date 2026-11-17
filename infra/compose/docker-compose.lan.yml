@@ -1,0 +1,122 @@
+# The LAN watch party stack (docs: LAN watch party). Its own project, volumes and secrets, separate from dev.
+# From the repository root, after ./scripts/provision-lan.sh --init:
+#   docker compose -f infra/compose/docker-compose.lan.yml --env-file infra/compose/.env.lan up -d --build --wait
+# Only Caddy listens on the network (443, and 80 to redirect). Everything else stays on the Compose network.
+name: pvpicks-lan
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: p2picks
+      POSTGRES_USER: p2picks
+      POSTGRES_PASSWORD: ${PVPICKS_DB_PASSWORD:?Set PVPICKS_DB_PASSWORD in infra/compose/.env.lan}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  kafka:
+    image: apache/kafka:3.9.2
+    environment:
+      CLUSTER_ID: TGFuV2F0Y2hQYXJ0eTAwMQ
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+  backend:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.lan.auth
+      - .env.lan.idempotency
+    environment:
+      SPRING_PROFILES_ACTIVE: lan
+      PVPICKS_ORIGIN: https://${PVPICKS_LAN_HOST:?Set PVPICKS_LAN_HOST in infra/compose/.env.lan}
+      PVPICKS_BOOTSTRAP_ADMIN: ${PVPICKS_BOOTSTRAP_ADMIN:?Set PVPICKS_BOOTSTRAP_ADMIN in infra/compose/.env.lan}
+      PVPICKS_DATASOURCE_URL: jdbc:postgresql://postgres:5432/p2picks
+      PVPICKS_DB_USER: p2picks
+      PVPICKS_DB_PASSWORD: ${PVPICKS_DB_PASSWORD}
+      PVPICKS_REDIS_HOST: redis
+      PVPICKS_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PVPICKS_BALLDONTLIE_API_KEY: ${PVPICKS_BALLDONTLIE_API_KEY:-}
+      PVPICKS_SPORTS_POLL_INTERVAL: ${PVPICKS_SPORTS_POLL_INTERVAL:-PT15S}
+      PVPICKS_SPORTS_STATS_INTERVAL: ${PVPICKS_SPORTS_STATS_INTERVAL:-PT3S}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+  client:
+    build:
+      context: ../../client
+      dockerfile: Dockerfile.lan
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      PVPICKS_LAN_HOST: ${PVPICKS_LAN_HOST}
+      PVPICKS_LAN_TLS: ${PVPICKS_LAN_TLS:-/certs/fullchain.pem /certs/privkey.pem}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate obtained before the party (docs: LAN watch party, HTTPS); git-ignored.
+      - ${PVPICKS_LAN_CERT_DIR:-../caddy/certs}:/certs:ro
+      - caddydata:/data
+    ports:
+      # Every interface: this is how phones on the Wi-Fi reach the app.
+      - "443:443"
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      client:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  kafkadata:
+  caddydata:

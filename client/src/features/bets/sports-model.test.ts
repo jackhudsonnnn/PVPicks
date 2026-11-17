@@ -76,7 +76,7 @@ describe("player modes", () => {
       ["Ann Archer", "Ben Baker", "Neither"],
     );
     expect(playerTerms("scorcerer", "", [], 0, "DET", "GB")).toEqual({
-      question: "GB @ DET: how is the next score made?",
+      question: "GB @ DET: next touchdown or field goal?",
       choices: SCORCERER_CHOICES,
     });
     expect(playerNames([ann, { ...ann, team: "NYK" }])).toEqual([

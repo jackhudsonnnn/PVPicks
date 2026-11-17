@@ -33,8 +33,8 @@ export async function request(path: string, init?: RequestInit): Promise<Respons
     let code: string | undefined;
     let detail: string | undefined;
     let body: unknown;
-    // 403 and 409 carry a code saying why (frozen account, wrong password, conflicts).
-    if (response.status === 409 || response.status === 403) {
+    // 400, 403, 409 and 429 carry a code saying why (a weak password, a frozen account, conflicts, limits).
+    if ([400, 403, 409, 429].includes(response.status)) {
       try {
         body = await response.json();
         const parsed = z

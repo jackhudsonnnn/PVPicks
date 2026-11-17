@@ -14,7 +14,7 @@ are examples rather than a list of implemented tests.
 | Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/settlement-integration.test.tsx` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
-| Social and safety | Mutual follows are friends; enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
+| Social and safety | Mutual follows are friends (account-wide; table members are peers, see [Terms](/domain#terms)); enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
 | Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message; one changeable vote per user/poll, polls gated by the table switch and the polls permission. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx`, `PollIntegrationTest` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
 
 Paths in the table are relative to `client/src/features/`. Review the
@@ -93,6 +93,7 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | Every pick is on one option (including a single picker) | All | "Everyone picked the same option" | Implemented |
 | The player already passed the line before lock | Prop Hunt | "Line reached before picks locked" | Implemented |
 | Either player already reached the target before lock | King Of The Hill | "Target reached before picks locked" | Implemented |
+| The combined score already passed the line before lock (proposals at or below the live combined score are rejected) | Total Disaster | "Line reached before picks locked" | Implemented |
 
 **At resolution** (when the result is known).
 
@@ -103,16 +104,27 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | Tie | Either Or | "Tie" | Implemented |
 | Both players first reach the target in the same update | King Of The Hill | "Both reached it in the same update" | Implemented |
 | A player in the bet didn't play | Either Or, Prop Hunt, King Of The Hill | "A player in the bet didn't play" | Implemented |
-| Two scores land between updates, or a score jump that isn't one scoring play | Scorcerer | "Couldn't tell the scoring play" | Implemented |
 | Game canceled or postponed | Sports | "Game canceled or postponed" | Implemented |
 | Game suspended more than 48 hours | Sports | "Game suspended for more than 48 hours" | Implemented |
+| A tie on a 0-point spread (a moneyline) | Give And Take | "Push" | Implemented (the push rule) |
+| Stats behind the score at lock, and the score moves again before they catch up | Scorcerer | "Couldn't tell the scoring play" | Implemented |
+| No automatic result 48 hours after the game's scheduled start (game stuck, or player stats never delivered; suspended games keep their own rule) | Sports | "No result from the feed" | Implemented |
+| Team scoring totals from player stats still disagree with the score once the grace period has passed, or a touchdown and a field goal first appear in the same update | Scorcerer | "Couldn't tell the scoring play" | Implemented |
+| Nobody called the result 7 days after lock (checked every ten minutes; Quick Pick originals with copies are skipped) | U2Pick | "Nobody called the result" | Implemented |
 
-**Planned:** more refined, mode-specific triggers are coming (owner,
-2026-11-15), for example a tie on a moneyline bet. Add each one to these
-tables, at lock or at resolution, with its reason and tests.
+Every wash trigger for the LAN modes is implemented and tested (owner
+decisions, 2026-11-15). Hosts can still override any automatic wash.
+Scorcerer ignores safeties and every other 2-point play: its choices are
+Touchdown, Field goal and No more TDs or FGs, and it tells them apart from
+team totals of player stats (see [Player stats](/player-stats#scorcerer-from-team-totals)).
+
+Add any further mode-specific trigger to these tables, at lock or at
+resolution, with its reason and tests.
 
 In code: the general lock washes are in `bets/BetLockService`; mode lock rules
-implement `bets/LockWashRule`; resolution washes are in
+implement `bets/LockWashRule` (`PlayerLockRules`, `ScoreLockRules`); the
+no-result wash is `SportsOutcome.orNoResult`, and uncalled U2Picks wash in
+`bets/U2PickExpiry`; resolution washes are in
 `bets/PayoutCalculator` (general) and the mode's resolver.
 
 ## Proposal, pick and lock
@@ -511,7 +523,7 @@ stores its UUID, not a duplicate message body, and reconstructs the original
 response from the matching request and immutable creation time. Future message
 editing, moderation and deletion must preserve authorization and replay
 semantics; a redacted or inaccessible message must not be exposed by replay.
-Sending does not yet enforce request-size or rate limits or deliver events.
+Sending is rate limited (30 messages a minute per account); it does not yet enforce a request size or deliver events.
 
 Reaction mutations lock the actor and session before the table, membership and
 message; blocking also locks the actor, serializing the visibility check.
@@ -569,8 +581,9 @@ atomically commits feedback with its 201 retry outcome. V18 aligns the link
 constraint for new writes with JavaScript whitespace; legacy rows are retained
 without validation and require review. Feedback may contain personal
 information; account deletion must handle it and cannot merely tombstone the
-user while leaving identifiable text behind. Moderation access, rate limiting,
-retention and personal-data cleanup remain unimplemented.
+user while leaving identifiable text behind. Sending is limited to 5 an hour per
+account; moderation access, retention and personal-data cleanup remain
+unimplemented.
 
 Admin flag and strike rows default to unflagged and zero strikes. An absent row
 has the same draft state. V13 limits stored strikes to 0–3 but does not freeze
@@ -735,7 +748,7 @@ Automatic resolution, before any override:
 | Tie on a bet with no tie choice (for example an NFL moneyline) | Wash |
 | Feed reports Final | Settles after a grace period of about 15–30 minutes, so quick stat corrections land first |
 | Score corrected after the bet resolved | No automatic re-settlement |
-| Feed outage or `unknown` status | Never settles automatically; waits |
+| Feed outage or `unknown` status | Never settles automatically; waits, and washes if there's still no result 48 hours after the scheduled start |
 | Player prop whose player did not play | Wash |
 | Proposal after the game is Final, canceled or postponed | Rejected |
 

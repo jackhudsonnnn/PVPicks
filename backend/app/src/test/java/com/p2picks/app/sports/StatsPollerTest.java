@@ -47,6 +47,14 @@ class StatsPollerTest {
     }
 
     @Test
+    void nflGamesAreRequestedOneAtATimeSoEachFitsOnePage() {
+        // NFL games reach about 70 rows, so two would spill onto a second page (a second request).
+        StatsPoller.Candidate first = new StatsPoller.Candidate("NFL-1", League.NFL, "1", true);
+        StatsPoller.Candidate second = new StatsPoller.Candidate("NFL-2", League.NFL, "2", true);
+        assertThat(StatsPoller.batch(List.of(first, second), new HashMap<>(), NOW)).hasSize(1);
+    }
+
+    @Test
     void activePlayersRefreshEveryInterval() {
         Instant now = Instant.parse("2026-11-15T03:00:00Z");
         java.time.Duration tenMinutes = java.time.Duration.ofMinutes(10);

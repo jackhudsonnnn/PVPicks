@@ -20,7 +20,12 @@ The `delivery` module's relay publishes committed outbox rows to Kafka at
 least once; its consumer turns bet, chat and settlement events into
 invalidations that the WebSocket gateway sends to authorized subscribers. The
 [realtime contract](/reference/realtime-contract) describes
-destinations, authorization and recovery. Redis is not used for delivery yet.
+destinations, authorization and recovery. Redis is not used for delivery. It
+holds only disposable state: failed sign-in counters (`security.LoginThrottle`),
+request rate limits (`common.RateLimiter`) and the ticker cache
+(`sports.TickerCache`). Both fall back to PostgreSQL-only
+behavior when Redis is down. [Kafka & Redis opportunities](/kafka-redis) lists
+where each should and shouldn't be used next, by priority.
 
 ## Modules and data ownership
 
@@ -46,7 +51,7 @@ flowchart LR
 
 | Module | Owns (writes) these tables |
 |---|---|
-| `security` | `auth_sessions` |
+| `security` | `auth_sessions`, `account_setup_codes`, `users.password_hash` |
 | `users` | `users` (profile fields) |
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
@@ -55,7 +60,7 @@ flowchart LR
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback`, `admin` | `feedback`; site health |
 | `moderation` | `reports`, `admin_user_flags` (strikes): the admin queue, strikes and unfreezing |
-| `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone). Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
+| `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone), and admin-created player accounts and the bootstrapped first admin. Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
 | `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status` |
 | `demo` | Nothing of its own: dev profile only (`pvpicks.demo.enabled`). Seeds the demo world and its history, resets app data (keeping sports data), serves the passwordless sign-in picker through `security.PasswordlessSignIn`, runs the looping demo games through `sports.GameSync` and plays the demo users through the bets, social, chat, settlement and moderation services |
@@ -123,9 +128,12 @@ for operation-specific invariants.
 
 ## Runtime and trust boundaries
 
-Only the dev profile is accepted today. The backend defaults to loopback; the
-Compose service publishes on loopback. LAN and production remain blocked until
-their security and deployment designs exist. The docs are unauthenticated whenever dev is active. The default binding and
+Two profiles are accepted, `dev` and `lan`; production refuses to start until
+its security and deployment design exists. In dev the backend defaults to
+loopback and the Compose services publish on loopback. The `lan` profile runs
+behind Caddy, which alone listens on the network: HTTPS only, Secure cookies,
+an HTTPS origin, forwarded headers trusted from Caddy, and every dev-only
+feature off (see [LAN watch party](/lan)). The docs are unauthenticated whenever dev is active. The default binding and
 Compose port are local, but exposing a dev server to a network also exposes
 its documentation. This is not a production documentation-access policy.
 

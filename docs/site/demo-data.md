@@ -126,7 +126,8 @@ around 115 a side and NFL around 24, never tied (no overtime in the demo).
 
 Each club has a fixed roster of eight made-up players, and every live or
 finished demo game has a box score built from the same minute-by-minute
-scoring: points (NBA) or touchdowns (NFL) follow the score, and the other
+scoring: points (NBA) or touchdowns, field goals and extra points (NFL, the
+kicker carries the kicks) follow the score, and the other
 stats grow with the clock. So the player modes and Scorcerer work on demo
 games at any hour.
 

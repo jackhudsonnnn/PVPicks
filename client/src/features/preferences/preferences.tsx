@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { DeleteAccountSection } from "./delete-account";
+import { ChangePasswordSection } from "@/features/auth";
 import { HUE_BG, type User } from "@/features/people";
 import { DisplaySettings } from "./display-settings";
 import { INVITE_MODES } from "@/features/social";
@@ -91,6 +92,7 @@ export function PreferencesPage({
         // Keyed by username so the form resets to the saved name after a rename.
         <div className="space-y-6">
           <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />
+          <ChangePasswordSection username={user.username} />
           <DeleteAccountSection onDeleted={onAccountDeleted} />
         </div>
       )}

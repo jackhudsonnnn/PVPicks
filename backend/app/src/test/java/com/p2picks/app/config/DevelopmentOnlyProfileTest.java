@@ -13,10 +13,12 @@ import org.springframework.mock.env.MockEnvironment;
 class DevelopmentOnlyProfileTest {
 
     @Test
-    void acceptsOnlyTheDevProfile() {
+    void acceptsTheDevAndLanProfiles() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("dev");
+        assertDoesNotThrow(() -> new DevelopmentOnlyProfile(environment));
 
+        environment.setActiveProfiles("lan");
         assertDoesNotThrow(() -> new DevelopmentOnlyProfile(environment));
     }
 
@@ -25,7 +27,10 @@ class DevelopmentOnlyProfileTest {
         MockEnvironment environment = new MockEnvironment();
         assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
 
-        environment.setActiveProfiles("lan");
+        environment.setActiveProfiles("prod");
+        assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
+
+        environment.setActiveProfiles("dev", "lan");
         assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
 
         environment.setActiveProfiles("dev", "prod");

@@ -14,13 +14,20 @@ final class DevOriginFilter extends OncePerRequestFilter {
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
     private final String allowedOrigin;
 
-    DevOriginFilter(String allowedOrigin) {
+    /**
+     * Dev accepts an HTTP loopback origin; the lan profile requires an HTTPS origin (the LAN hostname Caddy
+     * serves), because its cookies are Secure.
+     */
+    DevOriginFilter(String allowedOrigin, boolean lan) {
         URI origin = URI.create(allowedOrigin);
-        if (!"http".equals(origin.getScheme())
-                || !("127.0.0.1".equals(origin.getHost()) || "localhost".equals(origin.getHost()))
-                || origin.getUserInfo() != null || origin.getRawPath() == null || !origin.getRawPath().isEmpty()
-                || origin.getQuery() != null || origin.getFragment() != null) {
-            throw new IllegalArgumentException("PVPICKS_DEV_ORIGIN must be an HTTP loopback origin");
+        boolean shape = origin.getHost() != null && origin.getUserInfo() == null && origin.getRawPath() != null
+                && origin.getRawPath().isEmpty() && origin.getQuery() == null && origin.getFragment() == null;
+        boolean allowed = lan ? "https".equals(origin.getScheme())
+                : "http".equals(origin.getScheme())
+                        && ("127.0.0.1".equals(origin.getHost()) || "localhost".equals(origin.getHost()));
+        if (!shape || !allowed) {
+            throw new IllegalArgumentException(lan ? "PVPICKS_ORIGIN must be the HTTPS origin players use"
+                    : "PVPICKS_DEV_ORIGIN must be an HTTP loopback origin");
         }
         this.allowedOrigin = allowedOrigin;
     }

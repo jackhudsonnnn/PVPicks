@@ -131,6 +131,19 @@ export function ProposeBetSheet({
     }
   }
 
+  /** A new league selects its first open game (or none), which starts the game's setup over like any new game. */
+  function pickLeague(next: TickerGame["league"]) {
+    setLeague(next);
+    if (game?.league === next) return;
+    const first = games.find((g) => g.league === next);
+    if (first) pickGame(first);
+    else {
+      setGameId(null);
+      setPlayerIds([]);
+      setStat(null);
+    }
+  }
+
   function pickMode(next: ModeDef) {
     setMode(next);
     setPlayerIds([]);
@@ -357,7 +370,7 @@ export function ProposeBetSheet({
                       ariaLabel="League"
                       tabs={leagues.map((l) => ({ id: l, label: l }))}
                       value={league}
-                      onChange={setLeague}
+                      onChange={pickLeague}
                     />
                     {ticker.data === null ? (
                       <p className="text-sm text-muted-foreground">

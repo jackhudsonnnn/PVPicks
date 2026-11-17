@@ -25,7 +25,13 @@ import org.springframework.stereotype.Component;
 @Component
 class StatsPoller {
     private static final Logger log = LoggerFactory.getLogger(StatsPoller.class);
-    static final int BATCH = 2;
+    /**
+     * Games per stats request, so one request returns one 100-row page. NBA rows list both rosters (at most 36 a game
+     * in the 2026-11 recordings), so two games fit; NFL rows reach about 70 a game, so two would need a second page.
+     */
+    static int gamesPerRequest(League league) {
+        return league == League.NBA ? 2 : 1;
+    }
     static final Duration FINAL_REFRESH = Duration.ofMinutes(15);
     static final Duration FINAL_WINDOW = Duration.ofHours(6);
     /** While games are live and a refresh is due, every this-many-th request goes to it, so it can't starve. */
@@ -123,8 +129,8 @@ class StatsPoller {
     }
 
     /**
-     * The game that has waited longest, plus the next-longest-waiting due games in its league, up to {@link #BATCH}:
-     * one request covers them all. Two games fit one 100-row page in both leagues.
+     * The game that has waited longest, plus the next-longest-waiting due games in its league, up to
+     * {@link #gamesPerRequest(League)}: one request covers them all in one page.
      */
     static List<Candidate> batch(List<Candidate> games, Map<String, Instant> lastFetched, Instant now) {
         Optional<Candidate> first = next(games, lastFetched, now);
@@ -132,7 +138,7 @@ class StatsPoller {
         List<Candidate> batch = new ArrayList<>(List.of(first.get()));
         List<Candidate> rest = new ArrayList<>(games.stream()
                 .filter(g -> g.league() == first.get().league() && !g.equals(first.get())).toList());
-        while (batch.size() < BATCH) {
+        while (batch.size() < gamesPerRequest(first.get().league())) {
             Optional<Candidate> another = next(rest, lastFetched, now);
             if (another.isEmpty()) break;
             batch.add(another.get());

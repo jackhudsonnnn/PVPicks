@@ -52,8 +52,10 @@ class DevelopmentSessions {
                 """, (rs, row) -> new Account(rs.getObject("id", UUID.class), rs.getString("password_hash"),
                         rs.getString("status")), normalized);
         Account account = accounts.isEmpty() ? null : accounts.getFirst();
-        boolean matches = passwords.matches(password, account == null ? dummyHash : account.passwordHash());
-        if (!matches || account == null) {
+        // Accounts still waiting for their setup code have no usable hash; check the dummy so timing doesn't tell.
+        boolean usable = account != null && account.passwordHash().startsWith("$2");
+        boolean matches = passwords.matches(password, usable ? account.passwordHash() : dummyHash);
+        if (!matches || !usable) {
             return null;
         }
         if (account.status().equals("FROZEN")) throw new Frozen();
@@ -72,6 +74,35 @@ class DevelopmentSessions {
         if (status.isEmpty()) return null;
         if (status.getFirst().equals("FROZEN")) throw new Frozen();
         return issue(userId, previousToken);
+    }
+
+    /**
+     * Sets a new password, ends every session of the account and signs in afresh (setup and reset codes). The caller
+     * holds the account's row lock and has checked the password policy.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    String replacePasswordAndSignIn(UUID accountId, String password, String previousToken) {
+        jdbc.update("UPDATE users SET password_hash = ? WHERE id = ?", passwords.encode(password), accountId);
+        jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = ? AND revoked_at IS NULL", accountId);
+        return issue(accountId, previousToken);
+    }
+
+    /** Whether the password matches the account's (false for an account that has none yet). */
+    boolean matches(UUID accountId, String password) {
+        if (password == null || password.getBytes(StandardCharsets.UTF_8).length > 72) return false;
+        List<String> hashes = jdbc.queryForList("SELECT password_hash FROM users WHERE id = ?", String.class,
+                accountId);
+        String hash = hashes.isEmpty() ? null : hashes.getFirst();
+        return passwords.matches(password, hash == null || !hash.startsWith("$2") ? dummyHash : hash)
+                && hash != null && hash.startsWith("$2");
+    }
+
+    /** Sets a new password and ends the account's other sessions, keeping {@code currentSession}. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    void changePassword(UUID accountId, UUID currentSession, String password) {
+        jdbc.update("UPDATE users SET password_hash = ? WHERE id = ?", passwords.encode(password), accountId);
+        jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = ? AND id <> ? AND revoked_at IS NULL",
+                accountId, currentSession);
     }
 
     private String issue(UUID accountId, String previousToken) {

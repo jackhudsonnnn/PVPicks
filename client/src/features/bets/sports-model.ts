@@ -69,8 +69,11 @@ const PLAYER_MODES: readonly PlayerMode[] = ["either_or", "prop_hunt", "king_of_
 export const isPlayerMode = (mode: string): mode is PlayerMode =>
   (PLAYER_MODES as readonly string[]).includes(mode);
 
-/** Scorcerer: how the next NFL score is made. NFL only, read from score jumps. */
-export const SCORCERER_CHOICES = ["Touchdown", "Field goal", "Safety", "No more scoring"];
+/**
+ * Scorcerer: is the next NFL touchdown or field goal a touchdown or a field goal? Safeties and other 2-point plays
+ * don't count. NFL only, read from team totals of player stats.
+ */
+export const SCORCERER_CHOICES = ["Touchdown", "Field goal", "No more TDs or FGs"];
 
 /** Every mode that binds to a game. */
 export type SportsMode = ScoreMode | PlayerMode | "scorcerer";
@@ -101,7 +104,7 @@ export function playerTerms(
 ) {
   if (mode === "scorcerer")
     return {
-      question: `${away} @ ${home}: how is the next score made?`,
+      question: `${away} @ ${home}: next touchdown or field goal?`,
       choices: SCORCERER_CHOICES,
     };
   const stat = statLabel.toLowerCase();

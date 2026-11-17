@@ -32,7 +32,8 @@ public class SportsProposalService {
     static final String SCORCERER = "scorcerer";
     static final Set<String> MODES = Set.of("total_disaster", "give_and_take", "either_or", "prop_hunt",
             "king_of_the_hill", SCORCERER);
-    static final List<String> SCORCERER_CHOICES = List.of("Touchdown", "Field goal", "Safety", "No more scoring");
+    /** Safeties and other 2-point plays don't count (owner decision, 2026-11-15). */
+    static final List<String> SCORCERER_CHOICES = List.of("Touchdown", "Field goal", "No more TDs or FGs");
     private static final String OPERATION = "bet.sports.propose.v1";
     private static final BigDecimal HALF = new BigDecimal("0.5");
 
@@ -142,10 +143,15 @@ public class SportsProposalService {
     private Terms terms(Proposal proposal, GameLookup.Game game) {
         String home = game.home().abbreviation();
         String away = game.away().abbreviation();
+        if (proposal.mode().equals("total_disaster") && BigDecimal.valueOf(
+                SportsOutcome.combinedScore(game, proposal.includesOvertime())).compareTo(proposal.line()) >= 0) {
+            // Like Prop Hunt: a line the score already passed would make Over a sure thing (domain rules).
+            throw new InvalidTerms("The line must be above the current combined score");
+        }
         if (SCORE_MODES.contains(proposal.mode())) return terms(proposal.mode(), proposal.line(), home, away);
         if (proposal.mode().equals(SCORCERER)) {
             if (game.league() != League.NFL) throw new InvalidTerms("Scorcerer is NFL only");
-            return new Terms(away + " @ " + home + ": how is the next score made?", SCORCERER_CHOICES);
+            return new Terms(away + " @ " + home + ": next touchdown or field goal?", SCORCERER_CHOICES);
         }
         if (!PlayerStatsLookup.isStat(game.league(), proposal.stat())) throw new InvalidTerms("Unknown stat");
         List<PlayerStatsLookup.GamePlayer> picked = new ArrayList<>();

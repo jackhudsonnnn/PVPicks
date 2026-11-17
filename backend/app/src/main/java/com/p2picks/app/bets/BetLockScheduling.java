@@ -11,10 +11,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 class BetLockScheduling {
     private final BetLockWorker worker;
     private final SportsResolutionWorker sports;
+    private final U2PickExpiry u2pickExpiry;
 
-    BetLockScheduling(BetLockWorker worker, SportsResolutionWorker sports) {
+    BetLockScheduling(BetLockWorker worker, SportsResolutionWorker sports, U2PickExpiry u2pickExpiry) {
         this.worker = worker;
         this.sports = sports;
+        this.u2pickExpiry = u2pickExpiry;
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -26,5 +28,11 @@ class BetLockScheduling {
     @Scheduled(fixedDelay = 30000, initialDelay = 10000)
     void resolveSports() {
         sports.poll();
+    }
+
+    /** Uncalled U2Pick bets wash after seven days; checking every ten minutes is plenty. */
+    @Scheduled(fixedDelay = 600_000, initialDelay = 60_000)
+    void expireU2Picks() {
+        u2pickExpiry.poll();
     }
 }

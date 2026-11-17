@@ -1,9 +1,10 @@
 # Backend
 
-A development-only Spring Boot backend for P2Picks. It is **not** ready for real
-users, LAN or production: do not expose it to a network. The `lan` and `prod`
-profiles are deliberately rejected; the application starts only with `dev` and
-binds to `127.0.0.1`.
+A Spring Boot backend for P2Picks. The `dev` profile is for local
+development: it binds to `127.0.0.1`, and you must not expose it to a
+network. The `lan` profile runs the [LAN watch party](/lan) behind Caddy
+over HTTPS. Production isn't configured, and any other profile refuses to
+start.
 
 What is implemented and what is planned:
 
@@ -159,10 +160,25 @@ For a browser origin other than `http://127.0.0.1:8080`, set
 The browser flow is: `GET /auth/csrf`, then `POST /auth/login` with the token in
 `X-CSRF-TOKEN` and a same-origin `Origin`; fetch a new token after login and
 logout. Sessions are HttpOnly, SameSite=Strict cookies that expire after eight
-hours. They are not `Secure` because dev uses HTTP. TLS, secure cookies, rate
-limiting and refresh tokens are required before LAN.
+hours. They are not `Secure` because dev uses HTTP. Failed sign-ins are
+throttled in Redis: by default 10 per account name or 50 per client address in
+15 minutes (`PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT`,
+`PVPICKS_LOGIN_THROTTLE_PER_ADDRESS`, `PVPICKS_LOGIN_THROTTLE_WINDOW`). After
+that, attempts get 429 until the window ends. If Redis is down the throttle
+allows every attempt. TLS, secure cookies, rate limits on other endpoints and
+refresh tokens are required before LAN.
 
 The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
+
+### Run the LAN stack
+
+The [LAN watch party](/lan) page has the full runbook. In short, from the
+repository root: `./scripts/provision-lan.sh --init`, fill in
+`infra/compose/.env.lan`, then
+`docker compose -f infra/compose/docker-compose.lan.yml --env-file infra/compose/.env.lan up -d --build --wait`.
+It is a separate Compose project (`pvpicks-lan`) with its own volumes and
+keys. To try it on this Mac before the domain exists, set
+`PVPICKS_LAN_HOST=localhost` and `PVPICKS_LAN_TLS=internal`.
 
 ## Safety
 
@@ -199,6 +215,10 @@ The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
   while games are live, so it always finishes). A rate-limited response
   pauses this for a minute. Scores and player data share the plan's request
   budget (the GOAT trial allows 5 a minute: 2 for scores, 3 for player data).
+- `GET /ticker` is cached in Redis. A poll that changes a game invalidates
+  it after commit; otherwise entries live `PVPICKS_TICKER_CACHE_TTL` (default
+  `PT5S`). Code or scripts that write `games` without `GameSync` must call
+  `TickerCache.invalidate()`. If Redis is down, it reads PostgreSQL.
 - Dev sports data (dev profile): with `PVPICKS_DEV_SPORTS_DIR` set (Compose
   mounts `dev/sports` there), the `devdata` module plays scenario files and
   recorded chunks as `DEV-` games through the same game and stats sync, and the

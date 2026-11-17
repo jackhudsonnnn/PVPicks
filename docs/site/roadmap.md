@@ -1,56 +1,117 @@
 # Project roadmap
 
-What's left, by area. See [Project status](/status) for what's built. Work
-proceeds in parallel where dependencies allow; nothing here has a date.
+What's left, grouped by milestone. See [Project status](/status) for what's
+built. Each milestone lists its exit criteria first. Work runs in parallel
+where dependencies allow. No milestone has a date.
 
-## Betting
+1. **LAN watch party:** one night, real players, real games, on home Wi-Fi.
+2. **First production:** people play from anywhere, over weeks, and their
+   data must last.
+3. **Later:** everything else.
 
-- **Next:** the refined, mode-specific wash triggers the owner is writing
-  (for example a tie on a moneyline bet); add each to the domain rules' "Wash
-  triggers" tables.
-- Choose Their Fate, and Scorcerer for the NBA, need GOAT play-by-play.
-- Quick Pick subscriptions and copying results between tables; end-to-end
-  debt-cap enforcement across copies.
+## Time-sensitive
+
+- **Buy All-Star for NBA and NFL before the GOAT trial ends (about Nov 20).**
+  Check BallDontLie's terms for showing and storing their data first. The
+  switch itself is configuration only ([Player stats](/player-stats)).
+
+## Milestone 1: LAN watch party
+
+A single game night: about 5–15 guests in one place, on one Wi-Fi network,
+for a few hours. The stack runs in Docker Compose on the owner's Mac, and
+phones connect over HTTPS. Data must survive the night but can be wiped
+afterwards. [LAN watch party](/lan) has the design and the runbook.
+
+**Exit criteria.** All of these must hold:
+
+- Every guest can open the app on their phone over trusted HTTPS, with no
+  certificate setup, set their own password from a setup code, and sign in.
+- U2Pick, the score modes, the player modes and Scorcerer (NFL) work end to
+  end on real NBA and NFL games: propose, pick, lock, resolve or wash,
+  settle points and receipts.
+- Every wash trigger for those modes is implemented and tested (the domain
+  rules' [wash triggers](/reference/domain-rules#wash-triggers)).
+- The `lan` profile starts, and nothing dev-only is reachable: no demo world,
+  passwordless picker, Dev page, `/dev/**` endpoints or docs.
+- A full dry run passes on the real network with at least two phones,
+  following the runbook.
+
+**Built** (2026-11-15; see [LAN watch party](/lan)):
+
+- The `lan` profile and its Compose stack, with Caddy terminating HTTPS in
+  front of the backend and a production client build. Secure cookies, an
+  HTTPS-only origin, forwarded headers trusted from Caddy, LAN-only keys,
+  and every dev-only feature off.
+- Accounts through admin-issued setup codes, reset links, change password,
+  a bootstrapped first admin, and a script that creates the guests.
+- Rate limits on chat, reactions, polls, proposals, picks, search, follows,
+  blocks, feedback and WebSocket subscriptions, plus the sign-in throttle.
+- Every LAN wash trigger: Total Disaster lines start above the live combined
+  score, a 48-hour no-result wash, the 7-day U2Pick wash, and Scorcerer from
+  team totals with safeties ignored.
+- A runbook.
+
+**Left before the party** (owner):
+
+- Buy All-Star for NBA and NFL (about Nov 20; see Time-sensitive above).
+- Register the domain in Route 53, point `p2picks.<domain>` at the Mac and
+  get the certificate.
+- Any further mode-specific wash triggers.
+- The dry run on the real Wi-Fi with at least two phones.
+- No resets during the night. The disposable-environment rule applies before
+  and after the party, not during it.
+
+## Milestone 2: First production
+
+People play from anywhere, over weeks. Data is kept and backed up.
+
+- Hosting in the AWS project (selected Region), the same domain and TLS
+  approach, and a registration policy decided after LAN (invite codes are
+  the natural extension of setup codes).
+- Backups, restore drills and retention for retry records, audit data,
+  archives and outbox markers.
+- Observability: metrics and logs through OpenTelemetry (not Kafka), outbox
+  and consumer lag, and a Kafka check in site health
+  ([Kafka & Redis](/kafka-redis), item 5).
+- More than one backend instance: one runner per scheduled job and a shared
+  sports-feed request budget in Redis (item 3).
+- Event-driven sports resolution, then the production partition count and
+  topics split by domain (items 6–7).
+- Revoking a single session ("sign out of other devices"). Freezing and
+  deleting an account already end every session.
+- Make the sports plan a per-league setting that drives poll rate,
+  endpoints and offered modes (ADR 0005).
+
+## Later
+
+**Betting**
+
+- Choose Their Fate (NFL), designed on team totals of player stats; blocked
+  until turnovers on downs can be detected
+  ([Player stats](/player-stats#choose-their-fate-from-team-totals-design-blocked)).
+  Scorcerer for the NBA needs GOAT play-by-play.
+- Quick Pick subscriptions and copying results between tables, with
+  end-to-end debt-cap enforcement across copies.
 - Maybe: a host setting for who may override sports results; showing
   host-changed outcomes in the settlement message.
 - Every mode reuses the shared pick, privacy, cap, lock, payout and
   settlement transactions; only the feed supplies sports outcomes.
 
-## Sports data
+**Sports data**
 
-- **Buy All-Star for NBA and NFL before the GOAT trial ends (about Nov 20).**
-  Check BallDontLie's terms for showing and storing their data first. The
-  switch itself is configuration only ([Player stats](/player-stats)).
-- Make the plan a per-league setting that drives poll rate, endpoints and
-  offered modes (ADR 0005).
-- Check the recordings: how fast stats update, how a player who didn't play
-  appears, corrections after Final, and NFL status and quarter handling on a
-  live Sunday.
-- Cut today's remaining games into chunks once they finish, then remove that
-  day's raw recordings.
+- Check the recordings: how fast stats update, corrections after Final,
+  and NFL status and quarter handling on a live Sunday.
+- Cut finished games into chunks, then remove that day's raw recordings.
 
-## Social and tables
+**Social, tables and delivery**
 
-- An archive data cleanup policy, and revoking a single session ("sign out of
-  other devices"). Freezing and deleting an account already end every
-  session.
+- An archive data cleanup policy.
 - Keep reactions on older loaded chat messages current. Today a change
   refreshes the newest window and the message you reacted to.
-
-## Delivery
-
 - Ordering and gap detection beyond refetch-on-reconnect, and durable
   consumers that record processed events.
 
-## Documentation
+**Documentation**
 
-- An interactive API reference, once request execution and access safeguards
-  are defined. Finish the API contract review.
-
-## Security, operations and launch
-
-- Rate limits, secure cookies, TLS and other protections before LAN.
-- Retention and rotation for retry records and audit data.
-- Backups, recovery and observability before production.
-- Until then the dev environment is disposable. Before LAN, switch to
-  preserving data and approving destructive operations.
+- An interactive API reference, once request execution and access
+  safeguards are defined. Finish the API contract review.

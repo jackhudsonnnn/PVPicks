@@ -60,8 +60,11 @@ paths:
       summary: Start a session for a provisioned account
       description: >-
         Dev and LAN accounts are provisioned; production registration policy
-        will be decided after the LAN rehearsal. Dev login throttling (429) is
-        not implemented. In dev, normalize the username
+        will be decided after the LAN rehearsal. Failed sign-ins are
+        throttled (429 `rate_limited`, with Retry-After): by default 10
+        failures per account name or 50 per client address within 15
+        minutes block further attempts, even correct ones, until the window
+        ends; a success clears the account's count. In dev, normalize the username
         by trimming and lowercasing; verify the password exactly. Unknown,
         frozen and deleted accounts and wrong passwords receive the same 401.
         Login rotates the CSRF token. An existing session, if any, is revoked
@@ -98,6 +101,100 @@ paths:
             Origin or CSRF rejected, or, after a correct password, the account
             is frozen (code `account_frozen`). Frozen accounts can't sign in;
             freezing also ends their sessions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/setup:
+    post:
+      operationId: redeemSetupCode
+      security: []
+      summary: Set your password with a setup or reset code
+      description: >-
+        Redeems a single-use code an admin issued (the link is
+        /setup#<code>; the code stays in the URL fragment). Sets the
+        password, ends the account's other sessions and signs in, like
+        login, which also rotates the CSRF token. A password the rules
+        reject (code `weak_password`) leaves the code unused. Password rules:
+        12 to 64 characters and at most 72 bytes, not containing the
+        username, not a common password. Failed codes count toward the
+        per-address sign-in throttle.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code, password]
+              properties:
+                code:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        '204':
+          description: Password set and signed in; the server sets the session cookie.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          description: >-
+            Malformed body, an expired, used or unknown code (code
+            `invalid_setup_code`), or a password the rules reject (code
+            `weak_password`, with a message for the player).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/password:
+    post:
+      operationId: changePassword
+      summary: Change your own password
+      description: >-
+        Any signed-in account, player or admin. Needs the current password;
+        ends the account's other sessions and keeps this one. Wrong current
+        passwords count toward the sign-in throttle.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+      responses:
+        '204':
+          description: Changed.
+        '400':
+          description: Malformed body, or a new password the rules reject (code `weak_password`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The current password is wrong (code `wrong_password`), or origin or CSRF rejected.
           content:
             application/json:
               schema:
@@ -2715,6 +2812,124 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /admin/players:
+    get:
+      operationId: listPlayers
+      summary: Player accounts, newest first
+      description: >-
+        Whether each has set a password, and when their live setup or reset
+        code expires (codes themselves are never shown again).
+      responses:
+        '200':
+          description: Players.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, username, status, passwordSet, codeExpiresAt, createdAt]
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    username:
+                      type: string
+                    status:
+                      type: string
+                      enum: [ACTIVE, FROZEN]
+                    passwordSet:
+                      type: boolean
+                    codeExpiresAt:
+                      type: [string, 'null']
+                      format: date-time
+                    createdAt:
+                      type: string
+                      format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createPlayer
+      summary: Create a player account and its setup code
+      description: >-
+        There's no registration: the admin creates each account. The
+        username is trimmed and lowercased. The response carries the
+        single-use setup code once (valid 24 hours); issue another with
+        /admin/players/{playerId}/code if it's lost. No retry key: a
+        retry finds the username taken.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SetupCode'
+                  - type: object
+                    required: [id, username]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      username:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: The username is taken (code `username_taken`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/players/{playerId}/code:
+    parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: issuePlayerCode
+      summary: Issue a new setup or reset code
+      description: >-
+        SETUP while the player has never set a password, RESET after.
+        Cancels their unused code. Redeeming a reset code ends all their
+        sessions.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: Issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupCode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /admin/users/{userId}/unfreeze:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -3052,6 +3267,19 @@ components:
         minLength: 1
         maxLength: 255
   schemas:
+    SetupCode:
+      type: object
+      required: [setupCode, purpose, expiresAt]
+      properties:
+        setupCode:
+          type: string
+          description: Shown once; the player opens /setup#<setupCode>.
+        purpose:
+          type: string
+          enum: [SETUP, RESET]
+        expiresAt:
+          type: string
+          format: date-time
     AdminHealthSnapshot:
       type: object
       additionalProperties: false

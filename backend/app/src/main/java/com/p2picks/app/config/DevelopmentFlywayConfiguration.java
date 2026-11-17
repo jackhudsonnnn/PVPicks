@@ -11,7 +11,7 @@ class DevelopmentFlywayConfiguration {
     @Bean
     FlywayMigrationStrategy developmentMigrationStrategy(Environment environment) {
         return flyway -> {
-            DevelopmentOnlyProfile.requireDevProfile(environment);
+            DevelopmentOnlyProfile.requireSupportedProfile(environment);
             flyway.migrate();
         };
     }

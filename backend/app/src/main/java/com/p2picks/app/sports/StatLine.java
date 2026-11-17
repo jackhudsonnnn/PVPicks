@@ -24,6 +24,12 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
 
     public record Stat(String key, String label) {}
 
+    /**
+     * NFL scoring keys that aren't offered as bet stats: Scorcerer sums them per team, with {@code touchdowns}, to
+     * tell touchdowns from field goals. Kickers carry them.
+     */
+    public static final List<String> NFL_SCORING = List.of("field_goals", "extra_points");
+
     public StatLine {
         Objects.requireNonNull(league, "league");
         Objects.requireNonNull(player, "player");
@@ -63,6 +69,8 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
         stats.put("touchdowns", count(row, "rushing_touchdowns") + count(row, "receiving_touchdowns")
                 + count(row, "kick_return_touchdowns") + count(row, "punt_return_touchdowns")
                 + count(row, "fumbles_touchdowns") + count(row, "interception_touchdowns"));
+        stats.put("field_goals", count(row, "field_goals_made"));
+        stats.put("extra_points", count(row, "extra_points_made"));
         return new StatLine(League.NFL, game, player, true, stats);
     }
 

@@ -9,7 +9,11 @@ planned operations, so it isn't an inventory of what exists.
 **Accounts and social**
 
 - Sign-in with an eight-hour HttpOnly cookie session, CSRF and same-origin
-  checks. In dev, a passwordless picker over the demo accounts (see
+  checks. Failed sign-ins are throttled per account name and per address
+  (Redis), and chat, bets, search, follows, feedback and realtime
+  subscriptions are rate limited.
+- Accounts from the admin: create a player with a one-time setup link (and
+  QR code), reset links, and change password. No registration. In dev, a passwordless picker over the demo accounts (see
   [Demo world](/demo-data)).
 - Profile (username, color), invite preferences and debt cap.
 - Follows, blocks, user search and lookup.
@@ -50,7 +54,7 @@ planned operations, so it isn't an inventory of what exists.
 **Sports data**
 
 - The BallDontLie NBA and NFL feed: games, game history, players and
-  per-game player stats with history, the live ticker, and raw-response
+  per-game player stats with history, the live ticker (cached in Redis), and raw-response
   recordings for replay (see [Player stats](/player-stats)).
 - Dev sports data: live-edited scenario files and recorded chunks (full NBA
   and NFL games with live player stats), played as DEV games from the Dev
@@ -82,10 +86,14 @@ planned operations, so it isn't an inventory of what exists.
 ## Not yet available
 
 - Quick Pick subscriptions and copying results between tables.
-- Choose Their Fate, which needs GOAT play-by-play, and Scorcerer for the
-  NBA.
+- Choose Their Fate (an NFL design exists, blocked on detecting turnovers on
+  downs; see [Player stats](/player-stats#choose-their-fate-from-team-totals-design-blocked)),
+  and Scorcerer for the NBA.
 - More mode-specific wash triggers (planned by the owner; see the domain
   rules, "Wash triggers").
-- Registration, and LAN or production security and deployment.
+- Registration, and production security and deployment. The LAN watch
+  party stack is built (`lan` profile behind Caddy, see
+  [LAN watch party](/lan)); the domain, certificate and dry run are the
+  owner's to do.
 
 Picks are stored in plaintext. The [roadmap](/roadmap) tracks what's next.

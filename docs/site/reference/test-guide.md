@@ -15,8 +15,16 @@ cover.
   containers, the single shared Spring context and common HTTP helpers
   (`loginAs`, `csrf` and request builders). Do not change the context
   configuration in a subclass; that would start a second context.
-  - `security.AuthIntegrationTest`: login, CSRF/origin, session expiry and
-    role-based route access.
+  - `security.AuthIntegrationTest`: login, CSRF/origin, session expiry,
+    role-based route access and the failed sign-in throttle.
+    `security.LanSecurityTest`: the lan profile's HTTPS origin and Secure
+    cookies.
+  - `accounts.PlayerSetupIntegrationTest`: admin-created players, setup and
+    reset codes (single use, a newer code cancels the older), password rules
+    and changing your password.
+  - `common.RateLimitsIntegrationTest`: the Redis limiter and the per-route
+    interceptor. The shared context turns rate limits off
+    (`pvpicks.rate-limits.enabled=false`), so feature tests aren't limited.
   - `users`, `social`, `chat`, `feedback`: profile, search/lookup,
     relationships, invitations, chat windows, sending, reactions and read state.
   - `tables.TableMembershipIntegrationTest` and
@@ -51,7 +59,8 @@ cover.
   schema; API key, date and rate-limit handling against a local HTTP server)
   and `SportsIntegrationTest` (scripted-feed polling, one event per changing
   poll, failure recording, ticker scope across a daylight-saving date, 503 when
-  stale, `GET /ticker` against the OpenAPI schema).
+  stale, `GET /ticker` against the OpenAPI schema, the Redis ticker cache and
+  its invalidation).
 - `delivery`: `OutboxCleanupIntegrationTest` (only old published rows are
   deleted), `OutboxRelayIntegrationTest` (publish after broker
   acknowledgement, retry after a broker failure), `RealtimeConsumerTest` (which

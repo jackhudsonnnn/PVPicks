@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
-import { currentUser, signIn, signInAs, signOut, SignIn } from "@/features/auth";
+import { currentUser, SetupPassword, signIn, signInAs, signOut, SignIn } from "@/features/auth";
 import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
 import type { User } from "@/features/people";
 import { AdminWorkspace } from "@/features/admin";
@@ -109,6 +109,8 @@ export function App() {
       </main>
     );
   }
+  // A setup or reset link works signed in or out: redeeming it signs in as that account.
+  if (pathname === "/setup") return <SetupPassword onDone={startSession} />;
   if (!session.data) {
     if (pathname === "/dev" && devAvailable)
       return <SignedOutDev onReset={() => void resetWorld()} />;

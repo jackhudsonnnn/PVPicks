@@ -92,7 +92,8 @@ letters, digits, `-` and `_`, because they become part of game ids.
   - `startsInMinutes` is relative to Start; negative means already started.
   - `periods` are points per period; overtime is a fifth period.
 - **Players:**
-  - `stats` use the canonical keys (see [Player stats](/player-stats));
+  - `stats` use the canonical keys (see [Player stats](/player-stats)),
+    plus `field_goals` and `extra_points` for NFL kickers;
     missing keys are 0, and unknown keys are an error.
   - `played: false` is a player who didn't play.
 - **Steps** merge into games and players by `id` once `afterSeconds` have
@@ -144,7 +145,11 @@ responses carry no period). The two older chunks, `atl-chi-overtime` (tied
 
 ## Limits
 
-- Choose Their Fate isn't covered: it needs GOAT play-by-play. Scorcerer
-  reads score jumps, so scenarios and chunks both drive it.
+- Choose Their Fate isn't covered: it isn't built (its design is blocked on
+  detecting turnovers on downs). Scorcerer
+  reads team totals of player stats, so a scenario must keep each team's
+  `touchdowns` and its kicker's `field_goals` and `extra_points` in step with
+  its score, or Scorcerer bets wash. Recorded chunks are real data and
+  already do.
 - Dev games stay in the database. Delete them by hand
   (`DELETE ... WHERE provider_id LIKE 'DEV-%'`) only if no bets reference them.

@@ -72,7 +72,7 @@ earlier prototype (git tag `prototype-ui`).
   Choose Their Fate, which shows as coming soon), set up a U2Pick, or pick one
   of today's games (NFL only for Scorcerer) and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
-  their current number) and the line or target, which starts just above them
+  their position and current number, sorted by position) and the line or target, which starts just above them
   (player modes, `bets/components/player-setup.tsx`); and whether overtime
   counts. Then the wager (+0.01/+0.10/+1.00 steps,
   0.10 to 10.00, or 4fun) and the pick window, preview the ticket, send. On a
@@ -116,12 +116,19 @@ earlier prototype (git tag `prototype-ui`).
 - **Preferences:** a Tables tab for who can add you (friends and people you
   follow, each Open, Request or Closed), an Account tab for your username
   (also your sign-in name), avatar color and debt cap, which can only change
-  while you owe nothing, and a Display tab (theme, text size, motion, 24-hour
+  while you owe nothing, and your password (current password first; other
+  devices are signed out), and a Display tab (theme, text size, motion, 24-hour
   clock) saved on this device.
+- **Set your password:** `/setup#<code>` (from an admin's setup or reset
+  link) sets a password and signs in, signed in or out. The code stays in
+  the URL fragment and is removed from the address bar afterwards.
 - **How to play:** the game modes, bet lifecycle and payout rules, and a
   feedback form that sends to the backend.
 - **Admin:** an admin account sees only admin tools; it can't join tables,
   bet or chat.
+  - **Players:** create a player account and show its one-time setup link
+    with a QR code, or issue a new setup or reset link. Links are shown once.
+  - **Account:** change the admin's password.
   - **Moderation:** open reports, with the reported message, to dismiss or
     strike (the third strike freezes the account and signs it out), plus
     players with strikes or frozen accounts, to unfreeze or clear strikes.

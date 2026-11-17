@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Loads a sports bet for resolution or override after the caller has locked the users it affects
+ * Loads a bet (sports, or a U2Pick for {@link U2PickExpiry}) for resolution or override after the caller has locked the users it affects
  * ({@link #affectedUsers}), then locks the table and the bet, in the repository's users-then-table-then-bet order.
  */
 @Component
