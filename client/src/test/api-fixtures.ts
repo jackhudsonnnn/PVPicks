@@ -78,3 +78,29 @@ export const modeAvailability = new Map<string, boolean>([
   ["king_of_the_hill", true],
   ["scorcerer", true],
 ]);
+
+/** A whole table as `GET /tables` lists it for `viewerId`: a summary with a member preview, never every member. */
+export function summaryOf(
+  whole: {
+    id: string;
+    name: string;
+    emoji: string;
+    memberIds: string[];
+    hostIds: string[];
+    disabledPermissions: Record<string, ("bets" | "text" | "react" | "gifs" | "polls")[]>;
+  },
+  viewerId: string,
+  extra: { lastBetAt?: string; joinedAt?: string } = {},
+) {
+  return {
+    id: whole.id,
+    name: whole.name,
+    emoji: whole.emoji,
+    host: whole.hostIds.includes(viewerId),
+    memberCount: whole.memberIds.length,
+    memberPreview: whole.memberIds.slice(0, 4),
+    myDisabledPermissions: whole.disabledPermissions[viewerId] ?? [],
+    joinedAt: extra.joinedAt ?? "2026-11-01T00:00:00Z",
+    ...(extra.lastBetAt ? { lastBetAt: extra.lastBetAt } : {}),
+  };
+}

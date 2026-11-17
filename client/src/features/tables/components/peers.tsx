@@ -1,12 +1,16 @@
 import { useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { ScrollContainer } from "@/components/scroll-container";
+import { PageEdge } from "@/components/client-pages";
+import { useClientPages } from "@/components/use-client-pages";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { backendErrorMessage } from "@/lib/api-client";
-import type { Table, TableBalance } from "@/features/tables/api";
+import { searchTableMembers, type Table, type TableBalance } from "@/features/tables/api";
+import { searchTerm } from "@/features/social";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 
 type Scenario = "settle" | "true";
@@ -56,6 +60,21 @@ export function PeersPanel({
     const y = byId.get(b)?.settleCents ?? 0n;
     return x === y ? 0 : x < y ? 1 : -1;
   });
+  // Up to 500 people: mount them 20 at a time as you scroll. A search asks the server for matching usernames, 50 at
+  // a time, so only those rows (and their profiles) load.
+  const rowPages = useClientPages(rows);
+  const searching = query.trim() !== "";
+  const term = searchTerm(query);
+  const search = useInfiniteQuery({
+    queryKey: [...people.peopleKey, "member-search", table.id, term ?? ""],
+    queryFn: ({ pageParam, signal }) => searchTableMembers(table.id, term!, pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
+    enabled: term !== null,
+    retry: false,
+  });
+  const matches = search.data?.pages.flatMap((page) => page.items) ?? [];
+  const shownRows = searching ? matches : rowPages.shown;
   return (
     <div className={cn("@container flex min-h-0 flex-col gap-3 p-4", className)}>
       <dl className="hidden gap-1 rounded-lg border bg-surface px-3 py-2 text-[11px] leading-snug text-muted-foreground @md:grid">
@@ -94,23 +113,41 @@ export function PeersPanel({
         onChange={(event) => setQuery(event.target.value)}
       />
       {balances.error ? <p role="alert">{backendErrorMessage(balances.error)}</p> : null}
+      {searching && term === null ? (
+        <p className="text-sm text-muted-foreground">
+          Usernames use up to 15 letters, numbers and underscores.
+        </p>
+      ) : searching && search.isError ? (
+        <p role="alert">{backendErrorMessage(search.error)}</p>
+      ) : searching && search.isSuccess && matches.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No one here matches.</p>
+      ) : null}
       <ScrollContainer isVisible={false} className="-mx-2 min-h-0 flex-1 px-2">
         <ul className="grid gap-1.5">
           <AnimatedList>
-            {rows.map((id) => (
+            {shownRows.map((id) => (
               <PeerRow
                 key={id}
                 id={id}
                 balance={byId.get(id)}
                 seated={seatedIds.includes(id)}
                 scenario={scenario}
-                query={query.trim().toLowerCase()}
                 onSelect={() => onSelectUser(id)}
                 {...people}
               />
             ))}
           </AnimatedList>
         </ul>
+        {!searching && rowPages.hasMore && (
+          <PageEdge onMore={rowPages.more} label="More peers" className="mt-2 w-full" />
+        )}
+        {searching && search.hasNextPage && !search.isFetchingNextPage && (
+          <PageEdge
+            onMore={() => void search.fetchNextPage()}
+            label="More matches"
+            className="mt-2 w-full"
+          />
+        )}
       </ScrollContainer>
     </div>
   );
@@ -138,7 +175,6 @@ function PeerRow({
   balance,
   seated,
   scenario,
-  query,
   onSelect,
   ...people
 }: People & {
@@ -147,10 +183,8 @@ function PeerRow({
   balance: TableBalance | undefined;
   seated: boolean;
   scenario: Scenario;
-  query: string;
 }) {
   const person = usePerson(id, people.user, people.expire, people.peopleKey);
-  if (query && !person?.name.toLowerCase().includes(query)) return null;
   const value = (s: Scenario) => (s === "settle" ? balance?.settleCents : balance?.trueCents);
   return (
     <AnimatedItem as="li">

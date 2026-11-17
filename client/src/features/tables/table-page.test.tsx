@@ -7,12 +7,14 @@ import {
   type Table,
   listTomatoes,
   rotateQuickPickCode,
+  searchTableMembers,
   setQuickPicksEnabled,
   throwTomato,
   type TomatoThrow,
 } from "./api";
 import { TableChat } from "@/features/chat/chat";
 import { HostPanel } from "@/features/tables/components/host-panel";
+import { PeersPanel } from "@/features/tables/components/peers";
 import { ProfileDialog } from "@/features/social/profile";
 import { TomatoLayer } from "@/features/tables/components/tomatoes";
 import { useBetActions } from "@/features/bets/actions";
@@ -44,6 +46,7 @@ vi.mock("@/features/settlements/api", async (importOriginal) => ({
 }));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
+  searchTableMembers: vi.fn(),
   listTomatoes: vi.fn(),
   throwTomato: vi.fn(),
   setQuickPicksEnabled: vi.fn(),
@@ -139,6 +142,7 @@ beforeEach(() => {
   vi.mocked(getRelationships).mockResolvedValue({
     followingIds: [],
     followerIds: [],
+    friendIds: [],
     blockedIds: [],
   });
   vi.mocked(listSettlementGroups).mockResolvedValue([]);
@@ -281,5 +285,39 @@ describe("quick picks", () => {
     await waitFor(() =>
       expect(setQuickPicksEnabled).toHaveBeenCalledWith(table.id, false, expect.any(String)),
     );
+  });
+
+  it("searches a big table's members on the server and shows only the matches", async () => {
+    const crowd = Array.from(
+      { length: 30 },
+      (_, i) => `123e4567-e89b-42d3-a456-4266141742${String(i).padStart(2, "0")}`,
+    );
+    const names = new Map(crowd.map((id, i) => [id, `crowd${i}`]));
+    names.set(friend, "friend");
+    vi.mocked(getProfile).mockImplementation(async (id) => ({
+      id,
+      username: names.get(id) ?? "me",
+      hue: 1,
+    }));
+    vi.mocked(searchTableMembers).mockResolvedValue({ items: [crowd[7]!], nextCursor: null });
+    wrap(
+      <PeersPanel
+        table={{ ...table, memberIds: [me.id, friend, ...crowd] }}
+        balances={{ data: [], error: null }}
+        seatedIds={[]}
+        onSelectUser={() => {}}
+        user={me}
+        expire={expire}
+        peopleKey={peopleKey}
+      />,
+    );
+    expect(await screen.findByText("crowd0")).toBeInTheDocument();
+    expect(screen.queryByText("crowd25")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search members"), { target: { value: "Crowd7" } });
+    expect(await screen.findByText("crowd7")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("crowd0")).not.toBeInTheDocument());
+    expect(searchTableMembers).toHaveBeenCalledWith(table.id, "crowd7", null, expect.anything());
+    fireEvent.change(screen.getByLabelText("Search members"), { target: { value: "no spaces" } });
+    expect(await screen.findByText(/up to 15 letters/)).toBeInTheDocument();
   });
 });

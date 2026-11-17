@@ -4,17 +4,14 @@ import { Link } from "@tanstack/react-router";
 import { BookOpen, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { ScrollContainer } from "@/components/scroll-container";
-import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { listTables } from "@/features/tables";
+import { SidebarTables } from "@/features/tables";
 import type { User } from "@/features/people";
 import { ScoreTicker } from "@/features/sports";
 import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
 import { settlementsFeed } from "@/lib/realtime-connection";
 import { listSettlementGroups } from "@/features/settlements";
-import { useInvites } from "@/features/social";
 import { userKey } from "@/lib/query-keys";
 import { useDevAvailable } from "@/features/devdata";
 import { DevLinks } from "./dev-links";
@@ -149,60 +146,8 @@ function SignOutButton({ onSignOut, busy }: { onSignOut: () => void; busy: boole
   );
 }
 
-/** Your tables and pending invitations for the sidebar; invitations open Home, where you answer them. */
-function SidebarTables({ user, pathname }: { user: User; pathname: string }) {
-  const tables = useQuery({
-    queryKey: userKey(user.id, "list"),
-    queryFn: ({ signal }) => listTables(signal),
-    retry: false,
-  });
-  const invites = useInvites(user.id);
-  if (!tables.data?.length && !invites.data?.length) return null;
-  return (
-    <>
-      <div className="mt-4 px-5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        Your tables
-      </div>
-      <ScrollContainer isVisible={false} className="flex flex-col gap-0.5 px-3 py-2">
-        <AnimatedList>
-          {(invites.data ?? []).map((invite) => (
-            <AnimatedItem key={`invite-${invite.id}`} className="flex flex-col">
-              <Link
-                to="/"
-                className="flex items-center gap-3 rounded-lg border border-invite/50 bg-invite/10 px-3 py-2 text-left text-sm text-invite transition-colors hover:bg-invite/20"
-              >
-                <span className="text-base">{invite.tableEmoji}</span>
-                <span className="min-w-0 flex-1 truncate">{invite.tableName}</span>
-                <span className="font-mono text-[10px] font-bold uppercase">Invite</span>
-              </Link>
-            </AnimatedItem>
-          ))}
-          {(tables.data ?? []).map((table) => (
-            <AnimatedItem key={`table-${table.id}`} className="flex flex-col">
-              <Link
-                to="/tables/$tableId"
-                params={{ tableId: table.id }}
-                aria-current={pathname === `/tables/${table.id}` ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                  pathname === `/tables/${table.id}`
-                    ? "bg-sidebar-accent text-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-                )}
-              >
-                <span className="text-base">{table.emoji}</span>
-                <span className="truncate">{table.name}</span>
-              </Link>
-            </AnimatedItem>
-          ))}
-        </AnimatedList>
-      </ScrollContainer>
-    </>
-  );
-}
-
 /**
-- The signed-in frame: a sidebar on desktop (navigation, your tables, net points), a top bar and bottom tab bar on
+- The signed-in frame: a sidebar on desktop (navigation, your tables and requests, net points), a top bar and bottom tab bar on
 - phones, and the score ticker everywhere except a table page.
  */
 export function AppShell({
@@ -234,11 +179,11 @@ export function AppShell({
       )}
     >
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r bg-sidebar nav:flex">
-        <div className="flex h-16 items-center justify-between pl-5 pr-3">
+        <div className="flex h-16 shrink-0 items-center justify-between pl-5 pr-3">
           <Logo badge={devAvailable && <DevLinks active={devActive} />} />
           <SignOutButton onSignOut={onSignOut} busy={signingOut} />
         </div>
-        <nav aria-label="Main" className="flex flex-col gap-1 px-3 py-2">
+        <nav aria-label="Main" className="flex shrink-0 flex-col gap-1 px-3 py-2">
           {NAV.map(({ to, label, icon: Icon }) => {
             const active = isActive(pathname, to);
             const isHome = to === "/";
@@ -264,8 +209,8 @@ export function AppShell({
             );
           })}
         </nav>
-        <SidebarTables user={user} pathname={pathname} />
-        <div className="mt-auto border-t p-4">
+        <SidebarTables user={user} pathname={pathname} expire={expire} />
+        <div className="mt-auto shrink-0 border-t p-4">
           <div className="flex items-center justify-between gap-2">
             <PointsPill user={user} />
             <LiveStatus />

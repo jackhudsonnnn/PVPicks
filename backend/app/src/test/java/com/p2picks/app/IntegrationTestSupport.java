@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.security.MutationAuthentication;
 import jakarta.servlet.http.Cookie;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -177,17 +178,39 @@ public abstract class IntegrationTestSupport {
                 .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
-    protected MvcResult groupHttpAction(Cookie cookie, Csrf csrf, UUID other, String step, String revision, String key)
-            throws Exception {
-        return mvc.perform(post("/people/" + other + "/settle").cookie(cookie, csrf.cookie())
-                        .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
-                        .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"step\":\"" + step + "\",\"expectedRevision\":\"" + revision + "\"}")).andReturn();
+    /** Closes an open receipt as paid with a final settle (the payee marked it received). */
+    protected void closeReceipt(UUID line) {
+        Map<String, Object> row = jdbc.queryForMap("SELECT payer_id, payee_id, amount_cents FROM settlement_lines WHERE id = ?",
+                line);
+        UUID settle = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO settles (id, sender_id, other_id, kind, payer_id, payee_id, amount_cents)
+                VALUES (?, ?, ?, 'received', ?, ?, ?)
+                """, settle, row.get("payee_id"), row.get("payer_id"), row.get("payer_id"), row.get("payee_id"),
+                row.get("amount_cents"));
+        jdbc.update("INSERT INTO settle_lines (settle_id, line_id) VALUES (?, ?)", settle, line);
+        jdbc.update("UPDATE settlement_lines SET status = 'paid', settle_id = ? WHERE id = ?", settle, line);
     }
 
-    protected String groupRevision(Cookie cookie) throws Exception {
+    /** POST /people/{other}/settles: settle the chosen receipts ({@code sent}, {@code received} or {@code forgiven}). */
+    protected MvcResult settleHttp(Cookie cookie, Csrf csrf, UUID other, String kind, List<UUID> lineIds, String key)
+            throws Exception {
+        String ids = lineIds.stream().map(id -> "\"" + id + "\"").collect(java.util.stream.Collectors.joining(","));
+        return mvc.perform(post("/people/" + other + "/settles").cookie(cookie, csrf.cookie())
+                        .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
+                        .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"kind\":\"" + kind + "\",\"lineIds\":[" + ids + "]}")).andReturn();
+    }
+
+    protected MvcResult rejectHttp(Cookie cookie, Csrf csrf, UUID settle, String key) throws Exception {
+        return mvc.perform(post("/settles/" + settle + "/reject").cookie(cookie, csrf.cookie())
+                .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
+                .header("Idempotency-Key", key)).andReturn();
+    }
+
+    protected JsonNode settleGroups(Cookie cookie) throws Exception {
         return json.readTree(mvc.perform(get("/people/settle-groups").cookie(cookie))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get(0).path("revision").asText();
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
 
     protected UUID insertDebtBet(UUID table, UUID user, UUID other, String status, boolean forFun,
@@ -211,15 +234,37 @@ public abstract class IntegrationTestSupport {
         return bet;
     }
 
+    /**
+     * A receipt in a given state. {@code unpaid} is open; {@code paid} and {@code forgiven} are closed by a final
+     * settle ({@code received} or {@code forgiven}); {@code sent} is closed by a sent settle the payee can still
+     * reject (it keeps counting toward debt until then).
+     */
     protected UUID insertDebtReceipt(
             UUID table, UUID host, UUID payer, UUID payee, long amount, String status) {
         UUID settlement = UUID.randomUUID();
         UUID line = UUID.randomUUID();
         jdbc.update("INSERT INTO settlements (id, table_id, host_id) VALUES (?, ?, ?)", settlement, table, host);
         jdbc.update("""
-                INSERT INTO settlement_lines (id, settlement_id, table_id, host_id, payer_id, payee_id, amount_cents, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, line, settlement, table, host, payer, payee, amount, status);
+                INSERT INTO settlement_lines (id, settlement_id, table_id, host_id, payer_id, payee_id, amount_cents)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, line, settlement, table, host, payer, payee, amount);
+        if (status.equals("unpaid")) return line;
+        UUID settle = UUID.randomUUID();
+        String kind = switch (status) {
+            case "paid" -> "received";
+            case "forgiven" -> "forgiven";
+            case "sent" -> "sent";
+            default -> throw new IllegalArgumentException("Receipts are unpaid, paid, forgiven or sent: " + status);
+        };
+        UUID sender = kind.equals("sent") ? payer : payee;
+        jdbc.update("""
+                INSERT INTO settles (id, sender_id, other_id, kind, payer_id, payee_id, amount_cents, reject_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN clock_timestamp() + interval '48 hours' END)
+                """, settle, sender, sender.equals(payer) ? payee : payer, kind, payer, payee, amount,
+                kind.equals("sent"));
+        jdbc.update("INSERT INTO settle_lines (settle_id, line_id) VALUES (?, ?)", settle, line);
+        jdbc.update("UPDATE settlement_lines SET status = ?, settle_id = ?, revision = 1 WHERE id = ?",
+                status.equals("forgiven") ? "forgiven" : "paid", settle, line);
         return line;
     }
 
@@ -270,14 +315,6 @@ public abstract class IntegrationTestSupport {
         return request(method, "/messages/" + message + "/reaction").cookie(session, csrf.cookie())
                 .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
                 .header("Idempotency-Key", key);
-    }
-
-    protected MvcResult receiptHttpAction(Cookie cookie, Csrf csrf, UUID line, String action, int revision, String key)
-            throws Exception {
-        return mvc.perform(post("/settlement-lines/" + line + "/" + action).cookie(cookie, csrf.cookie())
-                        .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
-                        .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"revision\":" + revision + "}")).andReturn();
     }
 
     /**

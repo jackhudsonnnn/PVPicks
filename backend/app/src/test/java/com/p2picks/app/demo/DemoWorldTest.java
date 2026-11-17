@@ -81,6 +81,14 @@ class DemoWorldTest extends IntegrationTestSupport {
                   WHERE m.user_id = b.blocker_id)
                 """, pro, pro)).as("people in his tables block him").isEqualTo(3);
         assertThat(count("SELECT count(*) FROM table_invites WHERE user_id = ? AND status = 'PENDING'", pro)).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM table_members WHERE table_id = ?", DemoWorld.CROWD_TABLE))
+                .as("Mosh Pit: the pro and the whole crowd").isEqualTo(DemoRoster.CROWD + 1);
+        assertThat(count("SELECT count(*) FROM table_members WHERE table_id = ? AND role = 'HOST' AND user_id = ?",
+                DemoWorld.CROWD_TABLE, pro)).as("the pro hosts Mosh Pit").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM table_members WHERE table_id = ? AND role = 'HOST'",
+                DemoWorld.CROWD_TABLE)).as("and is its only host").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM table_members WHERE table_id = ? AND joined_at > now()",
+                DemoWorld.CROWD_TABLE)).as("nobody joins in the future").isZero();
         assertThat(count("""
                 SELECT count(*) FROM blocks b JOIN follows f
                   ON (f.follower_id = b.blocker_id AND f.followee_id = b.blocked_id)

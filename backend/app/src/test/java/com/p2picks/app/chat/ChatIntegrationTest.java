@@ -510,7 +510,7 @@ class ChatIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO settlements (id, table_id, host_id) VALUES (?, ?, ?)", settlement, table, author);
         jdbc.update("""
                 INSERT INTO settlement_lines (id, settlement_id, table_id, host_id, payer_id, payee_id, amount_cents, status)
-                VALUES (?, ?, ?, ?, ?, ?, 123, 'sent')
+                VALUES (?, ?, ?, ?, ?, ?, 123, 'unpaid')
                 """, UUID.randomUUID(), settlement, table, author, user, author);
         jdbc.update("INSERT INTO chat_messages (id, table_id, kind, author_id, text) VALUES (?, ?, 'text', ?, 'Hello')",
                 text, table, author);

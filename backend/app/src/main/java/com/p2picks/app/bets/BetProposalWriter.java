@@ -47,6 +47,7 @@ public class BetProposalWriter {
 
     static class DebtCapExceeded extends RuntimeException {}
 
+    private final BetLiveStats liveStats;
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final IdempotencyGuard idempotency;
@@ -54,7 +55,8 @@ public class BetProposalWriter {
     private final Outbox outbox;
 
     BetProposalWriter(JdbcTemplate jdbc, MutationAuthentication authentication, IdempotencyGuard idempotency,
-            DebtQuery debt, Outbox outbox) {
+            DebtQuery debt, Outbox outbox, BetLiveStats liveStats) {
+        this.liveStats = liveStats;
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.idempotency = idempotency;
@@ -127,6 +129,8 @@ public class BetProposalWriter {
                 row.lockBy() == null ? null : Timestamp.from(row.lockBy()), row.durationSec(),
                 row.lockBy() == null ? null : Timestamp.from(row.lockBy()), row.durationSec(),
                 row.settlerRule(), row.includesOvertime());
+        // The numbers a sports bet follows, as they were when it was proposed (ticket Details, "Live stats").
+        if (row.gameId() != null) liveStats.capture(betId, "proposed");
         outbox.append(OutboxEvent.BET_CREATED, betId, Map.of("tableId", tableId, "betId", betId));
         idempotency.saveResponseReference(actor, key, operation, betId);
         authentication.requireUnexpired(jwt);

@@ -3,7 +3,6 @@ package com.p2picks.app.settlement;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,10 +10,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * When a new points settlement changes what two people owe each other, both must review the new balance before
+ * settling again (domain rules, "Settle-ups"), so nobody settles against a total that's out of date. A pair's first
+ * receipts need no review: there was no earlier total to be wrong about.
+ */
 @Component
 class SettlementNetReconciliation {
-    record Snapshot(UUID userId, UUID otherId, BigInteger net, boolean inFlight, int openLines) {}
-    private record Line(UUID payerId, long amount, String status, boolean requested) {}
+    record Snapshot(UUID userId, UUID otherId, BigInteger net, int openLines) {}
 
     private final JdbcTemplate jdbc;
     private final SettlementReviewService reviews;
@@ -30,39 +33,28 @@ class SettlementNetReconciliation {
     @Transactional(propagation = Propagation.MANDATORY)
     public Snapshot capture(UUID userId, UUID otherId) {
         if (userId.equals(otherId)) throw new IllegalArgumentException("Settlement pair must be distinct");
-        List<Line> lines = jdbc.query("""
-                SELECT payer_id, amount_cents, status, forgive_requested_at IS NOT NULL AS requested FROM settlement_lines
-                WHERE ((payer_id = ? AND payee_id = ?) OR (payer_id = ? AND payee_id = ?))
-                  AND status NOT IN ('paid', 'forgiven')
+        BigInteger[] net = {BigInteger.ZERO};
+        int[] count = {0};
+        jdbc.query("""
+                SELECT payer_id, amount_cents FROM settlement_lines
+                WHERE ((payer_id = ? AND payee_id = ?) OR (payer_id = ? AND payee_id = ?)) AND status = 'unpaid'
                 ORDER BY id FOR UPDATE
-                """, (rs, row) -> new Line(rs.getObject("payer_id", UUID.class),
-                        rs.getLong("amount_cents"), rs.getString("status"), rs.getBoolean("requested")),
-                userId, otherId, otherId, userId);
-        BigInteger net = BigInteger.ZERO;
-        boolean inFlight = false;
-        for (Line line : lines) {
-            BigInteger amount = BigInteger.valueOf(line.amount());
-            net = net.add(line.payerId().equals(userId) ? amount.negate() : amount);
-            inFlight |= line.status().equals("sent") || line.status().equals("forgive_asked") || line.requested();
-        }
-        return new Snapshot(userId, otherId, net, inFlight, lines.size());
+                """, rs -> {
+                    BigInteger amount = BigInteger.valueOf(rs.getLong("amount_cents"));
+                    net[0] = net[0].add(rs.getObject("payer_id", UUID.class).equals(userId) ? amount.negate() : amount);
+                    count[0]++;
+                }, userId, otherId, otherId, userId);
+        return new Snapshot(userId, otherId, net[0], count[0]);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void reconcile(Snapshot before) {
         Snapshot after = capture(before.userId(), before.otherId());
         if (after.openLines() == 0 || before.net().equals(after.net())) return;
-        if (!before.inFlight()) {
+        if (before.openLines() == 0) {
             reviews.refreshPending(before.userId(), before.otherId());
             return;
         }
-        jdbc.update("""
-                UPDATE settlement_lines SET status = 'unpaid', forgive_requested_at = NULL,
-                    revision = revision + 1, updated_at = clock_timestamp()
-                WHERE ((payer_id = ? AND payee_id = ?) OR (payer_id = ? AND payee_id = ?))
-                  AND (status IN ('sent', 'forgive_asked')
-                       OR (status NOT IN ('paid', 'forgiven') AND forgive_requested_at IS NOT NULL))
-                """, before.userId(), before.otherId(), before.otherId(), before.userId());
         reviews.recordReset(before.userId(), before.otherId());
         outbox.append(OutboxEvent.SETTLEMENT_NET_CHANGED, before.userId() + ":" + before.otherId(),
                 Map.of("userId", before.userId(), "otherUserId", before.otherId(),

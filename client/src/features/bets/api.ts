@@ -186,3 +186,39 @@ export async function listModes(signal?: AbortSignal): Promise<Map<Bet["modeId"]
   const modes = await read(await request("/modes", signal ? { signal } : undefined), modesSchema);
   return new Map(modes.map((mode) => [mode.id, mode.available]));
 }
+
+const liveTeamSchema = z.object({ abbreviation: z.string(), score: z.number().int().nullable() });
+const liveStatsSchema = z.object({
+  gameId: z.string(),
+  league: z.enum(["NBA", "NFL"]),
+  status: z.string(),
+  period: z.number().int().nullable(),
+  clock: z.string().nullable(),
+  away: liveTeamSchema,
+  home: liveTeamSchema,
+  rows: z.array(
+    z.object({
+      label: z.string(),
+      detail: z.string().nullable(),
+      /** When the bet was proposed; null for bets made before these snapshots. */
+      proposed: z.number().int().nullable(),
+      /** When picks locked; null before lock. */
+      locked: z.number().int().nullable(),
+      current: z.number().int().nullable(),
+      /** The line or target, when the mode has one. */
+      target: z.number().nullable(),
+      targetLabel: z.string().nullable(),
+    }),
+  ),
+});
+
+/** What a sports bet follows (a score, a margin, a player's stat), when proposed, at lock and now. */
+export type BetLiveStats = z.infer<typeof liveStatsSchema>;
+
+export async function getBetLiveStats(betId: string, signal?: AbortSignal): Promise<BetLiveStats> {
+  if (!uuid.safeParse(betId).success) throw new BackendError("Bet not found.", 404);
+  return read(
+    await request(`/bets/${encodeURIComponent(betId)}/live`, signal ? { signal } : undefined),
+    liveStatsSchema,
+  );
+}

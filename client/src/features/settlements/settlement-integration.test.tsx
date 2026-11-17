@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integration", () => {
-  it("signs in, reviews a changed balance and sends the group", async () => {
+  it("signs in, reviews a changed balance and sends every open receipt", async () => {
     useIsolatedBackend();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -35,19 +35,19 @@ describe.skipIf(!process.env["PVPICKS_TEST_PORT"])("isolated settlement integrat
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("heading", { name: "Friends" })).toBeInTheDocument();
     expect(await screen.findByText("Balance changed: review")).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Settle-up receipts" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ledger" }));
     const dialog = within(await screen.findByRole("dialog"));
-    expect(await dialog.findByText(/Balance changed with/)).toBeInTheDocument();
-    expect(await dialog.findByRole("button", { name: "Mark group sent" })).toBeDisabled();
-    fireEvent.click(dialog.getByRole("button", { name: "I've reviewed this" }));
-    await waitFor(() =>
-      expect(dialog.getByRole("button", { name: "Mark group sent" })).toBeEnabled(),
-    );
-    fireEvent.click(dialog.getByRole("button", { name: "Mark group sent" }));
-    await waitFor(() =>
-      expect(dialog.queryByRole("button", { name: "Mark group sent" })).toBeNull(),
-    );
-    // The payment now waits for the payee to confirm it.
-    expect(await screen.findByText("Awaiting receipt")).toBeInTheDocument();
+    expect(await dialog.findByText(/Your balance with .* changed/)).toBeInTheDocument();
+    fireEvent.click(await dialog.findByRole("checkbox", { name: /Select all/ }));
+    const send = dialog.getByRole("button", { name: /^Send / });
+    expect(send).toBeDisabled();
+    fireEvent.click(dialog.getByRole("button", { name: "Got it" }));
+    await waitFor(() => expect(dialog.getByRole("button", { name: /^Send / })).toBeEnabled());
+    fireEvent.click(dialog.getByRole("button", { name: /^Send / }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    // Settled at once: nothing open is left, and History has the send the payee can still reject.
+    expect(await dialog.findByText(/Nothing open with/)).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("tab", { name: "History" }));
+    expect(await dialog.findByText(/You sent/)).toBeInTheDocument();
   }, 30000);
 });

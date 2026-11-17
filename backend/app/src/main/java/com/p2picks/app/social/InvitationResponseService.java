@@ -2,6 +2,7 @@ package com.p2picks.app.social;
 
 import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.MembershipLimits;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
@@ -16,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InvitationResponseService {
-    public enum Outcome { UPDATED, REPLAYED, CONFLICT, STALE, UNAUTHORIZED, NOT_FOUND }
+    public enum Outcome { UPDATED, REPLAYED, CONFLICT, STALE, UNAUTHORIZED, NOT_FOUND, TABLE_LIMIT, TABLE_FULL }
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
@@ -60,9 +61,12 @@ public class InvitationResponseService {
             authentication.requireUnexpired(jwt);
             return Outcome.NOT_FOUND;
         }
+        // A request past its lifetime is expired, whatever its stored status says (the hourly job may not have run).
         List<Invitation> locked = jdbc.query("""
-                SELECT from_id, table_id, status FROM table_invites WHERE id = ? AND user_id = ? FOR UPDATE
-                """, (rs, row) -> new Invitation(rs.getObject("from_id", UUID.class),
+                SELECT from_id, table_id,
+                       CASE WHEN %s THEN 'EXPIRED' ELSE status END AS status
+                FROM table_invites i WHERE id = ? AND user_id = ? FOR UPDATE
+                """.formatted(MembershipLimits.LAPSED), (rs, row) -> new Invitation(rs.getObject("from_id", UUID.class),
                         rs.getObject("table_id", UUID.class), rs.getString("status")), invitationId, userId);
         if (locked.isEmpty()) {
             authentication.requireUnexpired(jwt);
@@ -88,10 +92,24 @@ public class InvitationResponseService {
                 || !eligible(invitation.table(), userId, invitation.sender())) {
             if (invitation.status().equals("PENDING")) {
                 jdbc.update("UPDATE table_invites SET status = 'CANCELLED' WHERE id = ?", invitationId);
+            } else if (invitation.status().equals("EXPIRED")) {
+                jdbc.update("UPDATE table_invites SET status = 'EXPIRED' WHERE id = ?", invitationId);
             }
             idempotency.discardNewClaim(userId, key);
             authentication.requireUnexpired(jwt);
             return Outcome.STALE;
+        }
+        // Membership limits, counted under the user and table locks taken above. The request stays waiting, so it
+        // can be accepted after leaving a table or once the table has room.
+        if (accept && MembershipLimits.tables(jdbc, userId) >= MembershipLimits.TABLES_PER_USER) {
+            idempotency.discardNewClaim(userId, key);
+            authentication.requireUnexpired(jwt);
+            return Outcome.TABLE_LIMIT;
+        }
+        if (accept && MembershipLimits.members(jdbc, invitation.table()) >= MembershipLimits.MEMBERS_PER_TABLE) {
+            idempotency.discardNewClaim(userId, key);
+            authentication.requireUnexpired(jwt);
+            return Outcome.TABLE_FULL;
         }
         jdbc.update("UPDATE table_invites SET status = ? WHERE id = ?",
                 accept ? "ACCEPTED" : "DECLINED", invitationId);

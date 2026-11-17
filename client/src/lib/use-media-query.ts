@@ -22,3 +22,6 @@ export function useMediaQuery(query: string): boolean {
  * screens that are tall enough for both (790px). Shorter screens use the Tickets tab.
  */
 export const HOME_TICKETS = "(min-width: 1024px), (min-height: 790px)";
+
+/** When the desktop sidebar shows: Tailwind's `nav` breakpoint (68.75rem, in styles.css). */
+export const NAV_SIDEBAR = "(min-width: 68.75rem)";

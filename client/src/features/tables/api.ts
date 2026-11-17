@@ -26,8 +26,46 @@ const tableSchema = z.object({
 
 export type Table = z.infer<typeof tableSchema>;
 
-export async function listTables(signal?: AbortSignal): Promise<Table[]> {
-  return read(await request("/tables", signal ? { signal } : undefined), z.array(tableSchema));
+/** Most tables one account can be in, and most members one table can have (enforced by the server). */
+export const TABLES_PER_USER = 100;
+export const MEMBERS_PER_TABLE = 500;
+
+const tableSummarySchema = z.object({
+  id: z.guid(),
+  name: z.string(),
+  emoji: z.string(),
+  /** Whether you host it. */
+  host: z.boolean(),
+  memberCount: z.number().int().min(1),
+  /** The first few members by join order, for avatars; never the whole list. */
+  memberPreview: z.array(z.guid()).max(4),
+  /** Your own permissions a host turned off here. */
+  myDisabledPermissions: z.array(z.enum(["bets", "text", "react", "gifs", "polls"])),
+  /** When the most recent bet here was proposed; absent before the first one. */
+  lastBetAt: z.string().datetime({ offset: true }).optional(),
+  /** When you joined: the order's fallback for a table with no bets since. */
+  joinedAt: z.string().datetime({ offset: true }),
+});
+
+/** One of your tables in a list (Home, the sidebar, tickets). `getTable` has the whole table. */
+export type TableSummary = z.infer<typeof tableSummarySchema>;
+
+/** What a ticket shows about its table. Both a whole table and a summary have it. */
+export type TableRef = Pick<Table, "id" | "name" | "emoji">;
+
+/** Whether you can bet at a table, from either the whole table or your summary of it. */
+export function canBetAt(table: Table | TableSummary, userId: string): boolean {
+  return "myDisabledPermissions" in table
+    ? !table.myDisabledPermissions.includes("bets")
+    : !table.disabledPermissions[userId]?.includes("bets");
+}
+
+/** Your tables (at most 100), most recent activity first. */
+export async function listTables(signal?: AbortSignal): Promise<TableSummary[]> {
+  return read(
+    await request("/tables", signal ? { signal } : undefined),
+    z.array(tableSummarySchema).max(TABLES_PER_USER),
+  );
 }
 
 export async function getTable(id: string, signal?: AbortSignal): Promise<Table> {
@@ -208,4 +246,19 @@ export async function listTomatoes(tableId: string, signal?: AbortSignal): Promi
 
 export async function throwTomato(tableId: string, targetId: string, key: string) {
   await mutationRequest(`${tablePath(tableId)}/tomatoes`, "POST", key, { targetId });
+}
+
+/** Members of the table whose username contains `query`, by username, 50 at a time. */
+export async function searchTableMembers(
+  tableId: string,
+  query: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<{ items: string[]; nextCursor: string | null }> {
+  const params = new URLSearchParams({ q: query });
+  if (cursor) params.set("cursor", cursor);
+  return read(
+    await request(`${tablePath(tableId)}/members?${params}`, signal ? { signal } : undefined),
+    z.object({ items: z.array(uuid).max(50), nextCursor: z.string().nullable() }),
+  );
 }

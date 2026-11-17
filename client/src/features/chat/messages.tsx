@@ -27,6 +27,9 @@ interface RowProps {
   onVote: (option: number) => void;
 }
 
+/** Cards (bets, polls, points settlements) stay readable-width on wide screens instead of spanning the chat. */
+const CARD_WIDTH = "max-w-md";
+
 export function MessageRow({ message, ...props }: RowProps & { message: ChatMessage }) {
   const time = timeLabel(message.createdAt);
   if (message.kind === "system") {
@@ -150,7 +153,10 @@ function BetCard({
           type="button"
           disabled={!onOpenBet || !summary}
           onClick={() => onOpenBet?.(message.betId)}
-          className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl border bg-surface p-3 text-left transition-colors enabled:hover:border-primary/60"
+          className={cn(
+            "group flex min-w-0 flex-1 items-center gap-3 rounded-xl border bg-surface p-3 text-left transition-colors enabled:hover:border-primary/60",
+            CARD_WIDTH,
+          )}
         >
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ticket text-ticket-foreground">
             <Icon className="size-4" />
@@ -211,7 +217,7 @@ function PollCard({
       <div className="flex items-start gap-1">
         <section
           aria-label={`Poll: ${message.text}`}
-          className="min-w-0 flex-1 rounded-xl border bg-surface p-3"
+          className={cn("min-w-0 flex-1 rounded-xl border bg-surface p-3", CARD_WIDTH)}
         >
           <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             <ChartBar className="size-3.5 text-primary" /> {mineByAuthor ? "You" : name} · Poll ·{" "}
@@ -311,7 +317,7 @@ function SettlementCard({
 }: RowProps & { message: Extract<ChatMessage, { kind: "settlement" }> }) {
   const lines = message.settlementSummary.lines;
   return (
-    <div className="rounded-xl border bg-surface p-3">
+    <div className={cn("mx-auto rounded-xl border bg-surface p-3", CARD_WIDTH)}>
       <p className="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
         <Scale className="size-3.5" /> Points settled · {timeLabel(message.createdAt)}
       </p>

@@ -16,7 +16,7 @@ import { StatusBadge } from "./status-badge";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
-import type { Table } from "@/features/tables";
+import { canBetAt, type Table, type TableSummary } from "@/features/tables";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { BetDetailsDialog } from "./bet-details";
 import type { BetActions } from "./bet-controls";
@@ -36,7 +36,8 @@ import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
 
 interface TicketProps {
   bet: Bet;
-  table: Table;
+  /** The whole table (on its page) or your summary of it (ticket lists): either has what a ticket needs. */
+  table: Table | TableSummary;
   user: User;
   expire: () => void;
   /** Profile cache key shared by every name and avatar on the page. */
@@ -66,7 +67,7 @@ export function BetTicket({
   const tallies = choiceTallies(bet);
   const pot = potCents(bet);
   const result = myResultCents(bet, user.id);
-  const canBet = !table.disabledPermissions[user.id]?.includes("bets");
+  const canBet = canBetAt(table, user.id);
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
   const canPick = status === "active" && canBet && left > 0 && !blocked;
   const proposer = usePerson(bet.proposerId, user, expire, peopleKey);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -421,20 +422,28 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
         assertThatThrownBy(() -> jdbc.update(
                         insertLine, UUID.randomUUID(), settlement, table, host, other, host, 0))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        jdbc.update("UPDATE settlement_lines SET status = 'sent', revision = 1, updated_at = now() WHERE id = ?", line);
-        assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, line))
-                .isEqualTo("sent");
         assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET revision = -1 WHERE id = ?", line))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET status = 'unknown' WHERE id = ?", line))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET status = 'sent' WHERE id = ?", line))
+                .as("sent, disputed and forgive_asked are gone (V38)").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET status = 'paid' WHERE id = ?", line))
+                .as("a closed receipt names the settle that closed it").isInstanceOf(DataIntegrityViolationException.class);
+        UUID settle = UUID.randomUUID();
         jdbc.update("""
-                UPDATE settlement_lines SET status = 'forgive_asked', forgive_requested_at = now(),
-                                            revision = 2, updated_at = now() WHERE id = ?
-                """, line);
-        assertThat(jdbc.queryForObject(
-                        "SELECT forgive_requested_at FROM settlement_lines WHERE id = ?", OffsetDateTime.class, line))
-                .isNotNull();
+                INSERT INTO settles (id, sender_id, other_id, kind, payer_id, payee_id, amount_cents)
+                VALUES (?, ?, ?, 'received', ?, ?, 100)
+                """, settle, host, member, member, host);
+        jdbc.update("INSERT INTO settle_lines (settle_id, line_id) VALUES (?, ?)", settle, line);
+        jdbc.update("UPDATE settlement_lines SET status = 'paid', settle_id = ?, revision = 1 WHERE id = ?",
+                settle, line);
+        assertThatThrownBy(() -> jdbc.update("UPDATE settles SET amount_cents = 1 WHERE id = ?", settle))
+                .as("settles are an audit record").isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM settles WHERE id = ?", settle))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO settles (id, sender_id, other_id, kind, amount_cents) VALUES (?, ?, ?, 'sent', 0)
+                """, UUID.randomUUID(), host, member))
+                .as("a send always has a reject window").isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update(
                         "UPDATE settlement_lines SET amount_cents = 200 WHERE id = ?", line))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -544,6 +553,21 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
         UUID settlementId = UUID.randomUUID();
         upgradedJdbc.update("INSERT INTO settlements (id, table_id, host_id) VALUES (?, ?, ?)",
                 settlementId, tableId, userId);
+        // Receipts in the old states, for V38 (settles) to convert.
+        UUID sentLine = UUID.randomUUID();
+        UUID askedLine = UUID.randomUUID();
+        UUID paidLine = UUID.randomUUID();
+        for (Object[] receipt : List.of(new Object[] {sentLine, "sent"}, new Object[] {askedLine, "forgive_asked"},
+                new Object[] {paidLine, "paid"})) {
+            UUID settlement = UUID.randomUUID();
+            upgradedJdbc.update("INSERT INTO settlements (id, table_id, host_id) VALUES (?, ?, ?)",
+                    settlement, tableId, userId);
+            upgradedJdbc.update("""
+                    INSERT INTO settlement_lines
+                        (id, settlement_id, table_id, host_id, payer_id, payee_id, amount_cents, status)
+                    VALUES (?, ?, ?, ?, ?, ?, 250, ?)
+                    """, receipt[0], settlement, tableId, userId, secondUserId, userId, receipt[1]);
+        }
 
         Flyway chat = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword())
                 .target(MigrationVersion.fromVersion("10")).load();
@@ -662,7 +686,18 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 .target(MigrationVersion.fromVersion("22")).load();
         assertThat(hostAttribution.migrate().migrationsExecuted).isEqualTo(1);
         Flyway updated = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword()).load();
-        assertThat(updated.migrate().migrationsExecuted).isEqualTo(13); // V23 through V35
+        assertThat(updated.migrate().migrationsExecuted).isEqualTo(16); // V23 through V38
+        // V38: sent became a settle the payee can still reject; asked-to-forgive is open again; paid has a settle.
+        assertThat(upgradedJdbc.queryForMap("""
+                SELECT l.status, s.kind, s.sender_id, s.reject_by > now() + interval '47 hours' AS window_open
+                FROM settlement_lines l JOIN settles s ON s.id = l.settle_id WHERE l.id = ?
+                """, sentLine)).containsEntry("status", "paid").containsEntry("kind", "sent")
+                .containsEntry("sender_id", secondUserId).containsEntry("window_open", true);
+        assertThat(upgradedJdbc.queryForMap("SELECT status, settle_id FROM settlement_lines WHERE id = ?", askedLine))
+                .containsEntry("status", "unpaid").containsEntry("settle_id", null);
+        assertThat(upgradedJdbc.queryForObject("""
+                SELECT s.kind FROM settlement_lines l JOIN settles s ON s.id = l.settle_id WHERE l.id = ?
+                """, String.class, paidLine)).isEqualTo("received");
         assertThatThrownBy(() -> upgradedJdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", userId))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(upgradedJdbc.queryForObject("""

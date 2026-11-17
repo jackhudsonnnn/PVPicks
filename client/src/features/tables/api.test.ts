@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BackendError } from "@/lib/api-client";
 import { listTableBets } from "@/features/bets/api";
-import { bet, json, table, user } from "@/test/api-fixtures";
+import { bet, json, summaryOf, table, user } from "@/test/api-fixtures";
 import { getTable, listTableBalances, listTables } from "./api";
 
 function respond(body: unknown) {
@@ -16,10 +16,10 @@ describe("tables API", () => {
   it("reads table list and detail and rejects invalid identities", async () => {
     const fetch = vi
       .fn()
-      .mockResolvedValueOnce(json([table]))
+      .mockResolvedValueOnce(json([summaryOf(table, user.id)]))
       .mockResolvedValueOnce(json(table));
     vi.stubGlobal("fetch", fetch);
-    await expect(listTables()).resolves.toEqual([table]);
+    await expect(listTables()).resolves.toEqual([summaryOf(table, user.id)]);
     await expect(getTable(table.id)).resolves.toEqual(table);
     expect(fetch.mock.calls[1]?.[0]).toBe(`/api/tables/${table.id}`);
     await expect(getTable("../auth/logout")).rejects.toBeInstanceOf(BackendError);
@@ -28,11 +28,10 @@ describe("tables API", () => {
 
   it("preserves generic UUIDs and validates string-keyed response records", async () => {
     const genericId = "123e4567-e89b-02d3-0456-426614174000";
-    const withPermissions = {
-      ...table,
-      id: genericId,
-      disabledPermissions: { [user.id]: ["bets"] },
-    };
+    const withPermissions = summaryOf(
+      { ...table, id: genericId, disabledPermissions: { [user.id]: ["bets"] } },
+      user.id,
+    );
     const withConfig = { ...bet, config: { options: ["Yes", "No"], count: 2 } };
     const fetch = vi
       .fn()
@@ -43,6 +42,17 @@ describe("tables API", () => {
     await expect(listTables()).resolves.toEqual([withPermissions]);
     await expect(listTableBets(table.id)).resolves.toEqual([withConfig]);
     await expect(listTableBets(table.id)).rejects.toThrow("unexpected response");
+  });
+
+  it("refuses a table list that carries more than the 100-table limit or whole member lists", async () => {
+    const one = summaryOf(table, user.id);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(Array.from({ length: 101 }, () => one)))
+      .mockResolvedValueOnce(json([{ ...one, memberPreview: Array(5).fill(user.id) }]));
+    vi.stubGlobal("fetch", fetch);
+    await expect(listTables()).rejects.toThrow("unexpected response");
+    await expect(listTables()).rejects.toThrow("unexpected response");
   });
 });
 

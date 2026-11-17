@@ -9,8 +9,8 @@ import { listInvites } from "@/features/social/api";
 import { listTableBalances, getTable, listTables } from "@/features/tables/api";
 import { getGamePlayers, getTicker, type TickerGame } from "@/features/sports/api";
 import { currentUser } from "@/features/auth/api";
-import { listModes, listMyBets, listTableBets, type Bet } from "./api";
-import { modeAvailability } from "@/test/api-fixtures";
+import { getBetLiveStats, listModes, listMyBets, listTableBets, type Bet } from "./api";
+import { modeAvailability, summaryOf } from "@/test/api-fixtures";
 import { mutationRequest } from "@/lib/api-client";
 import { PICK_WINDOW_DEFAULT } from "./wager";
 
@@ -36,6 +36,7 @@ vi.mock("./api", async (importOriginal) => ({
   listTableBets: vi.fn(),
   listMyBets: vi.fn(),
   listModes: vi.fn(),
+  getBetLiveStats: vi.fn(),
 }));
 vi.mock("@/lib/api-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api-client")>()),
@@ -147,7 +148,7 @@ beforeEach(() => {
   vi.mocked(currentUser).mockResolvedValue(user);
   vi.mocked(getTable).mockResolvedValue(table);
   vi.mocked(listTableBets).mockResolvedValue([bet]);
-  vi.mocked(listTables).mockResolvedValue([table]);
+  vi.mocked(listTables).mockResolvedValue([summaryOf(table, user.id)]);
   vi.mocked(listTableBalances).mockResolvedValue([]);
   vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
   vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
@@ -380,6 +381,51 @@ describe("U2Pick betting", () => {
         },
       ),
     );
+  });
+
+  it("shows a player bet's live stats in Details: when proposed, at lock and now", async () => {
+    vi.mocked(getBetLiveStats).mockResolvedValue({
+      gameId: liveGame.id,
+      league: "NFL",
+      status: "LIVE",
+      period: 3,
+      clock: "Q3 5:12",
+      away: { abbreviation: "BUF", score: 17 },
+      home: { abbreviation: "NE", score: 21 },
+      rows: [
+        {
+          label: "Drake Maye passing yards",
+          detail: "QB · NE",
+          proposed: 112,
+          locked: 140,
+          current: 233,
+          target: 250.5,
+          targetLabel: "Line",
+        },
+      ],
+    });
+    vi.mocked(listTableBets).mockResolvedValue([
+      {
+        ...locked,
+        modeId: "prop_hunt",
+        gameId: liveGame.id,
+        question: "Who wins?",
+        choices: ["Over 250.5", "Under 250.5"],
+        picks: [{ userId: user.id, choice: "Over 250.5" }],
+      },
+    ]);
+    renderApp();
+    const ticket = await openTicket();
+    fireEvent.click(ticket.getByRole("button", { name: /Details/ }));
+    const details = within(await screen.findByRole("dialog", { name: "Who wins?" }));
+    expect(await details.findByText("Drake Maye passing yards")).toBeInTheDocument();
+    expect(details.getByText("QB · NE")).toBeInTheDocument();
+    expect(details.getByText("Line 250.5")).toBeInTheDocument();
+    expect(details.getByLabelText("Proposed: 112")).toBeInTheDocument();
+    expect(details.getByLabelText("At lock: 140")).toBeInTheDocument();
+    expect(details.getByLabelText("Now: 233")).toBeInTheDocument();
+    expect(details.getByText(/BUF 17 @ NE 21 · Q3 5:12/)).toBeInTheDocument();
+    expect(getBetLiveStats).toHaveBeenCalledWith(locked.id, expect.anything());
   });
 
   it("lets a host override a locked sports bet; it waits on the game otherwise", async () => {

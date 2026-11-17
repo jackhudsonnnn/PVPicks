@@ -11,10 +11,11 @@ are examples rather than a list of implemented tests.
 | Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
 | Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
 | Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `bets/api.test.ts` (balances), `preferences/preferences.test.tsx` (debt cap) | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
-| Settle-ups | Host creates separate settlement lines; sent remains outstanding until confirmed; forgiveness is for the whole amount; stale in-flight pair nets reset; each person must review their own warning before sending or asking for forgiveness; batch actions are atomic. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/settlement-integration.test.tsx` | `sentRemainsOutstanding`, `repeatedSettlementsKeepSeparateReceipts`, `changedNetResetsInFlightReceipt` |
+| Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the net payer sends (settled at once, rejectable by the receiver for 48 hours, still counted toward the debt cap until then); the net receiver marks received and the person owed forgives (both final); at most 3 sends per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `MigrationIntegrationTest` (V38) |
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
 | Social and safety | Mutual follows are friends (account-wide; table members are peers, see [Terms](/domain#terms)); enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
+| Membership limits | 100 open tables per account (deleted tables don't count), 500 members per table, 100 waiting requests per account; requests expire after 30 days. Enforced on create, on every add (open or request) and on accept. List reads carry summaries and member previews, never whole member lists. | `tables/api.test.ts`, `tables/management.test.tsx`, `tables/table-order.test.ts`, `tables/can-bet.test.ts` | `MembershipLimitsIntegrationTest`, `TableMembershipIntegrationTest` (summaries), `InviteContractTest` |
 | Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message; one changeable vote per user/poll, polls gated by the table switch and the polls permission. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx`, `PollIntegrationTest` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
 
 Paths in the table are relative to `client/src/features/`. Review the
@@ -57,10 +58,10 @@ the client never re-derives permissions:
 - Bets carry `viewerCanCall` (call a Pending U2Pick's result under its settler
   rule, using the same `U2PickSettler` the result call enforces) and
   `viewerCanOverride` (a host, a sports bet, points not yet settled).
-- Every receipt (history, groups, line actions) and every group lists the
-  caller's available `actions`, computed by the same `ReceiptActions` rules
-  the transitions enforce. Sending and asking to forgive are listed with
-  `blockedByReview` while a balance-change warning is unreviewed.
+- Settles: the client works out which settle buttons a selection gets (send,
+  mark received, forgive) from the same rules the server enforces
+  (`SettleRules`), as a convenience only; the server refuses anything else.
+  Each settle says whether the caller `canReject` it now.
 - `GET /modes` says which bet modes accept proposals; the client only
   describes modes.
 - `GET /gifs` serves the GIF library; sending accepts only its ids.
@@ -237,10 +238,11 @@ card. The API rejects longer names on creation and profile changes, and the
 database enforces the same limit (`tables_name_length`); the V32 migration
 shortened existing longer names.
 
-Pending invitation reads include the table's name, emoji and member ids (in
-join order) for the invite card. The member list leaves out deleted accounts
-and members who block the invitee, so every listed profile is readable. An
-invitation still grants no access to the table's code, chat or bets.
+Pending invitation reads include the table's name, emoji, up to four member
+ids (in join order) and the member count, for the request card. The preview
+leaves out deleted accounts and members who block the invitee, so every
+listed profile is readable; the count includes everyone. An invitation still
+grants no access to the table's code, chat or bets.
 
 For member-permission changes, lock actor and target user rows in PostgreSQL
 UUID order, then the actor's session, table and membership rows; check current
@@ -407,45 +409,7 @@ recheck current host authorization and return the original settlement ID.
 No eligible bets and unrepresentable totals fail without retaining the
 idempotency claim or partial writes.
 
-When a new settlement changes an open person net with sent or forgiveness-
-requested receipts, the internal transaction returns those open claims to
-unpaid, increments their revisions and records a private pair-net-change
-outbox event with before/after amounts. Closed receipts are unchanged. The
-realtime consumer sends only an amount-free `settlements.changed` invalidation
-to the two named parties; any other consumer must likewise restrict settlement
-data to them. The frontend warning-opening
-interaction remains a client concern, not a server concurrency guard, and is
-local to the browser. Internal receipt history is limited
-to direct parties, including archived-table and completed records. Individual
-actions require the current line revision and payer/payee authority; they
-never invalidate other in-flight receipts. A matching retry rechecks party
-and action authority and returns the current receipt without reapplying. The
-history adapter returns an empty list for unrelated or unknown users,
-without disclosing whether they exist.
-
-Internal person-group reads net open lines with exact arithmetic, including
-opposing offsets and archived-table receipts. Their opaque revision includes
-every open line ID and revision. The group-list adapter returns an
-explicit 409 rather than truncating any net outside the signed 64-bit API range;
-individual receipt history remains accessible. The pending-review list
-independently discovers the caller's unreviewed warnings, including after
-closure and when a group net is out of range; it does not deliver events or
-expose the other party's review state. Group actions lock both parties in PostgreSQL
-UUID order, reject stale revisions and validate current net payer/payee
-authority once before updating all open lines atomically. Either party may
-confirm a zero-net group. Paid and forgiven history stays visible but does
-not affect the net. Matching group retries require a retained direct receipt
-relationship and do not reapply the action. Fresh declined forgiveness
-requests cannot be repeated for 24 hours, measured by the database clock.
-An individual sent claim can coexist with an open forgiveness request: `forgive_requested_at` tracks that request independently
-of `status`, and a dispute restores the open request. A group sent, paid,
-unpaid or forgiven action clears requests and cooldowns across its lines;
-group ask/decline updates all requests while preserving sent offset claims.
-Reconciliation resets both types of in-flight claim on a changed net.
-Receipt mutation events remain private outbox records only. Pair-change events
-may also be materialized by the internal consumer described above. Future
-consumers must restrict them to the two parties. The realtime settlement feed
-invalidates only those two parties' views; clients then read the review list.
+Settling those receipts afterwards is described in [Settle-ups](#settle-ups).
 
 Table deletion is a host action blocked while any bet is ACTIVE or PENDING or
 any resolved non-4fun bet has not had its points settled. Washed and 4fun
@@ -663,8 +627,10 @@ Deleted identities referenced only by future history APIs will need their own
 authorization design.
 Social transactions lock both user rows in PostgreSQL UUID order before the
 session and relationship rows; future follow, block, invitation, deletion and
-moderation writers must use compatible ordering. Account-deletion cleanup,
-cross-session event delivery is not implemented.
+moderation writers must use compatible ordering. Account deletion cleans up
+follows, blocks and invitations (`social/SocialAccountCleanup`), and other
+sessions learn of changes through the outbox relay and the personal feed (see
+the [realtime contract](/reference/realtime-contract)).
 
 The dev invitation read returns eligible pending invitations with the table
 name and emoji, not full table access. It excludes archived tables, deleted
@@ -681,8 +647,8 @@ preference mutations cancel affected requests atomically; V19 cancels
 pre-existing ineligible requests. Acceptance revalidates the policy and
 atomically creates a membership, system chat line and internal outbox records;
 decline only updates the invitation. Retries recheck visibility, and acceptance
-replay requires current membership. The system chat line is not a user chat
-client delivery. Member removal cancels pending invitations involving the target;
+replay requires current membership. The system chat line reaches members
+like any table message, through the table's chat feed. Member removal cancels pending invitations involving the target;
 table deletion cancels all pending invitations. Host demotion cancels its own
 pending invitations. Account deletion and freezing cancel the account's
 invitations using compatible locks.
@@ -692,7 +658,7 @@ The creator is a host. For active recipients who follow the host, mutual follows
 use their friends preference and one-way follows use following; `open` adds
 immediately, `request` creates a pending invitation, and `closed` does neither.
 Frozen, deleted, missing, blocked, already-member and already-invited recipients
-all yield the same `not_added` outcome. Each request is atomic but processes
+all yield the same `not_added` outcome, as do the membership limits below. Each request is atomic but processes
 eligibility per person. Pending invitations are private to the invite flow and
 are not announced in table chat; direct additions produce a neutral notice.
 Transactions lock all existing requested users and the actor in PostgreSQL UUID
@@ -701,9 +667,91 @@ access and return original outcomes without repeating actions. Creation retries
 return the original outcomes and current authorized table view; lost table
 access returns 404. V23 stores the submitted IDs and outcomes in retry records;
 retention and account-deletion cleanup remain unresolved, as with other retry
-records. The outbox records events but does not deliver them; future
-consumers must recheck invitation eligibility before exposing or delivering an
-event that may have been cancelled after it was written.
+records. The outbox relay delivers the events as realtime invalidations
+(`invitations.changed` to the invitee); clients refetch, so an invitation
+cancelled after its event was written is simply absent from the next read.
+
+## Settle-ups
+
+Implemented 2026-11-16 (owner decisions), replacing per-receipt and
+all-at-once actions. A points settlement leaves one receipt per person and
+table: who pays whom, unpaid. A **settle** closes a chosen set of one pair's
+open receipts in one action (`settlement/SettleService`, rules in
+`SettleRules`).
+
+- **Netting.** A selection can mix both directions. Seen from the person
+  settling, it nets to what they pay (negative) or receive (positive, or
+  zero when it evens out).
+- **Send** (`sent`): only the net payer. It counts as settled at once: the
+  receipts close, the cards and balances move. The receiver can **reject**
+  it for 48 hours, which reopens every receipt in it; the rejected settle
+  stays in History for audit. After 48 hours it's final.
+- **Mark received** (`received`): the net receiver, or either side when the
+  selection is even. Final at once, since it can only give up money owed to
+  them.
+- **Forgive** (`forgiven`): the person owed, on receipts that are all owed
+  to them. Final at once. Asking to forgive is gone (ask in chat).
+- **Debt cap.** A send still counts toward the payer's debt until its window
+  closes, so claiming a payment can't free cap room to keep betting. Account
+  deletion also waits for open windows.
+- **Limit.** At most 3 sends between two people in any 24 hours, both
+  directions and rejected ones included (429 `settle_limit`). Marking
+  received and forgiving aren't limited.
+- **Review gate.** When a new points settlement changes an existing open
+  balance between two people, both must review it before settling again
+  (409 `settlement_review_required`), so nobody settles against an
+  out-of-date total. A pair's first receipts need no review. Settles never
+  reset each other: receipts in one settle can't be in another.
+- **Stale picks.** A selection must be all open receipts between the two
+  (409 `stale_selection` otherwise). Matching retries return the same
+  settle.
+- **Storage** (V38): `settles` (sender, kind, the net and its direction,
+  `reject_by` for sends, `rejected_at`) and `settle_lines`; a receipt is
+  `unpaid`, `paid` or `forgiven` and points at the settle that closed it.
+  Only a settle's rejection can change after it's written. V38 turned
+  receipts marked sent into sends with a fresh 48-hour window, and
+  forgive-asked and disputed receipts back into open ones.
+
+Cards on Friends, Settle-ups (one per person with open receipts or a send
+still in its window): **yellow** when something needs you (a balance change
+to review, or a send to you that you can still reject), else **red** (you
+owe), **green** (you're owed) or **neutral** (even, including a pair who owe
+each other equal amounts). Sorted yellow, red, green, neutral.
+
+Realtime: every settle and rejection sends the private `settlements.changed`
+invalidation to the two people. The pending-review list, each person's
+review, and group reads stay private to the pair.
+
+## Membership limits
+
+Implemented 2026-11-16 (owner decisions). Every list one person or table can
+grow is capped, so no one can flood someone else's tables, requests or a
+table's member list. The numbers live in `common/MembershipLimits`; each is
+counted under the lock the writer already holds (the user row for a person's
+counts, the table row for a table's).
+
+| Limit | Value | When it's reached |
+|---|---|---|
+| Open tables per account | 100, hosting or not; deleted (archived) tables don't count | Creating a table returns 409 `table_limit` ("You're at 100 tables. Leave one first."). Accepting a request returns the same and the request stays waiting. A host's add (open or request) is `not_added`, and no request is sent. |
+| Members per table | 500, hosts included | Adds are `not_added`. Accepting a request returns 409 `table_full`, and the request stays waiting. |
+| Waiting requests per account | 100 | A new request is `not_added` (none is created). |
+| Request lifetime | 30 days from sending | The request no longer appears, can't be answered (409, like a cancelled one), doesn't count toward the 100, and doesn't block a new request to the same table. Reads check the age directly; an hourly job (`social/InvitationExpiry`) and new requests mark old rows `EXPIRED` (V37). |
+
+Matching retries of a successful create or accept still replay after a limit
+is reached. The caps also bound reads: `GET /tables` returns at most 100
+summaries (name, emoji, your role and permissions, a four-member preview and
+the member count, never whole member lists), and `GET /me/invites` at most
+100 requests with the same kind of preview. `GET /tables/{id}` still returns
+the full table (up to 500 member ids). The client mounts long lists 20 at a
+time as you scroll (tables, requests, peers, members, followers to add).
+
+The pace is limited too, per account (Redis rate limits, see
+[Kafka & Redis](/kafka-redis)): 10 new tables an hour, 30 add-member calls an
+hour (each up to 100 people), and 30 follows or unfollows a minute. Followers
+have no cap: a follow is the follower's own choice, and following is already
+rate limited. A table's members can be searched by username on the server
+(`GET /tables/{id}/members?q=`, 50 at a time), so a 500-person table is never
+loaded profile by profile to find someone.
 
 ## Sports outcomes and host overrides
 

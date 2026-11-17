@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.chat.ChatMessageWriter;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.MembershipLimits;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.security.MutationAuthentication;
@@ -22,7 +23,7 @@ class TableCreationService {
     private static final String CREATE = "table.create.v1";
     private static final String ADD = "table.members.add.v1";
 
-    enum Outcome { SUCCESS, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
+    enum Outcome { SUCCESS, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, TABLE_LIMIT }
     record MemberOutcome(UUID userId, String outcome) {}
     record Result(Outcome outcome, UUID tableId, List<MemberOutcome> members) {}
 
@@ -64,6 +65,12 @@ class TableCreationService {
             return new Result(Outcome.SUCCESS, tableId, outcomes);
         }
 
+        // A new table counts toward the creator's limit; a replay above didn't create one.
+        if (MembershipLimits.tables(jdbc, actor) >= MembershipLimits.TABLES_PER_USER) {
+            idempotency.discardNewClaim(actor, key);
+            authentication.requireUnexpired(jwt);
+            return failure(Outcome.TABLE_LIMIT);
+        }
         UUID tableId = UUID.randomUUID();
         insertTable(tableId, name, emoji);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", tableId, actor);
@@ -130,6 +137,8 @@ class TableCreationService {
         for (UUID target : requested) {
             String outcome = "not_added";
             if (!actor.equals(target) && "ACTIVE".equals(statuses.get(target))) {
+                // A request past its lifetime no longer stands in the way of a new one.
+                MembershipLimits.expireLapsed(jdbc, tableId, target);
                 List<String> modes = jdbc.query("""
                         SELECT CASE
                             WHEN EXISTS (SELECT 1 FROM table_members WHERE table_id = ? AND user_id = ?)
@@ -147,6 +156,15 @@ class TableCreationService {
                         tableId, target, tableId, target, actor, target, target, actor,
                         target, actor, actor, target, target, target);
                 String mode = modes.getFirst();
+                // Membership limits: a full table, someone already at their table limit, or (for a request) someone
+                // with a full request list isn't added and gets no request. Counted under the table and user locks.
+                if (!mode.equals("closed")
+                        && (MembershipLimits.members(jdbc, tableId) >= MembershipLimits.MEMBERS_PER_TABLE
+                        || MembershipLimits.tables(jdbc, target) >= MembershipLimits.TABLES_PER_USER
+                        || mode.equals("request")
+                                && MembershipLimits.waitingRequests(jdbc, target) >= MembershipLimits.WAITING_REQUESTS)) {
+                    mode = "closed";
+                }
                 if (mode.equals("open")) {
                     jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')",
                             tableId, target);

@@ -75,8 +75,8 @@ class DebtIntegrationTest extends IntegrationTestSupport {
         insertDebtReceipt(archived, other, user, other, 400, "sent");
         insertDebtReceipt(archived, other, other, user, 100, "unpaid");
         insertDebtReceipt(archived, other, user, other, 10, "unpaid");
-        insertDebtReceipt(archived, other, user, other, 20, "disputed");
-        insertDebtReceipt(archived, other, user, other, 30, "forgive_asked");
+        insertDebtReceipt(archived, other, user, other, 20, "unpaid");
+        insertDebtReceipt(archived, other, user, other, 30, "unpaid");
         insertDebtReceipt(archived, third, third, user, 9000, "unpaid");
         insertDebtReceipt(archived, other, user, other, 9000, "paid");
         insertDebtReceipt(archived, other, user, other, 9000, "forgiven");
@@ -156,7 +156,7 @@ class DebtIntegrationTest extends IntegrationTestSupport {
         assertThat(saved.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
         assertThat(jdbc.queryForObject("SELECT cap_cents FROM debt_caps WHERE user_id = ?", Integer.class, user))
                 .isEqualTo(2147483600);
-        UUID receipt = insertDebtReceipt(table, other, user, other, 1, "sent");
+        UUID receipt = insertDebtReceipt(table, other, user, other, 1, "unpaid");
         mvc.perform(debtCapPut(session, csrf, "cap-first", "{\"capCents\":2147483600}"))
                 .andExpect(status().isNoContent());
         mvc.perform(debtCapPut(session, csrf, "cap-first", "{\"capCents\":0}")).andExpect(status().isConflict());
@@ -165,7 +165,7 @@ class DebtIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM http_idempotency WHERE user_id = ?", Integer.class, user))
                 .isEqualTo(1);
-        jdbc.update("UPDATE settlement_lines SET status = 'paid' WHERE id = ?", receipt);
+        closeReceipt(receipt);
         mvc.perform(debtCapPut(session, csrf, "cap-debt", "{\"capCents\":null}")).andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT cap_cents IS NULL FROM debt_caps WHERE user_id = ?", Boolean.class, user))
                 .isTrue();

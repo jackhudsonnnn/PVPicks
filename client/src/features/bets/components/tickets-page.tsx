@@ -3,7 +3,6 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { backendErrorMessage } from "@/lib/api-client";
@@ -80,31 +79,7 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
         <TableBetsListener key={t.id} tableId={t.id} onChange={refresh} />
       ))}
       <div className="space-y-6">
-        <PageHeader
-          eyebrow="Bet lifecycle"
-          title="Tickets"
-          action={
-            (tables.data?.length ?? 0) > 1 && (
-              <SegmentedTabs
-                ariaLabel="Filter by table"
-                size="sm"
-                dropdownOnly
-                tabs={[
-                  { id: "all", label: "All" },
-                  ...(tables.data ?? []).map((t) => ({ id: t.id, label: t.name })),
-                ]}
-                value={tableId ?? "all"}
-                onChange={(id) => {
-                  void navigate({
-                    to: "/tickets",
-                    search: id === "all" ? {} : { table: id },
-                    replace: true,
-                  });
-                }}
-              />
-            )
-          }
-        />
+        <h1 className="sr-only">Tickets</h1>
         <SegmentedTabs
           ariaLabel="Ticket status"
           size="sm"
@@ -113,6 +88,27 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
           value={tab}
           onChange={setTab}
         />
+        {/* Which table: full width on phones, a fixed width at the right on bigger screens. */}
+        {(tables.data?.length ?? 0) > 1 && (
+          <SegmentedTabs
+            className="w-full sm:ml-auto sm:w-64"
+            ariaLabel="Filter by table"
+            size="sm"
+            dropdownOnly
+            tabs={[
+              { id: "all", label: "All" },
+              ...(tables.data ?? []).map((t) => ({ id: t.id, label: t.name })),
+            ]}
+            value={tableId ?? "all"}
+            onChange={(id) => {
+              void navigate({
+                to: "/tickets",
+                search: id === "all" ? {} : { table: id },
+                replace: true,
+              });
+            }}
+          />
+        )}
         <p className="text-sm text-muted-foreground">{TABS.find((t) => t.id === tab)!.hint}</p>
       </div>
       <ActionStatus

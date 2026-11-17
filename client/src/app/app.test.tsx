@@ -1,3 +1,4 @@
+import { summaryOf } from "@/test/api-fixtures";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -171,6 +172,7 @@ beforeEach(() => {
   vi.mocked(getRelationships).mockResolvedValue({
     followingIds: [],
     followerIds: [],
+    friendIds: [],
     blockedIds: [],
   });
   vi.mocked(listInvites).mockResolvedValue([]);
@@ -194,7 +196,7 @@ describe("backend app", () => {
   it("signs in, reads tables and invitations, and revokes the session", async () => {
     vi.mocked(currentUser).mockResolvedValue(null);
     vi.mocked(signIn).mockResolvedValue(user);
-    vi.mocked(listTables).mockResolvedValue([table]);
+    vi.mocked(listTables).mockResolvedValue([summaryOf(table, user.id)]);
     vi.mocked(signOut).mockResolvedValue();
     vi.mocked(listInvites).mockResolvedValue([
       {
@@ -205,18 +207,19 @@ describe("backend app", () => {
         fromId: "123e4567-e89b-42d3-a456-426614174092",
         userId: user.id,
         createdAt: "2026-11-13T12:00:00Z",
-        memberIds: [],
+        memberPreview: [],
+        memberCount: 1,
       },
     ]);
     renderApp();
     fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "testuser" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    // Listed on Home and in the sidebar.
-    expect(await screen.findAllByText("Test table")).toHaveLength(2);
+    // A narrow screen (tests don't match the sidebar's media query): tables and requests are on Home only.
+    expect(await screen.findAllByText("Test table")).toHaveLength(1);
     expect(signIn).toHaveBeenCalledWith("testuser", "password");
     expect(
-      await screen.findByRole("button", { name: "Invitation to Invited table" }),
+      await screen.findByRole("button", { name: "Request to join Invited table" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New table" })).toBeInTheDocument();
     fireEvent.click(signOutButton());
@@ -227,7 +230,7 @@ describe("backend app", () => {
   it("starts every sign-in on Home, not the page the last session left open", async () => {
     vi.mocked(currentUser).mockResolvedValue(null);
     vi.mocked(signIn).mockResolvedValue(user);
-    vi.mocked(listTables).mockResolvedValue([table]);
+    vi.mocked(listTables).mockResolvedValue([summaryOf(table, user.id)]);
     route.pathname = "/tables/123e4567-e89b-42d3-a456-426614174099";
     renderApp();
     fireEvent.change(await screen.findByLabelText("Username"), { target: { value: "testuser" } });
@@ -341,7 +344,7 @@ describe("backend app", () => {
     // Closed bets live on the Tickets page.
     route.pathname = "/tickets";
     vi.mocked(currentUser).mockResolvedValue(user);
-    vi.mocked(listTables).mockResolvedValue([table]);
+    vi.mocked(listTables).mockResolvedValue([summaryOf(table, user.id)]);
     vi.mocked(listMyBets).mockImplementation(async ({ status }) => ({
       items: status === "SETTLED" ? [locked] : [],
       nextCursor: null,
@@ -526,9 +529,11 @@ describe("backend app", () => {
 
   it("reloads the table list when the personal feed says it changed", async () => {
     vi.mocked(currentUser).mockResolvedValue(user);
-    vi.mocked(listTables).mockResolvedValueOnce([table]).mockResolvedValue([]);
+    vi.mocked(listTables)
+      .mockResolvedValueOnce([summaryOf(table, user.id)])
+      .mockResolvedValue([]);
     renderApp();
-    expect(await screen.findAllByText("Test table")).toHaveLength(2);
+    expect(await screen.findAllByText("Test table")).toHaveLength(1);
     deliver("/user/queue/me", { type: "tables.changed" });
     expect(await screen.findByText(/No tables yet/)).toBeInTheDocument();
   });

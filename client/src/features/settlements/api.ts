@@ -18,40 +18,63 @@ const lineSchema = z.object({
   payerId: uuid,
   payeeId: uuid,
   amountCents: exactCents,
-  status: z.enum(["unpaid", "sent", "paid", "disputed", "forgive_asked", "forgiven"]),
+  /** Unpaid until a settle closes it. */
+  status: z.enum(["unpaid", "paid", "forgiven"]),
   revision: z.number().int().min(0).max(2147483647),
-  forgiveRequestedAt: timestamp.nullable().optional(),
-  forgiveDeclinedAt: timestamp.nullable().optional(),
+  /** The settle that closed it; null while unpaid. */
+  settleId: uuid.nullable(),
   createdAt: timestamp,
   updatedAt: timestamp,
-  /** What the viewer may do with this receipt, from the server's transition rules. */
-  actions: z.array(
-    z.object({
-      action: z.enum(["sent", "confirm", "dispute", "forgive", "ask-forgive", "decline-forgive"]),
-      /** Sending or asking to forgive waits until the balance-change warning is reviewed. */
-      blockedByReview: z.boolean(),
-    }),
-  ),
 });
-const groupSchema = z.object({
-  otherUserId: uuid,
-  netCents,
-  revision: z.string().min(1),
-  lines: z.array(lineSchema),
-  pendingReviewRevision: uuid.nullable(),
-  /** What the viewer may do with every open receipt with this person at once. */
-  actions: z.array(
+
+const settleSchema = z.object({
+  id: uuid,
+  /** sent: the payer says they paid (the receiver can reject until `rejectBy`); received and forgiven are final. */
+  kind: z.enum(["sent", "received", "forgiven"]),
+  senderId: uuid,
+  otherId: uuid,
+  /** Who pays the selection's net; null when it netted to zero. */
+  payerId: uuid.nullable(),
+  payeeId: uuid.nullable(),
+  amountCents: integer.refine((value) => value >= 0n),
+  createdAt: timestamp,
+  rejectBy: timestamp.nullable(),
+  rejectedAt: timestamp.nullable(),
+  /** Whether you can reject it now. */
+  canReject: z.boolean(),
+  lines: z.array(
     z.object({
-      action: z.enum(["sent", "paid", "unpaid", "forgiven", "ask", "decline"]),
-      blockedByReview: z.boolean(),
+      id: uuid,
+      tableId: uuid,
+      payerId: uuid,
+      payeeId: uuid,
+      amountCents: exactCents,
+      createdAt: timestamp,
     }),
   ),
 });
 
+const groupSchema = z.object({
+  otherUserId: uuid,
+  /** Of the open receipts: positive when you're owed. */
+  netCents,
+  /** The open receipts. */
+  lines: z.array(lineSchema),
+  pendingReviewRevision: uuid.nullable(),
+  /** Sent settles between you still inside their reject window, newest first. */
+  pendingSettles: z.array(settleSchema),
+});
+
+const settlePageSchema = z.object({
+  items: z.array(settleSchema),
+  nextCursor: z.string().nullable(),
+});
+
 export type SettlementLine = z.infer<typeof lineSchema>;
 export type SettlementGroup = z.infer<typeof groupSchema>;
-export type LineAction = SettlementLine["actions"][number]["action"];
-export type GroupAction = SettlementGroup["actions"][number]["action"];
+export type Settle = z.infer<typeof settleSchema>;
+export type SettleKind = Settle["kind"];
+export type SettlePage = z.infer<typeof settlePageSchema>;
 
 /** Parses a JSON response without losing precision in 64-bit integers, then validates it. */
 export async function readExact<T>(response: Response, schema: z.ZodType<T, unknown>): Promise<T> {
@@ -88,26 +111,35 @@ function directLine(line: SettlementLine, actor: string, other: string): boolean
   );
 }
 
+function directSettle(settle: Settle, actor: string, other: string): boolean {
+  return (
+    (settle.senderId === actor && settle.otherId === other) ||
+    (settle.otherId === actor && settle.senderId === other)
+  );
+}
+
 export async function listSettlementGroups(
   actor: string,
   signal?: AbortSignal,
 ): Promise<SettlementGroup[]> {
   validId(actor);
   const groups = await readExact(
-    await request("/people/settle-groups?includeHistory=true", signal ? { signal } : undefined),
+    await request("/people/settle-groups", signal ? { signal } : undefined),
     z.array(groupSchema),
   );
   if (
     groups.some(
       (group) =>
         group.otherUserId === actor ||
-        group.lines.some((line) => !directLine(line, actor, group.otherUserId)),
+        group.lines.some((line) => !directLine(line, actor, group.otherUserId)) ||
+        group.pendingSettles.some((settle) => !directSettle(settle, actor, group.otherUserId)),
     )
   )
     throw new BackendError("The backend returned an unexpected response.");
   return groups;
 }
 
+/** Your receipts with one person, open first, then newest first. */
 export async function receiptHistory(
   actor: string,
   other: string,
@@ -127,7 +159,29 @@ export async function receiptHistory(
   return lines;
 }
 
-async function post(path: string, body: object, key: string): Promise<Response> {
+/** Every settle with one person, newest first, a page at a time. */
+export async function listSettles(
+  actor: string,
+  other: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<SettlePage> {
+  validId(actor);
+  validId(other);
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const page = await readExact(
+    await request(
+      `/people/${encodeURIComponent(other)}/settles${query}`,
+      signal ? { signal } : undefined,
+    ),
+    settlePageSchema,
+  );
+  if (page.items.some((settle) => !directSettle(settle, actor, other)))
+    throw new BackendError("The backend returned an unexpected response.");
+  return page;
+}
+
+async function post(path: string, body: object | undefined, key: string): Promise<Response> {
   return mutationRequest(path, "POST", key, body);
 }
 
@@ -145,40 +199,25 @@ export async function acknowledgeReview(
   );
 }
 
-export async function transitionLine(
-  actor: string,
+/** Settles the chosen open receipts with one person. */
+export async function createSettle(
   other: string,
-  lineId: string,
-  action: LineAction,
-  revision: number,
+  kind: SettleKind,
+  lineIds: string[],
   key: string,
-): Promise<void> {
-  validId(actor);
+): Promise<Settle> {
   validId(other);
-  validId(lineId);
-  if (!z.number().int().min(0).max(2147483647).safeParse(revision).success)
-    throw new BackendError("Invalid receipt revision.");
-  const line = await readExact(
-    await post(`/settlement-lines/${encodeURIComponent(lineId)}/${action}`, { revision }, key),
-    lineSchema,
+  lineIds.forEach(validId);
+  return readExact(
+    await post(`/people/${encodeURIComponent(other)}/settles`, { kind, lineIds }, key),
+    settleSchema,
   );
-  if (line.id !== lineId || !directLine(line, actor, other))
-    throw new BackendError("The backend returned an unexpected response.");
 }
 
-export async function transitionGroup(
-  other: string,
-  action: GroupAction,
-  revision: string,
-  key: string,
-): Promise<void> {
-  validId(other);
-  if (!revision) throw new BackendError("Invalid group revision.");
-  await post(
-    `/people/${encodeURIComponent(other)}/settle`,
-    { step: action, expectedRevision: revision },
-    key,
-  );
+/** The receiver rejects a sent settle within its window; its receipts reopen. */
+export async function rejectSettle(settleId: string, key: string): Promise<void> {
+  validId(settleId);
+  await post(`/settles/${encodeURIComponent(settleId)}/reject`, undefined, key);
 }
 
 /** Formats signed cents as points, exactly (two decimals, grouped). */

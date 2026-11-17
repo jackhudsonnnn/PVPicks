@@ -65,6 +65,31 @@ class RateLimitsIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void creatingTablesAndAddingMembersArePaced() throws Exception {
+        RateLimits.Interceptor interceptor = new RateLimits.Interceptor(limiter, RateLimits.RULES);
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(Jwt.withTokenValue("t")
+                .header("alg", "HS256").subject(UUID.randomUUID().toString()).build()));
+        for (int i = 0; i < 10; i++) {
+            assertThat(interceptor.preHandle(request("POST", "/tables"), new MockHttpServletResponse(), null)).isTrue();
+        }
+        assertThat(interceptor.preHandle(request("GET", "/tables"), new MockHttpServletResponse(), null))
+                .as("reading your tables isn't limited").isTrue();
+        MockHttpServletResponse created = new MockHttpServletResponse();
+        assertThat(interceptor.preHandle(request("POST", "/tables"), created, null))
+                .as("10 new tables an hour").isFalse();
+        assertThat(created.getStatus()).isEqualTo(429);
+
+        String members = "/tables/" + UUID.randomUUID() + "/members";
+        for (int i = 0; i < 30; i++) {
+            assertThat(interceptor.preHandle(request("POST", members), new MockHttpServletResponse(), null)).isTrue();
+        }
+        assertThat(interceptor.preHandle(request("POST", members), new MockHttpServletResponse(), null))
+                .as("30 adds or requests an hour").isFalse();
+        assertThat(interceptor.preHandle(request("GET", members), new MockHttpServletResponse(), null))
+                .as("member search has its own budget").isTrue();
+    }
+
+    @Test
     void everyRuleCoversARealRoute() {
         assertThat(RateLimits.RULES).allSatisfy(rule -> assertThat(rule.limit()).isPositive());
         assertThat(RateLimits.RULES).extracting(RateLimits.Rule::bucket).doesNotHaveDuplicates();

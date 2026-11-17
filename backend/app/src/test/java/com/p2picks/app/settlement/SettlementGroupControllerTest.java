@@ -17,7 +17,8 @@ class SettlementGroupControllerTest {
     @Test
     void pendingReviewListEnforcesIdentityAndMatchesContract() throws IOException {
         SettlementReviewService reviews = mock(SettlementReviewService.class);
-        SettlementGroupController controller = new SettlementGroupController(mock(SettlementGroupService.class), reviews);
+        SettlementGroupController controller = new SettlementGroupController(mock(SettlementGroupService.class), reviews,
+                mock(SettleService.class));
         Jwt jwt = mock(Jwt.class);
         when(reviews.listPending(jwt)).thenReturn(
                 new SettlementReviewService.PendingReviews(false, false, List.of()),

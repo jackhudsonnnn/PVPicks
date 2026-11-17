@@ -12,14 +12,15 @@ import { cn } from "@/lib/utils";
 import { PersonAvatar, PersonName, type User } from "@/features/people";
 import { useSettlementActions } from "./actions";
 import { listSettlementGroups, type SettlementGroup } from "./api";
-import { groupSummary } from "./receipt-rules";
-import { Net, ReceiptsDialog, type Actions } from "./receipts-dialog";
+import { cardTone, groupSummary, sortGroups } from "./ledger-model";
+import { type Actions, LedgerDialog, Net } from "./ledger-dialog";
 import { LoadingList } from "@/components/loading";
 
 /**
- * Settle-ups on the Friends page: a sideways-scrolling card per person you've had receipts with, showing the
- * open net between you. Each opens their receipts. One request: each group carries its receipts, any unreviewed
- * balance-change warning, and the viewer's available actions.
+ * Settle-ups on the Friends page: a sideways-scrolling card per person you have open receipts with (or a send
+ * still in its reject window), showing the open net between you. Yellow when something needs you (a balance change
+ * to review, a send you can still reject), then red (you owe), green (you're owed) and neutral (even), in that
+ * order. Each opens the ledger with that person.
  */
 export function SettlementReceipts({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
@@ -70,7 +71,7 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
           className="snap-x gap-3 pb-2 md:scrollbar-thin"
         >
           <AnimatedList>
-            {groups.data.map((group) => (
+            {sortGroups(groups.data).map((group) => (
               <AnimatedItem key={group.otherUserId} isHorizontal className="shrink-0 snap-start">
                 <SettleCard
                   group={group}
@@ -104,16 +105,20 @@ function SettleCard({
 }) {
   const other = group.otherUserId;
   const net = group.netCents;
-  const summary = groupSummary(group.lines);
+  const summary = groupSummary(group);
+  const tone = cardTone(group);
   return (
     <div
+      data-tone={tone}
       className={cn(
         "flex min-h-48 w-60 flex-col gap-2 rounded-lg border p-3",
-        net < 0n
-          ? "border-loss/50 bg-loss/10"
-          : net > 0n
-            ? "border-primary/40 bg-primary/5"
-            : "bg-surface",
+        tone === "attention"
+          ? "border-invite/60 bg-invite/10"
+          : tone === "owe"
+            ? "border-loss/50 bg-loss/10"
+            : tone === "owed"
+              ? "border-primary/40 bg-primary/5"
+              : "bg-surface",
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -133,11 +138,8 @@ function SettleCard({
       <div className="flex items-baseline justify-between gap-2">
         <Net cents={net} className="scoreboard text-3xl leading-none" />
       </div>
-      {group.pendingReviewRevision && (
-        <p className="text-[11px] font-semibold text-status-pending">Balance changed: review</p>
-      )}
       <div className="mt-auto">
-        <ReceiptsDialog
+        <LedgerDialog
           user={user}
           expire={expire}
           group={group}

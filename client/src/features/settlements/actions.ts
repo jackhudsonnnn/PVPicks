@@ -1,28 +1,23 @@
 import { z } from "zod";
 import { backendErrorMessage, idSchema } from "@/lib/api-client";
 import { useRetryableMutation } from "@/lib/mutation";
-import { acknowledgeReview, transitionGroup, transitionLine } from "./api";
+import { acknowledgeReview, createSettle, rejectSettle } from "./api";
 
 const uuid = idSchema;
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("review"), other: uuid, revision: uuid }),
   z.object({
-    kind: z.literal("line"),
+    kind: z.literal("settle"),
     other: uuid,
-    lineId: uuid,
-    action: z.enum(["sent", "confirm", "dispute", "forgive", "ask-forgive", "decline-forgive"]),
-    revision: z.number().int().min(0).max(2147483647),
+    settle: z.enum(["sent", "received", "forgiven"]),
+    lineIds: z.array(uuid).min(1).max(500),
   }),
-  z.object({
-    kind: z.literal("group"),
-    other: uuid,
-    action: z.enum(["sent", "paid", "unpaid", "forgiven", "ask", "decline"]),
-    revision: z.string().min(1),
-  }),
+  z.object({ kind: z.literal("reject"), other: uuid, settleId: uuid }),
 ]);
 
 export type SettlementIntent = z.infer<typeof intentSchema>;
 
+/** Reviewing a balance change, settling chosen receipts, and rejecting a send, with retry-key safety. */
 export function useSettlementActions(
   userId: string,
   refresh: () => Promise<void>,
@@ -33,25 +28,28 @@ export function useSettlementActions(
     intentSchema,
     refresh,
     expire,
-    checkDescription: "receipt history",
+    checkDescription: "the ledger",
     errorMessage: (error) =>
-      error.code === "stale_review" || error.code === "stale_revision"
-        ? "The receipt or warning changed. Review the refreshed information before trying again."
+      error.code === "stale_review" || error.code === "stale_selection"
+        ? "Something changed. Check the refreshed ledger before trying again."
         : error.code === "settlement_review_required"
-          ? "Review the balance-change warning before sending or asking for forgiveness."
+          ? "Review the balance change before settling."
           : backendErrorMessage(error),
     execute: async (intent, key) => {
-      if (intent.kind === "review") await acknowledgeReview(intent.other, intent.revision, key);
-      else if (intent.kind === "line")
-        await transitionLine(
-          userId,
-          intent.other,
-          intent.lineId,
-          intent.action,
-          intent.revision,
-          key,
-        );
-      else await transitionGroup(intent.other, intent.action, intent.revision, key);
+      if (intent.kind === "review") {
+        await acknowledgeReview(intent.other, intent.revision, key);
+        return;
+      }
+      if (intent.kind === "settle") {
+        await createSettle(intent.other, intent.settle, intent.lineIds, key);
+        return intent.settle === "sent"
+          ? "Sent. It's settled unless they reject it within 48 hours."
+          : intent.settle === "forgiven"
+            ? "Forgiven."
+            : "Marked received.";
+      }
+      await rejectSettle(intent.settleId, key);
+      return "Rejected. Those receipts are open again.";
     },
   });
 }

@@ -4,6 +4,7 @@ import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.MembershipLimits;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
@@ -41,6 +42,8 @@ class InvitationResponseController {
                 case STALE -> error(409, "conflict", "Invitation is no longer available.");
                 case UNAUTHORIZED -> error(401, "unauthorized", "Authentication required or credentials invalid.");
                 case NOT_FOUND -> error(404, "not_found", "Invitation not found.");
+                case TABLE_LIMIT -> error(409, "table_limit", MembershipLimits.TABLE_LIMIT_MESSAGE);
+                case TABLE_FULL -> error(409, "table_full", MembershipLimits.TABLE_FULL_MESSAGE);
             };
         } catch (MutationAuthentication.ExpiredSession exception) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");

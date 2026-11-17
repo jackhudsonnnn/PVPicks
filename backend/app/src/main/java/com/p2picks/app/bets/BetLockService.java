@@ -30,6 +30,7 @@ public class BetLockService {
         }
     }
 
+    private final ObjectProvider<BetLiveStats> liveStats;
     private final JdbcTemplate jdbc;
     private final DebtQuery debt;
     private final SecureRandom random = new SecureRandom();
@@ -38,7 +39,8 @@ public class BetLockService {
     private final ObjectProvider<LockWashRule> modeRules;
 
     BetLockService(JdbcTemplate jdbc, DebtQuery debt, Outbox outbox, BetResolutionWriter writer,
-            ObjectProvider<LockWashRule> modeRules) {
+            ObjectProvider<LockWashRule> modeRules, ObjectProvider<BetLiveStats> liveStats) {
+        this.liveStats = liveStats;
         this.jdbc = jdbc;
         this.debt = debt;
         this.outbox = outbox;
@@ -132,6 +134,8 @@ public class BetLockService {
             throw new IllegalStateException("Locked bet changed");
         }
         outbox.append(OutboxEvent.BET_LOCKED, betId, Map.of("tableId", tableId, "betId", betId));
+        // The numbers a sports bet follows, as they were when picks locked (ticket Details, "Live stats").
+        liveStats.ifAvailable(stats -> stats.capture(betId, "locked"));
         // A bet nobody can win or lose washes right away rather than waiting on a result (domain rules, "Wash
         // triggers"): no picks, or every pick on one option. Then any mode-specific lock rule.
         String wash = generalLockWash(betId);

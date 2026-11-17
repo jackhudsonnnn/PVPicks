@@ -12,7 +12,8 @@ import com.p2picks.app.demo.DemoRoster.DemoUser;
 import com.p2picks.app.moderation.ReportService;
 import com.p2picks.app.security.PasswordlessSignIn;
 import com.p2picks.app.settlement.DebtCapService;
-import com.p2picks.app.settlement.SettlementReceiptService;
+import com.p2picks.app.settlement.SettleRules;
+import com.p2picks.app.settlement.SettleService;
 import com.p2picks.app.settlement.SettlementReviewService;
 import com.p2picks.app.settlement.TablePointsSettlementService;
 import com.p2picks.app.sports.FeedGame;
@@ -74,7 +75,7 @@ public class DemoHistory {
     private final U2PickResolutionService u2pickResults;
     private final SportsResolutionService sportsResults;
     private final TablePointsSettlementService points;
-    private final SettlementReceiptService receipts;
+    private final SettleService settles;
     private final SettlementReviewService reviews;
     private final DebtCapService caps;
     private final ReportService reports;
@@ -85,7 +86,7 @@ public class DemoHistory {
             PasswordlessSignIn signIn, GameSync games, U2PickProposalService u2picks,
             SportsProposalService sportsBets, BetPickService picks, BetLockService locks,
             U2PickResolutionService u2pickResults, SportsResolutionService sportsResults,
-            TablePointsSettlementService points, SettlementReceiptService receipts, SettlementReviewService reviews,
+            TablePointsSettlementService points, SettleService settles, SettlementReviewService reviews,
             DebtCapService caps, ReportService reports) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
@@ -100,7 +101,7 @@ public class DemoHistory {
         this.u2pickResults = u2pickResults;
         this.sportsResults = sportsResults;
         this.points = points;
-        this.receipts = receipts;
+        this.settles = settles;
         this.reviews = reviews;
         this.caps = caps;
         this.reports = reports;
@@ -161,6 +162,7 @@ public class DemoHistory {
             for (UUID user : everyone) caps.replace(as(user), key(), null);
         }
 
+        /** The user's tables, except Mosh Pit: it has no seeded past, so the pro's story stays as documented. */
         List<TableInfo> tables(UUID user) {
             List<TableInfo> tables = new ArrayList<>();
             jdbc.query("""
@@ -168,14 +170,14 @@ public class DemoHistory {
                            (SELECT h.user_id FROM table_members h WHERE h.table_id = t.id AND h.role = 'HOST'
                             ORDER BY h.joined_at LIMIT 1) AS host
                     FROM tables t JOIN table_members m ON m.table_id = t.id
-                    WHERE m.user_id = ? AND t.archived_at IS NULL ORDER BY t.created_at
+                    WHERE m.user_id = ? AND t.archived_at IS NULL AND t.id <> ? ORDER BY t.created_at
                     """, rs -> {
                         UUID id = rs.getObject("id", UUID.class);
                         tables.add(new TableInfo(id, rs.getObject("host", UUID.class),
                                 rs.getTimestamp("created_at").toInstant(), jdbc.queryForList(
                                         "SELECT user_id FROM table_members WHERE table_id = ? AND can_bet",
                                         UUID.class, id)));
-                    }, user);
+                    }, user, DemoWorld.CROWD_TABLE);
             return tables;
         }
 
@@ -327,7 +329,7 @@ public class DemoHistory {
             }
             List<UUID> open = jdbc.queryForList("""
                     SELECT DISTINCT settlement_id FROM settlement_lines
-                    WHERE (payer_id = ? OR payee_id = ?) AND status IN ('unpaid', 'sent')
+                    WHERE (payer_id = ? OR payee_id = ?) AND status = 'unpaid'
                     """, UUID.class, user, user);
             for (UUID settlement : open) {
                 settleLines(settlement, settlements.getOrDefault(settlement, now.minus(Duration.ofDays(2))), true);
@@ -346,30 +348,32 @@ public class DemoHistory {
                         || line.payee().equals(DemoWorld.INTERMEDIATE);
                 double roll = random.nextDouble();
                 try {
+                    // Paid ones are recorded by the person paid (final at once); some are forgiven.
                     if (allPaid || intermediate || roll < 0.8) {
-                        transition(line.payer(), line.payee(), line.id(), SettlementReceiptService.Action.SENT);
-                        transition(line.payee(), line.payer(), line.id(), SettlementReceiptService.Action.CONFIRM);
+                        settle(line.payee(), line.payer(), line.id(), SettleRules.Kind.RECEIVED);
                     } else if (roll < 0.9) {
-                        transition(line.payee(), line.payer(), line.id(), SettlementReceiptService.Action.FORGIVE);
+                        settle(line.payee(), line.payer(), line.id(), SettleRules.Kind.FORGIVEN);
                     }
-                    lineTimes.put(line.id(), at.plus(Duration.ofHours(2 + random.nextInt(70))));
+                    // Closed a few hours to a few days after the settlement, but never later than now.
+                    Instant closed = at.plus(Duration.ofHours(2 + random.nextInt(70)));
+                    Instant latest = now.minus(Duration.ofMinutes(5));
+                    lineTimes.put(line.id(), closed.isAfter(latest) ? latest : closed);
                 } catch (RuntimeException refused) {
                     log.debug("Demo history receipt refused: {}", refused.toString());
                 }
             }
         }
 
-        void transition(UUID actor, UUID other, UUID line, SettlementReceiptService.Action action) {
-            Integer revision = jdbc.queryForObject("SELECT revision FROM settlement_lines WHERE id = ?", Integer.class, line);
+        void settle(UUID actor, UUID other, UUID line, SettleRules.Kind kind) {
             try {
-                receipts.transition(as(actor), line, action, revision, key());
+                settles.create(as(actor), other, kind, List.of(line), key());
             } catch (SettlementReviewService.ReviewRequired required) {
                 List<UUID> pending = jdbc.queryForList("""
                         SELECT revision FROM settlement_pair_reviews
                         WHERE user_id = ? AND other_user_id = ? AND reviewed_at IS NULL
                         """, UUID.class, actor, other);
                 if (!pending.isEmpty()) reviews.acknowledge(as(actor), other, pending.getFirst(), key());
-                receipts.transition(as(actor), line, action, revision, key());
+                settles.create(as(actor), other, kind, List.of(line), key());
             }
         }
 
@@ -501,6 +505,7 @@ public class DemoHistory {
             transaction.executeWithoutResult(status -> {
                 jdbc.execute("ALTER TABLE chat_messages DISABLE TRIGGER chat_messages_position_immutable");
                 jdbc.execute("ALTER TABLE settlement_lines DISABLE TRIGGER settlement_lines_identity_immutable");
+                jdbc.execute("ALTER TABLE settles DISABLE TRIGGER settles_protected");
                 jdbc.batchUpdate("""
                         UPDATE bets SET created_at = ?, locks_at = ?,
                             locked_at = CASE WHEN locked_at IS NULL THEN NULL ELSE ?::timestamptz END,
@@ -537,8 +542,14 @@ public class DemoHistory {
                 jdbc.batchUpdate("UPDATE settlement_lines SET updated_at = ? WHERE id = ? AND status <> 'unpaid'",
                         lineTimes.entrySet().stream().map(e -> new Object[] {Timestamp.from(e.getValue()), e.getKey()})
                                 .toList());
+                // Each closed receipt's settle happened when the receipt closed.
+                jdbc.batchUpdate("""
+                        UPDATE settles SET created_at = ? WHERE id = (SELECT settle_id FROM settlement_lines WHERE id = ?)
+                        """, lineTimes.entrySet().stream()
+                                .map(e -> new Object[] {Timestamp.from(e.getValue()), e.getKey()}).toList());
                 jdbc.execute("ALTER TABLE chat_messages ENABLE TRIGGER chat_messages_position_immutable");
                 jdbc.execute("ALTER TABLE settlement_lines ENABLE TRIGGER settlement_lines_identity_immutable");
+                jdbc.execute("ALTER TABLE settles ENABLE TRIGGER settles_protected");
             });
         }
     }

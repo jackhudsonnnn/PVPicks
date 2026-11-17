@@ -285,8 +285,9 @@ paths:
         Sum negative table True balances and negative open person settle-up
         nets; positive balances do not offset debt elsewhere. Current
         non-archived memberships contribute unsettled non-4fun results minus
-        pending picked wagers. Open receipts include archived tables; sent,
-        disputed and forgiveness-requested receipts remain open. The response
+        pending picked wagers. Open receipts include archived tables, and a
+        receipt closed by a sent settle still counts until the receiver's
+        48-hour reject window passes. The response
         uses one database snapshot and does not enforce the cap.
       responses:
         '200':
@@ -427,6 +428,35 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /bets/{betId}/live:
+    parameters:
+      - name: betId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getBetLiveStats
+      summary: A sports bet's live stats
+      description: >-
+        What the bet's mode follows (the combined score, the home margin, each
+        chosen player's stat, or each team's touchdowns and field goals), as it
+        was when the bet was proposed, when picks locked, and now, with the
+        game's score and clock. Same access as the bet. 404 for a bet without
+        a game (U2Pick). Bets made before these snapshots existed have only the
+        current numbers.
+      responses:
+        '200':
+          description: Live stats.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetLiveStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /me/bets:
     get:
       operationId: listMyBets
@@ -739,9 +769,10 @@ paths:
       operationId: listMyTables
       summary: List the current user's tables
       description: >-
-        Returns current, non-archived memberships. Quick Pick codes are visible
-        only to current hosts; disabled permissions are visible to hosts for
-        all members and otherwise only for the caller.
+        Returns current, non-archived memberships as summaries (at most 100,
+        the table limit), most recent activity first: the later of the
+        table's last bet and when the caller joined. Summaries never carry
+        whole member lists; GET /tables/{tableId} returns the full table.
       responses:
         '200':
           description: Tables the user belongs to.
@@ -749,8 +780,9 @@ paths:
             application/json:
               schema:
                 type: array
+                maxItems: 100
                 items:
-                  $ref: '#/components/schemas/Table'
+                  $ref: '#/components/schemas/TableSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
@@ -760,6 +792,9 @@ paths:
         Creates the table and applies eligible initial member requests atomically.
         On retry the table view reflects current authorized state, while outcomes
         remain those of the original request. Returns 404 if access is lost.
+        Returns 409 `table_limit` when the caller is already at 100 tables (a
+        matching retry of an earlier success still replays).
+        Rate limited to 10 new tables an hour per account (429).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -801,6 +836,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /tables/archives:
     get:
       operationId: listMyTableArchives
@@ -1010,6 +1047,52 @@ paths:
   /tables/{tableId}/members:
     parameters:
       - $ref: '#/components/parameters/TableId'
+    get:
+      operationId: searchTableMembers
+      summary: Search a table's members by username
+      description: >-
+        Members of one of the caller's tables whose username contains `q`,
+        by username, 50 at a time. Same access as the table (404 otherwise).
+        Rate limited to 60 a minute per account.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_ ]{1,40}$'
+          description: 1 to 15 letters, numbers or underscores (trimmed, case-insensitive).
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: The previous page's nextCursor.
+      responses:
+        '200':
+          description: Matching member ids.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      type: string
+                      format: uuid
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
     post:
       operationId: addTableMembers
       summary: Add or invite eligible users
@@ -1018,9 +1101,15 @@ paths:
         preferences, pending invitations and blocks determine the outcome.
         Eligible open preferences add immediately; request creates a pending
         invitation. Frozen, deleted, unavailable, blocked, already-present and
-        otherwise ineligible accounts all return not_added. Matching retries
-        require current host access and return original outcomes without
-        repeating actions. Pending invitations are not announced in table chat.
+        otherwise ineligible accounts all return not_added. So do accounts at
+        their 100-table limit, a table at its 500-member limit, and, for a
+        request, accounts with 100 requests waiting (no request is created).
+        A request older than 30 days has expired and doesn't block a new one.
+        Matching retries require current host access and return original
+        outcomes without repeating actions. Pending invitations are not
+        announced in table chat.
+        Rate limited to 30 calls an hour per account (429); each call takes
+        up to 100 people.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1059,6 +1148,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /tables/{tableId}/members/{userId}:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -1672,34 +1763,63 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-  /settlement-lines/{lineId}/{action}:
+  /people/{userId}/settles:
     parameters:
-      - name: lineId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: action
-        in: path
-        required: true
-        schema:
-          type: string
-          enum: [sent, confirm, dispute, forgive, ask-forgive, decline-forgive]
-    post:
-      operationId: transitionSettlementLine
-      summary: Apply an authorized transition to a settlement receipt
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: listSettles
+      summary: Settle history with one person
       description: >-
-        Dev implementation.
-        The payer marks sent or asks for forgiveness. The payee confirms,
-        disputes, forgives or declines forgiveness. Sent remains outstanding
-        until confirmed; only paid and forgiven close a line. A dispute returns
-        the payment to unpaid while preserving any open forgiveness request.
-        A declined forgiveness request may be retried after 24 hours. An
-        outdated revision is rejected. A matching retry returns the current
-        receipt without reapplying the action. A payer with an unreviewed
-        balance-change warning cannot mark sent or request forgiveness;
-        those actions return 409 with code settlement_review_required.
+        Every settle between the caller and this person, newest first, 20 per
+        page, including rejected ones (kept for audit). 404 when the two have
+        no receipts.
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A page of settles.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Settle'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: createSettle
+      summary: Settle chosen open receipts with one person
+      description: >-
+        Closes the chosen open receipts between the caller and this person at
+        once. The selection nets, from the caller's side, to what they pay
+        (negative) or receive. `sent`: the net payer says they paid; it
+        counts as paid at once, the receiver can reject it for 48 hours
+        (which reopens the receipts), and the debt cap keeps counting it
+        until then. `received`: the net receiver, or either side at a zero
+        net, records it paid; final at once. `forgiven`: the person owed
+        gives up receipts that are all owed to them; final at once. At most 3
+        sends between the two in any 24 hours (both directions, rejected ones
+        included): 429 `settle_limit`. Other refusals are 409:
+        `stale_selection` (a receipt isn't open any more),
+        `invalid_settle` (wrong side for this kind),
+        `settlement_review_required` (a balance change to review first). A
+        matching retry returns the same settle.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1709,18 +1829,26 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [revision]
+              required: [kind, lineIds]
               properties:
-                revision:
-                  type: integer
-                  minimum: 0
+                kind:
+                  type: string
+                  enum: [sent, received, forgiven]
+                lineIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  uniqueItems: true
+                  items:
+                    type: string
+                    format: uuid
       responses:
-        '200':
-          description: Updated receipt.
+        '201':
+          description: The settle.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SettlementLine'
+                $ref: '#/components/schemas/Settle'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1731,41 +1859,32 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-  /people/{userId}/settle:
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /settles/{settleId}/reject:
     parameters:
-      - $ref: '#/components/parameters/UserId'
+      - name: settleId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
     post:
-      operationId: settleWithPerson
-      summary: Atomically apply a step to all open lines with one person
+      operationId: rejectSettle
+      summary: Reject a sent settle within its window
       description: >-
-        Dev implementation.
-        The revision represents the current group, not an individual receipt.
-        Reject a stale revision with 409. Authorization is determined by the
-        current net payer and payee; offsets are included in the atomic update.
-        Either party may confirm a zero-net group. A matching retry does not
-        repeat the update. A payer with an unreviewed balance-change warning
-        cannot mark sent or request forgiveness; those actions return 409
-        with code settlement_review_required.
+        Only the receiver of a `sent` settle, before `rejectBy`. Its receipts
+        reopen; the settle stays in History as rejected. 409 `not_rejectable`
+        once the window has passed or it was already rejected.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [step, expectedRevision]
-              properties:
-                step:
-                  type: string
-                  enum: [sent, paid, unpaid, forgiven, ask, decline]
-                expectedRevision:
-                  type: string
-                  minLength: 1
       responses:
-        '204':
-          description: Group updated.
+        '200':
+          description: The rejected settle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settle'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1782,21 +1901,14 @@ paths:
       summary: Get the current user's settle-up groups
       description: >-
         Dev implementation.
-        If any open group net exceeds the signed 64-bit range, the entire
-        response fails with 409 and code group_net_out_of_range. Individual
-        receipt history and settlement-review reads remain available.
-        With includeHistory=true, a closed group can still contain an
-        unreviewed warning. Groups with a nonzero net come first, newest
-        activity first; groups at a zero net come last.
-      parameters:
-        - name: includeHistory
-          in: query
-          schema:
-            type: boolean
-            default: false
+        Everyone the caller has open receipts with, or a sent settle still
+        inside its reject window (either direction). If any open group net
+        exceeds the signed 64-bit range, the entire response fails with 409
+        and code group_net_out_of_range. Groups with a nonzero net come
+        first, newest activity first; groups at a zero net come last.
       responses:
         '200':
-          description: Groups with their current open net, revision and the caller's pending review.
+          description: Groups with their open receipts and net, the caller's pending review, and in-window settles.
           content:
             application/json:
               schema:
@@ -1943,7 +2055,9 @@ paths:
         Excludes follows across blocks in either direction and relationships to
         deleted users. blockedIds contains only the caller's own blocks, not
         accounts that have blocked the caller. Frozen users' existing
-        relationships remain visible.
+        relationships remain visible. Every list is newest first: following
+        and followers by follow time, friends by when the second follow
+        happened, blocks by block time.
       responses:
         '200':
           description: Following, followers, and the caller's private blocks.
@@ -2093,14 +2207,16 @@ paths:
       description: >-
         Excludes invitations for archived tables, deleted senders, existing
         memberships, blocks, and invitations that no longer meet host, follow
-        or current preference requirements. A pending invite does not grant
-        access to the full table. Frozen senders' qualifying invites remain.
+        or current preference requirements, and requests older than 30 days
+        (expired). Newest first; at most 100 can be waiting. A pending invite
+        does not grant access to the full table. Frozen senders' qualifying
+        invites remain.
       responses:
         '200':
           description: >-
-            Pending invitations include the table name, emoji and members
-            needed for the invite card without granting access to the
-            table's chat or bets.
+            Pending invitations include the table name, emoji, a member
+            preview and the member count needed for the request card, without
+            granting access to the table's chat or bets.
           content:
             application/json:
               schema:
@@ -2238,10 +2354,14 @@ paths:
         The sender must still be a host, the recipient must follow the sender,
         and the current friends or following preference must not be closed.
         Ineligible requests are permanently cancelled; once cancelled they
-        cannot be declined. Acceptance adds a member and a system chat message
-        atomically. A matching retry returns 204 only while current visibility
-        and authorization still permit it. Invitation creation and realtime
-        delivery are not implemented.
+        cannot be declined. A request older than 30 days has expired and
+        returns 409 like a cancelled one. Acceptance adds a member and a
+        system chat message atomically; it returns 409 `table_limit` when the
+        caller is at 100 tables and `table_full` when the table has 500
+        members, and the request stays waiting. A matching retry returns 204
+        only while current visibility and authorization still permit it.
+        Requests are created by POST /tables/{tableId}/members, and the
+        recipient's personal feed announces changes (`invitations.changed`).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -3440,12 +3560,16 @@ components:
     Relationships:
       type: object
       additionalProperties: false
-      required: [followingIds, followerIds, blockedIds]
+      required: [followingIds, followerIds, friendIds, blockedIds]
+      description: Every list is newest first.
       properties:
         followingIds:
           $ref: '#/components/schemas/UuidList'
         followerIds:
           $ref: '#/components/schemas/UuidList'
+        friendIds:
+          $ref: '#/components/schemas/UuidList'
+          description: Mutual follows, newest friendship first (when the second follow happened).
         blockedIds:
           $ref: '#/components/schemas/UuidList'
     InvitePreferences:
@@ -3462,7 +3586,7 @@ components:
     TableInvite:
       type: object
       additionalProperties: false
-      required: [id, tableId, tableName, tableEmoji, fromId, userId, createdAt, memberIds]
+      required: [id, tableId, tableName, tableEmoji, fromId, userId, createdAt, memberPreview, memberCount]
       properties:
         id:
           type: string
@@ -3483,15 +3607,21 @@ components:
         createdAt:
           type: string
           format: date-time
-        memberIds:
+        memberPreview:
           type: array
+          maxItems: 4
           description: >-
-            The table's members in join order, for avatars on the invite
-            card. Leaves out deleted accounts and members who block the
-            invitee, so every listed profile is readable.
+            Up to four of the table's members in join order, for avatars on
+            the request card. Leaves out deleted accounts and members who
+            block the invitee, so every listed profile is readable.
           items:
             type: string
             format: uuid
+        memberCount:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: Everyone at the table, including members the preview leaves out.
     Settlement:
       type: object
       additionalProperties: false
@@ -3516,17 +3646,11 @@ components:
     SettlementLine:
       type: object
       additionalProperties: false
-      required: [id, settlementId, tableId, payerId, payeeId, amountCents, status, revision, createdAt, updatedAt]
+      required: [id, settlementId, tableId, payerId, payeeId, amountCents, status, revision, settleId, createdAt, updatedAt]
+      description: >-
+        A receipt: one table's points settlement between two people. Unpaid
+        until a settle closes it.
       properties:
-        actions:
-          type: array
-          description: >-
-            The caller's available actions (sent, confirm, dispute, forgive,
-            ask-forgive, decline-forgive). Always present on the caller's receipt
-            reads (history, groups, line actions); absent from a host's new
-            settlement, which isn't one viewer's receipt.
-          items:
-            $ref: '#/components/schemas/ReceiptAction'
         id:
           type: string
           format: uuid
@@ -3547,25 +3671,87 @@ components:
           minimum: 1
         status:
           type: string
-          enum: [unpaid, sent, paid, disputed, forgive_asked, forgiven]
-          description: A sent payment may also have an open forgiveness request.
+          enum: [unpaid, paid, forgiven]
         revision:
           type: integer
           minimum: 0
-        forgiveRequestedAt:
+        settleId:
           type: [string, 'null']
-          format: date-time
-          description: Open request time for an outstanding line, including a sent line.
-        forgiveDeclinedAt:
-          type: [string, 'null']
-          format: date-time
-          description: Most recent decline, used for the 24-hour cooldown.
+          format: uuid
+          description: The settle that closed it; null while unpaid.
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    Settle:
+      type: object
+      additionalProperties: false
+      required: [id, kind, senderId, otherId, payerId, payeeId, amountCents, createdAt, rejectBy, rejectedAt, canReject, lines]
+      description: One action that closed a set of a pair's receipts.
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [sent, received, forgiven]
+        senderId:
+          type: string
+          format: uuid
+          description: Who settled.
+        otherId:
+          type: string
+          format: uuid
+        payerId:
+          type: [string, 'null']
+          format: uuid
+          description: Who pays the selection's net; null when it netted to zero.
+        payeeId:
+          type: [string, 'null']
+          format: uuid
+        amountCents:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        rejectBy:
+          type: [string, 'null']
+          format: date-time
+          description: Sent settles only; the receiver can reject until then.
+        rejectedAt:
+          type: [string, 'null']
+          format: date-time
+        canReject:
+          type: boolean
+          description: Whether the caller can reject it now.
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, tableId, payerId, payeeId, amountCents, createdAt]
+            properties:
+              id:
+                type: string
+                format: uuid
+              tableId:
+                type: string
+                format: uuid
+              payerId:
+                type: string
+                format: uuid
+              payeeId:
+                type: string
+                format: uuid
+              amountCents:
+                type: integer
+                minimum: 1
+              createdAt:
+                type: string
+                format: date-time
     BetPage:
       type: object
       additionalProperties: false
@@ -3611,31 +3797,29 @@ components:
     SettlementGroup:
       type: object
       additionalProperties: false
-      required: [otherUserId, netCents, revision, lines, pendingReviewRevision, actions]
+      required: [otherUserId, netCents, lines, pendingReviewRevision, pendingSettles]
       properties:
-        actions:
-          type: array
-          description: The caller's available group actions (sent, paid, unpaid, forgiven, ask, decline).
-          items:
-            $ref: '#/components/schemas/ReceiptAction'
         otherUserId:
           type: string
           format: uuid
         netCents:
           type: integer
           format: int64
-          description: Positive means the caller is owed points; negative means the caller owes.
-        revision:
-          type: string
-          description: Opaque group revision for optimistic concurrency.
+          description: Of the open receipts. Positive means the caller is owed points; negative means the caller owes.
         pendingReviewRevision:
           type: [string, 'null']
           format: uuid
-          description: The caller's unreviewed balance-change warning, independent of the group revision.
+          description: The caller's unreviewed balance-change warning; settling waits until it's reviewed.
         lines:
           type: array
+          description: The open receipts.
           items:
             $ref: '#/components/schemas/SettlementLine'
+        pendingSettles:
+          type: array
+          description: Sent settles between the two still inside their reject window, newest first.
+          items:
+            $ref: '#/components/schemas/Settle'
     PendingSettlementReview:
       type: object
       additionalProperties: false
@@ -3762,19 +3946,6 @@ components:
               tags:
                 type: array
                 items: {type: string}
-    ReceiptAction:
-      type: object
-      additionalProperties: false
-      required: [action, blockedByReview]
-      description: >-
-        An action the caller may take now. blockedByReview means sending or
-        asking to forgive waits until the balance-change warning with this
-        person is reviewed.
-      properties:
-        action:
-          type: string
-        blockedByReview:
-          type: boolean
     ChatMessage:
       type: object
       additionalProperties: false
@@ -4000,6 +4171,102 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MemberRequestOutcome'
+    BetLiveStats:
+      type: object
+      additionalProperties: false
+      required: [gameId, league, status, period, clock, away, home, rows]
+      properties:
+        gameId:
+          type: string
+        league:
+          type: string
+          enum: [NBA, NFL]
+        status:
+          type: string
+        period:
+          type: [integer, 'null']
+        clock:
+          type: [string, 'null']
+        away:
+          $ref: '#/components/schemas/LiveTeam'
+        home:
+          $ref: '#/components/schemas/LiveTeam'
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, detail, proposed, locked, current, target, targetLabel]
+            properties:
+              label:
+                type: string
+                description: e.g. "Drake Maye passing yards" or "Combined score".
+              detail:
+                type: [string, 'null']
+                description: e.g. the player's position and team.
+              proposed:
+                type: [integer, 'null']
+                description: When the bet was proposed; null for bets made before snapshots.
+              locked:
+                type: [integer, 'null']
+                description: When picks locked; null before lock.
+              current:
+                type: [integer, 'null']
+              target:
+                type: [number, 'null']
+                description: The line or target this number is measured against, if the mode has one.
+              targetLabel:
+                type: [string, 'null']
+    LiveTeam:
+      type: object
+      additionalProperties: false
+      required: [abbreviation, score]
+      properties:
+        abbreviation:
+          type: string
+        score:
+          type: [integer, 'null']
+    TableSummary:
+      type: object
+      additionalProperties: false
+      description: One of the caller's tables in a list. Never the whole member list.
+      required: [id, name, emoji, host, memberCount, memberPreview, myDisabledPermissions, joinedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        emoji:
+          type: string
+        host:
+          type: boolean
+          description: Whether the caller hosts this table.
+        memberCount:
+          type: integer
+          minimum: 1
+          maximum: 500
+        memberPreview:
+          type: array
+          maxItems: 4
+          description: The first members by join order, for avatars.
+          items:
+            type: string
+            format: uuid
+        myDisabledPermissions:
+          type: array
+          description: The caller's own permissions a host turned off here.
+          items:
+            type: string
+            enum: [bets, text, react, gifs, polls]
+        lastBetAt:
+          type: string
+          format: date-time
+          description: When the table's most recent bet was proposed. Absent before its first bet.
+        joinedAt:
+          type: string
+          format: date-time
+          description: When the caller joined. The list orders by the later of this and lastBetAt.
     Table:
       type: object
       additionalProperties: false
@@ -4170,24 +4437,21 @@ components:
     BetBaseline:
       type: object
       additionalProperties: false
-      required: [at, awayScore, homeScore]
+      description: >-
+        Snapshots of what a sports bet's mode follows (see GET
+        /bets/{betId}/live), keyed by what they track: combined, margin,
+        player:<id>, home_td, home_fg, away_td, away_fg.
       properties:
-        at:
-          type: string
-          format: date-time
-        awayScore:
-          type: number
-        homeScore:
-          type: number
-        possession:
-          type: string
-          enum: [home, away]
-        yardLine:
-          type: string
-        stats:
+        proposed:
           type: object
+          description: When the bet was proposed.
           additionalProperties:
-            type: number
+            type: integer
+        locked:
+          type: object
+          description: When picks locked.
+          additionalProperties:
+            type: integer
     Bet:
       type: object
       additionalProperties: false

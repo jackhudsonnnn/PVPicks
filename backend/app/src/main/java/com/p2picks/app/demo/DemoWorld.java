@@ -30,6 +30,11 @@ final class DemoWorld {
     /** Every demo account's password. Public on purpose: the demo exists only in the dev profile. */
     static final String PASSWORD = "demo";
 
+    /** The pro's big table: he hosts, and the whole crowd sits at it. A fixed id, so the bots and history find it. */
+    static final UUID CROWD_TABLE = UUID.nameUUIDFromBytes("p2picks-demo-table:crowd".getBytes(
+            java.nio.charset.StandardCharsets.UTF_8));
+    static final String CROWD_TABLE_NAME = "Mosh Pit";
+
     static final int PRO_FRIENDS = 60;
     static final int INTERMEDIATE_FRIENDS = 9;
 
@@ -57,10 +62,11 @@ final class DemoWorld {
 
     DemoReset.Summary seed() {
         Instant now = clock.instant();
-        List<DemoUser> bots = DemoRoster.users();
+        List<DemoUser> bots = DemoRoster.regulars();
         // The picker signs in without a password; the shared, public demo password is for flows that ask for
         // one (account deletion) and for the password form. Dev only: production has no demo accounts.
-        insertUsers(bots, passwords.encode(PASSWORD), now);
+        String hash = passwords.encode(PASSWORD);
+        insertUsers(bots, hash, now);
 
         List<UUID> pool = new ArrayList<>(bots.stream().map(DemoUser::id).toList());
         Collections.shuffle(pool, random);
@@ -137,9 +143,47 @@ final class DemoWorld {
             tables++;
         }
 
+        crowd(hash, now);
+        tables++;
+
         writeFollows(now);
         int blocks = jdbc.queryForObject("SELECT count(*) FROM blocks", Integer.class);
-        return new DemoReset.Summary(bots.size() + DemoRoster.MAIN.size(), follows.size(), blocks, tables);
+        return new DemoReset.Summary(DemoRoster.SIZE + DemoRoster.MAIN.size(), follows.size(), blocks, tables);
+    }
+
+    /**
+     * The crowd and the pro's big table, Mosh Pit: the pro hosts, all 50 maniacs are members. They follow each other
+     * a lot but aren't the pro's friends, so his friend count stays as documented. Seeded last from its own random
+     * source, so everything above is the same world it was before the crowd existed. No history: the bots fill it.
+     */
+    private void crowd(String hash, Instant now) {
+        Random crowdRandom = new Random(DemoRoster.SEED + 2);
+        List<DemoUser> crowd = DemoRoster.crowd();
+        List<Object[]> rows = new ArrayList<>();
+        for (DemoUser bot : crowd) {
+            rows.add(new Object[] {bot.id(), bot.username(), bot.hue(), hash,
+                    Timestamp.from(now.minus(Duration.ofDays(20 + crowdRandom.nextInt(60))))});
+        }
+        jdbc.batchUpdate("""
+                INSERT INTO users (id, username, hue, password_hash, role, status, created_at)
+                VALUES (?, ?, ?, ?, 'PLAYER', 'ACTIVE', ?)
+                """, rows);
+        for (DemoUser bot : crowd) {
+            for (int i = 0; i < 10; i++) {
+                DemoUser other = crowd.get(crowdRandom.nextInt(crowd.size()));
+                follow(bot.id(), other.id());
+                if (crowdRandom.nextDouble() < other.profile().followBackChance()) follow(other.id(), bot.id());
+            }
+        }
+        Instant created = now.minus(Duration.ofDays(4));
+        jdbc.update("""
+                INSERT INTO tables (id, name, emoji, quickpick_code, created_at) VALUES (?, ?, '🔥', ?, ?)
+                """, CROWD_TABLE, CROWD_TABLE_NAME, code(crowdRandom), Timestamp.from(created));
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role, joined_at) VALUES (?, ?, 'HOST', ?)",
+                CROWD_TABLE, PRO, Timestamp.from(created));
+        jdbc.batchUpdate("INSERT INTO table_members (table_id, user_id, role, joined_at) VALUES (?, ?, 'MEMBER', ?)",
+                crowd.stream().map(bot -> new Object[] {CROWD_TABLE, bot.id(),
+                        Timestamp.from(created.plus(Duration.ofMinutes(5 + crowdRandom.nextInt(72 * 60))))}).toList());
     }
 
     private void insertUsers(List<DemoUser> bots, String hash, Instant now) {
@@ -203,6 +247,10 @@ final class DemoWorld {
     }
 
     private String code() {
+        return code(random);
+    }
+
+    private String code(Random random) {
         while (true) {
             StringBuilder code = new StringBuilder();
             for (int i = 0; i < 6; i++) code.append(CODE_ALPHABET.charAt(random.nextInt(CODE_ALPHABET.length())));

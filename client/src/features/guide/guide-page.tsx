@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PageHeader } from "@/components/page-header";
 import { useEffect, useState } from "react";
 import { MODES, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
@@ -88,7 +87,7 @@ export function HowToPlay({ feedback }: { feedback: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-5xl space-y-14 py-6 md:py-10">
       <div className="space-y-4">
-        <PageHeader eyebrow="No house. No vig." title="How to play" />
+        <h1 className="sr-only">How to play</h1>
         <nav aria-label="Guide sections" className="flex flex-wrap gap-2">
           {SECTIONS.map((x) => (
             <Link

@@ -41,7 +41,7 @@ class BetLockWorkerTest {
         transaction = new TransactionTemplate(manager);
         worker = new BetLockWorker(jdbc,
                 new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
-                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules()), manager);
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules(), noLiveStats()), manager);
     }
 
     @Test
@@ -73,7 +73,7 @@ class BetLockWorkerTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, sports)).isEqualTo("ACTIVE");
         var locks = new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
-                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules());
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules(), noLiveStats());
         assertThatThrownBy(() -> transaction.executeWithoutResult(ignored -> locks.lock(sports, Set.of("u2pick"))))
                 .isInstanceOf(BetLockService.UnsupportedMode.class);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, future)).isEqualTo("ACTIVE");
@@ -209,7 +209,7 @@ class BetLockWorkerTest {
         var failingJdbc = new JdbcTemplate(missing);
         var failing = new BetLockWorker(failingJdbc,
                 new BetLockService(failingJdbc, new DebtQuery(failingJdbc), new Outbox(failingJdbc, new ObjectMapper()),
-                new BetResolutionWriter(failingJdbc, new Outbox(failingJdbc, new ObjectMapper())), noModeRules()),
+                new BetResolutionWriter(failingJdbc, new Outbox(failingJdbc, new ObjectMapper())), noModeRules(), noLiveStats()),
                 new DataSourceTransactionManager(missing));
         assertThatThrownBy(failing::poll).isInstanceOf(DataAccessException.class);
     }
@@ -251,6 +251,10 @@ class BetLockWorkerTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(exception);
         }
+    }
+
+    private static org.springframework.beans.factory.ObjectProvider<BetLiveStats> noLiveStats() {
+        return new org.springframework.beans.factory.support.StaticListableBeanFactory().getBeanProvider(BetLiveStats.class);
     }
 
     private static org.springframework.beans.factory.ObjectProvider<LockWashRule> noModeRules() {

@@ -30,12 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class BetReadController {
+    private final BetLiveStats liveStats;
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
-    BetReadController(JdbcTemplate jdbc, ObjectMapper json) {
+    BetReadController(JdbcTemplate jdbc, ObjectMapper json, BetLiveStats liveStats) {
         this.jdbc = jdbc;
         this.json = json;
+        this.liveStats = liveStats;
     }
 
     /**
@@ -118,6 +120,20 @@ class BetReadController {
         if (!result.authenticated()) return unauthorized();
         if (result.bets().isEmpty()) return notFound();
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result.bets().getFirst());
+    }
+
+    /**
+     * A sports bet's live stats for its ticket Details: what its mode follows when proposed, at lock and now, with
+     * the game's score. Same access as the bet itself; 404 for a bet without a game (U2Pick).
+     */
+    @GetMapping("/bets/{betId}/live")
+    ResponseEntity<?> live(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID betId) {
+        ReadResult result = read(jwt, null, betId);
+        if (!result.authenticated()) return unauthorized();
+        if (result.bets().isEmpty()) return notFound();
+        return liveStats.read(betId)
+                .<ResponseEntity<?>>map(live -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(live))
+                .orElseGet(BetReadController::notFound);
     }
 
     private static final int DEFAULT_PAGE = 30;

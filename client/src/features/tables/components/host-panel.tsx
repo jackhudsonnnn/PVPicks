@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Crown } from "lucide-react";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { ScrollContainer } from "@/components/scroll-container";
+import { PageEdge } from "@/components/client-pages";
+import { useClientPages } from "@/components/use-client-pages";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { cn } from "@/lib/utils";
 import { PersonAvatar, usePerson } from "@/features/people";
@@ -18,6 +20,8 @@ export function HostPanel(props: PanelProps) {
   const members = [...table.memberIds].sort(
     (a, b) => Number(table.hostIds.includes(b)) - Number(table.hostIds.includes(a)),
   );
+  // Up to 500 members: mount them 20 at a time as you scroll.
+  const memberPages = useClientPages(members);
   return (
     <ScrollContainer isVisible={false} className={cn("space-y-4 p-4", className)}>
       <ActionStatus
@@ -34,13 +38,16 @@ export function HostPanel(props: PanelProps) {
         <ScrollContainer isVisible={false} className="max-h-80">
           <ul className="divide-y">
             <AnimatedList>
-              {members.map((id) => (
+              {memberPages.shown.map((id) => (
                 <AnimatedItem as="li" key={id}>
                   <MemberButton id={id} onOpen={() => setOpenId(id)} {...props} />
                 </AnimatedItem>
               ))}
             </AnimatedList>
           </ul>
+          {memberPages.hasMore && (
+            <PageEdge onMore={memberPages.more} label="More members" className="my-2 w-full" />
+          )}
         </ScrollContainer>
       </SettingsSection>
       <MemberSettingsDialog

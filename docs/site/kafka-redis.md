@@ -157,6 +157,9 @@ limits directly.
 | User search | `GET /users` | 30 a minute |
 | Follows, blocks | `POST`/`DELETE /follows/*`, `/blocks/*` | 30 a minute each |
 | Feedback | `POST /feedback` | 5 an hour |
+| New tables | `POST /tables` | 10 an hour |
+| Adding members or sending requests | `POST /tables/*/members` | 30 an hour (each call up to 100 people) |
+| Member search | `GET /tables/*/members` | 60 a minute |
 | WebSocket subscriptions | STOMP `SUBSCRIBE` (`delivery.SubscriptionGuard`) | 120 a minute, refused before the authorization queries |
 
 Two limits stay in PostgreSQL because their rows are business records:

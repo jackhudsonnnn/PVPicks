@@ -23,6 +23,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { ScrollContainer } from "@/components/scroll-container";
+import { PageEdge } from "@/components/client-pages";
+import { useClientPages } from "@/components/use-client-pages";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { PersonAvatar, usePerson } from "@/features/people";
 import { addableFollowers } from "@/features/tables/rules";
@@ -235,6 +237,7 @@ export function AddPlayersSection({ table, tableActions, ...people }: PanelProps
   const data = relationships.data;
   const candidates = data ? addableFollowers(table, data.followerIds, data.blockedIds) : [];
   const friends = candidates.filter((id) => data?.followingIds.includes(id));
+  const candidatePages = useClientPages(candidates);
   const disabled = busy(tableActions);
   const add = (userIds: string[]) =>
     tableActions.start({ kind: "add", tableId: table.id, userIds });
@@ -276,7 +279,7 @@ export function AddPlayersSection({ table, tableActions, ...people }: PanelProps
         <ScrollContainer isVisible={false} className="max-h-72">
           <ul className="divide-y">
             <AnimatedList>
-              {candidates.map((id) => (
+              {candidatePages.shown.map((id) => (
                 <AnimatedItem
                   as="li"
                   key={id}
@@ -317,6 +320,13 @@ export function AddPlayersSection({ table, tableActions, ...people }: PanelProps
               ))}
             </AnimatedList>
           </ul>
+          {candidatePages.hasMore && (
+            <PageEdge
+              onMore={candidatePages.more}
+              label="More followers"
+              className="mx-4 my-2 w-[calc(100%-2rem)]"
+            />
+          )}
         </ScrollContainer>
       )}
     </SettingsSection>

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile } from "@/features/people/api";
 import {
   type Table,
@@ -18,6 +18,7 @@ import {
 import { FriendsPage } from "@/features/social/friends";
 import { CreateTableDialog } from "@/features/tables/components/create-table-dialog";
 import { TableCards } from "@/features/tables/components/table-cards";
+import { SidebarTables } from "@/features/tables/components/sidebar-tables";
 import { AboutPanel, HostPanel } from "@/features/tables/components/host-panel";
 import { useBetActions } from "@/features/bets/actions";
 import { addableFollowers, tableNameProblem } from "./rules";
@@ -31,6 +32,7 @@ import {
   setFollow,
 } from "@/features/social/api";
 import { describeOutcomes, useTableActions } from "./actions";
+import { summaryOf } from "@/test/api-fixtures";
 
 vi.mock("@/features/people/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/people/api")>()),
@@ -67,8 +69,10 @@ vi.mock("@/features/chat/api", async (importOriginal) => ({
   listLatestMessages: vi.fn(async () => []),
 }));
 vi.mock("@/lib/realtime", () => ({ useRealtimeFeed: () => {} }));
+const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  useNavigate: () => navigate,
 }));
 
 const me = { id: "123e4567-e89b-42d3-a456-426614174000", username: "me", hue: 1 };
@@ -130,6 +134,7 @@ beforeEach(() => {
   vi.mocked(getRelationships).mockResolvedValue({
     followingIds: [friend, stranger],
     followerIds: [friend, fan],
+    friendIds: [friend],
     blockedIds: [],
   });
   vi.mocked(listInvites).mockResolvedValue([]);
@@ -150,10 +155,12 @@ describe("rules", () => {
     const relationships = {
       followingIds: [friend, stranger],
       followerIds: [friend, fan],
+      friendIds: [friend],
       blockedIds: [],
     };
     expect(peopleIn("friends", relationships)).toEqual([friend]);
-    expect(peopleIn("followers", relationships)).toEqual([friend, fan]);
+    expect(peopleIn("requests", relationships)).toEqual([fan]);
+    expect(peopleIn("following", relationships)).toEqual([friend, stranger]);
     expect(addableFollowers(table, [friend, fan, stranger], [stranger])).toEqual([fan]);
     expect(
       describeOutcomes([
@@ -204,8 +211,8 @@ describe("home", () => {
     expect(createTable).not.toHaveBeenCalled();
   });
 
-  it("shows invitations and tables as cards, and accepts an invitation", async () => {
-    vi.mocked(listTables).mockResolvedValue([{ ...table, name: "Sunday Squad" }]);
+  it("without the sidebar, shows requests and tables as cards, and accepts a request", async () => {
+    vi.mocked(listTables).mockResolvedValue([summaryOf({ ...table, name: "Sunday Squad" }, me.id)]);
     vi.mocked(listInvites).mockResolvedValue([
       {
         id: "123e4567-e89b-42d3-a456-426614174020",
@@ -215,7 +222,8 @@ describe("home", () => {
         fromId: friend,
         userId: me.id,
         createdAt: "2026-11-13T12:00:00Z",
-        memberIds: [friend],
+        memberPreview: [friend],
+        memberCount: 1,
       },
     ]);
     vi.mocked(respondToInvite).mockResolvedValue();
@@ -223,7 +231,7 @@ describe("home", () => {
     expect(await screen.findByText("Sunday Squad")).toBeInTheDocument();
     expect(await screen.findByText("No messages yet")).toBeInTheDocument();
     expect(await screen.findByText("friend wants you at this table. Accept?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Invitation to Game Night" }));
+    fireEvent.click(screen.getByRole("button", { name: "Request to join Game Night" }));
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() =>
       expect(respondToInvite).toHaveBeenCalledWith(
@@ -236,19 +244,229 @@ describe("home", () => {
   });
 });
 
+describe("table list with the desktop sidebar", () => {
+  const request = (id: string, tableName: string, createdAt: string) => ({
+    id,
+    tableId: table.id,
+    tableName,
+    tableEmoji: "🎲",
+    fromId: friend,
+    userId: me.id,
+    createdAt,
+    memberPreview: [friend],
+    memberCount: 1,
+  });
+  const older = request(
+    "123e4567-e89b-42d3-a456-426614174021",
+    "Older Ask",
+    "2026-11-10T12:00:00Z",
+  );
+  const newer = request(
+    "123e4567-e89b-42d3-a456-426614174022",
+    "Newer Ask",
+    "2026-11-15T12:00:00Z",
+  );
+  const quiet = summaryOf(
+    { ...table, id: "123e4567-e89b-42d3-a456-426614174031", name: "Quiet" },
+    me.id,
+  );
+  const busy = summaryOf(
+    { ...table, id: "123e4567-e89b-42d3-a456-426614174032", name: "Busy" },
+    me.id,
+    { lastBetAt: "2026-11-16T20:00:00Z" },
+  );
+
+  beforeEach(() => {
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === "(min-width: 68.75rem)",
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    vi.mocked(listTables).mockResolvedValue([quiet, busy]);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("on Home shows only Requests, newest first, and answers them from the sidebar", async () => {
+    vi.mocked(listInvites).mockResolvedValue([older, newer]);
+    vi.mocked(respondToInvite).mockResolvedValue();
+    wrap(<SidebarTables user={me} pathname="/" expire={expire} />);
+    expect(await screen.findByText("Requests")).toBeInTheDocument();
+    const rows = await screen.findAllByRole("button", { name: /Request to join/ });
+    expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+      "Request to join Newer Ask",
+      "Request to join Older Ask",
+    ]);
+    expect(screen.queryByText("Busy")).not.toBeInTheDocument();
+    fireEvent.click(rows[0]!);
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    await waitFor(() =>
+      expect(respondToInvite).toHaveBeenCalledWith(newer.id, true, expect.any(String)),
+    );
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({
+        to: "/tables/$tableId",
+        params: { tableId: newer.tableId },
+      }),
+    );
+  });
+
+  it("on Home shows nothing without requests", async () => {
+    const { container } = wrap(<SidebarTables user={me} pathname="/" expire={expire} />);
+    await waitFor(() => expect(listInvites).toHaveBeenCalled());
+    await waitFor(() => expect(listTables).toHaveBeenCalled());
+    expect(screen.queryByText("Requests")).not.toBeInTheDocument();
+    expect(screen.queryByText("Busy")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("elsewhere switches between My tables (by most recent bet) and Requests", async () => {
+    vi.mocked(listInvites).mockResolvedValue([older, newer]);
+    wrap(<SidebarTables user={me} pathname="/friends" expire={expire} />);
+    expect(
+      await screen.findByRole("tab", { name: "My tables", selected: true }),
+    ).toBeInTheDocument();
+    const busyRow = await screen.findByText("Busy");
+    expect(busyRow.compareDocumentPosition(screen.getByText("Quiet"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Requests" }));
+    expect(
+      await screen.findByRole("button", { name: "Request to join Newer Ask" }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Busy")).not.toBeInTheDocument());
+  });
+
+  it("elsewhere lists just My tables when there are no requests", async () => {
+    wrap(<SidebarTables user={me} pathname="/friends" expire={expire} />);
+    expect(await screen.findByText("Busy")).toBeInTheDocument();
+    expect(screen.getByText("My tables")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  });
+
+  it("pages a long table list 20 at a time", async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      summaryOf(
+        {
+          ...table,
+          id: `123e4567-e89b-42d3-a456-4266141741${String(i).padStart(2, "0")}`,
+          name: `Table ${i}`,
+        },
+        me.id,
+        { joinedAt: `2026-11-${String(25 - i).padStart(2, "0")}T00:00:00Z` },
+      ),
+    );
+    vi.mocked(listTables).mockResolvedValue(many);
+    wrap(<SidebarTables user={me} pathname="/friends" expire={expire} />);
+    expect(await screen.findByText("Table 0")).toBeInTheDocument();
+    expect(screen.getByText("Table 19")).toBeInTheDocument();
+    expect(screen.queryByText("Table 20")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More tables" }));
+    expect(await screen.findByText("Table 24")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More tables" })).not.toBeInTheDocument();
+  });
+
+  it("leaves requests off Home's table cards", async () => {
+    vi.mocked(listInvites).mockResolvedValue([newer]);
+    wrap(<TableCards user={me} expire={expire} />);
+    expect(await screen.findByText("Busy")).toBeInTheDocument();
+    expect(screen.queryByText("Newer Ask")).not.toBeInTheDocument();
+  });
+});
+
+describe("Home table cards without the sidebar", () => {
+  it("puts requests (newest first) before your tables, which go by most recent bet", async () => {
+    const request = (id: string, tableName: string, createdAt: string) => ({
+      id,
+      tableId: table.id,
+      tableName,
+      tableEmoji: "🎲",
+      fromId: friend,
+      userId: me.id,
+      createdAt,
+      memberPreview: [friend],
+      memberCount: 120,
+    });
+    vi.mocked(listInvites).mockResolvedValue([
+      request("123e4567-e89b-42d3-a456-426614174041", "Old Ask", "2026-11-01T00:00:00Z"),
+      request("123e4567-e89b-42d3-a456-426614174042", "New Ask", "2026-11-15T00:00:00Z"),
+    ]);
+    vi.mocked(listTables).mockResolvedValue([
+      summaryOf({ ...table, id: "123e4567-e89b-42d3-a456-426614174051", name: "Quiet" }, me.id),
+      summaryOf({ ...table, id: "123e4567-e89b-42d3-a456-426614174052", name: "Busy" }, me.id, {
+        lastBetAt: "2026-11-16T00:00:00Z",
+      }),
+    ]);
+    wrap(<TableCards user={me} expire={expire} />);
+    expect(await screen.findByRole("heading", { name: "Tables" })).toBeInTheDocument();
+    const requests = within(await screen.findByRole("group", { name: "Requests" }));
+    expect(
+      requests
+        .getAllByRole("button", { name: /Request to join/ })
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Request to join New Ask", "Request to join Old Ask"]);
+    const tables = within(screen.getByRole("group", { name: "Tables" }));
+    const busy = await tables.findByText("Busy");
+    expect(busy.compareDocumentPosition(tables.getByText("Quiet"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    // The request card counts everyone at the table, not just the preview.
+    expect(requests.getAllByText("+119")).toHaveLength(2);
+  });
+});
+
 describe("friends", () => {
-  it("lists friends and new followers, follows back and blocks", async () => {
+  it("lists friends, then requests to follow back, with no separate new-followers list", async () => {
     vi.mocked(setFollow).mockResolvedValue();
     vi.mocked(setBlock).mockResolvedValue();
     wrap(<FriendsPage user={me} expire={expire} />);
-    const newFollowers = (await screen.findByText("New followers")).parentElement!;
-    expect(await within(newFollowers).findByText("fan")).toBeInTheDocument();
-    fireEvent.click(within(newFollowers).getByRole("button", { name: "Follow back" }));
+    expect(await screen.findByRole("tab", { name: "Friends · 1" })).toBeInTheDocument();
+    expect(await screen.findByText("friend")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "My network" })).toBeInTheDocument();
+    // Cards in a sideways row, like the settle-ups.
+    const row = screen.getByLabelText(/People you follow who follow you back/);
+    expect(row).toHaveAttribute("data-scroll-direction", "horizontal");
+    expect(within(row).getByText("friend")).toBeInTheDocument();
+    expect(screen.queryByText("New followers")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "People" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /Followers/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Requests · 1" }));
+    expect(await screen.findByText(/Follow them to be friends/)).toBeInTheDocument();
+    expect(await screen.findByText("fan")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Follow" }));
+    expect(await screen.findByText(/so you'll be friends/)).toBeInTheDocument();
+    expect(setFollow).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(setFollow).toHaveBeenCalledWith(fan, true, expect.any(String)));
-    expect(screen.getByRole("tab", { name: "Friends · 1" })).toBeInTheDocument();
-    fireEvent.click(within(newFollowers).getByRole("button", { name: "Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "Block" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(setBlock).toHaveBeenCalledWith(fan, true, expect.any(String)));
+  });
+
+  it("asks before unfollowing or unblocking", async () => {
+    vi.mocked(getRelationships).mockResolvedValue({
+      followingIds: [friend],
+      followerIds: [friend],
+      friendIds: [friend],
+      blockedIds: [stranger],
+    });
+    vi.mocked(setFollow).mockResolvedValue();
+    vi.mocked(setBlock).mockResolvedValue();
+    wrap(<FriendsPage user={me} expire={expire} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Unfollow" }));
+    expect(await screen.findByText(/no longer be friends/)).toBeInTheDocument();
+    expect(setFollow).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(setFollow).toHaveBeenCalledWith(friend, false, expect.any(String)));
+    fireEvent.click(screen.getByRole("tab", { name: "Blocked · 1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unblock" }));
+    expect(await screen.findByText(/aren't restored/)).toBeInTheDocument();
+    expect(setBlock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(setBlock).toHaveBeenCalledWith(stranger, false, expect.any(String)));
   });
 
   it("searches valid usernames only", async () => {

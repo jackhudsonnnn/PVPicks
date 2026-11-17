@@ -2,16 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BackendError } from "@/lib/api-client";
 import {
   acknowledgeReview,
+  createSettle,
   listSettlementGroups,
+  listSettles,
   receiptHistory,
-  transitionGroup,
-  transitionLine,
+  rejectSettle,
 } from "./api";
 
 const actor = "123e4567-e89b-42d3-a456-426614174000";
 const other = "123e4567-e89b-42d3-a456-426614174001";
 const lineId = "123e4567-e89b-42d3-a456-426614174002";
 const revision = "123e4567-e89b-42d3-a456-426614174003";
+const settleId = "123e4567-e89b-42d3-a456-426614174004";
 const line = {
   id: lineId,
   settlementId: revision,
@@ -21,78 +23,105 @@ const line = {
   amountCents: 100,
   status: "unpaid",
   revision: 1,
-  forgiveRequestedAt: null,
-  forgiveDeclinedAt: null,
+  settleId: null,
   createdAt: "2026-11-11T12:00:00Z",
   updatedAt: "2026-11-11T12:00:00Z",
-  actions: [{ action: "sent", blockedByReview: false }],
 };
-const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
+const settle = {
+  id: settleId,
+  kind: "sent",
+  senderId: actor,
+  otherId: other,
+  payerId: actor,
+  payeeId: other,
+  amountCents: 100,
+  createdAt: "2026-11-16T12:00:00Z",
+  rejectBy: "2026-11-18T12:00:00Z",
+  rejectedAt: null,
+  canReject: false,
+  lines: [
+    {
+      id: lineId,
+      tableId: revision,
+      payerId: actor,
+      payeeId: other,
+      amountCents: 100,
+      createdAt: "2026-11-11T12:00:00Z",
+    },
+  ],
+};
+const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("gated settlement API", () => {
-  it("preserves int64 cents exactly and rejects receipts for other parties", async () => {
+describe("settlement API", () => {
+  it("preserves int64 cents exactly and rejects receipts or settles for other parties", async () => {
     const hugeLine = JSON.stringify(line).replace(
       '"amountCents":100',
       '"amountCents":9223372036854775807',
     );
-    const groups = `[{"otherUserId":"${other}","netCents":-9223372036854775808,"revision":"abc","pendingReviewRevision":null,"actions":[],"lines":[${hugeLine}]}]`;
+    const groups = `[{"otherUserId":"${other}","netCents":-9223372036854775808,"pendingReviewRevision":null,"pendingSettles":[],"lines":[${hugeLine}]}]`;
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(groups))
-      .mockResolvedValueOnce(json([{ ...line, payerId: other, payeeId: revision }]));
+      .mockResolvedValueOnce(json([{ ...line, payerId: other, payeeId: revision }]))
+      .mockResolvedValueOnce(
+        json({ items: [{ ...settle, senderId: revision }], nextCursor: null }),
+      );
     vi.stubGlobal("fetch", fetch);
     const [group] = await listSettlementGroups(actor);
     expect(group?.netCents).toBe(-9223372036854775808n);
     expect(group?.lines[0]?.amountCents).toBe(9223372036854775807n);
+    expect(fetch.mock.calls[0]?.[0]).toBe("/api/people/settle-groups");
     await expect(receiptHistory(actor, other)).rejects.toThrow("unexpected response");
+    await expect(listSettles(actor, other, null)).rejects.toThrow("unexpected response");
   });
 
-  it("uses fresh CSRF and supplied retry keys for review, line and group actions", async () => {
+  it("settles and rejects with fresh CSRF and the supplied retry keys", async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(json({ token: "one" }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(settle, 201))
       .mockResolvedValueOnce(json({ token: "two" }))
-      .mockResolvedValueOnce(json({ ...line, status: "sent", revision: 2 }))
+      .mockResolvedValueOnce(json({ ...settle, rejectedAt: "2026-11-16T13:00:00Z" }))
       .mockResolvedValueOnce(json({ token: "three" }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json({ items: [settle], nextCursor: "next" }));
     vi.stubGlobal("fetch", fetch);
+    expect((await createSettle(other, "sent", [lineId], "settle-key")).amountCents).toBe(100n);
+    await rejectSettle(settleId, "reject-key");
     await acknowledgeReview(other, revision, "review-key");
-    await transitionLine(actor, other, lineId, "sent", 1, "line-key");
-    await transitionGroup(other, "paid", "group-revision", "group-key");
+    const page = await listSettles(actor, other, "abc");
+    expect(page.nextCursor).toBe("next");
     expect(fetch.mock.calls[1]).toMatchObject([
-      `/api/users/${other}/settlement-review/acknowledge`,
+      `/api/people/${other}/settles`,
       {
         method: "POST",
-        headers: { "X-CSRF-TOKEN": "one", "Idempotency-Key": "review-key" },
-        body: JSON.stringify({ revision }),
+        headers: { "X-CSRF-TOKEN": "one", "Idempotency-Key": "settle-key" },
+        body: JSON.stringify({ kind: "sent", lineIds: [lineId] }),
       },
     ]);
     expect(fetch.mock.calls[3]).toMatchObject([
-      `/api/settlement-lines/${lineId}/sent`,
-      { headers: { "X-CSRF-TOKEN": "two", "Idempotency-Key": "line-key" }, body: '{"revision":1}' },
+      `/api/settles/${settleId}/reject`,
+      { method: "POST", headers: { "X-CSRF-TOKEN": "two", "Idempotency-Key": "reject-key" } },
     ]);
-    expect(fetch.mock.calls[5]).toMatchObject([
-      `/api/people/${other}/settle`,
-      {
-        headers: { "X-CSRF-TOKEN": "three", "Idempotency-Key": "group-key" },
-        body: '{"step":"paid","expectedRevision":"group-revision"}',
-      },
-    ]);
+    expect(fetch.mock.calls[5]?.[0]).toBe(`/api/users/${other}/settlement-review/acknowledge`);
+    expect(fetch.mock.calls[6]?.[0]).toBe(`/api/people/${other}/settles?cursor=abc`);
   });
 
-  it("retains conflict codes and rejects invalid identities before a request", async () => {
+  it("keeps limit and conflict codes and rejects invalid identities before a request", async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(json({ token: "one" }))
-      .mockResolvedValueOnce(new Response('{"code":"stale_review"}', { status: 409 }));
+      .mockResolvedValueOnce(
+        new Response('{"code":"settle_limit","message":"Try again later."}', { status: 429 }),
+      );
     vi.stubGlobal("fetch", fetch);
-    await expect(acknowledgeReview(other, revision, "same-key")).rejects.toMatchObject({
-      status: 409,
-      code: "stale_review",
+    await expect(createSettle(other, "sent", [lineId], "same-key")).rejects.toMatchObject({
+      status: 429,
+      code: "settle_limit",
     });
+    await expect(createSettle(other, "sent", ["../bad"], "k")).rejects.toBeInstanceOf(BackendError);
     await expect(receiptHistory(actor, "../bad")).rejects.toBeInstanceOf(BackendError);
     expect(fetch).toHaveBeenCalledTimes(2);
   });

@@ -1,7 +1,7 @@
 # Demo world
 
-The dev backend always comes up as a lived-in app: 200 demo users with their
-own play styles, three main accounts at different stages, games that are
+The dev backend always comes up as a lived-in app: 250 demo users with their
+own play styles (200 regulars and a 50-person crowd), three main accounts at different stages, games that are
 always live, and bots that react to what you do (owner decisions,
 2026-11-14). Production never has any of
 it. There's no switch: it's the dev profile, and **Reset** on the Dev page is
@@ -27,7 +27,7 @@ password form. It's public on purpose: the demo exists only in dev.
 |---|---|
 | `newbie` | Completely fresh: no friends, follows, tables, tickets, chat or settle-ups. |
 | `intermediate` | 9 friends, 3 tables, 8 settled tickets from the last 45 days, all settled up. No Active or Pending bets, no blocks or reports. |
-| `pro` | 60 friends and 14 tables (2 more inviting him). Blocks people and is blocked by people who share his tables. About 300 tickets over 90 days, points settled every two weeks per table, older receipts mostly paid (some forgiven, some still open), the latest open. Kept near **20 Pending and 5 Active** bets. |
+| `pro` | 60 friends and 15 tables (2 more inviting him), including Mosh Pit, the big table (below). Blocks people and is blocked by people who share his tables. About 300 tickets over 90 days, points settled every two weeks per table, older receipts mostly paid (some forgiven, some still open), the latest open. Kept near **20 Pending and 5 Active** bets. |
 | `admin` | The moderation queue with 6 open reports, and site health. |
 
 Active means a bet is still taking picks (a 30–600 second window); Pending
@@ -64,7 +64,7 @@ variation from a fixed seed, so a reset rebuilds the same world.
 | Chat | `messagesPerHour` | 0.5 | Messages in each of their tables while online. |
 | | `gifChance`, `reactionChance` | 0.15, 0.2 | GIFs instead of text; reacting to messages. |
 | | `trashTalkChance` | 0.3 | A canned line after a win or loss. |
-| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `FORGIVES` or `DISPUTES` with receipts. |
+| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `FORGIVES` or `DISPUTES` when settling up. |
 | | `activeHours` | all day | When they act (New York time; the same start and end means all day). |
 | | `onlineChance` | 0.9 | Share of their active hours they're actually around. |
 
@@ -78,9 +78,36 @@ Archetypes (each changes only what's listed):
 | Sharp | `pickStyle` `FAVORITE`, `settleStyle` `PROMPT`, `trashTalkChance` 0.05. |
 | Troll | `trashTalkChance` 0.8, `blockChance` 0.1, `reportChance` 0.1, `settleStyle` `DISPUTES`. |
 | Friendly | `followBackChance` 0.95, `inviteAcceptChance` 0.9, `settleStyle` `FORGIVES`. |
+| Maniac | The crowd only, never drawn for regulars: `joinBetChance` 0.95, `proposalsPerHour` 2, `wager` 5–10, `reactionSeconds` 3–30, `messagesPerHour` 4, `gifChance` 0.25, `reactionChance` 0.3, `trashTalkChance` 0.9, `onlineChance` 1, and `blockChance` and `reportChance` 0 so the noise stays in the table instead of the moderation queue. |
 
 Usernames are generated handles that fit the 3–15 character rule. Chat lines
 are canned, not AI-written.
+
+## Mosh Pit: the big table
+
+Mosh Pit simulates a big group. The pro hosts it, and he's its only host.
+Its other 50 members are the crowd: demo users who exist only for this table,
+all with the Maniac archetype. They follow each other a lot but aren't the
+pro's friends.
+
+- **Bets.** The crowd keeps 6 to 12 bets open there, on its own budget, so
+  the pro's other tables still keep their five. Nearly everyone joins each
+  bet within seconds, at 5–10 points, so a bet usually has 40 or more
+  pickers.
+- **U2Pick calls.** The pro is the only host, so the crowd's U2Picks there
+  use the "anyone" settler rule and get called 5–30 minutes after lock.
+  Otherwise each one would wait on him.
+- **Chat.** About 200 messages an hour, plus reactions. Trash talk is capped
+  at three lines per settled bet in every table.
+- **Points.** No demo user hosts Mosh Pit, so its points wait for the pro to
+  settle them. Settle often or the settle-up gets long.
+- **History.** It has none. The seeded past and Pending bets stay in the
+  pro's other tables, so his story above is unchanged and it starts empty
+  after a reset. The bots fill it within a minute or two.
+
+The table's id is fixed (`DemoWorld.CROWD_TABLE`). The crowd is generated after
+the regulars from the same seed, and its table is seeded last with its own
+random source, so adding them left the rest of the world exactly as it was.
 
 ## Bots
 
@@ -101,10 +128,10 @@ they do:
 | Six or more bets waiting for points settlement | The demo host settles the table's points, at most hourly | Tables a demo user hosts |
 | Online | Chat (`messagesPerHour`, `gifChance`), react to recent messages (`reactionChance`) | Tables with a main account |
 | A bet they were in settles | Trash talk (`trashTalkChance`); others may report or block the talker | Same |
-| Someone follows them (after the bots started) | Follow back (`followBackChance`) | Anywhere |
+| Someone follows them (after the bots started) | Follow (`followBackChance`) | Anywhere |
 | An invitation | Accept (`inviteAcceptChance`) or decline | Anywhere |
 | Now and then | Follow someone (`followsPerDay`): other demo users, sometimes the pro | Anywhere |
-| A receipt that's theirs to act on | Mark sent, confirm, dispute, forgive or ask to forgive, per `settleStyle` | Anywhere |
+| Open receipts with someone | Send them all when they owe (`PROMPT` within minutes, `SLOW` and `DISPUTES` within hours), mark an even pair received, and sometimes forgive what's owed to them (`FORGIVES`). A `DISPUTES` receiver sometimes rejects a send a few minutes in. | Anywhere |
 
 The seeded world stays as seeded: follows that existed before the bots
 started never get followed back, and newbie only gets bots if you put him in

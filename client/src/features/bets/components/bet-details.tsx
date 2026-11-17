@@ -1,5 +1,6 @@
 import { STATUSES } from "@/features/bets/statuses";
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,8 @@ import { StatusBadge } from "./status-badge";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import type { Bet } from "@/features/bets/api";
-import type { Table } from "@/features/tables";
+import { type Bet, getBetLiveStats } from "@/features/bets/api";
+import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
 
@@ -58,7 +59,7 @@ function FactSection({ title, children }: { title: string; children: ReactNode }
 
 interface Props {
   bet: Bet;
-  table: Table;
+  table: TableRef;
   user: User;
   expire: () => void;
   peopleKey: readonly string[];
@@ -206,6 +207,8 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 
           <BetFacts {...props} onNavigate={() => setOpen(false)} />
 
+          {bet.gameId && <LiveStats betId={bet.id} />}
+
           <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
             {rows ? (
               rows.length === 0 ? (
@@ -250,5 +253,82 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
         </ScrollContainer>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Refresh while the game is live: stats arrive every few seconds, scores every 15. */
+const LIVE_REFRESH_MS = 15_000;
+
+/**
+ * "Live stats": what the bet's mode follows (the combined score, the home margin, each player's stat, each team's
+ * touchdowns and field goals) when it was proposed, when picks locked, and now, against its line or target. Mounted
+ * only while Details is open, so it fetches on demand.
+ */
+function LiveStats({ betId }: { betId: string }) {
+  const live = useQuery({
+    queryKey: ["bet-live", betId],
+    queryFn: ({ signal }) => getBetLiveStats(betId, signal),
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.status === "LIVE" ? LIVE_REFRESH_MS : false),
+  });
+  if (live.isPending || live.isError || live.data.rows.length === 0) return null;
+  const { away, home, status, clock, period } = live.data;
+  const when =
+    status === "LIVE"
+      ? (clock ?? (period ? `Period ${period}` : "Live"))
+      : status === "FINAL"
+        ? "Final"
+        : status === "SCHEDULED"
+          ? "Not started"
+          : status.toLowerCase();
+  return (
+    <section className="space-y-1">
+      <h4 className="flex items-center justify-between font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
+        Live stats
+        <span className="font-normal text-muted-foreground">
+          {away.abbreviation} {away.score ?? 0} @ {home.abbreviation} {home.score ?? 0} · {when}
+        </span>
+      </h4>
+      <div className="divide-y rounded-lg border bg-surface px-3">
+        {live.data.rows.map((row) => (
+          <div key={row.label} className="py-2 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block font-semibold">{row.label}</span>
+                {row.detail && (
+                  <span className="block text-xs text-muted-foreground">{row.detail}</span>
+                )}
+              </span>
+              {row.target !== null && (
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {row.targetLabel ?? "Target"} {row.target}
+                </span>
+              )}
+            </div>
+            <dl className="mt-1.5 grid grid-cols-3 gap-2 text-center">
+              {(
+                [
+                  ["Proposed", row.proposed],
+                  ["At lock", row.locked],
+                  ["Now", row.current],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="rounded-md bg-muted/50 py-1">
+                  <dt className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd
+                    className={cn("scoreboard text-lg", label === "Now" && "text-primary")}
+                    aria-label={`${label}: ${value ?? "not recorded"}`}
+                  >
+                    {value ?? "–"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

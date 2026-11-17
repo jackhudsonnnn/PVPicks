@@ -43,6 +43,34 @@ class SocialIntegrationTest extends IntegrationTestSupport {
     private SocialReadController socialReads;
 
     @Test
+    void relationshipListsAreNewestFirst() throws Exception {
+        UUID viewer = UUID.randomUUID();
+        UUID early = UUID.randomUUID();
+        UUID late = UUID.randomUUID();
+        UUID fan = UUID.randomUUID();
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, 'ordviewer', 1, ?, 'PLAYER', 'ACTIVE'), (?, 'ordearly', 1, ?, 'PLAYER', 'ACTIVE'),
+                (?, 'ordlate', 1, ?, 'PLAYER', 'ACTIVE'), (?, 'ordfan', 1, ?, 'PLAYER', 'ACTIVE')
+                """, viewer, hash, early, hash, late, hash, fan, hash);
+        // The viewer followed "early" first and "late" second, but "early" only followed back today, so that's the
+        // newer friendship. "fan" followed the viewer yesterday (a request).
+        jdbc.update("""
+                INSERT INTO follows (follower_id, followee_id, created_at) VALUES
+                (?, ?, now() - interval '10 days'), (?, ?, now() - interval '5 days'),
+                (?, ?, now() - interval '4 days'), (?, ?, now() - interval '1 hour'),
+                (?, ?, now() - interval '1 day')
+                """, viewer, early, viewer, late, late, viewer, early, viewer, fan, viewer);
+        JsonNode lists = json.readTree(mvc.perform(get("/me/relationships").cookie(loginAs("ordviewer")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(lists.path("followingIds").toString()).isEqualTo("[\"" + late + "\",\"" + early + "\"]");
+        assertThat(lists.path("followerIds").toString())
+                .isEqualTo("[\"" + early + "\",\"" + fan + "\",\"" + late + "\"]");
+        assertThat(lists.path("friendIds").toString()).isEqualTo("[\"" + early + "\",\"" + late + "\"]");
+    }
+
+    @Test
     void relationshipReadsKeepBlocksPrivateAndFilterStaleFollows() throws Exception {
         UUID viewer = UUID.randomUUID();
         UUID friend = UUID.randomUUID();
@@ -81,6 +109,7 @@ class SocialIntegrationTest extends IntegrationTestSupport {
         assertThat(relationships.path("blockedIds").size()).isEqualTo(1);
         assertThat(relationships.path("blockedIds").get(0).asText()).isEqualTo(blocked.toString());
         assertThat(relationships.toString()).doesNotContain(blocker.toString());
+        assertThat(relationships.path("friendIds").toString()).isEqualTo("[\"" + friend + "\"]");
 
         JsonNode blockedView = json.readTree(mvc.perform(get("/me/relationships").cookie(blockedSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
@@ -185,8 +214,9 @@ class SocialIntegrationTest extends IntegrationTestSupport {
         for (JsonNode invitation : invitations) {
             assertThat(OpenApiSchemas.load("TableInvite").validate(invitation)).isEmpty();
             assertThat(invitation.has("quickPickCode")).isFalse();
-            // Members are listed for the card's avatars; the code, chat and bets stay private.
-            assertThat(invitation.path("memberIds").isArray()).isTrue();
+            // A few members for the card's avatars and the count; the code, chat and bets stay private.
+            assertThat(invitation.path("memberPreview").isArray()).isTrue();
+            assertThat(invitation.has("memberIds")).isFalse();
         }
         mvc.perform(get("/tables/" + newer).cookie(viewerSession)).andExpect(status().isNotFound());
         JsonNode otherInvites = json.readTree(mvc.perform(get("/me/invites").cookie(otherSession))

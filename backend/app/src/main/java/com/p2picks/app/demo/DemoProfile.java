@@ -126,7 +126,15 @@ public record DemoProfile(
         LURKER(20, p -> p.joinBetChance(0.2).messagesPerHour(0.05)),
         SHARP(10, p -> p.pickStyle(PickStyle.FAVORITE).settleStyle(SettleStyle.PROMPT).trashTalkChance(0.05)),
         TROLL(5, p -> p.trashTalkChance(0.8).blockChance(0.1).reportChance(0.1).settleStyle(SettleStyle.DISPUTES)),
-        FRIENDLY(15, p -> p.followBackChance(0.95).inviteAcceptChance(0.9).settleStyle(SettleStyle.FORGIVES));
+        FRIENDLY(15, p -> p.followBackChance(0.95).inviteAcceptChance(0.9).settleStyle(SettleStyle.FORGIVES)),
+        /**
+         * The crowd at the pro's big table, never drawn for regulars (weight 0): always online, joins almost every
+         * bet within seconds, proposes and chats constantly, bets big and talks trash. They don't block or report,
+         * so the volume stays in the table instead of flooding moderation.
+         */
+        MANIAC(0, p -> p.joinBetChance(0.95).proposalsPerHour(2).wager(500, 1_000).reactionSeconds(3, 30)
+                .messagesPerHour(4).gifChance(0.25).reactionChance(0.3).trashTalkChance(0.9).blockChance(0)
+                .reportChance(0).onlineChance(1));
 
         /** Relative share of demo users with this archetype. */
         final int weight;

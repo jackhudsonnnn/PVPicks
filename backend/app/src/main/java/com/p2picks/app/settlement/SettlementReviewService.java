@@ -109,16 +109,6 @@ public class SettlementReviewService {
                 """, UUID.randomUUID(), actor, other, other, actor);
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void refreshPendingIfOpen(UUID actor, UUID other) {
-        Boolean open = jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM settlement_lines
-                    WHERE ((payer_id = ? AND payee_id = ?) OR (payer_id = ? AND payee_id = ?))
-                      AND status NOT IN ('paid', 'forgiven'))
-                """, Boolean.class, actor, other, other, actor);
-        if (Boolean.TRUE.equals(open)) refreshPending(actor, other);
-    }
-
     @Transactional
     public Outcome acknowledge(Jwt jwt, UUID other, UUID revision, String key) {
         if (!IdempotencyGuard.validKey(key) || other == null || revision == null) {

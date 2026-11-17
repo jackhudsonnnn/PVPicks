@@ -30,7 +30,7 @@ class SettlementFrontendIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Preview', 'T', 'P4E8WA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, payer);
-        UUID line = insertDebtReceipt(table, host, payer, host, 100, "sent");
+        UUID line = insertDebtReceipt(table, host, payer, host, 100, "unpaid");
         insertDebtBet(table, payer, host, "SETTLED", false, false, false, 100, -125);
         Jwt hostJwt = decoder.decode(loginAs("previewhost").getValue());
         pointsSettlement.settle(hostJwt, table, "preview-points");
@@ -39,7 +39,11 @@ class SettlementFrontendIntegrationTest extends IntegrationTestSupport {
         runFrontendTest("src/features/settlements/settlement-integration.test.tsx", Map.of());
         assertThat(reviewRevision(loginAs("previewpayer"), host)).isNull();
         assertThat(reviewRevision(loginAs("previewhost"), payer)).isNotNull();
+        // Sent through the ledger: paid now, with the host able to reject it for 48 hours.
         assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, line))
-                .isEqualTo("sent");
+                .isEqualTo("paid");
+        assertThat(jdbc.queryForObject("""
+                SELECT s.kind FROM settlement_lines l JOIN settles s ON s.id = l.settle_id WHERE l.id = ?
+                """, String.class, line)).isEqualTo("sent");
     }
 }

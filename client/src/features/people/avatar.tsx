@@ -47,16 +47,19 @@ export function PersonAvatar({
 export function AvatarStack({
   ids,
   max = 4,
+  total = ids.length,
   ...person
 }: {
   ids: string[];
   max?: number;
+  /** Everyone in the group, when `ids` is only a preview of it (for the "+N"). */
+  total?: number;
   user: User;
   expire: () => void;
   queryKey: readonly string[];
 }) {
   const shown = ids.slice(0, max);
-  const extra = ids.length - shown.length;
+  const extra = Math.max(0, total - shown.length);
   return (
     <div className="flex -space-x-2">
       {shown.map((id) => (

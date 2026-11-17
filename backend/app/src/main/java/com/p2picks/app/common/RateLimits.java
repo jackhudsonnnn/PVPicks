@@ -18,7 +18,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Per-account limits on the endpoints people could spam (Kafka & Redis, item 4): chat, reactions, polls, proposals,
- * picks, search, follows, blocks and feedback. Signed-out requests count by address. Over the limit, the request
+ * picks, search, follows, blocks, feedback, creating tables, adding members and member search. Signed-out requests count by address. Over the limit, the request
  * gets 429 {@code rate_limited} with Retry-After. {@code pvpicks.rate-limits.enabled=false} turns them off (the
  * shared integration-test context does, and tests the limits directly). Sign-in has its own throttle.
  */
@@ -38,7 +38,11 @@ public class RateLimits implements WebMvcConfigurer {
             new Rule("users.search", Set.of("GET"), "/users", 30, MINUTE),
             new Rule("social.follow", Set.of("POST", "DELETE"), "/follows/*", 30, MINUTE),
             new Rule("social.block", Set.of("POST", "DELETE"), "/blocks/*", 30, MINUTE),
-            new Rule("feedback", Set.of("POST"), "/feedback", 5, Duration.ofHours(1)));
+            new Rule("feedback", Set.of("POST"), "/feedback", 5, Duration.ofHours(1)),
+            // Growing tables and sending requests (membership limits cap the totals; these cap the pace).
+            new Rule("tables.create", Set.of("POST"), "/tables", 10, Duration.ofHours(1)),
+            new Rule("tables.add", Set.of("POST"), "/tables/*/members", 30, Duration.ofHours(1)),
+            new Rule("tables.member_search", Set.of("GET"), "/tables/*/members", 60, MINUTE));
 
     private final RateLimiter limiter;
     private final boolean enabled;

@@ -13,8 +13,12 @@ import java.util.UUID;
  * reset rebuilds the same world and links to a demo user keep working.
  */
 public final class DemoRoster {
+    /** How many regular demo users the world has, spread over the main accounts' tables. */
+    static final int REGULARS = 200;
+    /** How many {@link DemoProfile.Archetype#MANIAC} demo users fill the big table ({@link DemoWorld#CROWD_TABLE}). */
+    static final int CROWD = 50;
     /** How many demo users the world has, besides the main accounts. */
-    public static final int SIZE = 200;
+    public static final int SIZE = REGULARS + CROWD;
     static final long SEED = 20261114L;
 
     /** The main accounts, shown first on the sign-in picker. */
@@ -39,19 +43,42 @@ public final class DemoRoster {
         return UUID.nameUUIDFromBytes(("p2picks-demo:" + username).getBytes(StandardCharsets.UTF_8));
     }
 
+    /** Every demo user: the regulars, then the crowd. */
     public static List<DemoUser> users() {
-        return generate(SEED, SIZE);
+        return ALL;
     }
 
-    static List<DemoUser> generate(long seed, int count) {
+    /** The regulars, spread over the main accounts' tables. */
+    static List<DemoUser> regulars() {
+        return ALL.subList(0, REGULARS);
+    }
+
+    /** The crowd: aggressive bettors who all sit at the pro's big table. */
+    static List<DemoUser> crowd() {
+        return ALL.subList(REGULARS, SIZE);
+    }
+
+    private static final List<DemoUser> ALL = generate(SEED, REGULARS, CROWD);
+
+    /**
+     * {@code count} regulars with weighted archetypes, then {@code crowd} maniacs. The crowd comes after the regulars
+     * from the same random source, so adding it left the regulars exactly as they were.
+     */
+    static List<DemoUser> generate(long seed, int count, int crowd) {
         Random random = new Random(seed);
         int totalWeight = 0;
         for (DemoProfile.Archetype archetype : DemoProfile.Archetype.values()) totalWeight += archetype.weight;
         Set<String> taken = new HashSet<>(MAIN);
         List<DemoUser> users = new ArrayList<>(count);
-        while (users.size() < count) {
+        while (users.size() < count + crowd) {
             String username = name(random);
             if (!taken.add(username)) continue;
+            if (users.size() >= count) {
+                DemoProfile.Archetype maniac = DemoProfile.Archetype.MANIAC;
+                users.add(new DemoUser(idFor(username), username, 1 + random.nextInt(5), maniac,
+                        maniac.profile().jitter(random)));
+                continue;
+            }
             int roll = random.nextInt(totalWeight);
             DemoProfile.Archetype archetype = null;
             for (DemoProfile.Archetype candidate : DemoProfile.Archetype.values()) {

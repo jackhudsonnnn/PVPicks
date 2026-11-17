@@ -17,7 +17,10 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -37,6 +40,9 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest
 @ActiveProfiles("dev")
 @Import(DemoBotsIntegrationTest.TestClock.class)
+// The seeded history is checked before any test lets the bots act: they share this database, and bots acting at
+// a clock-dependent moment can settle a table's points (a new open settle-up) before the history checks run.
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DemoBotsIntegrationTest {
     private static final String DATABASE = "demo_bots";
 
@@ -98,6 +104,7 @@ class DemoBotsIntegrationTest {
     ObjectMapper json;
 
     @Test
+    @Order(2)
     void demoUsersJoinTheProsBetsAsThemselves() {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Integer.class))
                 .as("startup seeded the empty demo database").isEqualTo(DemoRoster.SIZE + 4);
@@ -141,6 +148,7 @@ class DemoBotsIntegrationTest {
     }
 
     @Test
+    @Order(1)
     void startupSeedsTheMainAccountsHistoriesConsistently() {
         int proTickets = count("""
                 SELECT count(*) FROM picks p JOIN bets b ON b.id = p.bet_id

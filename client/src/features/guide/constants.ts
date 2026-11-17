@@ -10,6 +10,8 @@ import {
   Flag,
   Trash2,
   MessagesSquare,
+  Send,
+  Hourglass,
 } from "lucide-react";
 
 export type ModeFilter = "all" | "u2pick" | "nba" | "nfl";
@@ -83,7 +85,17 @@ export const SETTLE_POINTS = [
   {
     icon: ShieldCheck,
     title: "Settle often",
-    text: "Use Settle points, then mark payments sent and received under Friends, Settle-ups. Or forgive it: the person owed can wipe a settle-up, and the person who owes can ask them to. Your points number is the net of what's still open.",
+    text: "After a host settles points, open someone's Ledger under Friends, Settle-ups and pick the receipts to settle. They net out, so a few receipts can be one payment. Your points number is the net of what's still open.",
+  },
+  {
+    icon: Send,
+    title: "Send, receive, forgive",
+    text: "If you owe on what you picked, pay them your usual way, then Send. It counts as settled right away, and they have 48 hours to reject it if the money never arrived. If you're owed, Mark received when you're paid, or Forgive it. Up to 3 sends a day between two people.",
+  },
+  {
+    icon: Hourglass,
+    title: "Friction on purpose",
+    text: "P2Picks never touches the money, so paying up always happens outside the app: a transfer you make yourself, to a friend who can see it. That pause is deliberate. It keeps losses real and visible, gives you a moment before chasing them, and keeps your group in the loop. A send also keeps counting toward your debt cap until its 48 hours pass, so claiming a payment can't free up room to keep betting. If you're betting more than you meant to, set a debt cap in Preferences and talk to someone you trust.",
   },
 ];
 

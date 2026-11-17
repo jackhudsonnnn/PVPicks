@@ -4,6 +4,7 @@ import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.MembershipLimits;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.ArrayList;
@@ -106,6 +107,7 @@ class TableCreationController {
             case UNAUTHORIZED -> error(401, "unauthorized", "Authentication required or credentials invalid.");
             case FORBIDDEN -> error(403, "forbidden", "Only a host can add members.");
             case NOT_FOUND -> error(404, "not_found", "Table not found.");
+            case TABLE_LIMIT -> error(409, "table_limit", MembershipLimits.TABLE_LIMIT_MESSAGE);
             case SUCCESS -> throw new IllegalArgumentException("Expected a failed table operation");
         };
     }

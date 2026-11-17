@@ -29,6 +29,8 @@ planned operations, so it isn't an inventory of what exists.
 - Members, invitations, hosts, per-member permissions (bets, texts,
   reactions, GIFs, polls), the leftover-cents rule, betting settings and the
   polls switch.
+- Membership limits: 100 tables per account, 500 members per table, 100
+  waiting requests, and requests that expire after 30 days.
 - Quick Pick switches and code rotation; subscriptions and copying aren't
   built.
 - Chat: paged history, text and GIFs, polls (hosts can turn them off per
@@ -47,9 +49,10 @@ planned operations, so it isn't an inventory of what exists.
 - Wash triggers at lock (nobody picked, everyone on one option, a line or
   target already reached) and at resolution (nobody picked the winner, ties,
   pushes, a player who didn't play), listed in the domain rules.
-- Ledger, host points settlement, receipts (individual and per person) with
-  private balance-change reviews. The server says which receipt actions you
-  can take.
+- Ledger, host points settlement, receipts, and settles: pick receipts with
+  someone and send them (rejectable for 48 hours), mark them received or
+  forgive them, with private balance-change reviews and a 3-sends-a-day
+  limit per pair.
 
 **Sports data**
 
@@ -68,7 +71,7 @@ planned operations, so it isn't an inventory of what exists.
 
 **Demo world (dev)**
 
-- 200 demo users with play-style profiles, played by bots through the real
+- 250 demo users (including the 50-person Mosh Pit crowd) with play-style profiles, played by bots through the real
   services. newbie, intermediate and pro are seeded with friends, tables,
   blocks and history, the admin with open reports. Demo games are always
   live, and the Dev page has a Reset (see [Demo world](/demo-data)).
@@ -76,10 +79,11 @@ planned operations, so it isn't an inventory of what exists.
 **Frontend**
 
 - Every feature above, organized by feature folder (see the client README).
-  Home with table and invitation cards and a Tickets column, the felt table
+  Home with table and request cards and a Tickets column, sidebar tables and
+  requests, the felt table
   page with chat, Peers and Host panels, the proposal sheet, a Tickets page,
   Friends with settle-up cards, profiles, Preferences, the guide with
-  feedback, and the admin workspace (moderation, site health).
+  feedback, and the admin workspace (moderation, site health, players).
 - Actions whose outcome is unknown keep their retry key in the browser, so
   they can be retried safely.
 

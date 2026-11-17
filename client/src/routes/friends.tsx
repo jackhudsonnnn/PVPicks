@@ -6,12 +6,12 @@ export const Route = createFileRoute("/friends")({
       { title: "Friends | P2Picks" },
       {
         name: "description",
-        content: "Follow people, follow back, and see your friends and followers on P2Picks.",
+        content: "Follow people, follow others, and see your friends and followers on P2Picks.",
       },
       { property: "og:title", content: "Friends | P2Picks" },
       {
         property: "og:description",
-        content: "Follow people, follow back, and see your friends and followers on P2Picks.",
+        content: "Follow people, follow others, and see your friends and followers on P2Picks.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

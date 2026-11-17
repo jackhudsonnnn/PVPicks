@@ -26,13 +26,18 @@ destinations.
 - Initial state and read APIs for tables, users, bets, games, follows, blocks,
   invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
-  list supplies its name and emoji for the pending-invite screen. Dev
-  `GET /tables` and `GET /tables/{id}` are implemented for active memberships:
-  hosts see the Quick Pick code and all disabled permissions, other members see
-  only their own disabled permissions, and missing, archived and non-member
-  tables all return 404. `GET /me/relationships` returns the caller's private
-  relationship view, suppressing follows across blocks and to deleted users, and
-  `GET /me/invites` returns visible pending invitations. `GET /tables/archives`
+  list supplies its name, emoji, a four-member preview and the member count
+  for the request card. Dev `GET /tables` returns summaries of active
+  memberships (at most 100; see "Membership limits" in the domain rules): name,
+  emoji, whether you host, your own disabled permissions, a four-member
+  preview, the member count, `joinedAt` and, once there's a bet, `lastBetAt`,
+  most recent activity first. `GET /tables/{id}` returns the full table: hosts
+  see the Quick Pick code and all disabled permissions, other members see only
+  their own, and missing, archived and non-member tables all return 404. `GET /me/relationships` returns the caller's private
+  relationship view (following, followers, friends and blocks, each newest
+  first), suppressing follows across blocks and to deleted users, and
+  `GET /me/invites` returns visible pending invitations, newest first,
+  leaving out requests older than 30 days. `GET /tables/archives`
   lists available read-only chat archives. Other reads remain incomplete.
 - Dev `GET /ticker` returns today's New York games plus earlier live games,
   live first, and 503 `feed_unavailable` unless every league polled
@@ -134,7 +139,9 @@ destinations.
   ineligible pending invitations. Dev invitation responses enforce current
   host, follow, block and preference rules; acceptance adds the member and a
   system chat message. Losing eligibility cancels a pending invitation
-  permanently. Table member requests can create invitations.
+  permanently. Table member requests can create invitations. Create, add and
+  accept enforce the membership limits (409 `table_limit` / `table_full`, or
+  `not_added`).
 - Dev follow/unfollow and block/unblock mutations use pair locking and the
   retry guard. Blocks remove follows and cancel pending invitations in both
   directions. Blocked follow attempts return the same 404 as unavailable
@@ -169,10 +176,33 @@ destinations.
   pending invitations and retains a read-only chat archive for those members
   for 90 days; afterwards the archive is hidden but its data remains. It
   preserves receipts and Quick Pick copies. It requires
-  settlement of all resolved non-4fun bet points. Receipt actions and zero-net
-  settlement exist internally; retained-data cleanup remains unimplemented.
+  settlement of all resolved non-4fun bet points. Zero-net points
+  settlement exists internally; retained-data cleanup remains unimplemented.
+- Settle-ups: `GET /people/settle-groups` (open receipts, net, pending review
+  and sends still in their window, per person), `POST /people/{id}/settles`
+  (`sent`, `received` or `forgiven` over chosen receipt ids),
+  `POST /settles/{id}/reject` (the receiver, within 48 hours) and
+  `GET /people/{id}/settles` (history, paged). Rules and limits are in the
+  domain rules ("Settle-ups").
 - Realtime: STOMP at `/ws` with per-user destinations
   `/user/queue/tables/{id}`, `/user/queue/tables/{id}/bets`,
   `/user/queue/tables/{id}/chat`, `/user/queue/settlements`, `/user/queue/me`
   and `/user/queue/ticker`. Ordering, replay and gap detection beyond
   refetch-on-reconnect remain open.
+
+- `GET /tables` orders by the later of `lastBetAt` and `joinedAt` (index
+  `bets_table_created_idx`, V36), and the client sorts the same way. The list
+  is refetched when you open a page or your memberships change, not on every
+  bet, so the order doesn't shift while you look at it.
+
+- `GET /bets/{id}/live` (same access as the bet; 404 for U2Pick): what a
+  sports bet's mode follows, when proposed, at lock and now, with the game's
+  score and clock. The proposal and lock transactions snapshot those numbers
+  into `bets.baseline` (`{"proposed": {...}, "locked": {...}}`, keyed
+  `combined`, `margin`, `player:<id>`, `home_td`, `home_fg`, `away_td`,
+  `away_fg`); `BetLiveStats` reads them back with the current values.
+
+- `GET /tables/{id}/members?q=&cursor=`: members of one of your tables whose
+  username contains `q`, by username, 50 at a time (404 for non-members).
+  Creating tables (10 an hour), adding members (30 calls an hour) and member
+  search (60 a minute) are rate limited per account.

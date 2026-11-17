@@ -1,22 +1,11 @@
-import type { ReactNode } from "react";
+import { type ReactNode, type RefObject, useLayoutEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRight, Crown, Mail } from "lucide-react";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { ActionStatus } from "@/components/action-status";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollContainer } from "@/components/scroll-container";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
@@ -27,24 +16,60 @@ import { useInPlayTables } from "@/features/bets";
 import { previewText, useChatPreview } from "@/features/chat";
 import { AvatarStack, type User, usePerson } from "@/features/people";
 import {
-  type SocialActions,
+  type InviteActions,
   type TableInvite,
+  useInviteActions,
   useInvites,
-  useSocialActions,
 } from "@/features/social";
-import { listTables, type Table } from "@/features/tables/api";
+import { listTables, type TableSummary } from "@/features/tables/api";
+import { PageEdge } from "@/components/client-pages";
+import { useClientPages } from "@/components/use-client-pages";
+import { NAV_SIDEBAR, useMediaQuery } from "@/lib/use-media-query";
+import { byRecentBet, newestFirst } from "@/features/tables/table-order";
 import { CreateTableDialog } from "./create-table-dialog";
+import { InviteDialog } from "./invite-dialog";
 import { LoadingList } from "@/components/loading";
 
 type Props = { user: User; expire: () => void };
 
+/** Below Tailwind's `lg` the cards sit in one sideways row; from it they stack in a box. */
+const STACKED = "(min-width: 1024px)";
+
 /**
- * Your invitations and tables as cards. On phones they sit in one row that scrolls sideways, snapping card by card;
- * on desktop they stack as rows in a scrolling box, the same height as Home's Tickets box. Invitations come first, and opening one asks to accept or
- * decline. A table where you have a live pick shows green.
+ * Your tables as cards, by most recent bet (up to 100; they mount 20 at a time as you scroll). A table where you
+ * have a live pick shows green.
+ *
+ * - Phones and tablets: one sideways row that snaps a card to the center. It opens centered on your most recent
+ *   table; without the desktop sidebar, table requests sit to its left, newest nearest, older further left.
+ * - Desktop: the cards stack in a scrolling box, the same height as Home's Tickets box; without the sidebar,
+ *   requests come first.
+ * - With the sidebar, requests live there instead (see `SidebarTables`).
  */
 export function TableCards({ user, expire }: Props) {
+  const sidebar = useMediaQuery(NAV_SIDEBAR);
+  return sidebar ? (
+    <TableCardList user={user} expire={expire} />
+  ) : (
+    <TableCardsWithRequests user={user} expire={expire} />
+  );
+}
+
+/** Mounted only without the sidebar, so one invite-actions hook is live at a time (the sidebar has the other). */
+function TableCardsWithRequests({ user, expire }: Props) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const actions = useInviteActions(
+    user.id,
+    async () => {
+      await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
+    },
+    expire,
+    (tableId) => void navigate({ to: "/tables/$tableId", params: { tableId } }),
+  );
+  return <TableCardList user={user} expire={expire} actions={actions} />;
+}
+
+function TableCardList({ user, expire, actions }: Props & { actions?: InviteActions }) {
   const tables = useQuery({
     queryKey: userKey(user.id, "list"),
     queryFn: ({ signal }) => listTables(signal),
@@ -52,16 +77,15 @@ export function TableCards({ user, expire }: Props) {
   });
   const invites = useInvites(user.id);
   useExpireOnUnauthorized([tables.error, invites.error], expire);
-  // One action hook for every invitation card: two instances with one storage key don't sync.
-  const actions = useSocialActions(
-    user.id,
-    async () => {
-      await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
-    },
-    expire,
-  );
-  const pending = invites.data ?? [];
+  const requests = newestFirst(invites.data ?? []);
   const inPlay = useInPlayTables(user.id);
+  const tablePages = useClientPages(byRecentBet(tables.data ?? []));
+  const requestPages = useClientPages(actions ? requests : []);
+  const stacked = useMediaQuery(STACKED);
+  const scroller = useRef<HTMLDivElement>(null);
+  const requestGroup = useRef<HTMLDivElement>(null);
+  const firstTable = useRef<HTMLDivElement>(null);
+  useKeepTablesInView({ scroller, requestGroup, firstTable, sideways: !stacked });
 
   return (
     <section className="space-y-3" aria-labelledby="tables-heading">
@@ -70,57 +94,147 @@ export function TableCards({ user, expire }: Props) {
           id="tables-heading"
           className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground"
         >
-          Your tables
+          Tables
         </h2>
         <CreateTableDialog user={user} expire={expire} />
       </div>
-      <ActionStatus
-        actions={actions}
-        pendingText="An invitation response may not have been saved."
-        checkText="Check your tables and invitations first."
-      />
-      {invites.isError && <p role="alert">{backendErrorMessage(invites.error)}</p>}
+      {actions && (
+        <ActionStatus
+          actions={actions}
+          pendingText="A request response may not have been saved."
+          checkText="Check your tables and requests first."
+        />
+      )}
+      {actions && invites.isError && <p role="alert">{backendErrorMessage(invites.error)}</p>}
       {tables.isPending ? (
         <LoadingList label="Loading tables" rows={2} rowClassName="h-20" />
       ) : tables.isError ? (
         <p role="alert">{backendErrorMessage(tables.error)}</p>
-      ) : tables.data.length === 0 && pending.length === 0 ? (
+      ) : tables.data.length === 0 && requestPages.shown.length === 0 ? (
         <EmptyState boxed className="p-6">
-          No tables yet. Create one and invite your friends.
+          {requests.length > 0
+            ? "No tables yet. Answer a request in the sidebar, or create a table and invite your friends."
+            : "No tables yet. Create one and invite your friends."}
         </EmptyState>
       ) : (
         <ScrollContainer
+          ref={scroller}
           isHorizontal="mobile"
           isVisible={false}
-          aria-label="Your tables and invitations"
+          aria-label={requestPages.shown.length ? "Your tables and requests" : "Your tables"}
           className="snap-x snap-mandatory gap-3 py-1 md:scrollbar-thin lg:h-[27rem] lg:snap-none lg:gap-2 lg:rounded-2xl lg:border lg:p-2"
         >
-          <AnimatedList>
-            {pending.map((invite) => (
-              <AnimatedItem key={`invite-${invite.id}`} isHorizontal className={CARD_SLOT}>
-                <InviteDialog invite={invite} actions={actions} {...{ user, expire }}>
-                  <InviteCard invite={invite} user={user} expire={expire} />
-                </InviteDialog>
-              </AnimatedItem>
-            ))}
-            {tables.data.map((table) => (
-              <AnimatedItem key={`table-${table.id}`} isHorizontal className={CARD_SLOT}>
-                <TableCard
-                  table={table}
-                  inPlay={inPlay.has(table.id)}
-                  user={user}
-                  expire={expire}
+          {actions && requestPages.shown.length > 0 && (
+            // Newest first in the DOM; sideways it's reversed, so the newest sits next to your tables and older
+            // ones (and the edge that loads more) run off to the left.
+            <div
+              ref={requestGroup}
+              className="flex shrink-0 flex-row-reverse gap-3 lg:flex-col lg:gap-2"
+              aria-label="Requests"
+              role="group"
+            >
+              <AnimatedList>
+                {requestPages.shown.map((invite) => (
+                  <AnimatedItem key={`invite-${invite.id}`} isHorizontal className={CARD_SLOT}>
+                    <InviteDialog
+                      invite={invite}
+                      actions={actions}
+                      user={user}
+                      expire={expire}
+                      triggerClassName={cn(
+                        CARD,
+                        "border-invite/70 bg-invite/10 transition-colors hover:bg-invite/15",
+                      )}
+                    >
+                      <InviteCard invite={invite} user={user} expire={expire} />
+                    </InviteDialog>
+                  </AnimatedItem>
+                ))}
+              </AnimatedList>
+              {requestPages.hasMore && (
+                <PageEdge
+                  onMore={requestPages.more}
+                  label="Older requests"
+                  className="self-center lg:self-stretch"
                 />
-              </AnimatedItem>
-            ))}
-          </AnimatedList>
+              )}
+            </div>
+          )}
+          <div
+            className="flex shrink-0 gap-3 lg:flex-col lg:gap-2"
+            role="group"
+            aria-label="Tables"
+          >
+            <AnimatedList>
+              {tablePages.shown.map((table, index) => (
+                <AnimatedItem
+                  key={`table-${table.id}`}
+                  ref={index === 0 ? firstTable : undefined}
+                  isHorizontal
+                  className={CARD_SLOT}
+                >
+                  <TableCard
+                    table={table}
+                    inPlay={inPlay.has(table.id)}
+                    user={user}
+                    expire={expire}
+                  />
+                </AnimatedItem>
+              ))}
+            </AnimatedList>
+            {tablePages.hasMore && (
+              <PageEdge
+                onMore={tablePages.more}
+                label="More tables"
+                className="self-center lg:self-stretch"
+              />
+            )}
+          </div>
         </ScrollContainer>
       )}
     </section>
   );
 }
 
-const CARD_SLOT = "w-72 max-w-[85%] shrink-0 snap-start lg:w-full lg:max-w-none";
+/**
+ * Sideways only: opens with your most recent table centered (requests wait to its left), and keeps whatever you're
+ * looking at in place when requests are added or answered on the left, instead of letting the row jump.
+ */
+function useKeepTablesInView({
+  scroller,
+  requestGroup,
+  firstTable,
+  sideways,
+}: {
+  scroller: RefObject<HTMLDivElement | null>;
+  requestGroup: RefObject<HTMLDivElement | null>;
+  firstTable: RefObject<HTMLDivElement | null>;
+  sideways: boolean;
+}) {
+  const centered = useRef(false);
+  const requestWidth = useRef(0);
+  useLayoutEffect(() => {
+    const row = scroller.current;
+    const first = firstTable.current;
+    const width = requestGroup.current?.offsetWidth ?? 0;
+    if (!sideways || !row) {
+      centered.current = false;
+      requestWidth.current = width;
+      return;
+    }
+    if (!centered.current && first) {
+      const card = first.getBoundingClientRect();
+      const box = row.getBoundingClientRect();
+      row.scrollLeft += card.left + card.width / 2 - (box.left + box.width / 2);
+      centered.current = true;
+    } else if (width !== requestWidth.current) {
+      row.scrollLeft += width - requestWidth.current;
+    }
+    requestWidth.current = width;
+  });
+}
+
+const CARD_SLOT = "w-72 max-w-[85%] shrink-0 snap-center lg:w-full lg:max-w-none";
 const CARD =
   "group flex h-56 w-full min-w-0 flex-col gap-3 rounded-xl border p-4 text-left lg:h-auto lg:flex-row lg:items-center";
 
@@ -130,7 +244,8 @@ function CardBody({
   name,
   badge,
   line,
-  memberIds,
+  memberPreview,
+  memberCount,
   chevronClass,
   user,
   expire,
@@ -140,7 +255,8 @@ function CardBody({
   name: string;
   badge: ReactNode;
   line: string;
-  memberIds: string[];
+  memberPreview: string[];
+  memberCount: number;
   chevronClass: string;
 }) {
   return (
@@ -166,7 +282,8 @@ function CardBody({
       </span>
       <span className="flex shrink-0 items-center justify-between gap-3">
         <AvatarStack
-          ids={memberIds}
+          ids={memberPreview}
+          total={memberCount}
           max={3}
           user={user}
           expire={expire}
@@ -183,7 +300,12 @@ function CardBody({
   );
 }
 
-function TableCard({ table, inPlay, user, expire }: Props & { table: Table; inPlay: boolean }) {
+function TableCard({
+  table,
+  inPlay,
+  user,
+  expire,
+}: Props & { table: TableSummary; inPlay: boolean }) {
   const queryClient = useQueryClient();
   // Bets here changed: your in-play state (and Home's tickets) may have too.
   useRealtimeFeed(tableBetsFeed(table.id), () => {
@@ -213,7 +335,7 @@ function TableCard({ table, inPlay, user, expire }: Props & { table: Table; inPl
         name={table.name}
         badge={
           <>
-            {table.hostIds.includes(user.id) && (
+            {table.host && (
               <span className="flex shrink-0 items-center gap-1 rounded-full border border-primary/60 px-1.5 font-mono text-[10px] font-bold uppercase text-primary">
                 <Crown className="size-3" /> Host
               </span>
@@ -222,7 +344,8 @@ function TableCard({ table, inPlay, user, expire }: Props & { table: Table; inPl
           </>
         }
         line={line}
-        memberIds={table.memberIds}
+        memberPreview={table.memberPreview}
+        memberCount={table.memberCount}
         chevronClass="text-muted-foreground"
         user={user}
         expire={expire}
@@ -240,84 +363,15 @@ function InviteCard({ invite, user, expire }: Props & { invite: TableInvite }) {
       name={invite.tableName}
       badge={
         <span className="flex shrink-0 items-center gap-1 rounded-full bg-invite px-1.5 font-mono text-[10px] font-bold uppercase text-invite-foreground">
-          <Mail className="size-3" /> Invite
+          <Mail className="size-3" /> Request
         </span>
       }
       line={`${from?.name ?? "Someone"} wants you at this table. Accept?`}
-      memberIds={invite.memberIds}
+      memberPreview={invite.memberPreview}
+      memberCount={invite.memberCount}
       chevronClass="text-invite"
       user={user}
       expire={expire}
     />
-  );
-}
-
-/** The "Accept?" popup behind an invitation card. Accepting turns the card into the table's card. */
-function InviteDialog({
-  invite,
-  actions,
-  user,
-  expire,
-  children,
-}: Props & { invite: TableInvite; actions: SocialActions; children: ReactNode }) {
-  const from = usePerson(invite.fromId, user, expire, userKey(user.id, "people"));
-  const blocked = actions.busy || !!actions.pending || !!actions.storageError;
-  const count = invite.memberIds.length;
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Invitation to ${invite.tableName}`}
-          className={cn(CARD, "border-invite/70 bg-invite/10 transition-colors hover:bg-invite/15")}
-        >
-          {children}
-        </button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-invite/20 text-3xl sm:mx-0">
-            {invite.tableEmoji}
-          </span>
-          <DialogTitle className="font-display text-3xl font-black uppercase">
-            Join {invite.tableName}?
-          </DialogTitle>
-          <DialogDescription>
-            {from?.name ?? "Someone"} wants you at their table. You'll see its chat and can join its
-            bets.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <AvatarStack
-            ids={invite.memberIds}
-            max={4}
-            user={user}
-            expire={expire}
-            queryKey={userKey(user.id, "people")}
-          />
-          {count} {count === 1 ? "person" : "people"} at the table
-        </div>
-        <DialogFooter className="gap-2">
-          <DialogClose asChild>
-            <Button
-              variant="outline"
-              disabled={blocked}
-              onClick={() => actions.start({ kind: "invite", inviteId: invite.id, accept: false })}
-            >
-              Decline
-            </Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button
-              className="bg-invite text-invite-foreground hover:bg-invite/90"
-              disabled={blocked}
-              onClick={() => actions.start({ kind: "invite", inviteId: invite.id, accept: true })}
-            >
-              Accept
-            </Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

@@ -43,5 +43,21 @@ class DemoProfileTest {
         assertThat(counts.keySet()).as("every archetype appears").containsExactlyInAnyOrder(DemoProfile.Archetype.values());
         assertThat(users.stream().map(DemoRoster.DemoUser::profile).map(Function.identity()).distinct().count())
                 .as("jitter varies profiles").isGreaterThan(DemoRoster.SIZE / 2);
+        assertThat(DemoRoster.regulars()).hasSize(DemoRoster.REGULARS)
+                .noneMatch(user -> user.archetype() == DemoProfile.Archetype.MANIAC);
+        assertThat(DemoRoster.crowd()).hasSize(DemoRoster.CROWD)
+                .allMatch(user -> user.archetype() == DemoProfile.Archetype.MANIAC);
+    }
+
+    @Test
+    void maniacsAreAggressiveButDontFloodModeration() {
+        DemoProfile maniac = DemoProfile.Archetype.MANIAC.profile();
+        DemoProfile degen = DemoProfile.Archetype.DEGEN.profile();
+        assertThat(maniac.joinBetChance()).isGreaterThan(degen.joinBetChance());
+        assertThat(maniac.proposalsPerHour()).isGreaterThan(degen.proposalsPerHour());
+        assertThat(maniac.messagesPerHour()).isGreaterThan(degen.messagesPerHour());
+        assertThat(maniac.reactionMaxSeconds()).isLessThan(DemoProfile.DEFAULT.reactionMaxSeconds());
+        assertThat(maniac.blockChance()).isZero();
+        assertThat(maniac.reportChance()).isZero();
     }
 }

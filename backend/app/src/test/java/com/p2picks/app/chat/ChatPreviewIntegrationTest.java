@@ -109,9 +109,10 @@ class ChatPreviewIntegrationTest extends IntegrationTestSupport {
         JsonNode invite = json.readTree(mvc.perform(get("/me/invites").cookie(loginAs("civ")))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get(0);
         assertThat(OpenApiSchemas.load("TableInvite").validate(invite)).isEmpty();
-        assertThat(invite.path("memberIds").toString())
+        assertThat(invite.path("memberPreview").toString())
                 .as("join order, without the member who blocks the invitee")
                 .isEqualTo("[\"" + host + "\",\"" + friend + "\"]");
+        assertThat(invite.path("memberCount").asInt()).as("the count includes everyone").isEqualTo(3);
     }
 
     @Test

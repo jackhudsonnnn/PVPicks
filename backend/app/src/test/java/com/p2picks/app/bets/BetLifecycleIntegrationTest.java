@@ -367,11 +367,12 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
         JsonNode pointLines = json.readTree(points.getResponse().getContentAsString()).path("lines");
         assertThat(pointLines.size()).isEqualTo(1);
         UUID receipt = UUID.fromString(pointLines.get(0).path("id").asText());
-        assertThat(groupHttpAction(playerCookie, csrf, host, "sent", groupRevision(playerCookie), "http-group-sent")
-                .getResponse().getStatus()).isEqualTo(204);
-        assertThat(receiptHttpAction(hostCookie, csrf, receipt, "confirm", 1, "http-receipt-confirm")
-                .getResponse().getStatus()).isEqualTo(200);
+        // The payer sends it: paid at once, and the host can still reject it for 48 hours.
+        assertThat(settleHttp(playerCookie, csrf, host, "sent", List.of(receipt), "http-settle-sent")
+                .getResponse().getStatus()).isEqualTo(201);
         assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, receipt))
                 .isEqualTo("paid");
+        assertThat(settleGroups(hostCookie).get(0).path("pendingSettles").get(0).path("canReject").asBoolean())
+                .isTrue();
     }
 }

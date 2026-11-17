@@ -27,14 +27,18 @@ cover.
     (`pvpicks.rate-limits.enabled=false`), so feature tests aren't limited.
   - `users`, `social`, `chat`, `feedback`: profile, search/lookup,
     relationships, invitations, chat windows, sending, reactions and read state.
+    `social.MembershipLimitsIntegrationTest` covers the membership limits on
+    every path that adds someone (create, add, accept) and request expiry.
   - `tables.TableMembershipIntegrationTest` and
     `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
     reads, profile, settings, permissions, remainder and Quick Pick controls.
   - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
     HTTP adapters), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
     `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
-  - `settlement`: `PointsSettlementIntegrationTest`, `ReceiptIntegrationTest`
-    (receipts, groups and balance-change reviews) and `DebtIntegrationTest`.
+  - `settlement`: `PointsSettlementIntegrationTest`, `SettleIntegrationTest`
+    (settles, rejection windows, the daily send limit, history and
+    balance-change reviews), `SettleRulesTest` (who may settle what) and
+    `DebtIntegrationTest`.
   - `MigrationIntegrationTest`: schema constraints and populated V2–V25
     upgrades. `PlatformIntegrationTest`: health, developer docs and
     infrastructure connectivity.
@@ -44,6 +48,11 @@ cover.
     lets the backend lock the bet, then calls the result and settles points.
     Their invocation and prerequisites are in the
     [Frontend](/frontend). These use jsdom, not a browser.
+- `demo`: `DemoProfileTest` and `BotMindTest` (roster, archetypes, bot
+  choices), `DemoWorldTest` (the seeded world, including Mosh Pit) and
+  `DemoBotsIntegrationTest` (bots against a freshly seeded database of their
+  own). The last checks the seeded history first (`@Order`), because its other
+  test lets the bots act on the shared database at a clock-dependent moment.
 - `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the lock
   worker and its recovery; integration tests turn the worker off and lock
   bets explicitly. `settlement.SettlementGroupControllerTest` checks the

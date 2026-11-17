@@ -266,6 +266,20 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         points("NBA-pm1", 25, Instant.now().minusSeconds(60));
         locks.lock(prop);
         assertThat(state(prop)).isEqualTo("WASHED:" + PlayerLockRules.LINE_REACHED);
+        // Live stats in ticket Details: the player's number when proposed, at lock and now, against the line.
+        JsonNode live = json.readTree(mvc.perform(get("/bets/" + prop + "/live").cookie(aliceSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(com.p2picks.app.OpenApiSchemas.load("BetLiveStats").validate(live)).isEmpty();
+        JsonNode row = live.path("rows").get(0);
+        assertThat(row.path("label").asText()).isEqualTo("Ann Archer points");
+        assertThat(row.path("detail").asText()).isEqualTo("G · BOS");
+        assertThat(row.path("proposed").asInt()).isEqualTo(20);
+        assertThat(row.path("locked").asInt()).isEqualTo(25);
+        assertThat(row.path("current").asInt()).isEqualTo(25);
+        assertThat(row.path("target").decimalValue()).isEqualByComparingTo("24.5");
+        assertThat(row.path("targetLabel").asText()).isEqualTo("Line");
+        assertThat(live.path("home").path("abbreviation").asText()).isNotBlank();
+        mvc.perform(get("/bets/" + prop + "/live")).andExpect(status().isUnauthorized());
 
         // King Of The Hill settles the moment someone reaches the target, mid-game.
         UUID hill = propose(aliceSession, csrf, "king_of_the_hill",
@@ -287,6 +301,13 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         locks.lock(either);
         points("NBA-pm1", 40, Instant.now());
         finishGame(110, 100, Instant.now().minus(SportsOutcome.GRACE).minusSeconds(1));
+        JsonNode eitherLive = json.readTree(mvc.perform(get("/bets/" + either + "/live").cookie(aliceSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(eitherLive.path("rows").size()).isEqualTo(2);
+        assertThat(eitherLive.path("rows").get(0).path("locked").asInt()).isEqualTo(25);
+        assertThat(eitherLive.path("rows").get(0).path("current").asInt()).isEqualTo(40);
+        assertThat(eitherLive.path("rows").get(1).path("current").asInt()).isEqualTo(31);
+        assertThat(eitherLive.path("rows").get(0).path("target").isNull()).as("Either Or has no line").isTrue();
         assertThat(resolutions.resolve(either, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
         assertThat(state(either)).isEqualTo("SETTLED:Ann Archer");
     }

@@ -98,14 +98,14 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
                 .isNull();
         assertThat(jdbc.queryForObject("SELECT settlement_id FROM settlement_bets WHERE bet_id = ?",
                 UUID.class, bet)).isEqualTo(settlementId);
-        jdbc.update("UPDATE settlement_lines SET status = 'sent', revision = revision + 1 WHERE id = ?",
+        jdbc.update("UPDATE settlement_lines SET revision = revision + 1 WHERE id = ?",
                 UUID.fromString(line.path("id").asText()));
         MvcResult replay = mvc.perform(post(path).cookie(hostCookie, csrf.cookie())
                         .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
                         .header("Idempotency-Key", "points-http")).andExpect(status().isCreated()).andReturn();
         JsonNode replayed = json.readTree(replay.getResponse().getContentAsString());
         assertThat(replayed.path("id").asText()).isEqualTo(settlementId.toString());
-        assertThat(replayed.path("lines").get(0).path("status").asText()).isEqualTo("sent");
+        assertThat(replayed.path("lines").get(0).path("status").asText()).isEqualTo("unpaid");
         assertThat(replayed.path("lines").get(0).path("revision").asInt()).isEqualTo(1);
         MvcResult empty = mvc.perform(post(path).cookie(hostCookie, csrf.cookie())
                         .header("Origin", "http://127.0.0.1:8080").header("X-CSRF-TOKEN", csrf.token())
@@ -153,10 +153,10 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
         UUID first = insertDebtBet(table, loser, winner, "SETTLED", false, false, false, 100, -125);
         UUID fun = insertDebtBet(table, loser, winner, "SETTLED", true, false, false, 100, 0);
         UUID pending = insertDebtBet(table, loser, winner, "PENDING", false, false, false, 100, 0);
+        // Already open between the host and the loser: one open receipt, one in a send's window, one paid.
+        UUID open = insertDebtReceipt(oldTable, host, loser, host, 60, "unpaid");
         UUID sent = insertDebtReceipt(oldTable, host, loser, host, 40, "sent");
-        UUID asked = insertDebtReceipt(oldTable, host, loser, host, 20, "forgive_asked");
         UUID paid = insertDebtReceipt(oldTable, host, loser, host, 1000, "paid");
-        jdbc.update("UPDATE settlement_lines SET forgive_requested_at = now() WHERE id = ?", asked);
         Jwt hostJwt = decoder.decode(loginAs("pointshost").getValue());
         Jwt loserJwt = decoder.decode(loginAs("pointsloser").getValue());
         assertThat(pointsSettlement.settle(loserJwt, table, "not-host").outcome())
@@ -184,10 +184,15 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
         assertThat(jdbc.queryForObject("""
                 SELECT amount_cents FROM settlement_lines WHERE settlement_id = ? AND payer_id = ? AND payee_id = ?
                 """, Long.class, result.settlementId(), host, winner)).isEqualTo(125);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM settlement_lines WHERE id IN (?, ?) AND status = 'unpaid' AND revision = 1",
-                Integer.class, sent, asked)).isEqualTo(2);
-        assertThat(jdbc.queryForObject("SELECT forgive_requested_at IS NULL FROM settlement_lines WHERE id = ?",
-                Boolean.class, asked)).isTrue();
+        // A new settlement leaves earlier receipts and in-flight sends as they were; it asks both to review.
+        assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, open))
+                .isEqualTo("unpaid");
+        assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, sent))
+                .isEqualTo("paid");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM settlement_pair_reviews WHERE reviewed_at IS NULL
+                  AND ((user_id = ? AND other_user_id = ?) OR (user_id = ? AND other_user_id = ?))
+                """, Integer.class, host, loser, loser, host)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, paid))
                 .isEqualTo("paid");
         JsonNode change = json.readTree(jdbc.queryForObject("""
@@ -267,21 +272,35 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Rollback', 'T', 'P2R3QA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", table, host);
         UUID bet = insertDebtBet(table, peer, host, "SETTLED", false, false, false, 100, -100);
-        UUID receipt = insertDebtReceipt(table, host, peer, host, 50, "sent");
-        jdbc.update("UPDATE settlement_lines SET revision = 2147483647 WHERE id = ?", receipt);
+        UUID receipt = insertDebtReceipt(table, host, peer, host, 50, "unpaid");
+        // Make the balance-change review this settlement records fail, for this host only.
+        jdbc.execute("""
+                CREATE FUNCTION fail_review_for_test() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.user_id = '%s' THEN RAISE EXCEPTION 'review write failed'; END IF;
+                    RETURN NEW;
+                END;
+                $$""".formatted(host));
+        jdbc.execute("""
+                CREATE TRIGGER fail_review_for_test BEFORE INSERT OR UPDATE ON settlement_pair_reviews
+                    FOR EACH ROW EXECUTE FUNCTION fail_review_for_test()""");
         Jwt jwt = decoder.decode(loginAs("pointsrollback").getValue());
-        assertThatThrownBy(() -> pointsSettlement.settle(jwt, table, "rollback-points"))
-                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        try {
+            assertThatThrownBy(() -> pointsSettlement.settle(jwt, table, "rollback-points"))
+                    .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        } finally {
+            jdbc.execute("DROP TRIGGER fail_review_for_test ON settlement_pair_reviews");
+            jdbc.execute("DROP FUNCTION fail_review_for_test()");
+        }
         assertThat(jdbc.queryForObject("SELECT points_settled_at IS NULL FROM bets WHERE id = ?", Boolean.class, bet)).isTrue();
         assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, receipt))
-                .isEqualTo("sent");
+                .isEqualTo("unpaid");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM settlements WHERE table_id = ?", Integer.class, table))
                 .isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM settlement_bets WHERE bet_id = ?", Integer.class, bet))
                 .isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM http_idempotency WHERE user_id = ?", Integer.class, host))
                 .isZero();
-        jdbc.update("UPDATE settlement_lines SET revision = 0 WHERE id = ?", receipt);
         assertThat(pointsSettlement.settle(jwt, table, "rollback-points").outcome())
                 .isEqualTo(TablePointsSettlementService.Outcome.CREATED);
     }
@@ -370,7 +389,7 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
                 (?, 'pointstablepeer', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, peer, hash);
         jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Stable', 'T', 'P2S5QA')", table);
-        UUID sent = insertDebtReceipt(table, host, peer, host, 100, "sent");
+        UUID sent = insertDebtReceipt(table, host, peer, host, 100, "unpaid");
         new TransactionTemplate(transactions).executeWithoutResult(ignored -> {
             jdbc.query("SELECT id FROM users WHERE id IN (?, ?) ORDER BY id FOR UPDATE",
                     (rs, row) -> rs.getObject("id", UUID.class), host, peer);
@@ -379,9 +398,14 @@ class PointsSettlementIntegrationTest extends IntegrationTestSupport {
             insertDebtReceipt(table, host, peer, host, 30, "unpaid");
             settlementReconciliation.reconcile(before);
             assertThat(jdbc.queryForObject("SELECT status FROM settlement_lines WHERE id = ?", String.class, sent))
-                    .isEqualTo("sent");
+                    .isEqualTo("unpaid");
             var beforeClose = settlementReconciliation.capture(host, peer);
-            jdbc.update("UPDATE settlement_lines SET status = 'paid' WHERE table_id = ?", table);
+            UUID settle = UUID.randomUUID();
+            jdbc.update("""
+                    INSERT INTO settles (id, sender_id, other_id, kind, payer_id, payee_id, amount_cents)
+                    VALUES (?, ?, ?, 'received', ?, ?, 100)
+                    """, settle, host, peer, peer, host);
+            jdbc.update("UPDATE settlement_lines SET status = 'paid', settle_id = ? WHERE table_id = ?", settle, table);
             settlementReconciliation.reconcile(beforeClose);
         });
         assertThat(jdbc.queryForObject("""

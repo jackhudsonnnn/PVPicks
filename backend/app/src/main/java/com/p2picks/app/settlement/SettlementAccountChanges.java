@@ -18,12 +18,15 @@ public class SettlementAccountChanges {
         this.jdbc = jdbc;
     }
 
-    /** Owes or is owed on a receipt that isn't paid or forgiven. */
+    /** Owes or is owed on an open receipt, or is party to a sent settle that can still be rejected. */
     public boolean hasOpenReceipts(UUID userId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM settlement_lines
-                               WHERE (payer_id = ? OR payee_id = ?) AND status NOT IN ('paid', 'forgiven'))
-                """, Boolean.class, userId, userId));
+                               WHERE (payer_id = ? OR payee_id = ?) AND status = 'unpaid')
+                    OR EXISTS (SELECT 1 FROM settles
+                               WHERE (sender_id = ? OR other_id = ?) AND kind = 'sent' AND rejected_at IS NULL
+                                 AND reject_by > clock_timestamp())
+                """, Boolean.class, userId, userId, userId, userId));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

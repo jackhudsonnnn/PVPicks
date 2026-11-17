@@ -15,7 +15,8 @@ import com.p2picks.app.demo.DemoRoster.DemoUser;
 import com.p2picks.app.moderation.ReportService;
 import com.p2picks.app.security.PasswordlessSignIn;
 import com.p2picks.app.sports.PlayerStatsLookup;
-import com.p2picks.app.settlement.SettlementReceiptService;
+import com.p2picks.app.settlement.SettleRules;
+import com.p2picks.app.settlement.SettleService;
 import com.p2picks.app.settlement.SettlementReviewService;
 import com.p2picks.app.settlement.TablePointsSettlementService;
 import com.p2picks.app.social.InvitationResponseService;
@@ -62,6 +63,11 @@ public class DemoBots {
     /** The pro is kept near this many open (Active) bets in his tables, and this many Pending bets of his own. */
     static final int PRO_OPEN = 5;
     static final int PRO_PENDING = 20;
+    /** Mosh Pit has its own budget: the crowd keeps it between these many open bets, apart from the pro's five. */
+    static final int CROWD_OPEN_MIN = 6;
+    static final int CROWD_OPEN_MAX = 12;
+    /** At most this many trash-talk lines per settled bet, so a 50-person bet doesn't flood the chat. */
+    static final int TRASH_TALK_PER_BET = 3;
     private static final Duration LOCK_MARGIN = Duration.ofSeconds(3);
 
     private final JdbcTemplate jdbc;
@@ -79,7 +85,7 @@ public class DemoBots {
     private final ReactionService reactions;
     private final GifCatalog gifs;
     private final ReportService reports;
-    private final SettlementReceiptService receipts;
+    private final SettleService settles;
     private final SettlementReviewService reviews;
     private final TablePointsSettlementService pointsSettlement;
     private final PlayerStatsLookup playerStats;
@@ -91,6 +97,7 @@ public class DemoBots {
     private final Set<String> decided = new HashSet<>();
     private final PriorityQueue<Planned> queue = new PriorityQueue<>((a, b) -> a.at().compareTo(b.at()));
     private final Map<UUID, UUID> trashTalk = new LinkedHashMap<>();
+    private final Map<UUID, Integer> talkPerBet = new HashMap<>();
     private final Map<String, Integer> done = new java.util.TreeMap<>();
     private Instant since;
     private Instant lastTick;
@@ -102,7 +109,7 @@ public class DemoBots {
             @Value("${pvpicks.demo.bots.tick:PT5S}") Duration tick, PasswordlessSignIn signIn, BetPickService picks,
             U2PickProposalService u2picks, SportsProposalService sportsBets, U2PickResolutionService results,
             SocialMutationService social, InvitationResponseService invitations, ChatSendService chat,
-            ReactionService reactions, GifCatalog gifs, ReportService reports, SettlementReceiptService receipts,
+            ReactionService reactions, GifCatalog gifs, ReportService reports, SettleService settles,
             SettlementReviewService reviews, TablePointsSettlementService pointsSettlement,
             PlayerStatsLookup playerStats) {
         this.jdbc = jdbc;
@@ -120,7 +127,7 @@ public class DemoBots {
         this.reactions = reactions;
         this.gifs = gifs;
         this.reports = reports;
-        this.receipts = receipts;
+        this.settles = settles;
         this.reviews = reviews;
         this.pointsSettlement = pointsSettlement;
         this.playerStats = playerStats;
@@ -157,6 +164,7 @@ public class DemoBots {
         decided.clear();
         queue.clear();
         trashTalk.clear();
+        talkPerBet.clear();
         done.clear();
         since = clock.instant();
     }
@@ -185,6 +193,7 @@ public class DemoBots {
             log.warn("Demo bots tick failed", exception);
         }
         if (decided.size() > 200_000) decided.clear();
+        if (talkPerBet.size() > 10_000) talkPerBet.clear();
     }
 
     // ---------------------------------------------------------------- the world as the bots see it
@@ -276,37 +285,52 @@ public class DemoBots {
 
     private void planProposals(World world, Instant now) {
         if (world.pro == null || world.proTables.isEmpty()) return;
-        int open = openBets(world.proTables, now).size() + (int) queue.stream().filter(p -> p.what().equals("propose")).count();
+        // The pro's regular tables share one budget; Mosh Pit, if he still has it, has its own.
+        Set<UUID> regular = new HashSet<>(world.proTables);
+        regular.remove(DemoWorld.CROWD_TABLE);
+        planProposals(world, regular, PRO_OPEN, PRO_OPEN + 3, "propose", now);
+        if (world.proTables.contains(DemoWorld.CROWD_TABLE)) {
+            planProposals(world, Set.of(DemoWorld.CROWD_TABLE), CROWD_OPEN_MIN, CROWD_OPEN_MAX, "propose-crowd", now);
+        }
+    }
+
+    /**
+     * Proposals in {@code tables}: bots propose at their own pace while fewer than {@code max} bets are open there,
+     * and someone tops up whenever fewer than {@code min} are.
+     */
+    private void planProposals(World world, Set<UUID> tables, int min, int max, String what, Instant now) {
+        if (tables.isEmpty()) return;
+        int open = openBets(tables, now).size() + (int) queue.stream().filter(p -> p.what().equals(what)).count();
         List<Member> proposers = world.members.stream()
-                .filter(m -> world.proTables.contains(m.table()) && bots.containsKey(m.user()) && m.canBet()
+                .filter(m -> tables.contains(m.table()) && bots.containsKey(m.user()) && m.canBet()
                         && (m.host() || !world.tables.get(m.table()).hostsOnlyBets()))
                 .toList();
         if (proposers.isEmpty()) return;
-        // Everyone's own pace, while the pro's tables aren't already crowded.
-        if (open < PRO_OPEN + 3) {
+        // Everyone's own pace, while the tables aren't already crowded.
+        if (open < max) {
             for (Member member : proposers) {
                 DemoUser bot = bots.get(member.user());
                 if (BotMind.online(bot.id(), bot.profile(), now)
                         && BotMind.happens(random, bot.profile().proposalsPerHour(), tick)) {
-                    planProposal(world, member, now);
+                    planProposal(world, member, what, now);
                     open++;
                 }
             }
         }
-        // Topping up: someone (preferably online) proposes when the pro has fewer than five open bets to join.
-        if (open < PRO_OPEN) {
+        // Topping up: someone (preferably online) proposes when the pro has too few open bets to join there.
+        if (open < min) {
             List<Member> online = proposers.stream()
                     .filter(m -> BotMind.online(m.user(), bots.get(m.user()).profile(), now)).toList();
-            planProposal(world, DemoLines.any(random, online.isEmpty() ? proposers : online), now);
+            planProposal(world, DemoLines.any(random, online.isEmpty() ? proposers : online), what, now);
         }
     }
 
     private record Game(String id, String league, String status, Integer homeScore, Integer awayScore, Integer period) {}
 
-    private void planProposal(World world, Member member, Instant now) {
+    private void planProposal(World world, Member member, String what, Instant now) {
         DemoUser bot = bots.get(member.user());
         Table table = world.tables.get(member.table());
-        plan(now.plus(BotMind.delay(random, bot.profile(), Duration.ofSeconds(30))), "propose", () -> {
+        plan(now.plus(BotMind.delay(random, bot.profile(), Duration.ofSeconds(30))), what, () -> {
             List<Game> games = jdbc.query("""
                     SELECT id, league, status, home_score, away_score, period FROM games
                     WHERE (status = 'LIVE' OR (status = 'SCHEDULED' AND starts_at BETWEEN ? AND ?))
@@ -333,10 +357,12 @@ public class DemoBots {
             }
             if (!u2pick) return "SKIPPED";
             DemoLines.Question question = DemoLines.any(random, DemoLines.QUESTIONS);
+            // In Mosh Pit the pro is the only host, so a hosts-only U2Pick would wait on him; anyone calls them there.
+            boolean hostsCall = !member.table().equals(DemoWorld.CROWD_TABLE) && random.nextDouble() < 0.7;
             var proposal = new U2PickProposalService.Proposal(
                     new U2PickDefinition(question.question(), question.choices()), json.createObjectNode(),
                     forFun ? 0 : wager, window, forFun,
-                    random.nextDouble() < 0.7 ? U2PickSettler.Rule.HOSTS : U2PickSettler.Rule.ANYONE);
+                    hostsCall ? U2PickSettler.Rule.HOSTS : U2PickSettler.Rule.ANYONE);
             return act(bot.id(), jwt -> u2picks.create(jwt, member.table(), proposal, key()).outcome().name());
         });
     }
@@ -515,9 +541,11 @@ public class DemoBots {
                     UUID table = rs.getObject("table_id", UUID.class);
                     DemoUser bot = bots.get(rs.getObject("user_id", UUID.class));
                     if (bot == null || !decide("talk", bet, bot.id())
-                            || random.nextDouble() >= bot.profile().trashTalkChance()) {
+                            || random.nextDouble() >= bot.profile().trashTalkChance()
+                            || talkPerBet.getOrDefault(bet, 0) >= TRASH_TALK_PER_BET) {
                         return;
                     }
+                    talkPerBet.merge(bet, 1, Integer::sum);
                     boolean won = rs.getString("choice").equals(rs.getString("winning_choice"));
                     String line = DemoLines.any(random, won ? DemoLines.WIN : DemoLines.LOSS);
                     plan(now.plus(BotMind.delay(random, bot.profile(), null)), "trash-talk", () -> act(bot.id(), jwt -> {
@@ -600,70 +628,95 @@ public class DemoBots {
 
     // ---------------------------------------------------------------- settle-ups
 
-    private record Receipt(UUID id, UUID payer, UUID payee, String status, int revision, Instant createdAt,
-            Instant updatedAt) {}
+    private record Receipt(UUID id, UUID payer, UUID payee, long amount, Instant createdAt) {}
 
+    /**
+     * Settle-ups, per bot and person, by the bot's `settleStyle`: whoever owes on all their open receipts sends them
+     * (promptly, or slowly); a forgiving creditor sometimes forgives what's owed to it; an even pair is marked
+     * received; and a disputing receiver sometimes rejects a send before its window closes.
+     */
     private void planReceipts(World world, Instant now) {
         if (world.botIds.isEmpty()) return;
-        List<Receipt> open = jdbc.query("""
-                SELECT id, payer_id, payee_id, status, revision, created_at, updated_at FROM settlement_lines
-                WHERE (payer_id = ANY (?::uuid[]) OR payee_id = ANY (?::uuid[]))
-                  AND status IN ('unpaid', 'sent', 'forgive_asked')
-                """, (rs, row) -> new Receipt(rs.getObject("id", UUID.class), rs.getObject("payer_id", UUID.class),
-                        rs.getObject("payee_id", UUID.class), rs.getString("status"), rs.getInt("revision"),
-                        rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()),
-                array(world.botIds), array(world.botIds));
-        for (Receipt receipt : open) {
-            DemoUser payer = bots.get(receipt.payer());
-            DemoUser payee = bots.get(receipt.payee());
-            DemoUser actor;
-            SettlementReceiptService.Action action;
+        Map<List<UUID>, List<Receipt>> pairs = new LinkedHashMap<>();
+        jdbc.query("""
+                SELECT id, payer_id, payee_id, amount_cents, created_at FROM settlement_lines
+                WHERE (payer_id = ANY (?::uuid[]) OR payee_id = ANY (?::uuid[])) AND status = 'unpaid'
+                ORDER BY id
+                """, rs -> {
+                    Receipt receipt = new Receipt(rs.getObject("id", UUID.class), rs.getObject("payer_id", UUID.class),
+                            rs.getObject("payee_id", UUID.class), rs.getLong("amount_cents"),
+                            rs.getTimestamp("created_at").toInstant());
+                    for (UUID side : List.of(receipt.payer(), receipt.payee())) {
+                        if (!bots.containsKey(side)) continue;
+                        UUID other = side.equals(receipt.payer()) ? receipt.payee() : receipt.payer();
+                        pairs.computeIfAbsent(List.of(side, other), ignored -> new ArrayList<>()).add(receipt);
+                    }
+                }, array(world.botIds), array(world.botIds));
+        pairs.forEach((pair, receipts) -> {
+            DemoUser bot = bots.get(pair.get(0));
+            UUID other = pair.get(1);
+            long net = receipts.stream().mapToLong(r -> r.payee().equals(bot.id()) ? r.amount() : -r.amount()).sum();
+            String identity = receipts.stream().map(r -> r.id().toString()).collect(Collectors.joining(","));
+            Random fixed = new Random(identity.hashCode() * 31L + bot.id().hashCode());
+            Instant newest = receipts.stream().map(Receipt::createdAt).max(Instant::compareTo).orElse(now);
+            var style = bot.profile().settleStyle();
+            List<UUID> chosen;
+            String kind;
             Duration wait;
-            Random fixed = new Random(receipt.id().hashCode() * 31L + receipt.revision());
-            if (receipt.status().equals("unpaid") && payer != null) {
-                actor = payer;
-                var style = payer.profile().settleStyle();
-                action = style == DemoProfile.SettleStyle.DISPUTES && fixed.nextDouble() < 0.3
-                        ? SettlementReceiptService.Action.ASK_FORGIVE : SettlementReceiptService.Action.SENT;
+            if (net < 0) {
+                chosen = receipts.stream().map(Receipt::id).toList();
+                kind = "sent";
                 wait = style == DemoProfile.SettleStyle.SLOW || style == DemoProfile.SettleStyle.DISPUTES
                         ? Duration.ofMinutes(60 + fixed.nextInt(300)) : Duration.ofMinutes(1 + fixed.nextInt(10));
-            } else if (receipt.status().equals("unpaid") && payee != null
-                    && payee.profile().settleStyle() == DemoProfile.SettleStyle.FORGIVES && fixed.nextBoolean()) {
-                actor = payee;
-                action = SettlementReceiptService.Action.FORGIVE;
+            } else if (net == 0) {
+                chosen = receipts.stream().map(Receipt::id).toList();
+                kind = "received";
+                wait = Duration.ofMinutes(5 + fixed.nextInt(30));
+            } else if (style == DemoProfile.SettleStyle.FORGIVES && fixed.nextBoolean()) {
+                chosen = receipts.stream().filter(r -> r.payee().equals(bot.id())).map(Receipt::id).toList();
+                kind = "forgiven";
                 wait = Duration.ofMinutes(10 + fixed.nextInt(50));
-            } else if (receipt.status().equals("sent") && payee != null) {
-                actor = payee;
-                action = payee.profile().settleStyle() == DemoProfile.SettleStyle.DISPUTES && fixed.nextDouble() < 0.4
-                        ? SettlementReceiptService.Action.DISPUTE : SettlementReceiptService.Action.CONFIRM;
-                wait = Duration.ofMinutes(1 + fixed.nextInt(15));
-            } else if (receipt.status().equals("forgive_asked") && payee != null) {
-                actor = payee;
-                action = payee.profile().settleStyle() == DemoProfile.SettleStyle.FORGIVES || fixed.nextDouble() < 0.3
-                        ? SettlementReceiptService.Action.FORGIVE : SettlementReceiptService.Action.DECLINE_FORGIVE;
-                wait = Duration.ofMinutes(2 + fixed.nextInt(20));
             } else {
-                continue;
+                return;
             }
-            if (now.isBefore(receipt.updatedAt().plus(wait))
-                    || !decide("receipt-" + receipt.status() + "-" + receipt.revision(), receipt.id(), actor.id())) {
-                continue;
-            }
-            UUID other = actor.id().equals(receipt.payer()) ? receipt.payee() : receipt.payer();
-            plan(now, "receipt-" + action.name().toLowerCase(), () -> act(actor.id(), jwt -> {
-                try {
-                    return receipts.transition(jwt, receipt.id(), action, receipt.revision(), key()).outcome().name();
-                } catch (SettlementReviewService.ReviewRequired required) {
-                    // Like a player: look at the balance-change warning, then try again.
-                    List<UUID> revision = jdbc.queryForList("""
-                            SELECT revision FROM settlement_pair_reviews
-                            WHERE user_id = ? AND other_user_id = ? AND reviewed_at IS NULL
-                            """, UUID.class, actor.id(), other);
-                    if (revision.isEmpty()) return "REVIEW_MISSING";
-                    reviews.acknowledge(jwt, other, revision.getFirst(), key());
-                    return receipts.transition(jwt, receipt.id(), action, receipt.revision(), key()).outcome().name();
-                }
-            }));
+            if (now.isBefore(newest.plus(wait)) || !decide("settle-" + identity, bot.id(), other)) return;
+            SettleRules.Kind settleKind = SettleRules.Kind.of(kind);
+            plan(now, "settle-" + kind, () -> act(bot.id(), jwt -> reviewing(jwt, bot.id(), other,
+                    () -> settles.create(jwt, other, settleKind, chosen, key()).outcome().name())));
+        });
+        // Rejections: a disputing receiver sometimes says it never arrived, a few minutes in.
+        jdbc.query("""
+                SELECT id, other_id, created_at FROM settles
+                WHERE other_id = ANY (?::uuid[]) AND kind = 'sent' AND rejected_at IS NULL
+                  AND reject_by > clock_timestamp()
+                """, rs -> {
+                    UUID settle = rs.getObject("id", UUID.class);
+                    DemoUser receiver = bots.get(rs.getObject("other_id", UUID.class));
+                    Random fixed = new Random(settle.hashCode());
+                    if (receiver == null || receiver.profile().settleStyle() != DemoProfile.SettleStyle.DISPUTES
+                            || fixed.nextDouble() >= 0.4
+                            || now.isBefore(rs.getTimestamp("created_at").toInstant()
+                                    .plus(Duration.ofMinutes(2 + fixed.nextInt(20))))
+                            || !decide("reject", settle, receiver.id())) {
+                        return;
+                    }
+                    plan(now, "settle-rejected",
+                            () -> act(receiver.id(), jwt -> settles.reject(jwt, settle, key()).outcome().name()));
+                }, array(world.botIds));
+    }
+
+    /** Like a player: if a balance change needs reviewing first, look at it, then try again. */
+    private String reviewing(Jwt jwt, UUID bot, UUID other, java.util.function.Supplier<String> action) {
+        try {
+            return action.get();
+        } catch (SettlementReviewService.ReviewRequired required) {
+            List<UUID> revision = jdbc.queryForList("""
+                    SELECT revision FROM settlement_pair_reviews
+                    WHERE user_id = ? AND other_user_id = ? AND reviewed_at IS NULL
+                    """, UUID.class, bot, other);
+            if (revision.isEmpty()) return "REVIEW_MISSING";
+            reviews.acknowledge(jwt, other, revision.getFirst(), key());
+            return action.get();
         }
     }
 

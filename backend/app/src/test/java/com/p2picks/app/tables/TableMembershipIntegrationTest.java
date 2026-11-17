@@ -103,9 +103,34 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
         assertThat(hostList.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
         JsonNode hostTables = json.readTree(hostList.getResponse().getContentAsString());
         assertThat(hostTables.size()).isEqualTo(1);
-        JsonNode hostTable = hostTables.get(0);
+        JsonNode summary = hostTables.get(0);
+        assertThat(OpenApiSchemas.load("TableSummary").validate(summary)).isEmpty();
+        assertThat(summary.path("id").asText()).isEqualTo(table.toString());
+        assertThat(summary.path("host").asBoolean()).isTrue();
+        assertThat(summary.path("memberCount").asInt()).isEqualTo(jdbc.queryForObject(
+                "SELECT count(*) FROM table_members WHERE table_id = ?", Integer.class, table));
+        assertThat(summary.path("memberPreview").size()).isBetween(1, 4);
+        assertThat(summary.has("memberIds")).as("lists never carry whole member lists").isFalse();
+        assertThat(summary.has("quickPickCode")).isFalse();
+        assertThat(summary.has("disabledPermissions")).as("other members' permissions stay on the table").isFalse();
+        assertThat(summary.path("myDisabledPermissions").isEmpty()).isTrue();
+        java.time.Instant lastBet = jdbc.queryForObject("SELECT max(created_at) FROM bets WHERE table_id = ?",
+                java.sql.Timestamp.class, table).toInstant();
+        assertThat(java.time.Instant.parse(summary.path("lastBetAt").asText()))
+                .as("the most recent bet, for ordering the list").isEqualTo(lastBet);
+        assertThat(java.time.Instant.parse(summary.path("joinedAt").asText())).isEqualTo(jdbc.queryForObject(
+                "SELECT joined_at FROM table_members m JOIN users u ON u.id = m.user_id"
+                        + " WHERE m.table_id = ? AND u.username = 'tablehost'",
+                java.sql.Timestamp.class, table).toInstant());
+        JsonNode limitedSummary = json.readTree(mvc.perform(get("/tables").cookie(loginAs("tablelimited")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get(0);
+        assertThat(limitedSummary.path("myDisabledPermissions").toString()).as("only your own")
+                .isEqualTo("[\"bets\"]");
+        assertThat(limitedSummary.path("host").asBoolean()).isFalse();
+
+        JsonNode hostTable = json.readTree(mvc.perform(get("/tables/" + table).cookie(hostSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("Table").validate(hostTable)).isEmpty();
-        assertThat(hostTable.path("id").asText()).isEqualTo(table.toString());
         assertThat(hostTable.path("quickPickCode").asText()).isEqualTo("H2R5QA");
         assertThat(hostTable.path("disabledPermissions").path(member.toString()).toString())
                 .isEqualTo("[\"text\",\"react\"]");
@@ -155,6 +180,52 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
         jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = ?", member);
         assertThat(tableReads.list(validatedBeforeRevocation).getStatusCode().value()).isEqualTo(401);
         mvc.perform(get("/tables").cookie(memberSession)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void memberSearchMatchesUsernamesInPagesForMembersOnly() throws Exception {
+        UUID table = UUID.randomUUID();
+        UUID viewer = UUID.randomUUID();
+        UUID outsider = UUID.randomUUID();
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, 'msviewer', 1, ?, 'PLAYER', 'ACTIVE'), (?, 'msoutsider', 1, ?, 'PLAYER', 'ACTIVE')
+                """, viewer, hash, outsider, hash);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Search', 'T', 'M5S8QA')", table);
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", table, viewer);
+        List<UUID> pickers = new java.util.ArrayList<>();
+        for (int i = 0; i < 55; i++) {
+            UUID id = UUID.randomUUID();
+            pickers.add(id);
+            jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, 'x', 'PLAYER', 'ACTIVE')",
+                    id, "mspick" + String.format("%02d", i));
+            jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')", table, id);
+        }
+        UUID stranger = UUID.randomUUID();
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, 'mspicknot', 1, 'x', 'PLAYER', 'ACTIVE')",
+                stranger);
+        Cookie session = loginAs("msviewer");
+        String path = "/tables/" + table + "/members";
+
+        JsonNode first = json.readTree(mvc.perform(get(path).param("q", "MSPICK").cookie(session))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(first.path("items").size()).isEqualTo(TableReadController.MEMBER_SEARCH_PAGE);
+        assertThat(first.path("items").get(0).asText()).as("by username").isEqualTo(pickers.get(0).toString());
+        assertThat(first.path("nextCursor").asText()).isEqualTo("mspick49");
+        assertThat(first.toString()).as("members only").doesNotContain(stranger.toString());
+        JsonNode second = json.readTree(mvc.perform(get(path).param("q", "mspick")
+                        .param("cursor", first.path("nextCursor").asText()).cookie(session))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(second.path("items").size()).isEqualTo(5);
+        assertThat(second.path("nextCursor").isNull()).isTrue();
+        JsonNode one = json.readTree(mvc.perform(get(path).param("q", "pick07").cookie(session))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(one.path("items").toString()).isEqualTo("[\"" + pickers.get(7) + "\"]");
+
+        mvc.perform(get(path).param("q", "no spaces!").cookie(session)).andExpect(status().isBadRequest());
+        mvc.perform(get(path).param("q", "mspick").cookie(loginAs("msoutsider"))).andExpect(status().isNotFound());
+        mvc.perform(get(path).param("q", "mspick")).andExpect(status().isUnauthorized());
     }
 
     @Test

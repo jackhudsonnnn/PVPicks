@@ -77,7 +77,11 @@ public class DebtQuery {
                         CASE WHEN l.payer_id = viewer.id THEN -l.amount_cents ELSE l.amount_cents END
                     FROM settlement_lines l
                     WHERE (l.payer_id = viewer.id OR l.payee_id = viewer.id)
-                      AND l.status NOT IN ('paid', 'forgiven')
+                      -- Open, or paid by a send the receiver can still reject: a claimed payment frees no cap room
+                      -- until it's final (domain rules, "Settle-ups").
+                      AND (l.status = 'unpaid' OR EXISTS (
+                          SELECT 1 FROM settles s WHERE s.id = l.settle_id AND s.kind = 'sent'
+                            AND s.rejected_at IS NULL AND s.reject_by > clock_timestamp()))
                 ) input ON true
                 """, (rs, row) -> new DebtInput(rs.getString("kind"), rs.getObject("id", UUID.class),
                         rs.getObject("other_id", UUID.class),

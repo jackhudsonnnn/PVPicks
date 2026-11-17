@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { backendErrorMessage } from "@/lib/api-client";
 import { userKey } from "@/lib/query-keys";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
+import { useMediaQuery } from "@/lib/use-media-query";
+import { cn } from "@/lib/utils";
 import type { User } from "@/features/people";
 import { listTables } from "@/features/tables";
 import { useBetActions } from "@/features/bets/actions";
@@ -23,8 +25,10 @@ import { LoadingList } from "@/components/loading";
 const MIN_SHOWN = 6;
 
 /**
- * Desktop Home's Tickets column: every bet at your tables, live first, then pending, resolved and washed (newest
- * first within each), in a box as tall as the tables box that loads more as you scroll inside it. Table cards refresh it when a table's bets change.
+ * Home's Tickets: every bet at your tables, live first, then pending, resolved and washed (newest first within
+ * each), loading more as you scroll. Beside the tables (from `lg`) it's a box as tall as the tables box that scrolls
+ * inside; stacked below them on a tall tablet it's part of the page. Table cards refresh it when a table's bets
+ * change.
  */
 export function HomeTickets({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
@@ -61,6 +65,7 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
   }, [pages, shown.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const byId = new Map((tables.data ?? []).map((t) => [t.id, t]));
   const peopleKey = userKey(user.id, "people");
+  const beside = useMediaQuery("(min-width: 1024px)");
 
   return (
     <section className="min-w-0 space-y-3" aria-labelledby="home-tickets-heading">
@@ -92,11 +97,18 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
           No tickets yet. Head to a table and propose one.
         </EmptyState>
       ) : (
-        // Same height as the tables box beside it (tables/components/table-cards.tsx); scrolls inside.
+        // Beside the tables (from `lg`): a box as tall as the tables box (tables/components/table-cards.tsx)
+        // that scrolls inside. Stacked below them on a tall tablet: the tickets are simply on the page, and the
+        // page scrolls.
         <ScrollContainer
           isVisible={false}
           aria-label="Tickets"
-          className="h-[27rem] space-y-4 rounded-2xl border p-2 md:scrollbar-thin"
+          className={cn(
+            "space-y-4",
+            beside
+              ? "h-[27rem] rounded-2xl border p-2 md:scrollbar-thin"
+              : "overflow-x-visible overflow-y-visible",
+          )}
         >
           <AnimatedList>
             {shown.map((bet) => {

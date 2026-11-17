@@ -17,17 +17,27 @@ export function ConfirmAction({
   description,
   disabled,
   onConfirm,
+  variant = "outline",
+  className,
 }: {
   label: string;
   title: string;
   description: string;
   disabled: boolean;
   onConfirm: () => void;
+  variant?: "outline" | "default" | "destructive";
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button size="sm" variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant={variant}
+        className={className}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
         {label}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>

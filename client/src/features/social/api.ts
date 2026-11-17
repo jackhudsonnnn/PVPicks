@@ -3,9 +3,11 @@ import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/ap
 import { userSchema, type User } from "@/features/people";
 
 const uuid = idSchema;
+/** Each list newest first: following and followers by follow time, friends by when the second follow happened. */
 const relationshipsSchema = z.object({
   followingIds: z.array(uuid),
   followerIds: z.array(uuid),
+  friendIds: z.array(uuid),
   blockedIds: z.array(uuid),
 });
 const inviteSchema = z.object({
@@ -16,8 +18,10 @@ const inviteSchema = z.object({
   fromId: uuid,
   userId: uuid,
   createdAt: z.string().datetime({ offset: true }),
-  /** Members whose profiles you can read, in join order, for the invite card's avatars. */
-  memberIds: z.array(uuid),
+  /** Up to four members whose profiles you can read, in join order, for the request's avatars. */
+  memberPreview: z.array(uuid).max(4),
+  /** Everyone at the table, including members the preview leaves out. */
+  memberCount: z.number().int().min(1),
 });
 
 export type Relationships = z.infer<typeof relationshipsSchema>;
@@ -58,7 +62,10 @@ export async function setBlock(userId: string, block: boolean, key: string) {
 }
 
 export async function listInvites(signal?: AbortSignal): Promise<TableInvite[]> {
-  return read(await request("/me/invites", signal ? { signal } : undefined), z.array(inviteSchema));
+  return read(
+    await request("/me/invites", signal ? { signal } : undefined),
+    z.array(inviteSchema).max(100),
+  );
 }
 
 export async function respondToInvite(inviteId: string, accept: boolean, key: string) {

@@ -1,10 +1,29 @@
 # Frontend
 
 The app (`src/app/app.tsx`) signs in to the dev backend. From 1100px wide (the `nav` breakpoint) a sidebar holds Home, Tickets, Friends, How to play and
-Preferences, your tables, and your net settle-up points; narrower screens get a top bar
+Preferences, your tables and table requests (below), and your net settle-up points; narrower screens get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The design came from an
 earlier prototype (git tag `prototype-ui`).
+
+- **Sidebar tables and requests** (`tables/components/sidebar-tables.tsx`):
+  - On Home, which already shows your tables, the sidebar lists only
+    **Requests**, newest first, and nothing at all when none are waiting.
+  - On other pages it lists **My tables**, by most recent bet. While
+    requests are waiting, a My tables / Requests switch shows either.
+  - Table and request rows are the same height (a request shows the table
+    and who sent it on one line), and only the list scrolls, so switching
+    lists never moves the header or the points box.
+  - Long lists mount 20 rows at a time and add more as you scroll.
+  - A request opens the same accept-or-decline dialog as Home's cards, and
+    accepting opens the table.
+  - Requests exist only while someone's invite preference for you is
+    Request; Open adds you directly and Closed refuses.
+  - The order follows the last fetch of the list (opening a page, joining or
+    leaving a table, a reconnect), not each new bet, so rows don't jump
+    around while you look at them.
+  - Answers use their own retry key (`useInviteActions`), separate from
+    follows, blocks and reports.
 
 - **Signing in:** the sign-in page shows the demo account picker when the
   backend has the demo, and the password form otherwise. While the backend is
@@ -14,59 +33,107 @@ earlier prototype (git tag `prototype-ui`).
   else's page. Signing out, an expired session and a demo reset all return to
   sign-in.
 
-- **Home:** a greeting ("Sunday slate / Hey, name") and one sideways-scrolling
-  row of cards that snaps card by card.
-  - Invitations come first, in yellow: "theo_r wants you at this table.
-    Accept?" opens a dialog to accept or decline.
-  - Then your tables, each with its icon, a Host badge if you host, the
-    latest chat message (live), and member avatars. A table where you have a
-    pick in an open bet shows green ("in play", from
+- **Home:** a greeting ("Sunday slate / Hey, name"), then **Tables**
+  (`tables/components/table-cards.tsx`).
+  - Below 1024px the cards are one sideways row that snaps the nearest card
+    to the center. It opens centered on your most recent table.
+  - Without the sidebar (below 1100px), table requests (invitations that
+    need your answer) sit to the left of your tables, in yellow: the newest
+    right next to them, older ones further left. "theo_r wants you at this
+    table. Accept?" opens a dialog to accept or decline, and accepting opens
+    the table. Answering or loading requests on the left keeps the card
+    you're looking at in place. With the sidebar, requests are there instead,
+    not on Home.
+  - Your tables go by most recent bet (or when you joined, if that's later).
+    Each card has its icon, a Host badge if you host, the latest chat message
+    (live), and avatars for the first members plus "+N" for the rest. A table
+    where you have a pick in an open bet shows green ("in play", from
     `GET /me/bets?status=ACTIVE`).
+  - Both lists mount 20 cards at a time and add more as you scroll toward
+    their ends (up to 100 of each; see the membership limits in the
+    [domain rules](/reference/domain-rules#membership-limits)).
   - On desktop the cards stack as rows in a scrolling box, and a Tickets
     column sits beside them in a scrolling box of the same height. Both
     boxes have transparent backgrounds. It lists every bet at your tables: live first,
     then pending, resolved and washed, newest first within each. It loads
     more as you scroll, and "All tickets" opens the Tickets page. Below
-    1024px the table cards become a sideways-scrolling row, and screens at
-    least 790px tall show the same Tickets box below them. Shorter screens
-    use the Tickets page instead
+    1024px, screens at least 790px tall show **Tickets** below the table
+    row, as part of the page rather than a box of its own (the page
+    scrolls). Shorter screens use the Tickets page instead
     (`HOME_TICKETS` in `src/lib/use-media-query.ts`).
   - "New table" opens a dialog: a name of up to 14 characters, an icon, and
     people who follow you.
   - Below the row are deleted tables whose chat you can still read for 90
     days (read-only, at `/archives/<id>`).
 - **Friends:** settle-ups first, as a sideways-scrolling row with one card
-  per person: people with an open balance first (newest activity first), and
-  people you're square with (0.00) last. The server sends them in that order.
-  - A card shows your open net with that person: red when you pay them, green
-    when they pay you. It also says how many tables and open receipts that
-    covers, and whether a payment awaits confirmation.
-  - "Settle-up receipts" opens a dialog with any balance-change warning to
-    review, group actions (mark everything sent or received, forgive or ask
-    to forgive), and each dated receipt. A receipt shows its table, the
-    amount, and who has sent and who has received, with your actions on it.
-- Friends also lists new followers, and lists of friends,
-  following, followers and blocked people, with username search, follow,
-  follow back, block and unblock. A host can only add people who follow them,
-  and each person's invite preferences decide whether they join right away or
-  get an invitation.
+  per person you have open receipts with (or a send still in its reject
+  window).
+  - A card shows your open net with that person ("You pay them" / "They pay
+    you" / "You're square") and how many tables and open receipts that
+    covers. It's **yellow** when something needs you (a balance change to
+    review, or a send to you that you can still reject; the color says it,
+    with no extra text on the card), otherwise **red** when you owe,
+    **green** when you're owed and **neutral** when even. Cards sort
+    yellow, red, green, neutral (`settlements/ledger-model.ts`).
+  - **Ledger** opens the dialog (`settlements/ledger-dialog.tsx`), headed
+    "You owe X to name", "You're owed X from name" or "You are even with
+    name", with two tabs:
+    - **Settle:** any balance change to review ("Got it"), then the open
+      receipts with checkboxes and Select all. A large, bold line says what
+      the selection comes to ("You pay X", "name pays you X", "These even
+      out", or "Choose receipts to settle."). The selection's net decides
+      the buttons: **Send X** when you pay it, **Mark X received** (or
+      **Settle even**) when you're paid, and **Forgive** when every receipt
+      is owed to you. Each asks to confirm.
+    - **History:** every settle, newest first, a page at a time: who sent,
+      received or forgave how much, over how many receipts, and whether it
+      was rejected or can still be. The receiver of a send gets **Reject**
+      for 48 hours. It opens on History when you have one to reject.
+- Below settle-ups, **My network** (same heading style), your people in tabs
+  (`social/friends.tsx`), each newest first: **Friends** (mutual follows, by when the second follow happened),
+  **Requests** (people who follow you that you don't follow back: follow
+  them to be friends), **Following**, **Blocked** and **Find** (username
+  search). Followers are friends plus requests, so there's no separate
+  followers list. A line under the tabs, in the same style as the
+  settle-ups description, explains each one. Every list, search results
+  included, is a sideways row of cards the size of the settle-up cards,
+  mounting 20 at a time as you scroll. A card shows the person and what they
+  are to you, with full-width Follow or Unfollow and Block or Unblock
+  buttons, each asking to confirm. A host can only add people who follow them, and each person's
+  invite preferences decide whether they join right away or get an
+  invitation.
 - **Table page:** a card-room felt with members seated around it (each
   showing their points at the table and, for the focused bet, their pick) and
   the open bets fanned as cards in the middle; tap the front card to open its
   ticket. A side panel beside the felt from 1455px wide (the `split`
   breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's Settle
   and True points at the table) and Host (or About for members): points
-  settlement, members, roles, permissions and table settings. The page loads
-  only the table's live bets; older ones load when opened. Tapping a person
+  settlement, members, roles, permissions and table settings. A table can
+  have up to 500 people, so Peers, the members list and the followers to add
+  mount 20 rows at a time as you scroll. A Peers search asks the server for
+  members whose username matches (`GET /tables/{id}/members?q=`), 50 at a
+  time, so only those rows load. The page loads only the table's live bets; older
+  ones load when opened. Tapping a person
   shows their record at the table (computed by the server) and their bets
   there, newest first, a page at a time.
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
-  dropdown), paged. Under the question a ticket shows "Proposed by" with the
+  dropdown under the status tabs: full width on phones, at the right on wider
+  screens), paged. Tickets, Friends and How to play have no visible page
+  title (each keeps a screen-reader heading). Under the question a ticket shows "Proposed by" with the
   proposer's avatar and name (opening their profile at that table,
   `?profile=<id>`); the time is in Details. The footer shows the table's emoji
   and name (linking to it) beside the wager and picks or pot, on every
   ticket.
+- **Ticket Details** (`bets/components/bet-details.tsx`): the timeline, the
+  Bet facts, then for sports bets **Live stats**: the game's score and clock,
+  and each number the mode follows with what it was when the bet was
+  proposed, at lock, and now, beside its line or target. Total Disaster
+  follows the combined score, Give And Take the home margin, the player modes
+  each player's stat (with position and team), and Scorcerer each team's
+  touchdowns and field goals. It refreshes every 15 seconds while the game is
+  live (`GET /bets/{id}/live`). Bets made before these snapshots show "–" for
+  proposed and at lock.
 
 - **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
   Choose Their Fate, which shows as coming soon), set up a U2Pick, or pick one
