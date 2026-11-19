@@ -11,7 +11,7 @@ are examples rather than a list of implemented tests.
 | Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
 | Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
 | Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `bets/api.test.ts` (balances), `preferences/preferences.test.tsx` (debt cap) | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
-| Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the net payer sends (settled at once, rejectable by the receiver for 48 hours, still counted toward the debt cap until then); the net receiver marks received and the person owed forgives (both final); at most 3 sends per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `MigrationIntegrationTest` (V38) |
+| Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the person down settles (`sent`: settled at once, rejectable by the other for 48 hours, still counted toward the points limit until then); the person up, or either side when even, marks as settled (`received`, final); no forgive; at most 3 sent settles per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `MigrationIntegrationTest` (V38, V42) |
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
 | Social and safety | Mutual follows are friends (account-wide; table members are peers, see [Terms](/domain#terms)); enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
@@ -39,12 +39,21 @@ Owner decisions, 2026-11-14:
   reaching three freezes the account (again after an unfreeze). Clearing
   strikes doesn't unfreeze, and unfreezing doesn't clear strikes. Admin
   actions are one-shot: repeating one answers `already_handled`.
+- **Player audits** (owner decision, 2026-11-17). Admins can see everything a
+  player did and wrote: tables, record, settle-ups, reports, and a keyword
+  search over their messages, polls and proposed bets. Bets still Active are
+  left out of every pick and participation count until they lock. Every audit
+  opened and every search run is recorded in `admin_audit_log` with the admin,
+  and the audit log is visible to every admin
+  ([Admin dashboard](/admin#users)).
+- **Feedback inbox.** Admins mark player feedback Done or New with a private
+  note; Done records who and when.
 - **Frozen accounts can't sign in.** Freezing ends every session at once.
-  After a correct password, sign-in answers 403 `account_frozen`. Bets, picks
+  After a correct code (or an admin's correct password), sign-in answers 403
+  `account_frozen`. Bets, picks
   and receipts are untouched. Hosted tables follow host recovery.
-- **Account deletion** (`POST /me/delete`, with your password; wrong
-  passwords count toward the sign-in throttle, so a stolen session can't
-  guess it):
+- **Account deletion** (`POST /me/delete`, confirmed by typing your own
+  username; players have no password):
   - It's blocked until you're square: no Active or Pending bet you proposed or
     joined, no unsettled table points, and no open receipts.
   - It then removes personal data: profile, relationships, invite
@@ -66,8 +75,8 @@ the client never re-derives permissions:
 - Bets carry `viewerCanCall` (call a Pending U2Pick's result under its settler
   rule, using the same `U2PickSettler` the result call enforces) and
   `viewerCanOverride` (a host, a sports bet, points not yet settled).
-- Settles: the client works out which settle buttons a selection gets (send,
-  mark received, forgive) from the same rules the server enforces
+- Settles: the client works out which settle button a selection gets
+  (Settle, or Mark as settled) from the same rules the server enforces
   (`SettleRules`), as a convenience only; the server refuses anything else.
   Each settle says whether the caller `canReject` it now.
 - `GET /modes` says which bet modes accept proposals; the client only
@@ -389,10 +398,10 @@ different tables or people. It checks exact cap boundaries and the 4fun
 exemption. Its caller must supply current-member tables, only unsettled
 non-4fun result deltas and pending wagers, and all open receipts (including
 those retained after table deletion), grouped from the user's perspective.
-Paid and forgiven receipts must be excluded; sent receipts remain open.
+Paid (settled) receipts must be excluded; sent receipts remain open.
 Dev `GET /me/debt` gathers those inputs from a single PostgreSQL snapshot,
 including corrections on unsettled results. It excludes active bets, No guess
-and 4fun wagers, former or archived table memberships, and paid or forgiven
+and 4fun wagers, former or archived table memberships, and paid
 receipts; archived-table open receipts remain included. The endpoint does not
 serialize subsequent changes. The cap update locks the user before reading
 the debt and writes the cap in that transaction. Every future writer that can
@@ -552,18 +561,16 @@ rejects NUL and unpaired surrogates that PostgreSQL cannot safely store, and
 atomically commits feedback with its 201 retry outcome. V18 aligns the link
 constraint for new writes with JavaScript whitespace; legacy rows are retained
 without validation and require review. Feedback may contain personal
-information; account deletion must handle it and cannot merely tombstone the
-user while leaving identifiable text behind. Sending is limited to 5 an hour per
-account; moderation access, retention and personal-data cleanup remain
-unimplemented.
+information, so account deletion removes it (`FeedbackAccountCleanup`) rather
+than tombstoning the author. Sending is limited to 5 an hour per account.
+Admins read it in the feedback inbox; a retention period for kept feedback is
+not decided yet.
 
-Admin flag and strike rows default to unflagged and zero strikes. An absent row
-has the same draft state. V13 limits stored strikes to 0–3 but does not freeze
-the account or record an action. Future services must serialize actions,
-authorize administrators, atomically record changes and revoke sessions on
-freeze. Clearing strikes does not unfreeze; explicit unfreeze at three strikes
-is allowed, and a later strike freezes again. Notes and flags are personal
-moderation data requiring restricted access and deletion/retention policies.
+Admin flag and strike rows default to unflagged and zero strikes; an absent row
+means the same. Strikes are 0–3 (V13). The moderation rules are above;
+reports, strikes, feedback notes and the admin audit log are personal
+moderation data, readable only by admins, and their retention period is not
+decided yet.
 
 Clearing an existing pick keeps that player as a No guess participant outside the
 pot; clearing before joining does not create a participant. Because the backend stores
@@ -682,29 +689,33 @@ cancelled after its event was written is simply absent from the next read.
 ## Settle-ups
 
 Implemented 2026-11-16 (owner decisions), replacing per-receipt and
-all-at-once actions. A points settlement leaves one receipt per person and
-table: who pays whom, unpaid. A **settle** closes a chosen set of one pair's
+all-at-once actions; Forgive removed 2026-11-18. Points have no cash value:
+a settle only records that two people consider those receipts closed, and
+the app never asks anyone to pay anything. The internal names (payer,
+payee, `sent`, `received`, `paid`, debt) predate that wording; the app says
+down, up, Settle and Mark as settled. A points settlement leaves one receipt
+per person and table: who's down to whom, unpaid. A **settle** closes a chosen set of one pair's
 open receipts in one action (`settlement/SettleService`, rules in
 `SettleRules`).
 
 - **Netting.** A selection can mix both directions. Seen from the person
-  settling, it nets to what they pay (negative) or receive (positive, or
+  settling, it nets to points they're down (negative) or up (positive, or
   zero when it evens out).
-- **Send** (`sent`): only the net payer. It counts as settled at once: the
-  receipts close, the cards and balances move. The receiver can **reject**
+- **Settle** (`sent`): only the person down. It counts as settled at once: the
+  receipts close, the cards and balances move. The other person can **reject**
   it for 48 hours, which reopens every receipt in it; the rejected settle
   stays in History for audit. After 48 hours it's final.
-- **Mark received** (`received`): the net receiver, or either side when the
-  selection is even. Final at once, since it can only give up money owed to
-  them.
-- **Forgive** (`forgiven`): the person owed, on receipts that are all owed
-  to them. Final at once. Asking to forgive is gone (ask in chat).
-- **Debt cap.** A send still counts toward the payer's debt until its window
-  closes, so claiming a payment can't free cap room to keep betting. Account
+- **Mark as settled** (`received`): the person up, or either side when the
+  selection is even. Final at once, since it only gives up points owed to
+  them. This replaced Forgive, which V42 converted (forgives became
+  `received` settles, their receipts `paid`).
+- **Points limit** (debt cap in code). A sent settle still counts toward
+  the settler's debt until its window closes, so settling can't free room
+  to keep betting. Account
   deletion also waits for open windows.
-- **Limit.** At most 3 sends between two people in any 24 hours, both
-  directions and rejected ones included (429 `settle_limit`). Marking
-  received and forgiving aren't limited.
+- **Limit.** At most 3 sent settles between two people in any 24 hours,
+  both directions and rejected ones included (429 `settle_limit`). Marking
+  as settled isn't limited.
 - **Review gate.** When a new points settlement changes an existing open
   balance between two people, both must review it before settling again
   (409 `settlement_review_required`), so nobody settles against an
@@ -715,10 +726,11 @@ open receipts in one action (`settlement/SettleService`, rules in
   settle.
 - **Storage** (V38): `settles` (sender, kind, the net and its direction,
   `reject_by` for sends, `rejected_at`) and `settle_lines`; a receipt is
-  `unpaid`, `paid` or `forgiven` and points at the settle that closed it.
+  `unpaid` or `paid` and points at the settle that closed it.
   Only a settle's rejection can change after it's written. V38 turned
   receipts marked sent into sends with a fresh 48-hour window, and
-  forgive-asked and disputed receipts back into open ones.
+  forgive-asked and disputed receipts back into open ones. V42 removed
+  `forgiven`.
 
 Cards on Friends, Settle-ups (one per person with open receipts or a send
 still in its window): **yellow** when something needs you (a balance change

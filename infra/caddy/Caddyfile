@@ -17,7 +17,7 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		# Setup links carry their code in the fragment, which browsers never send; this keeps the path private too.
+		# QR sign-in links carry the code in the fragment, which browsers never send; this keeps the path private too.
 		Referrer-Policy "no-referrer"
 		-Server
 	}

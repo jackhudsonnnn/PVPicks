@@ -47,11 +47,19 @@ export function mergeRange(loaded: ChatMessage[], items: ChatMessage[]): ChatMes
   const before = loaded.slice(0, firstInWindow ?? start);
   const after = lastInWindow === undefined ? [] : loaded.slice(Math.max(end, lastInWindow) + 1);
   const windowIds = new Set(items.map((message) => message.id));
-  return [
+  // Unchanged messages keep their objects, so their rows don't re-render.
+  const kept = new Map(loaded.map((message) => [message.id, message]));
+  const merged = [
     ...before.filter((m) => !windowIds.has(m.id)),
-    ...items,
+    ...items.map((m) => {
+      const old = kept.get(m.id);
+      return old && JSON.stringify(old) === JSON.stringify(m) ? old : m;
+    }),
     ...after.filter((m) => !windowIds.has(m.id)),
   ];
+  return merged.length === loaded.length && merged.every((m, i) => m === loaded[i])
+    ? loaded
+    : merged;
 }
 
 export function canReactTo(message: ChatMessage) {

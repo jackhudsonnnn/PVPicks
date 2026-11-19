@@ -22,12 +22,15 @@ import { type User, PersonName } from "@/features/people";
 import { useRelationships } from "@/features/social";
 import { useTableActions } from "@/features/tables/actions";
 import { TABLE_NAME_LIMIT, tableNameProblem } from "@/features/tables/rules";
+import { useNewcomer } from "@/features/tables/newcomer";
+import { FindFriendsDialog } from "@/components/find-friends-dialog";
 
 /** "New table": name, icon, and people who follow you to ask along. */
 export function CreateTableDialog({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
   const relationships = useRelationships(user.id);
   const [open, setOpen] = useState(false);
+  const newcomer = useNewcomer(user.id);
   const actions = useTableActions(
     user.id,
     async () => {
@@ -61,7 +64,8 @@ export function CreateTableDialog({ user, expire }: { user: User; expire: () => 
         pendingText="A table change may not have been saved."
         checkText="Check your tables first."
       />
-      <Dialog open={open} onOpenChange={setOpen}>
+      {newcomer && <FindFriendsDialog open={open} onOpenChange={setOpen} />}
+      <Dialog open={open && !newcomer} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button variant="outline" disabled={blocked}>
             <Plus /> New table

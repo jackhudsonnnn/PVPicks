@@ -3,11 +3,7 @@ package com.p2picks.app.security;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.time.Duration;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.CacheControl;
@@ -15,55 +11,21 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * {@code POST /auth/setup} redeems a setup or reset code (signed out, like login); {@code POST /auth/password}
- * changes your own password (any signed-in account). Failed attempts share the sign-in throttle.
+ * {@code POST /auth/password} changes your own password. Only admins have one (players sign in with a code), so a
+ * player gets 403 {@code not_admin}. Wrong current passwords share the sign-in throttle.
  */
 @RestController
 class PasswordController {
     private final PasswordService passwords;
     private final LoginThrottle throttle;
-    private final CsrfTokenRepository csrfTokens;
-    private final SessionCookies cookies;
-
-    PasswordController(PasswordService passwords, LoginThrottle throttle, CsrfTokenRepository csrfTokens,
-            SessionCookies cookies) {
-        this.cookies = cookies;
+    PasswordController(PasswordService passwords, LoginThrottle throttle) {
         this.passwords = passwords;
         this.throttle = throttle;
-        this.csrfTokens = csrfTokens;
-    }
-
-    @PostMapping("/auth/setup")
-    ResponseEntity<?> setup(@RequestBody JsonNode input, HttpServletRequest request, HttpServletResponse response) {
-        if (!input.isObject() || input.size() != 2 || !input.path("code").isTextual()
-                || !input.path("password").isTextual()) {
-            return error(400, "bad_request", "A code and a password are required.");
-        }
-        String address = request.getRemoteAddr();
-        if (throttle.blockedAddress(address)) return rateLimited();
-        Cookie[] cookies = request.getCookies();
-        String previous = cookies == null ? null : Arrays.stream(cookies)
-                .filter(cookie -> cookie.getName().equals("session")).map(Cookie::getValue).findFirst().orElse(null);
-        PasswordService.SetupResult result = passwords.redeem(input.path("code").textValue(),
-                input.path("password").textValue(), previous);
-        if (result instanceof PasswordService.SetupResult.InvalidCode) {
-            throttle.failedAddress(address);
-            return error(400, "invalid_setup_code",
-                    "This setup link has expired or was already used. Ask the admin for a new one.");
-        }
-        if (result instanceof PasswordService.SetupResult.Rejected rejected) {
-            return error(400, "weak_password", rejected.problem());
-        }
-        String token = ((PasswordService.SetupResult.SignedIn) result).token();
-        response.addHeader(HttpHeaders.SET_COOKIE, this.cookies.session(token, Duration.ofHours(8)));
-        csrfTokens.saveToken(null, request, response);
-        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 
     @PostMapping("/auth/password")
@@ -89,6 +51,7 @@ class PasswordController {
                     throttle.failed(account, address);
                     yield error(403, "wrong_password", "Your current password isn't right.");
                 }
+                case NOT_ADMIN -> error(403, "not_admin", "Players sign in with a code and have no password.");
                 case UNAUTHORIZED -> error(401, "unauthorized", "Authentication required or credentials invalid.");
             };
         } catch (MutationAuthentication.ExpiredSession expired) {

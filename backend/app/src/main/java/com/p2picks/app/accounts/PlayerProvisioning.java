@@ -2,7 +2,7 @@ package com.p2picks.app.accounts;
 
 import com.p2picks.app.common.PageCursor;
 import com.p2picks.app.common.PostgresText;
-import com.p2picks.app.security.AccountSetupCodes;
+import com.p2picks.app.security.SignInCodes;
 import com.p2picks.app.security.MutationAuthentication;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -15,8 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Admin-created player accounts (LAN plan, "Accounts and passwords"). A new account has no usable password until the
- * player redeems its setup code; a forgotten password gets a reset code. There's no registration.
+ * Admin-created player accounts. There's no registration and players have no password: each gets a sign-in code
+ * ({@link SignInCodes}) the admin shows them as a QR code, and rotates when it needs replacing.
  */
 @Service
 class PlayerProvisioning {
@@ -25,15 +25,15 @@ class PlayerProvisioning {
 
     record Page(List<Player> items, String nextCursor) {}
 
-    record Player(UUID id, String username, String status, boolean passwordSet, OffsetDateTime codeExpiresAt,
-                  OffsetDateTime createdAt) {}
+    record Player(UUID id, String username, Integer hue, String status, OffsetDateTime lastSignInAt,
+                  OffsetDateTime codeRotatedAt, OffsetDateTime createdAt, int strikes, int openReports) {}
 
-    record Created(UUID id, String username, AccountSetupCodes.Issued code) {}
+    record Created(UUID id, String username, String code) {}
 
     sealed interface Result {
         record Done(Created created) implements Result {}
 
-        record Code(AccountSetupCodes.Issued code) implements Result {}
+        record Code(String code) implements Result {}
 
         record Invalid(String message) implements Result {}
 
@@ -46,19 +46,23 @@ class PlayerProvisioning {
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
-    private final AccountSetupCodes codes;
+    private final SignInCodes codes;
 
-    PlayerProvisioning(JdbcTemplate jdbc, MutationAuthentication authentication, AccountSetupCodes codes) {
+    PlayerProvisioning(JdbcTemplate jdbc, MutationAuthentication authentication, SignInCodes codes) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.codes = codes;
     }
 
     /**
-     * Players, newest first, {@link #PAGE} at a time, with whether they've set a password and when their live code
-     * (if any) expires. Throws IllegalArgumentException on a bad cursor.
+     * Players, newest first, {@link #PAGE} at a time, with their last sign-in, when their code was last rotated,
+     * their strikes and open reports against them (never the code itself: {@link #reveal} shows one). {@code search} keeps only usernames starting
+     * with it. Throws IllegalArgumentException on a bad cursor.
      */
-    Page players(String cursor) {
+    Page players(String cursor, String search) {
+        String prefix = search == null || search.isBlank() ? null
+                : search.trim().toLowerCase(Locale.ROOT).replace("\\", "\\\\").replace("_", "\\_")
+                        .replace("%", "\\%") + "%";
         OffsetDateTime before = null;
         UUID beforeId = null;
         if (cursor != null) {
@@ -67,18 +71,21 @@ class PlayerProvisioning {
             beforeId = UUID.fromString(parts.get(1));
         }
         List<Player> rows = jdbc.query("""
-                SELECT u.id, u.username::text AS username, u.status, u.password_hash LIKE '$2%' AS password_set,
-                       u.created_at,
-                       (SELECT max(c.expires_at) FROM account_setup_codes c
-                        WHERE c.user_id = u.id AND c.used_at IS NULL AND c.expires_at > now()) AS code_expires_at
+                SELECT u.id, u.username::text AS username, u.hue, u.status, u.created_at,
+                       (SELECT max(s.created_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_sign_in,
+                       (SELECT c.rotated_at FROM sign_in_codes c WHERE c.user_id = u.id) AS code_rotated_at,
+                       COALESCE((SELECT f.strike_count FROM admin_user_flags f WHERE f.user_id = u.id), 0) AS strikes,
+                       (SELECT count(*) FROM reports r WHERE r.target_id = u.id AND r.status = 'OPEN') AS open_reports
                 FROM users u WHERE u.role = 'PLAYER' AND u.status <> 'DELETED'
+                  AND (?::text IS NULL OR u.username::text LIKE ?)
                   AND (?::timestamptz IS NULL OR (u.created_at, u.id) < (?::timestamptz, ?::uuid))
                 ORDER BY u.created_at DESC, u.id DESC
                 LIMIT ?
                 """, (rs, row) -> new Player(rs.getObject("id", UUID.class), rs.getString("username"),
-                rs.getString("status"), rs.getBoolean("password_set"),
-                rs.getObject("code_expires_at", OffsetDateTime.class), rs.getObject("created_at", OffsetDateTime.class)),
-                before, before, beforeId, PAGE + 1);
+                (Integer) rs.getObject("hue", Integer.class), rs.getString("status"), rs.getObject("last_sign_in", OffsetDateTime.class),
+                rs.getObject("code_rotated_at", OffsetDateTime.class), rs.getObject("created_at", OffsetDateTime.class),
+                rs.getInt("strikes"), rs.getInt("open_reports")),
+                prefix, prefix, before, before, beforeId, PAGE + 1);
         if (rows.size() <= PAGE) return new Page(rows, null);
         Player last = rows.get(PAGE - 1);
         return new Page(rows.subList(0, PAGE), PageCursor.encode(last.createdAt(), last.id()));
@@ -95,26 +102,38 @@ class PlayerProvisioning {
         int inserted = jdbc.update("""
                 INSERT INTO users (id, username, hue, password_hash, role, status)
                 VALUES (?, ?, ?, ?, 'PLAYER', 'ACTIVE') ON CONFLICT (username) DO NOTHING
-                """, id, username, ThreadLocalRandom.current().nextInt(1, 6), AccountSetupCodes.unusablePasswordHash());
+                """, id, username, ThreadLocalRandom.current().nextInt(1, 6), SignInCodes.NO_PASSWORD);
         if (inserted == 0) return new Result.Taken();
-        AccountSetupCodes.Issued code = codes.issue(id, AccountSetupCodes.Purpose.SETUP, admin(jwt));
+        String code = codes.rotate(id, admin(jwt));
         authentication.requireUnexpired(jwt);
         return new Result.Done(new Created(id, username, code));
     }
 
-    /** A new code for an active player: SETUP while they've never set a password, RESET after. */
+    /** A new code for a player, ending all their sessions so the old code (and every device) is signed out. */
     @Transactional
-    Result issueCode(Jwt jwt, UUID playerId) {
+    Result rotate(Jwt jwt, UUID playerId) {
         if (!authentication.lockActive(jwt)) return new Result.Unauthorized();
-        List<String> hashes = jdbc.queryForList("""
-                SELECT password_hash FROM users WHERE id = ? AND role = 'PLAYER' AND status = 'ACTIVE' FOR UPDATE
-                """, String.class, playerId);
-        if (hashes.isEmpty()) return new Result.NotFound();
-        AccountSetupCodes.Purpose purpose = hashes.getFirst().startsWith("$2")
-                ? AccountSetupCodes.Purpose.RESET : AccountSetupCodes.Purpose.SETUP;
-        AccountSetupCodes.Issued code = codes.issue(playerId, purpose, admin(jwt));
+        if (!lockPlayer(playerId)) return new Result.NotFound();
+        String code = codes.rotate(playerId, admin(jwt));
         authentication.requireUnexpired(jwt);
         return new Result.Code(code);
+    }
+
+    /** The player's current code, for the admin's QR. */
+    @Transactional(readOnly = true)
+    Result reveal(UUID playerId) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM users WHERE id = ? AND role = 'PLAYER' AND status IN ('ACTIVE', 'FROZEN'))
+                """, Boolean.class, playerId))) {
+            return new Result.NotFound();
+        }
+        return codes.reveal(playerId).<Result>map(Result.Code::new).orElseGet(Result.NotFound::new);
+    }
+
+    private boolean lockPlayer(UUID playerId) {
+        return !jdbc.queryForList("""
+                SELECT id FROM users WHERE id = ? AND role = 'PLAYER' AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                """, UUID.class, playerId).isEmpty();
     }
 
     private static UUID admin(Jwt jwt) {

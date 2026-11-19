@@ -9,7 +9,7 @@ const intentSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("settle"),
     other: uuid,
-    settle: z.enum(["sent", "received", "forgiven"]),
+    settle: z.enum(["sent", "received"]),
     lineIds: z.array(uuid).min(1).max(500),
   }),
   z.object({ kind: z.literal("reject"), other: uuid, settleId: uuid }),
@@ -17,7 +17,7 @@ const intentSchema = z.discriminatedUnion("kind", [
 
 export type SettlementIntent = z.infer<typeof intentSchema>;
 
-/** Reviewing a balance change, settling chosen receipts, and rejecting a send, with retry-key safety. */
+/** Reviewing a balance change, settling chosen receipts, and rejecting a settle, with retry-key safety. */
 export function useSettlementActions(
   userId: string,
   refresh: () => Promise<void>,
@@ -43,10 +43,8 @@ export function useSettlementActions(
       if (intent.kind === "settle") {
         await createSettle(intent.other, intent.settle, intent.lineIds, key);
         return intent.settle === "sent"
-          ? "Sent. It's settled unless they reject it within 48 hours."
-          : intent.settle === "forgiven"
-            ? "Forgiven."
-            : "Marked received.";
+          ? "Settled, unless they reject it within 48 hours."
+          : "Marked as settled.";
       }
       await rejectSettle(intent.settleId, key);
       return "Rejected. Those receipts are open again.";

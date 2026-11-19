@@ -7,6 +7,7 @@ import { Logo } from "@/components/logo";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { SidebarTables } from "@/features/tables";
+import { useHasTickets } from "@/features/bets";
 import type { User } from "@/features/people";
 import { ScoreTicker } from "@/features/sports";
 import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
@@ -67,18 +68,20 @@ function HomeSvgIcon({ className }: { className?: string }) {
 }
 
 const NAV = [
-  { to: "/friends", label: "Friends", short: "Friends", icon: Users },
   { to: "/tickets", label: "Tickets", short: "Tickets", icon: Ticket },
+  { to: "/friends", label: "Friends", short: "Friends", icon: Users },
   { to: "/", label: "Home", short: "", icon: HomeSvgIcon },
   { to: "/how-to-play", label: "Guide", short: "Guide", icon: BookOpen },
   { to: "/preferences", label: "Preferences", short: "Prefs", icon: SlidersHorizontal },
 ];
 
+const NO_TICKETS = "Tickets show up once a bet starts at one of your tables.";
+
 const isActive = (pathname: string, to: string) =>
   to === "/" ? pathname === "/" : pathname.startsWith(to);
 
 /**
-- Net of your open settle-ups: positive means you're owed. Same query and key as the Friends page's settle-ups,
+- Net of your open settle-ups: positive means you're up. Same query and key as the Friends page's settle-ups,
 - so both stay in step; the settlements feed refreshes it.
  */
 function PointsPill({ user }: { user: User }) {
@@ -168,6 +171,9 @@ export function AppShell({
   const isTable = pathname.startsWith("/tables/");
   const devAvailable = useDevAvailable(user.id);
   const devActive = isActive(pathname, "/dev");
+  // Tickets stays greyed out until there's a bet at one of your tables.
+  const hasTickets = useHasTickets(user.id);
+  const off = (to: string) => to === "/tickets" && !hasTickets && !isActive(pathname, to);
   return (
     <div
       className={cn(
@@ -187,6 +193,18 @@ export function AppShell({
           {NAV.map(({ to, label, icon: Icon }) => {
             const active = isActive(pathname, to);
             const isHome = to === "/";
+            if (off(to))
+              return (
+                <span
+                  key={to}
+                  aria-disabled="true"
+                  title={NO_TICKETS}
+                  className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-muted-foreground opacity-50"
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </span>
+              );
             return (
               <Link
                 key={to}
@@ -216,8 +234,7 @@ export function AppShell({
             <LiveStatus />
           </div>
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            Net of your open settle-ups: pay, get paid or forgive to clear them. Points are mock
-            dollars.
+            Net of your open settle-ups. Points have no cash value.
           </p>
           <p className="mt-2 truncate text-xs text-muted-foreground">
             Signed in as {user.username}
@@ -245,6 +262,18 @@ export function AppShell({
         {NAV.map(({ to, short, icon: Icon }) => {
           const active = isActive(pathname, to);
           const isHome = to === "/";
+          if (off(to))
+            return (
+              <span
+                key={to}
+                aria-disabled="true"
+                title={NO_TICKETS}
+                className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground opacity-40"
+              >
+                <Icon className="size-5" />
+                {short}
+              </span>
+            );
           return (
             <Link
               key={to}

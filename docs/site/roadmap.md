@@ -25,7 +25,8 @@ afterwards. [LAN watch party](/lan) has the design and the runbook.
 **Exit criteria.** All of these must hold:
 
 - Every guest can open the app on their phone over trusted HTTPS, with no
-  certificate setup, set their own password from a setup code, and sign in.
+  certificate setup, and sign in by scanning their QR code or typing their
+  username and code.
 - U2Pick, the score modes, the player modes and Scorcerer (NFL) work end to
   end on real NBA and NFL games: propose, pick, lock, resolve or wash,
   settle points and receipts.
@@ -42,20 +43,30 @@ afterwards. [LAN watch party](/lan) has the design and the runbook.
   front of the backend and a production client build. Secure cookies, an
   HTTPS-only origin, forwarded headers trusted from Caddy, LAN-only keys,
   and every dev-only feature off.
-- Accounts through admin-issued setup codes, reset links, change password,
-  a bootstrapped first admin, and a script that creates the guests.
+- Accounts with per-player sign-in codes (QR on the admin's cards, blur and
+  rotate), an admin with an environment-set password, and a script that
+  creates the guests.
 - Rate limits on chat, reactions, polls, proposals, picks, search, follows,
-  blocks, feedback and WebSocket subscriptions, plus the sign-in throttle.
+  blocks, feedback and WebSocket subscriptions, plus the sign-in throttle
+  (wrong codes count per player, with an admin **Unlock**).
 - Every LAN wash trigger: Total Disaster lines start above the live combined
   score, a 48-hour no-result wash, the 7-day U2Pick wash, and Scorcerer from
   team totals with safeties ignored.
 - A runbook.
+- A smoke test of the whole stack on the Mac (2026-11-18, `localhost` with
+  Caddy's internal certificate): HTTPS, headers, admin sign-in, creating a
+  player, code and QR sign-in, rotate, and the wrong-code lockout. It found
+  and fixed a bug where a rotated player's old session cookie blocked the
+  new code.
 
 **Left before the party** (owner):
 
 - Buy All-Star for NBA and NFL (about Nov 20; see Time-sensitive above).
 - Register the domain in Route 53, point `p2picks.<domain>` at the Mac and
   get the certificate.
+- Fill in `infra/compose/.env.lan`: host, admin username and password
+  (`PVPICKS_BOOTSTRAP_ADMIN_PASSWORD` is a new line), and the BallDontLie
+  key.
 - Any further mode-specific wash triggers.
 - The dry run on the real Wi-Fi with at least two phones.
 - No resets during the night. The disposable-environment rule applies before
@@ -66,13 +77,18 @@ afterwards. [LAN watch party](/lan) has the design and the runbook.
 People play from anywhere, over weeks. Data is kept and backed up.
 
 - Hosting in the AWS project (selected Region), the same domain and TLS
-  approach, and a registration policy decided after LAN (invite codes are
-  the natural extension of setup codes).
+  approach, and a registration policy decided after LAN (probably Google
+  sign-in for players; LAN's sign-in codes stay for local events).
 - Backups, restore drills and retention for retry records, audit data,
   archives and outbox markers.
-- Observability: metrics and logs through OpenTelemetry (not Kafka), outbox
-  and consumer lag, and a Kafka check in site health
-  ([Kafka & Redis](/kafka-redis), item 5).
+- Observability: metrics and logs through OpenTelemetry (not Kafka),
+  consumer lag and a Kafka check in the admin Perf tab
+  ([Kafka & Redis](/kafka-redis), item 5). The Perf tab's own timings
+  (`perf_minutes`, 7 days) stay as the in-app view.
+- Historic sports data: a backfill job that pulls past games, snapshots and
+  player stats from the provider into the admin sports explorer, season by
+  season. It's slow (a season may take a day at the provider's rate limits),
+  so it runs in the background and resumes where it stopped.
 - More than one backend instance: one runner per scheduled job and a shared
   sports-feed request budget in Redis (item 3).
 - Event-driven sports resolution, then the production partition count and

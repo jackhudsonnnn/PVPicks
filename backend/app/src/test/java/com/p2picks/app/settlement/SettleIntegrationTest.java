@@ -140,7 +140,7 @@ class SettleIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void markReceivedAndForgiveAreFinalAndOnlyForTheRightSide() throws Exception {
+    void markSettledIsFinalAndOnlyForTheRightSide() throws Exception {
         Pair p = pair();
         UUID owed1 = insertDebtReceipt(p.table(), p.host(), p.player(), p.host(), 500, "unpaid");
         UUID owed2 = insertDebtReceipt(p.table(), p.host(), p.player(), p.host(), 100, "unpaid");
@@ -149,8 +149,8 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         MvcResult wrongSide = settleHttp(p.hostCookie(), p.csrf(), p.player(), "sent", List.of(owed1), "wrong-send");
         assertThat(wrongSide.getResponse().getStatus()).isEqualTo(409);
         assertThat(body(wrongSide).path("code").asText()).isEqualTo("invalid_settle");
-        assertThat(body(settleHttp(p.hostCookie(), p.csrf(), p.player(), "forgiven", List.of(owed1, owes), "mixed"))
-                .path("code").asText()).as("only what's owed to you").isEqualTo("invalid_settle");
+        assertThat(settleHttp(p.hostCookie(), p.csrf(), p.player(), "forgiven", List.of(owed1), "forgive")
+                .getResponse().getStatus()).as("forgive is gone").isEqualTo(400);
 
         MvcResult received = settleHttp(p.hostCookie(), p.csrf(), p.player(), "received", List.of(owed1, owes),
                 "received");
@@ -158,11 +158,11 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         assertThat(body(received).path("rejectBy").isNull()).as("final at once").isTrue();
         assertThat(lineStatus(owed1)).isEqualTo("paid");
         assertThat(lineStatus(owes)).isEqualTo("paid");
-        MvcResult stale = settleHttp(p.hostCookie(), p.csrf(), p.player(), "forgiven", List.of(owed1, owed2), "stale");
+        MvcResult stale = settleHttp(p.hostCookie(), p.csrf(), p.player(), "received", List.of(owed1, owed2), "stale");
         assertThat(body(stale).path("code").asText()).isEqualTo("stale_selection");
-        assertThat(settleHttp(p.hostCookie(), p.csrf(), p.player(), "forgiven", List.of(owed2), "forgive")
-                .getResponse().getStatus()).isEqualTo(201);
-        assertThat(lineStatus(owed2)).isEqualTo("forgiven");
+        assertThat(settleHttp(p.hostCookie(), p.csrf(), p.player(), "received", List.of(owed2), "owed-only")
+                .getResponse().getStatus()).as("the person up can close what's owed to them").isEqualTo(201);
+        assertThat(lineStatus(owed2)).isEqualTo("paid");
         assertThat(settleGroups(p.playerCookie())).isEmpty();
         assertThat(debt(p.playerCookie())).isZero();
     }
@@ -310,7 +310,7 @@ class SettleIntegrationTest extends IntegrationTestSupport {
         List<UUID> closed = new ArrayList<>();
         for (int i = 0; i < 25; i++) {
             closed.add(insertDebtReceipt(p.table(), p.host(), p.player(), p.host(), 100,
-                    i % 2 == 0 ? "paid" : "forgiven"));
+                    "paid"));
         }
         String path = "/users/" + p.host() + "/settlements";
         JsonNode first = body(mvc.perform(get(path).cookie(p.playerCookie())).andExpect(status().isOk()).andReturn());

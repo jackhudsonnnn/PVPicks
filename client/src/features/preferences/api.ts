@@ -50,8 +50,9 @@ export async function updateProfile(
 
 /**
  * Deletes your account (`POST /me/delete`). Not retried with a saved key: once it succeeds the session is gone.
- * Throws a BackendError: 403 `wrong_password`, or 409 `account_not_square` with the blockers in its body.
+ * You confirm by typing your own username (players have no password). Throws a BackendError: 403
+ * `wrong_username`, or 409 `account_not_square` with the blockers in its body.
  */
-export async function deleteAccount(password: string): Promise<void> {
-  await mutationRequest("/me/delete", "POST", crypto.randomUUID(), { password });
+export async function deleteAccount(username: string): Promise<void> {
+  await mutationRequest("/me/delete", "POST", crypto.randomUUID(), { username });
 }

@@ -94,10 +94,11 @@ export type BetPage = z.infer<typeof betPageSchema>;
 
 /** Your bets across your current tables (or one), newest first. */
 export async function listMyBets(
-  filter: { status?: Bet["status"]; tableId?: string; cursor?: string },
+  filter: { status?: Bet["status"]; tableId?: string; cursor?: string; limit?: number },
   signal?: AbortSignal,
 ): Promise<BetPage> {
   const params = new URLSearchParams();
+  if (filter.limit) params.set("limit", String(filter.limit));
   if (filter.status) params.set("status", filter.status);
   if (filter.tableId) params.set("tableId", filter.tableId);
   if (filter.cursor) params.set("cursor", filter.cursor);

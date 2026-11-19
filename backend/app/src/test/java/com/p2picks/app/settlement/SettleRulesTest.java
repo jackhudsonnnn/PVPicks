@@ -29,8 +29,8 @@ class SettleRulesTest {
         List<Line> iPay = List.of(owe(500), owed(300));
         assertThat(SettleRules.net(iPay, ME)).isEqualTo(java.math.BigInteger.valueOf(-200));
         assertThat(SettleRules.problem(SettleRules.Kind.SENT, iPay, ME)).isNull();
-        assertThat(SettleRules.problem(SettleRules.Kind.RECEIVED, iPay, ME)).contains("Send");
-        assertThat(SettleRules.problem(SettleRules.Kind.SENT, iPay, THEM)).contains("Mark them received");
+        assertThat(SettleRules.problem(SettleRules.Kind.RECEIVED, iPay, ME)).contains("Settle them");
+        assertThat(SettleRules.problem(SettleRules.Kind.SENT, iPay, THEM)).contains("Mark them as settled");
         assertThat(SettleRules.problem(SettleRules.Kind.RECEIVED, iPay, THEM)).isNull();
     }
 
@@ -43,9 +43,8 @@ class SettleRulesTest {
     }
 
     @Test
-    void onlyReceiptsOwedToYouCanBeForgiven() {
-        assertThat(SettleRules.problem(SettleRules.Kind.FORGIVEN, List.of(owed(100), owed(50)), ME)).isNull();
-        assertThat(SettleRules.problem(SettleRules.Kind.FORGIVEN, List.of(owed(100), owe(50)), ME)).isNotNull();
+    void forgiveIsGoneAndAnEmptySelectionIsRefused() {
+        assertThat(SettleRules.Kind.of("forgiven")).isNull();
         assertThat(SettleRules.problem(SettleRules.Kind.SENT, List.of(), ME)).isNotNull();
     }
 

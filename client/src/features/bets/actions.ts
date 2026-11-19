@@ -119,7 +119,7 @@ export function useBetActions(userId: string, refresh: () => Promise<void>, expi
 
 const betErrors: Record<string, string> = {
   bet_closed: "The pick window has closed. Refresh the bet before continuing.",
-  debt_cap_exceeded: "This action would exceed your debt cap.",
+  debt_cap_exceeded: "This would put you further down than your points limit.",
   bet_not_pending: "This bet is no longer waiting for a result. Refresh to see its outcome.",
   bet_affected_users_changed: "Players changed while the result was being saved. Try again.",
   quick_pick_propagation_unavailable: "Results for shared Quick Pick bets can't be called yet.",

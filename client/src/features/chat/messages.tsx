@@ -308,7 +308,7 @@ function PollCard({
   );
 }
 
-/** The host's points settlement, posted for everyone: who pays whom. Payment tracking lives on Friends. */
+/** The host's points settlement, posted for everyone: who's down to whom. Settle-ups live on Friends. */
 function SettlementCard({
   message,
   user,
@@ -329,7 +329,7 @@ function SettlementCard({
           expire={expire}
           queryKey={names}
         />
-        . {lines.length === 0 ? "Nobody owes anything." : "Settle up on the Friends page."}
+        . {lines.length === 0 ? "Everyone's even." : "Settle up on the Friends page."}
       </p>
       {lines.length > 0 && (
         <ul className="mt-2 divide-y">
@@ -340,7 +340,7 @@ function SettlementCard({
             >
               <span className="min-w-0 break-words">
                 <PersonName id={line.payerId} user={user} expire={expire} queryKey={names} />
-                <span className="text-muted-foreground"> pays </span>
+                <span className="text-muted-foreground"> → </span>
                 <PersonName id={line.payeeId} user={user} expire={expire} queryKey={names} />
               </span>
               <span className="scoreboard shrink-0 text-base">

@@ -631,9 +631,9 @@ public class DemoBots {
     private record Receipt(UUID id, UUID payer, UUID payee, long amount, Instant createdAt) {}
 
     /**
-     * Settle-ups, per bot and person, by the bot's `settleStyle`: whoever owes on all their open receipts sends them
-     * (promptly, or slowly); a forgiving creditor sometimes forgives what's owed to it; an even pair is marked
-     * received; and a disputing receiver sometimes rejects a send before its window closes.
+     * Settle-ups, per bot and person, by the bot's `settleStyle`: whoever is down on their open receipts settles them
+     * (promptly, or slowly); a lenient bot that's up sometimes marks what's owed to it as settled; an even pair is
+     * marked settled; and a disputing bot sometimes rejects a settle before its window closes.
      */
     private void planReceipts(World world, Instant now) {
         if (world.botIds.isEmpty()) return;
@@ -672,9 +672,9 @@ public class DemoBots {
                 chosen = receipts.stream().map(Receipt::id).toList();
                 kind = "received";
                 wait = Duration.ofMinutes(5 + fixed.nextInt(30));
-            } else if (style == DemoProfile.SettleStyle.FORGIVES && fixed.nextBoolean()) {
+            } else if (style == DemoProfile.SettleStyle.LENIENT && fixed.nextBoolean()) {
                 chosen = receipts.stream().filter(r -> r.payee().equals(bot.id())).map(Receipt::id).toList();
-                kind = "forgiven";
+                kind = "received";
                 wait = Duration.ofMinutes(10 + fixed.nextInt(50));
             } else {
                 return;
@@ -684,7 +684,7 @@ public class DemoBots {
             plan(now, "settle-" + kind, () -> act(bot.id(), jwt -> reviewing(jwt, bot.id(), other,
                     () -> settles.create(jwt, other, settleKind, chosen, key()).outcome().name())));
         });
-        // Rejections: a disputing receiver sometimes says it never arrived, a few minutes in.
+        // Rejections: a disputing bot sometimes rejects a settle to it, a few minutes in.
         jdbc.query("""
                 SELECT id, other_id, created_at FROM settles
                 WHERE other_id = ANY (?::uuid[]) AND kind = 'sent' AND rejected_at IS NULL

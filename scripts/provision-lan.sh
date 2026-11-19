@@ -36,7 +36,7 @@ write_new() {
 if [[ ! -e "$settings" ]]; then
     password="$(openssl rand -hex 24)"
     write_new "$settings" "$(sed "s/^PVPICKS_DB_PASSWORD=.*/PVPICKS_DB_PASSWORD=$password/" "$example")"
-    echo "Created infra/compose/.env.lan: set PVPICKS_LAN_HOST, PVPICKS_BOOTSTRAP_ADMIN and the API key there."
+    echo "Created infra/compose/.env.lan: set PVPICKS_LAN_HOST, PVPICKS_BOOTSTRAP_ADMIN, PVPICKS_BOOTSTRAP_ADMIN_PASSWORD and the API key there."
 fi
 write_new "$secret" "PVPICKS_DEV_JWT_SECRET=$(openssl rand -base64 32)"
 write_new "$retry_secret" "PVPICKS_DEV_IDEMPOTENCY_SECRET=$(openssl rand -base64 32)"

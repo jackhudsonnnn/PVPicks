@@ -11,8 +11,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // to its mobile layout below 600px, so both offsets point at the same variable.
       offset={{ bottom: "var(--toast-bottom)" }}
       mobileOffset={{ bottom: "var(--toast-bottom)" }}
+      // Long enough to read a sentence; the x closes one sooner.
+      duration={7000}
+      closeButton
       toastOptions={{
         classNames: {
+          // Sonner puts the x on the top-left corner; ours sits top-right.
+          closeButton:
+            "group-[.toast]:!left-auto group-[.toast]:!right-0 group-[.toast]:!translate-x-[35%] group-[.toast]:!-translate-y-[35%] group-[.toast]:!border-border group-[.toast]:!bg-surface-raised group-[.toast]:!text-muted-foreground hover:group-[.toast]:!text-foreground",
           toast:
             "group toast group-[.toaster]:bg-surface group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:font-sans",
           title: "group-[.toast]:font-semibold",

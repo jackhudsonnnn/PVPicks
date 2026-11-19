@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/empty-state";
@@ -10,6 +10,7 @@ import { ActionStatus } from "@/components/action-status";
 import { ConfirmAction } from "@/components/confirm-action";
 import { SettlementReceipts } from "@/features/settlements";
 import { userKey } from "@/lib/query-keys";
+import { useDebounced } from "@/lib/use-debounced";
 import { searchUsers, type Relationships } from "./api";
 import { useSocialActions } from "./actions";
 import { useRelationships } from "./queries";
@@ -27,20 +28,19 @@ const noRelationships: Relationships = {
   blockedIds: [],
 };
 
-type Tab = "friends" | "requests" | "following" | "blocked" | "find";
+type Tab = "find" | "followers" | "following" | "blocked";
 
 /** The line under the tabs, styled like the settle-ups' description. */
 const HINTS: Record<Tab, string> = {
-  friends: "People you follow who follow you back, newest first.",
-  requests: "People who follow you but you don't follow back. Follow them to be friends.",
+  find: "Search usernames across P2Picks.",
+  followers: "Everyone who follows you, newest first. Follow someone back to be friends.",
   following: "Everyone you follow, newest first.",
   blocked: "People you blocked. Unblocking does not restore follows.",
-  find: "Search usernames across P2Picks.",
 };
 
 /**
- * Friends: settle-ups, then your people in tabs (friends, friend requests, following, blocked, find), each newest
- * first. Followers are friends plus requests, so they have no tab of their own.
+ * Friends: settle-ups, then your people in tabs (find, followers, following, blocked), each newest first. Friends
+ * are people in both Followers and Following, so they have no tab of their own.
  */
 export function FriendsPage({ user, expire }: { user: User; expire: () => void }) {
   const queryClient = useQueryClient();
@@ -52,7 +52,7 @@ export function FriendsPage({ user, expire }: { user: User; expire: () => void }
     },
     expire,
   );
-  const [tab, setTab] = useState<Tab>("friends");
+  const [tab, setTab] = useState<Tab>("find");
   const names = userKey(user.id, "people");
   const data = relationships.data ?? noRelationships;
 
@@ -101,11 +101,10 @@ export function FriendsPage({ user, expire }: { user: User; expire: () => void }
               size="sm"
               ariaLabel="People"
               tabs={[
-                { id: "friends", label: `Friends · ${peopleIn("friends", data).length}` },
-                { id: "requests", label: `Requests · ${peopleIn("requests", data).length}` },
-                { id: "following", label: `Following · ${data.followingIds.length}` },
-                { id: "blocked", label: `Blocked · ${data.blockedIds.length}` },
                 { id: "find", label: "Find" },
+                { id: "followers", label: "Followers" },
+                { id: "following", label: "Following" },
+                { id: "blocked", label: "Blocked" },
               ]}
               value={tab}
               onChange={setTab}
@@ -125,15 +124,24 @@ export function FriendsPage({ user, expire }: { user: User; expire: () => void }
   );
 }
 
+/** Search waits for at least this many characters (usernames are 3–15) and for typing to pause this long. */
+const SEARCH_MIN = 3;
+const SEARCH_DELAY_MS = 500;
+
 function FindPeople({ user, row }: { user: User; row: (id: string) => React.ReactNode }) {
   const [text, setText] = useState("");
-  const term = searchTerm(text);
+  const valid = searchTerm(text);
+  const tooShort = valid !== null && valid.length < SEARCH_MIN;
+  const settled = useDebounced(tooShort ? null : valid, SEARCH_DELAY_MS);
+  // Searches once typing pauses; the last results stay up meanwhile so the list doesn't flicker.
+  const term = valid === null || tooShort ? null : settled;
   const results = useInfiniteQuery({
     queryKey: userKey(user.id, "search", term ?? ""),
     queryFn: ({ pageParam, signal }) => searchUsers(term!, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     enabled: term !== null,
+    placeholderData: keepPreviousData,
     retry: false,
   });
   const people = results.data?.pages.flatMap((page) => page.items) ?? [];
@@ -145,11 +153,15 @@ function FindPeople({ user, row }: { user: User; row: (id: string) => React.Reac
         value={text}
         onChange={(event) => setText(event.target.value)}
       />
-      {text.trim() && term === null ? (
+      {text.trim() && valid === null ? (
         <p className="text-sm text-muted-foreground">
           Usernames use up to 15 letters, numbers and underscores.
         </p>
-      ) : term === null ? null : results.isPending ? (
+      ) : tooShort ? (
+        <p className="text-sm text-muted-foreground">
+          Type at least {SEARCH_MIN} characters to search.
+        </p>
+      ) : valid === null ? null : term === null || results.isPending ? (
         <LoadingList label="Searching" rows={2} rowClassName="h-14" />
       ) : results.isError ? (
         <p role="alert">{backendErrorMessage(results.error)}</p>

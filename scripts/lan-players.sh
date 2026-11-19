@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Creates LAN watch party player accounts and prints each one's single-use setup link (docs/site/lan.md, Runbook).
+# Creates LAN watch party player accounts and prints each one's username, sign-in code and QR link (docs/site/lan.md,
+# Runbook). Guests scan the QR, or type their username and code.
 # Signs in as the admin (password prompted, never echoed or stored). With `qrencode` installed, each link is also
-# drawn as a QR code in the terminal for guests to scan. Links work once, for 24 hours; issue a new one from the admin
-# Players tab if a guest misses theirs. Existing usernames are reported and skipped.
+# drawn as a QR code in the terminal for guests to scan. A code keeps working until the admin rotates it (Users tab,
+# each player's card). Existing usernames are reported and skipped.
 #
 #   scripts/lan-players.sh p2picks.example.com owner alice bob carol
 
@@ -55,12 +56,14 @@ for player in "$@"; do
     payload="${response%$'\n'*}"
     case "$code" in
         201)
-            link="$base/setup#$(json_field setupCode <<< "$payload")"
-            echo "== $(json_field username <<< "$payload")"
+            code_value="$(json_field code <<< "$payload")"
+            # The link carries the player's id (stable across renames); typing needs the username and code.
+            link="$base/signin#$(json_field id <<< "$payload").$code_value"
+            echo "== $(json_field username <<< "$payload"): code $code_value"
             echo "$link"
             if command -v qrencode > /dev/null; then qrencode -t ansiutf8 "$link"; fi
             ;;
-        409) echo "== $player: username taken; issue a link from the admin Players tab if needed." ;;
+        409) echo "== $player: username taken; their code is on their card in the admin Users tab." ;;
         *) echo "== $player: failed (HTTP $code): $payload" >&2 ;;
     esac
 done

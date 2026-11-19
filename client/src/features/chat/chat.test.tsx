@@ -119,6 +119,44 @@ describe("table chat", () => {
     expect(await screen.findAllByText(/friend/)).not.toHaveLength(0);
   });
 
+  it("doesn't page through a big unread backlog: one newer page, then Load newer or Jump to latest", async () => {
+    const page = (from: number) => Array.from({ length: 25 }, (_, i) => message(from + i));
+    vi.mocked(getChatUnread).mockResolvedValue({
+      firstUnreadMessageId: message(2).id,
+      unreadCount: 900,
+    });
+    vi.mocked(getChatWindow).mockImplementation(async (_table, window) =>
+      "around" in window
+        ? { items: [message(1), message(2)], previousCursor: null, nextCursor: "after-2" }
+        : "after" in window
+          ? window.after === "after-2"
+            ? { items: page(10), previousCursor: null, nextCursor: "after-34" }
+            : { items: page(40), previousCursor: null, nextCursor: "after-64" }
+          : {
+              items: [message(98), message(99)],
+              previousCursor: "before-98",
+              nextCursor: "after-99",
+            },
+    );
+    renderChat();
+    expect(await screen.findByText("hello 34")).toBeInTheDocument();
+    expect(getChatWindow).toHaveBeenCalledTimes(2);
+    expect(markRead).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load newer messages" }));
+    expect(await screen.findByText("hello 64")).toBeInTheDocument();
+    expect(getChatWindow).toHaveBeenLastCalledWith(table.id, { after: "after-34" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Jump to latest/ }));
+    expect(await screen.findByText("hello 99")).toBeInTheDocument();
+    expect(getChatWindow).toHaveBeenLastCalledWith(table.id, { latest: true });
+    expect(screen.queryByText("hello 34")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load newer messages" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(markRead).toHaveBeenCalledWith(table.id, message(99).id, expect.any(String)),
+    );
+  });
+
   it("loads older history above the loaded messages", async () => {
     vi.mocked(getChatWindow).mockImplementation(async (_table, window) =>
       "before" in window
@@ -279,6 +317,45 @@ describe("table chat", () => {
       }),
     );
     expect(await screen.findByText("hello 3")).toBeInTheDocument();
+  });
+
+  it("folds a burst of changes into one refresh, and opens the latest window when far behind", async () => {
+    renderChat();
+    await screen.findByText("hello 2");
+    const page = (from: number) => Array.from({ length: 25 }, (_, i) => message(from + i));
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(getChatWindow).mockClear();
+    vi.mocked(getChatWindow).mockImplementation(async (_table, window) => {
+      await held;
+      return "after" in window
+        ? {
+            items: page(window.after === "after-2" ? 10 : 40),
+            previousCursor: null,
+            nextCursor: `next-${window.after}`,
+          }
+        : {
+            items: [message(98), message(99)],
+            previousCursor: "before-98",
+            nextCursor: "after-99",
+          };
+    });
+    const listener = feeds.get(`/user/queue/tables/${table.id}/chat`);
+    const event = {
+      eventId: "123e4567-e89b-42d3-a456-426614174099",
+      type: "chat.changed",
+      schemaVersion: 1,
+      occurredAt: "2026-11-13T12:00:00Z",
+      tableId: table.id,
+    } as const;
+    act(() => {
+      for (let i = 0; i < 10; i++) listener?.(event);
+    });
+    release();
+    expect(await screen.findByText("hello 99")).toBeInTheDocument();
+    // Two refreshes at most (one running, one queued), each two newer pages then the latest window.
+    await waitFor(() => expect(screen.queryByText("hello 10")).not.toBeInTheDocument());
+    expect(vi.mocked(getChatWindow).mock.calls.length).toBeLessThanOrEqual(6);
   });
 
   describe("polls", () => {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
@@ -13,7 +13,8 @@ import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { User } from "@/features/people";
-import { listTables } from "@/features/tables";
+import { listTables, useNewcomer } from "@/features/tables";
+import { FindFriendsDialog } from "@/components/find-friends-dialog";
 import { useBetActions } from "@/features/bets/actions";
 import { listMyBets } from "@/features/bets/api";
 import { FIRST_TICKET_PAGE, nextTicketPage } from "@/features/bets/ticket-feed";
@@ -66,6 +67,8 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
   const byId = new Map((tables.data ?? []).map((t) => [t.id, t]));
   const peopleKey = userKey(user.id, "people");
   const beside = useMediaQuery("(min-width: 1024px)");
+  const newcomer = useNewcomer(user.id);
+  const [findFriends, setFindFriends] = useState(false);
 
   return (
     <section className="min-w-0 space-y-3" aria-labelledby="home-tickets-heading">
@@ -77,11 +80,22 @@ export function HomeTickets({ user, expire }: { user: User; expire: () => void }
           Tickets
         </h2>
         {/* Same button as "New table" beside it, so the two headers line up. */}
-        <Button asChild variant="outline" className="text-primary hover:text-primary">
-          <Link to="/tickets">
+        {newcomer ? (
+          <Button
+            variant="outline"
+            className="text-primary hover:text-primary"
+            onClick={() => setFindFriends(true)}
+          >
             All tickets <ArrowRight />
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild variant="outline" className="text-primary hover:text-primary">
+            <Link to="/tickets">
+              All tickets <ArrowRight />
+            </Link>
+          </Button>
+        )}
+        <FindFriendsDialog open={findFriends} onOpenChange={setFindFriends} />
       </div>
       <ActionStatus
         actions={actions}

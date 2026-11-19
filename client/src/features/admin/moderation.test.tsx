@@ -16,6 +16,7 @@ const admin = { id: "123e4567-e89b-42d3-a456-426614174000", username: "boss", hu
 const target = {
   id: "123e4567-e89b-42d3-a456-426614174002",
   username: "troll",
+  hue: 1,
   status: "ACTIVE" as const,
   strikes: 2,
 };
@@ -28,6 +29,7 @@ const report: ModerationReport = {
   reporter: {
     id: "123e4567-e89b-42d3-a456-426614174001",
     username: "victim",
+    hue: 1,
     status: "ACTIVE",
     strikes: 0,
   },
@@ -77,5 +79,16 @@ describe("moderation", () => {
     await waitFor(() => expect(moderate).toHaveBeenCalledWith("dismiss", report.id));
     fireEvent.click(await screen.findByRole("button", { name: "Unfreeze" }));
     await waitFor(() => expect(changeUser).toHaveBeenCalledWith("unfreeze", target.id));
+  });
+
+  it("searches strikes and frozen accounts by username", async () => {
+    renderQueue();
+    expect(await screen.findByRole("button", { name: "Unfreeze" })).toBeInTheDocument();
+    vi.mocked(listFlagged).mockResolvedValue({ items: [], nextCursor: null });
+    fireEvent.change(screen.getByLabelText("Search strikes and frozen accounts"), {
+      target: { value: "ZZ" },
+    });
+    expect(await screen.findByText("No flagged usernames start with that.")).toBeInTheDocument();
+    expect(listFlagged).toHaveBeenLastCalledWith(null, expect.anything(), "zz");
   });
 });

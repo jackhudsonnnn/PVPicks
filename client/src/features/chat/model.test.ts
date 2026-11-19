@@ -66,6 +66,14 @@ describe("chat history", () => {
     ]);
   });
 
+  it("keeps unchanged messages, and the whole list when nothing changed", () => {
+    const loaded = [text(1), text(2), text(3)];
+    expect(mergeRange(loaded, [text(2), text(3)])).toBe(loaded);
+    const merged = mergeRange(loaded, [text(2), text(3, [{ userId: me, emoji: "🔥" }])]);
+    expect(merged[1]).toBe(loaded[1]);
+    expect(merged[2]).not.toBe(loaded[2]);
+  });
+
   it("ignores a window that does not overlap, rather than leaving a gap", () => {
     const loaded = [text(1), text(2)];
     expect(mergeRange(loaded, [text(8), text(9)])).toBe(loaded);

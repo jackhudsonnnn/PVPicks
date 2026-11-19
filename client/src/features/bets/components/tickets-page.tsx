@@ -88,28 +88,33 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
           value={tab}
           onChange={setTab}
         />
-        {/* Which table: full width on phones, a fixed width at the right on bigger screens. */}
-        {(tables.data?.length ?? 0) > 1 && (
-          <SegmentedTabs
-            className="w-full sm:ml-auto sm:w-64"
-            ariaLabel="Filter by table"
-            size="sm"
-            dropdownOnly
-            tabs={[
-              { id: "all", label: "All" },
-              ...(tables.data ?? []).map((t) => ({ id: t.id, label: t.name })),
-            ]}
-            value={tableId ?? "all"}
-            onChange={(id) => {
-              void navigate({
-                to: "/tickets",
-                search: id === "all" ? {} : { table: id },
-                replace: true,
-              });
-            }}
-          />
-        )}
-        <p className="text-sm text-muted-foreground">{TABS.find((t) => t.id === tab)!.hint}</p>
+        {/* The tab's hint and which table: stacked on phones (filter first, full width), one row on bigger
+            screens with the hint on the left and a fixed-width filter on the right. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <p className="order-last text-sm text-muted-foreground sm:order-none">
+            {TABS.find((t) => t.id === tab)!.hint}
+          </p>
+          {(tables.data?.length ?? 0) > 1 && (
+            <SegmentedTabs
+              className="w-full shrink-0 sm:w-64"
+              ariaLabel="Filter by table"
+              size="sm"
+              dropdownOnly
+              tabs={[
+                { id: "all", label: "All" },
+                ...(tables.data ?? []).map((t) => ({ id: t.id, label: t.name })),
+              ]}
+              value={tableId ?? "all"}
+              onChange={(id) => {
+                void navigate({
+                  to: "/tickets",
+                  search: id === "all" ? {} : { table: id },
+                  replace: true,
+                });
+              }}
+            />
+          )}
+        </div>
       </div>
       <ActionStatus
         actions={actions}

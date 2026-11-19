@@ -24,7 +24,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
     @Test
     void failedSignInsAreThrottledPerAccountAndPerAddress() throws Exception {
         String name = "thr" + Long.toString(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L << 30), 36);
-        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'PLAYER', 'ACTIVE')",
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'ADMIN', 'ACTIVE')",
                 UUID.randomUUID(), name, passwords.encode("a secure test password"));
         // Unique addresses, so this test doesn't spend the shared 127.0.0.1 budget other tests sign in from.
         String home = "198.51.100." + java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 255);
@@ -45,7 +45,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         assertThat(OpenApiSchemas.load("Error").validate(body)).isEmpty();
 
         String other = "thr2" + Long.toString(java.util.concurrent.ThreadLocalRandom.current().nextLong(1L << 30), 36);
-        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'PLAYER', 'ACTIVE')",
+        jdbc.update("INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, 1, ?, 'ADMIN', 'ACTIVE')",
                 UUID.randomUUID(), other, passwords.encode("a secure test password"));
         assertThat(signIn(other, "a secure test password", home).getStatus()).isEqualTo(204);
         for (int i = 0; i < 50; i++) throttle.failed("spray" + i, home);
@@ -72,7 +72,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         UUID userId = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?)",
-                userId, "login_user", 2, passwords.encode("a secure test password"), "PLAYER", "ACTIVE");
+                userId, "login_user", 2, passwords.encode("a secure test password"), "ADMIN", "ACTIVE");
         Csrf csrf = csrf();
         String login = "{\"username\":\" LOGIN_USER \",\"password\":\"a secure test password\"}";
         mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(login))
@@ -103,7 +103,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         MvcResult me = mvc.perform(get("/me").cookie(session)).andExpect(status().isOk()).andReturn();
         JsonNode current = json.readTree(me.getResponse().getContentAsString());
         assertThat(current.path("username").asText()).isEqualTo("login_user");
-        assertThat(current.path("role").asText()).isEqualTo("PLAYER");
+        assertThat(current.path("role").asText()).isEqualTo("ADMIN");
         assertThat(OpenApiSchemas.load("CurrentUser").validate(current)).isEmpty();
         Cookie tampered = new Cookie("session", "x" + session.getValue().substring(1));
         mvc.perform(get("/me").cookie(tampered)).andExpect(status().isUnauthorized());
@@ -171,7 +171,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         UUID userId = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?)",
-                userId, "frozen_user", 1, passwords.encode("a secure test password"), "PLAYER", "ACTIVE");
+                userId, "frozen_user", 1, passwords.encode("a secure test password"), "ADMIN", "ACTIVE");
         Csrf csrf = csrf();
         String origin = "http://127.0.0.1:8080";
         MvcResult wrong = mvc.perform(post("/auth/login").header("Origin", origin)
@@ -231,14 +231,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         mvc.perform(get("/admin/health")).andExpect(status().isUnauthorized());
         mvc.perform(get("/admin/users/" + userId + "/audit")).andExpect(status().isUnauthorized());
 
-        Csrf loginCsrf = csrf();
-        MvcResult login = mvc.perform(post("/auth/login").header("Origin", "http://127.0.0.1:8080")
-                        .header("X-CSRF-TOKEN", loginCsrf.token()).cookie(loginCsrf.cookie())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"roleplayer\",\"password\":\"a secure test password\"}"))
-                .andExpect(status().isNoContent()).andReturn();
-        Cookie session = login.getResponse().getCookie("session");
-        assertThat(session).isNotNull();
+        Cookie session = loginAs("roleplayer");
         mvc.perform(get("/admin").cookie(session)).andExpect(status().isForbidden());
         mvc.perform(get("/admin/").cookie(session)).andExpect(status().isForbidden());
         mvc.perform(get("/admin/health").cookie(session)).andExpect(status().isForbidden());

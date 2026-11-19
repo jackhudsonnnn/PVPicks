@@ -4,6 +4,7 @@ import { BackendError, csrf, idSchema, mutationRequest, read, request } from "@/
 const person = z.object({
   id: idSchema,
   username: z.string().nullable(),
+  hue: z.number().int().min(1).max(5).nullable(),
   status: z.enum(["ACTIVE", "FROZEN", "DELETED"]),
   strikes: z.number().int().min(0).max(3),
 });
@@ -29,10 +30,10 @@ export interface AdminPage<T> {
   nextCursor: string | null;
 }
 
-const page = <T extends z.ZodTypeAny>(item: T) =>
+export const page = <T extends z.ZodTypeAny>(item: T) =>
   z.object({ items: z.array(item).max(50), nextCursor: z.string().min(1).nullable() });
 
-const withCursor = (path: string, cursor: string | null) =>
+export const withCursor = (path: string, cursor: string | null) =>
   cursor === null
     ? path
     : `${path}${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`;
@@ -53,12 +54,17 @@ export async function listReports(
 }
 
 /** Frozen first, then most strikes, then by name, 50 at a time. */
+/** Players with strikes or a frozen account; `search` keeps usernames starting with it. */
 export async function listFlagged(
   cursor: string | null,
   signal?: AbortSignal,
+  search = "",
 ): Promise<AdminPage<ModerationPerson>> {
+  const path = search.trim()
+    ? `/admin/users/flagged?q=${encodeURIComponent(search.trim())}`
+    : "/admin/users/flagged";
   return read(
-    await request(withCursor("/admin/users/flagged", cursor), signal ? { signal } : undefined),
+    await request(withCursor(path, cursor), signal ? { signal } : undefined),
     page(person),
   );
 }
@@ -94,30 +100,33 @@ export async function changeUser(action: "unfreeze" | "clear-strikes", userId: s
   );
 }
 
-const setupCode = z.object({
-  setupCode: z.string().min(1),
-  purpose: z.enum(["SETUP", "RESET"]),
-  expiresAt: z.string().datetime({ offset: true }),
-});
+/** A player's sign-in code: 4 characters, no look-alikes. */
+const signInCode = z.object({ code: z.string().regex(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$/) });
 const playerSchema = z.object({
   id: idSchema,
   username: z.string(),
+  hue: z.number().int().min(1).max(5),
   status: z.enum(["ACTIVE", "FROZEN"]),
-  passwordSet: z.boolean(),
-  codeExpiresAt: z.string().datetime({ offset: true }).nullable(),
+  lastSignInAt: z.string().datetime({ offset: true }).nullable(),
+  codeRotatedAt: z.string().datetime({ offset: true }).nullable(),
   createdAt: z.string().datetime({ offset: true }),
+  strikes: z.number().int().min(0).max(3),
+  openReports: z.number().int().min(0),
 });
 
-export type SetupCode = z.infer<typeof setupCode>;
 export type AdminPlayer = z.infer<typeof playerSchema>;
 
-/** Players, newest first, 50 at a time. */
+/** Players, newest first, 50 at a time; `search` keeps usernames starting with it. */
 export async function listPlayers(
   cursor: string | null,
   signal?: AbortSignal,
+  search = "",
 ): Promise<AdminPage<AdminPlayer>> {
+  const path = search.trim()
+    ? `/admin/players?q=${encodeURIComponent(search.trim().toLowerCase())}`
+    : "/admin/players";
   return read(
-    await request(withCursor("/admin/players", cursor), signal ? { signal } : undefined),
+    await request(withCursor(path, cursor), signal ? { signal } : undefined),
     page(playerSchema),
   );
 }
@@ -134,18 +143,34 @@ async function post(path: string, body?: object) {
   });
 }
 
-/** Creates a player; the response's setup code is shown once and never again. */
+/** Creates a player, with their sign-in code. */
 export async function createPlayer(username: string) {
   return read(
     await post("/admin/players", { username }),
-    setupCode.extend({ id: idSchema, username: z.string() }),
+    signInCode.extend({ id: idSchema, username: z.string() }),
   );
 }
 
-/** A new setup (never signed in) or reset code for a player; it cancels their unused one. */
-export async function issuePlayerCode(playerId: string): Promise<SetupCode> {
-  return read(await post(`/admin/players/${encodeURIComponent(playerId)}/code`), setupCode);
+/** A player's current sign-in code, for their QR card. */
+export async function getPlayerCode(playerId: string, signal?: AbortSignal): Promise<string> {
+  return (
+    await read(
+      await request(
+        `/admin/players/${encodeURIComponent(playerId)}/code`,
+        signal ? { signal } : undefined,
+      ),
+      signInCode,
+    )
+  ).code;
 }
 
-/** The link a player opens; the code stays in the fragment, so it never reaches server logs. */
-export const setupLink = (code: string) => `${window.location.origin}/setup#${code}`;
+/** Issues the player a new code; their old code and every signed-in device stop working. */
+export async function rotatePlayerCode(playerId: string): Promise<string> {
+  return (await read(await post(`/admin/players/${encodeURIComponent(playerId)}/code`), signInCode))
+    .code;
+}
+
+/** The QR link a player opens; the code stays in the fragment, so it never reaches server logs. */
+/** A player's QR link: their id (stable across renames) and code, in the fragment so neither reaches any log. */
+export const signInLink = (playerId: string, code: string) =>
+  `${window.location.origin}/signin#${playerId}.${code}`;

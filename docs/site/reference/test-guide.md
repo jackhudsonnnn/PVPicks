@@ -19,9 +19,17 @@ cover.
     role-based route access and the failed sign-in throttle.
     `security.LanSecurityTest`: the lan profile's HTTPS origin and Secure
     cookies.
-  - `accounts.PlayerSetupIntegrationTest`: admin-created players, setup and
-    reset codes (single use, a newer code cancels the older), password rules
-    and changing your password.
+  - `admin.AdminDashboardIntegrationTest`: player audits (Active bets left
+    out of counts, logging, keyword search), player search, the feedback
+    inbox, server and browser timings, and the sports explorer.
+    `admin.PerfBucketsTest`: latency buckets and percentile estimates.
+  - `accounts.SignInCodeIntegrationTest`: admin-created players and their
+    sign-in codes (typed with the username in any case, or by player id as
+    the QR link does; shown again to the admin; a rename keeps the QR
+    working; rotation signs out everywhere, and a stale cookie doesn't block
+    the new code; frozen accounts; the per-player lockout and the admin's
+    unlock), and that only admins have passwords. `loginAs` signs players in
+    with their id and code, and admins with the test password.
   - `common.RateLimitsIntegrationTest`: the Redis limiter, the per-route
     interceptor and the write backstop. `EndpointCoverageTest` checks every
     served endpoint against `openapi.yaml` and every write endpoint against

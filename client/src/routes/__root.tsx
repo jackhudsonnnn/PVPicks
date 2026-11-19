@@ -75,16 +75,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "P2Picks | Bet with friends, not the house" },
+      { title: "P2Picks | Free-to-play picks with friends" },
       {
         name: "description",
-        content: "Peer-to-peer NFL and NBA picks with your friends. No house, no vig.",
+        content: "Free-to-play NFL and NBA picks with your friends. Points only, no cash value.",
       },
       { name: "author", content: "Jack Hudson" },
-      { property: "og:title", content: "P2Picks | Bet with friends, not the house" },
+      { property: "og:title", content: "P2Picks | Free-to-play picks with friends" },
       {
         property: "og:description",
-        content: "Peer-to-peer NFL and NBA picks with your friends. No house, no vig.",
+        content: "Free-to-play NFL and NBA picks with your friends. Points only, no cash value.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

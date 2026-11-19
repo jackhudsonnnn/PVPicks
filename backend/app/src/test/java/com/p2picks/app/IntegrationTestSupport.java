@@ -192,7 +192,7 @@ public abstract class IntegrationTestSupport {
         jdbc.update("UPDATE settlement_lines SET status = 'paid', settle_id = ? WHERE id = ?", settle, line);
     }
 
-    /** POST /people/{other}/settles: settle the chosen receipts ({@code sent}, {@code received} or {@code forgiven}). */
+    /** POST /people/{other}/settles: settle the chosen receipts ({@code sent} or {@code received}). */
     protected MvcResult settleHttp(Cookie cookie, Csrf csrf, UUID other, String kind, List<UUID> lineIds, String key)
             throws Exception {
         String ids = lineIds.stream().map(id -> "\"" + id + "\"").collect(java.util.stream.Collectors.joining(","));
@@ -235,8 +235,8 @@ public abstract class IntegrationTestSupport {
     }
 
     /**
-     * A receipt in a given state. {@code unpaid} is open; {@code paid} and {@code forgiven} are closed by a final
-     * settle ({@code received} or {@code forgiven}); {@code sent} is closed by a sent settle the payee can still
+     * A receipt in a given state. {@code unpaid} is open; {@code paid} is closed by a final
+     * {@code received} settle; {@code sent} is closed by a sent settle the payee can still
      * reject (it keeps counting toward debt until then).
      */
     protected UUID insertDebtReceipt(
@@ -252,9 +252,8 @@ public abstract class IntegrationTestSupport {
         UUID settle = UUID.randomUUID();
         String kind = switch (status) {
             case "paid" -> "received";
-            case "forgiven" -> "forgiven";
             case "sent" -> "sent";
-            default -> throw new IllegalArgumentException("Receipts are unpaid, paid, forgiven or sent: " + status);
+            default -> throw new IllegalArgumentException("Receipts are unpaid, paid or sent: " + status);
         };
         UUID sender = kind.equals("sent") ? payer : payee;
         jdbc.update("""
@@ -264,7 +263,7 @@ public abstract class IntegrationTestSupport {
                 kind.equals("sent"));
         jdbc.update("INSERT INTO settle_lines (settle_id, line_id) VALUES (?, ?)", settle, line);
         jdbc.update("UPDATE settlement_lines SET status = ?, settle_id = ?, revision = 1 WHERE id = ?",
-                status.equals("forgiven") ? "forgiven" : "paid", settle, line);
+                "paid", settle, line);
         return line;
     }
 
@@ -283,12 +282,27 @@ public abstract class IntegrationTestSupport {
                 .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
+    @Autowired
+    protected com.p2picks.app.security.SignInCodes signInCodes;
+
+    /**
+     * Signs in as a test account: an admin with the shared test password, a player with their sign-in code (players
+     * have no password). A player without a code yet gets one; an existing code is reused, so earlier sessions of
+     * the same player stay signed in.
+     */
     protected Cookie loginAs(String username) throws Exception {
         Csrf csrf = csrf();
-        MvcResult login = mvc.perform(post("/auth/login").header("Origin", "http://127.0.0.1:8080")
+        var account = jdbc.queryForMap("SELECT id, role FROM users WHERE username = ?::citext",
+                com.p2picks.app.common.PostgresText.trim(username).toLowerCase(java.util.Locale.ROOT));
+        UUID id = (UUID) account.get("id");
+        String body = "ADMIN".equals(account.get("role"))
+                ? "{\"username\":\"" + username + "\",\"password\":\"a secure test password\"}"
+                : "{\"player\":\"" + id + "\",\"code\":\"" + signInCodes.ensure(id) + "\"}";
+        MvcResult login = mvc.perform(post("ADMIN".equals(account.get("role")) ? "/auth/login" : "/auth/code")
+                        .header("Origin", "http://127.0.0.1:8080")
                         .header("X-CSRF-TOKEN", csrf.token()).cookie(csrf.cookie())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"" + username + "\",\"password\":\"a secure test password\"}"))
+                        .content(body))
                 .andExpect(status().isNoContent()).andReturn();
         Cookie session = login.getResponse().getCookie("session");
         assertThat(session).isNotNull();

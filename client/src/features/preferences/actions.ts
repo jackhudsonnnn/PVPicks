@@ -22,7 +22,7 @@ function preferencesErrorMessage(error: BackendError) {
   return backendErrorMessage(error);
 }
 
-/** Invite preferences, debt cap and profile changes, with retry-key safety. */
+/** Invite preferences, points limit and profile changes, with retry-key safety. */
 export function usePreferencesActions(
   userId: string,
   refresh: () => Promise<void>,
@@ -42,7 +42,7 @@ export function usePreferencesActions(
           return "Saved. Pending invitations that no longer qualify were cancelled.";
         case "debt-cap":
           await putDebtCap(intent.capCents, key);
-          return intent.capCents === null ? "Debt cap turned off." : "Debt cap saved.";
+          return intent.capCents === null ? "Points limit turned off." : "Points limit saved.";
         case "profile":
           await updateProfile(
             {

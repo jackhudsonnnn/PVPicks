@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordApiCall } from "./perf";
 
 /** Every API id is a UUID; checking first turns a malformed route parameter into a 404 without a request. */
 export const idSchema = z.guid();
@@ -24,11 +25,21 @@ export function isUnauthorized(error: unknown): error is BackendError {
 }
 
 export async function request(path: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+  const started = performance.now();
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...init,
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+  } catch (error) {
+    // An aborted request (a query cancelled on navigation) isn't a failure worth reporting.
+    if (!(error instanceof DOMException && error.name === "AbortError"))
+      recordApiCall(init?.method ?? "GET", path, 0, performance.now() - started);
+    throw error;
+  }
+  recordApiCall(init?.method ?? "GET", path, response.status, performance.now() - started);
   if (!response.ok) {
     let code: string | undefined;
     let detail: string | undefined;

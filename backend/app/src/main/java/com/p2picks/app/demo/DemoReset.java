@@ -1,5 +1,6 @@
 package com.p2picks.app.demo;
 
+import com.p2picks.app.security.SignInCodes;
 import java.time.Clock;
 import java.util.List;
 import java.util.Set;
@@ -26,7 +27,9 @@ public class DemoReset {
 
     /** Kept by a reset: the migration history and sports data, so the ticker isn't empty afterwards. */
     static final Set<String> KEPT = Set.of("flyway_schema_history", "games", "game_snapshots", "players",
-            "player_game_stats", "player_stat_snapshots", "sports_feed_status");
+            "player_game_stats", "player_stat_snapshots", "sports_feed_status",
+            // Request timings describe the server, not the demo world.
+            "perf_minutes");
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
@@ -35,9 +38,12 @@ public class DemoReset {
     private final ObjectProvider<DemoBots> bots;
     private final ObjectProvider<DemoHistory> history;
     private final ObjectProvider<DemoGames> games;
+    private final SignInCodes codes;
 
     DemoReset(JdbcTemplate jdbc, PlatformTransactionManager transactions, PasswordEncoder passwords, Clock clock,
-            ObjectProvider<DemoBots> bots, ObjectProvider<DemoHistory> history, ObjectProvider<DemoGames> games) {
+            ObjectProvider<DemoBots> bots, ObjectProvider<DemoHistory> history, ObjectProvider<DemoGames> games,
+            SignInCodes codes) {
+        this.codes = codes;
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.passwords = passwords;
@@ -59,6 +65,8 @@ public class DemoReset {
         if (running != null) running.pause();
         try {
             Summary summary = transaction.execute(status -> wipeAndSeedWorld());
+            // Every demo player gets a sign-in code, like real players (the admin's QR cards show them).
+            codes.issueMissing();
             log.info("Demo world reset: {}", summary);
             // The pro's live score bets need the demo games on the board.
             games.ifAvailable(DemoGames::tick);

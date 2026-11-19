@@ -41,16 +41,16 @@ type Tab = "settle" | "history";
 interface LedgerProps {
   user: User;
   expire: () => void;
-  /** Everything open with this person: receipts, net, any balance change to review, sends still in their window. */
+  /** Everything open with this person: receipts, net, any balance change to review, settles still in their window. */
   group: SettlementGroup;
   actions: Actions;
   queryKey: readonly string[];
 }
 
 /**
- * The ledger with one person (domain rules, "Settle-ups"). Settle: pick open receipts and send them (you pay the
- * net), mark them received (you're paid, or it's even), or forgive them (all owed to you). History: every settle,
- * newest first, where the receiver of a send can reject it for 48 hours.
+ * The ledger with one person (domain rules, "Settle-ups"). Points have no cash value. Settle: pick open receipts
+ * and settle them (you're down on the net; they can reject it for 48 hours) or mark them as settled (you're up, or
+ * it's even; final). History: every settle, newest first.
  */
 export function LedgerDialog(props: LedgerProps) {
   const { user, expire, group, queryKey } = props;
@@ -62,7 +62,7 @@ export function LedgerDialog(props: LedgerProps) {
     <Dialog>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="w-full">
-          <BookOpen /> Ledger
+          <BookOpen /> Point Ledger
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[90dvh] max-w-2xl flex-col overflow-hidden p-4 sm:p-6">
@@ -71,16 +71,16 @@ export function LedgerDialog(props: LedgerProps) {
           <DialogDescription>
             {net < 0n ? (
               <>
-                You owe <span className="font-mono font-semibold text-loss">{points} pts</span> to{" "}
-                {name}
+                You're down <span className="font-mono font-semibold text-loss">{points} pts</span>{" "}
+                with {name}
               </>
             ) : net > 0n ? (
               <>
-                You're owed <span className="font-mono font-semibold text-win">{points} pts</span>{" "}
-                from {name}
+                You're up <span className="font-mono font-semibold text-win">{points} pts</span>{" "}
+                with {name}
               </>
             ) : (
-              <>You are even with {name}</>
+              <>You're even with {name}</>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -92,7 +92,7 @@ export function LedgerDialog(props: LedgerProps) {
 
 function LedgerBody(props: LedgerProps & { name: string }) {
   const { group, actions } = props;
-  // A send you can still reject is the thing to see first.
+  // A settle you can still reject is the thing to see first.
   const [tab, setTab] = useState<Tab>(
     group.pendingSettles.some((settle) => settle.canReject) ? "history" : "settle",
   );
@@ -121,17 +121,13 @@ function LedgerBody(props: LedgerProps & { name: string }) {
 
 const ACTION_COPY: Record<SettleKind, { label: (amount: string) => string; confirm: string }> = {
   sent: {
-    label: (amount) => `Send ${amount}`,
+    label: (amount) => `Settle ${amount}`,
     confirm:
-      "It counts as settled right away. They can reject it for 48 hours if it never arrived, which reopens these receipts. Pay them outside the app first.",
+      "It counts as settled right away. They have 48 hours to reject it, which reopens these receipts.",
   },
   received: {
-    label: (amount) => (amount === "0.00" ? "Settle even" : `Mark ${amount} received`),
+    label: (amount) => (amount === "0.00" ? "Settle even" : `Mark ${amount} as settled`),
     confirm: "This closes these receipts for good.",
-  },
-  forgiven: {
-    label: () => "Forgive",
-    confirm: "You give up what these receipts owe you. This closes them for good.",
   },
 };
 
@@ -216,11 +212,11 @@ function SettleTab({ user, group, actions, name }: LedgerProps & { name: string 
                 <span className="text-muted-foreground">Choose receipts to settle.</span>
               ) : net < 0n ? (
                 <>
-                  You pay <span className="font-mono text-loss">{amount}</span>
+                  You're down <span className="font-mono text-loss">{amount}</span>
                 </>
               ) : net > 0n ? (
                 <>
-                  {name} pays you <span className="font-mono text-win">{amount}</span>
+                  You're up <span className="font-mono text-win">{amount}</span>
                 </>
               ) : (
                 "These even out"
@@ -234,7 +230,6 @@ function SettleTab({ user, group, actions, name }: LedgerProps & { name: string 
                   title={`${ACTION_COPY[kind].label(amount)}?`}
                   description={ACTION_COPY[kind].confirm}
                   disabled={blocked || !!review}
-                  variant={kind === "forgiven" ? "outline" : "default"}
                   onConfirm={() => settle(kind)}
                 />
               ))}
@@ -332,17 +327,17 @@ function HistoryTab({
   );
 }
 
-/** "You sent 4.00" / "alex marked 2.00 received" / "You forgave 1.50", with when and whether it can be rejected. */
+/** "You settled 4.00" / "alex marked 2.00 as settled", with when and whether it can be rejected. */
 function settleSentence(settle: Settle, viewerId: string, name: string): string {
   const who = settle.senderId === viewerId ? "You" : name;
   const amount = formatPoints(settle.amountCents);
   switch (settle.kind) {
     case "sent":
-      return `${who} sent ${amount}`;
+      return `${who} settled ${amount}`;
     case "received":
-      return settle.amountCents === 0n ? `${who} settled even` : `${who} marked ${amount} received`;
-    case "forgiven":
-      return `${who} forgave ${amount}`;
+      return settle.amountCents === 0n
+        ? `${who} settled even`
+        : `${who} marked ${amount} as settled`;
   }
 }
 
@@ -378,7 +373,7 @@ function SettleRow({
         <ConfirmAction
           label="Reject"
           title="Reject this settle-up?"
-          description={`Only if ${name}'s payment never arrived. Its receipts reopen, and ${name} can send again.`}
+          description={`Only if you don't agree these are settled. Its receipts reopen, and ${name} can settle again.`}
           disabled={blocked}
           onConfirm={onReject}
         />
@@ -387,7 +382,7 @@ function SettleRow({
   );
 }
 
-/** A signed, colored points amount: red when you owe, green when you're owed. */
+/** A signed, colored points amount: red when you're down, green when you're up. */
 export function Net({ cents, className }: { cents: bigint; className?: string }) {
   return (
     <span

@@ -12,6 +12,7 @@ export { MODES } from "./modes";
 export { formatClock, potCents, proposeBlock, secondsLeft, ticketStatus } from "./ticket-model";
 export { HomeTickets } from "./components/home-tickets";
 export { useInPlayTables } from "./in-play";
+export { useHasTickets } from "./has-tickets";
 export { STATUS_ORDER, STATUSES, statusOf } from "./statuses";
 export type { BetStatus } from "./statuses";
 export { useBet, useMemberBets, useMemberRecord } from "./history";

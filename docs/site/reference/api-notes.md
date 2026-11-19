@@ -14,15 +14,17 @@ destinations.
   in as any demo account without a password; like login, they ignore a stale
   session cookie. In dev, every `/dev/**` path (dev data and the demo) works
   without a session, so the Dev page works signed out. The security filter checks the current database role for
-  `/admin` routes (moderation, players and site health). Accounts come from
-  the admin: `POST /admin/players` creates one with a single-use setup code,
-  `POST /admin/players/{id}/code` issues a new setup or reset code, and
-  `POST /auth/setup` redeems it (sets the password, ends other sessions,
-  signs in). `POST /auth/password` changes your own password. Codes last 24
-  hours, are stored only as hashes and appear once; bad codes and wrong
-  current passwords count toward the sign-in throttle. Production sign-up
-  and refresh tokens are still to be designed; LAN TLS is Caddy's (see
-  [LAN watch party](/lan)).
+  `/admin` routes (see [Admin dashboard](/admin#endpoints)). Accounts come from
+  the admin: `POST /admin/players` creates one with its sign-in code,
+  `GET /admin/players/{id}/code` shows the code and `POST` rotates it
+  (signing the player out everywhere). Players sign in with `POST
+  /auth/code`: `{username, code}` typed, or `{player, code}` from the QR
+  link (4-character codes; 10 wrong codes per player per 15 minutes, with a
+  per-address backstop; admins unlock with `DELETE
+  /admin/sign-in-lockout[/players/{id}]`) and have no password; `POST /auth/login` and `POST
+  /auth/password` are for admins only. Production sign-up (probably Google
+  sign-in) and refresh tokens are still to be designed; LAN TLS is Caddy's
+  (see [LAN watch party](/lan#accounts-and-sign-in-codes)).
 - Initial state and read APIs for tables, users, bets, games, follows, blocks,
   invitations and permissions; paginated history and chat.
   Invitees are not table members and cannot read the full table; the invite
@@ -127,10 +129,23 @@ destinations.
   and `GET /admin/players` page 50 at a time (`{items, nextCursor}`),
   dismiss or strike a report (the third strike freezes the account and ends
   its sessions), unfreeze, clear strikes. Repeated actions answer
-  `already_handled`. `POST /feedback` is limited to 5 an hour per account, and has no moderation reads or
-  personal-data cleanup, and links stored before V18 aren't revalidated.
-  `GET /admin/health` reports PostgreSQL and Redis without connection details;
-  Kafka is `NOT_CHECKED` and there are no latency or error metrics.
+  `already_handled`. `POST /feedback` is limited to 5 an hour per account;
+  admins read it in an inbox (`GET /admin/feedback`, New or Done with a
+  private note through the idempotent `PUT /admin/feedback/{id}`). A deleted
+  account's feedback is removed; links stored before V18 aren't revalidated.
+  `GET /admin/health` reports PostgreSQL and Redis without connection details
+  (Kafka is `NOT_CHECKED`); `GET /admin/perf/live` adds runtime gauges.
+- Admin audits: `GET /admin/users/{id}/audit` and
+  `GET /admin/users/{id}/activity` leave bets still Active out of every pick
+  and participation count, and record each open and search in
+  `admin_audit_log` (once per admin, player and search per 10 minutes).
+- Performance: `POST /perf` takes up to 100 browser samples (10 calls a
+  minute, any signed-in account); API paths are mapped to the server route
+  they match and unknown ones dropped. `GET /admin/perf` reads 1-minute
+  buckets kept 7 days; percentiles are bucket estimates. See
+  [Admin dashboard](/admin#perf).
+- Sports explorer: `GET /admin/sports/...` reads stored games, snapshots and
+  player stats by New York day; read-only.
 - Dev `GET /me/debt-cap` reads the saved setting and default. Dev
   `GET /me/debt` reads current table exposure and open receipt nets in one
   database snapshot. Dev `PUT /me/debt-cap` requires zero debt and whole-point
@@ -182,7 +197,7 @@ destinations.
   settlement exists internally; retained-data cleanup remains unimplemented.
 - Settle-ups: `GET /people/settle-groups` (open receipts, net, pending review
   and sends still in their window, per person), `POST /people/{id}/settles`
-  (`sent`, `received` or `forgiven` over chosen receipt ids),
+  (`sent` or `received` over chosen receipt ids),
   `POST /settles/{id}/reject` (the receiver, within 48 hours) and
   `GET /people/{id}/settles` (history, paged). Rules and limits are in the
   domain rules ("Settle-ups").
@@ -206,7 +221,7 @@ destinations.
 
 - `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one
   person, `{open, closed, nextCursor}`. Every open receipt comes in full (you
-  need them all to settle); closed ones (paid or forgiven) page 20 at a time,
+  need them all to settle); closed ones (paid) page 20 at a time,
   and a cursor's page has no open ones.
 - `EndpointCoverageTest` keeps the contract honest: every served endpoint is
   in `openapi.yaml`, and every operation there is served except the planned

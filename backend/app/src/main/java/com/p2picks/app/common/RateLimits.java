@@ -48,7 +48,9 @@ public class RateLimits implements WebMvcConfigurer {
             // Growing tables and sending requests (membership limits cap the totals; these cap the pace).
             new Rule("tables.create", Set.of("POST"), "/tables", 10, Duration.ofHours(1)),
             new Rule("tables.add", Set.of("POST"), "/tables/*/members", 30, Duration.ofHours(1)),
-            new Rule("tables.member_search", Set.of("GET"), "/tables/*/members", 60, MINUTE));
+            new Rule("tables.member_search", Set.of("GET"), "/tables/*/members", 60, MINUTE),
+            // Browsers send timings about once a minute and when the tab hides.
+            new Rule("perf", Set.of("POST"), "/perf", 10, MINUTE));
 
     public static final int WRITES_PER_MINUTE = 120;
     static final Set<String> WRITES = Set.of("POST", "PUT", "PATCH", "DELETE");
@@ -61,10 +63,10 @@ public class RateLimits implements WebMvcConfigurer {
      */
     public static final Map<String, String> EXEMPT = Map.ofEntries(
             Map.entry("POST /auth/login", "Sign-in throttle (failures per account name and address)."),
-            Map.entry("POST /auth/setup", "Sign-in throttle (failed codes per address)."),
+            Map.entry("POST /auth/code", "Sign-in throttle (wrong codes per player, plus a per-address backstop)."),
             Map.entry("POST /auth/password", "Sign-in throttle (failures per account and address)."),
             Map.entry("POST /auth/logout", "Ends your own session."),
-            Map.entry("POST /me/delete", "Sign-in throttle (failures per account and address)."),
+            Map.entry("POST /me/delete", "Your own account, once; confirmed by typing your username."),
             Map.entry("PATCH /me/profile", "Your own profile; usernames are unique, nothing fans out."),
             Map.entry("PUT /me/debt-cap", "Your own setting."),
             Map.entry("PUT /me/invite-preferences", "Your own setting."),
@@ -90,11 +92,14 @@ public class RateLimits implements WebMvcConfigurer {
             Map.entry("POST /settles/*/reject", "Once per send, within its 48-hour window."),
             Map.entry("POST /users/*/settlement-review/acknowledge", "Once per balance revision."),
             Map.entry("POST /admin/players", "Admins only."),
-            Map.entry("POST /admin/players/*/code", "Admins only."),
+            Map.entry("POST /admin/players/*/code", "Admins only; rotating signs the player out."),
             Map.entry("POST /admin/reports/*/dismiss", "Admins only, once per report."),
             Map.entry("POST /admin/reports/*/strike", "Admins only, once per report."),
             Map.entry("POST /admin/users/*/unfreeze", "Admins only."),
             Map.entry("POST /admin/users/*/clear-strikes", "Admins only."),
+            Map.entry("PUT /admin/feedback/*", "Admins only; idempotent."),
+            Map.entry("DELETE /admin/sign-in-lockout", "Admins only; idempotent."),
+            Map.entry("DELETE /admin/sign-in-lockout/players/*", "Admins only; idempotent."),
             Map.entry("POST /dev/demo/sign-in", "Dev profile only."),
             Map.entry("POST /dev/demo/reset", "Dev profile only."),
             Map.entry("POST /dev/sports/*/*/*", "Dev profile only."));

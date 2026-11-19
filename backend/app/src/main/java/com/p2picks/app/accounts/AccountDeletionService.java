@@ -11,7 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.p2picks.app.common.PostgresText;
+import com.p2picks.app.security.SignInCodes;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 class AccountDeletionService {
-    enum Outcome { DELETED, UNAUTHORIZED, WRONG_PASSWORD, NOT_SQUARE }
+    enum Outcome { DELETED, UNAUTHORIZED, WRONG_USERNAME, NOT_SQUARE }
 
     /** Why deletion is blocked, for the client to explain. */
     enum Blocker { OPEN_BETS, UNSETTLED_POINTS, OPEN_RECEIPTS }
@@ -33,7 +34,7 @@ class AccountDeletionService {
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
-    private final PasswordEncoder passwords;
+    private final SignInCodes codes;
     private final AccountStatus status;
     private final BetAccountChecks bets;
     private final SettlementAccountChanges settlement;
@@ -42,13 +43,13 @@ class AccountDeletionService {
     private final SocialAccountCleanup social;
     private final FeedbackAccountCleanup feedback;
 
-    AccountDeletionService(JdbcTemplate jdbc, MutationAuthentication authentication, PasswordEncoder passwords,
+    AccountDeletionService(JdbcTemplate jdbc, MutationAuthentication authentication, SignInCodes codes,
             AccountStatus status, BetAccountChecks bets, SettlementAccountChanges settlement,
             TableAccountChanges tables, ChatAccountCleanup chat, SocialAccountCleanup social,
             FeedbackAccountCleanup feedback) {
         this.jdbc = jdbc;
         this.authentication = authentication;
-        this.passwords = passwords;
+        this.codes = codes;
         this.status = status;
         this.bets = bets;
         this.settlement = settlement;
@@ -58,13 +59,20 @@ class AccountDeletionService {
         this.feedback = feedback;
     }
 
+    /**
+     * Deletes the caller's account once they've typed their own username (players have no password to confirm
+     * with). Refused while they're in open bets or owe or are owed anything.
+     */
     @Transactional
-    public Result delete(Jwt jwt, String password) {
+    public Result delete(Jwt jwt, String typedUsername) {
         if (!authentication.lockActive(jwt)) return new Result(Outcome.UNAUTHORIZED, List.of());
         UUID user = UUID.fromString(jwt.getSubject());
-        String hash = jdbc.queryForObject("SELECT password_hash FROM users WHERE id = ? AND role = 'PLAYER'",
+        String username = jdbc.queryForObject("SELECT username::text FROM users WHERE id = ? AND role = 'PLAYER'",
                 String.class, user);
-        if (hash == null || !passwords.matches(password, hash)) return new Result(Outcome.WRONG_PASSWORD, List.of());
+        if (username == null || typedUsername == null
+                || !username.equalsIgnoreCase(PostgresText.trim(typedUsername))) {
+            return new Result(Outcome.WRONG_USERNAME, List.of());
+        }
         List<Blocker> blockers = new ArrayList<>();
         if (bets.inOpenBets(user)) blockers.add(Blocker.OPEN_BETS);
         if (bets.hasUnsettledPoints(user)) blockers.add(Blocker.UNSETTLED_POINTS);
@@ -77,6 +85,7 @@ class AccountDeletionService {
         feedback.deleted(user);
         settlement.deleted(user);
         status.revokeSessions(user);
+        codes.forget(user);
         jdbc.update("""
                 UPDATE users SET status = 'DELETED', deleted_at = clock_timestamp(), username = NULL, hue = NULL,
                                  password_hash = NULL

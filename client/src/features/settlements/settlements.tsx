@@ -49,7 +49,6 @@ export function SettlementReceipts({ user, expire }: { user: User; expire: () =>
       >
         Settle-ups
       </h2>
-      <p className="text-sm text-muted-foreground">Net of your open settle-ups with each person.</p>
       <ActionStatus
         actions={actions}
         pendingText="A settlement action may not have been saved."
@@ -128,7 +127,7 @@ function SettleCard({
             <PersonName id={other} user={user} expire={expire} queryKey={queryKey} />
           </p>
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            {net < 0n ? "You pay them" : net > 0n ? "They pay you" : "You're square"}
+            {net < 0n ? "You're down" : net > 0n ? "You're up" : "You're even"}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {summary.tables} {summary.tables === 1 ? "table" : "tables"} · {summary.open} open

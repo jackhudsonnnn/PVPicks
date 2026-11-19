@@ -35,6 +35,7 @@ const config = withMermaid({
           { text: "Kafka & Redis opportunities", link: "/kafka-redis" },
           { text: "Backend", link: "/backend" },
           { text: "Frontend", link: "/frontend" },
+          { text: "Admin dashboard", link: "/admin" },
           { text: "Domain & privacy", link: "/domain" },
           { text: "Player stats", link: "/player-stats" },
           { text: "Dev sports data", link: "/dev-sports-data" },

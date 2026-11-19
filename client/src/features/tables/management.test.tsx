@@ -158,8 +158,7 @@ describe("rules", () => {
       friendIds: [friend],
       blockedIds: [],
     };
-    expect(peopleIn("friends", relationships)).toEqual([friend]);
-    expect(peopleIn("requests", relationships)).toEqual([fan]);
+    expect(peopleIn("followers", relationships)).toEqual([friend, fan]);
     expect(peopleIn("following", relationships)).toEqual([friend, stranger]);
     expect(addableFollowers(table, [friend, fan, stranger], [stranger])).toEqual([fan]);
     expect(
@@ -419,29 +418,30 @@ describe("Home table cards without the sidebar", () => {
 });
 
 describe("friends", () => {
-  it("lists friends, then requests to follow back, with no separate new-followers list", async () => {
+  it("opens on Find, then lists followers to follow back, with no counts or Friends tab", async () => {
     vi.mocked(setFollow).mockResolvedValue();
     vi.mocked(setBlock).mockResolvedValue();
     wrap(<FriendsPage user={me} expire={expire} />);
-    expect(await screen.findByRole("tab", { name: "Friends · 1" })).toBeInTheDocument();
-    expect(await screen.findByText("friend")).toBeInTheDocument();
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(
+      expect.arrayContaining(["Find", "Followers", "Following", "Blocked"]),
+    );
+    expect(screen.getByRole("tab", { name: "Find" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: /Friends|Requests|·/ })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "My network" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Followers" }));
     // Cards in a sideways row, like the settle-ups.
-    const row = screen.getByLabelText(/People you follow who follow you back/);
+    const row = await screen.findByLabelText(/Everyone who follows you/);
     expect(row).toHaveAttribute("data-scroll-direction", "horizontal");
-    expect(within(row).getByText("friend")).toBeInTheDocument();
-    expect(screen.queryByText("New followers")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "People" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /Followers/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Requests · 1" }));
-    expect(await screen.findByText(/Follow them to be friends/)).toBeInTheDocument();
-    expect(await screen.findByText("fan")).toBeInTheDocument();
+    expect(await within(row).findByText("friend")).toBeInTheDocument();
+    expect(await within(row).findByText("fan")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Follow" }));
     expect(await screen.findByText(/so you'll be friends/)).toBeInTheDocument();
     expect(setFollow).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(setFollow).toHaveBeenCalledWith(fan, true, expect.any(String)));
-    fireEvent.click(screen.getByRole("button", { name: "Block" }));
+    // Followers come newest first: friend, then fan.
+    fireEvent.click(screen.getAllByRole("button", { name: "Block" }).at(-1)!);
     fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(setBlock).toHaveBeenCalledWith(fan, true, expect.any(String)));
   });
@@ -456,12 +456,13 @@ describe("friends", () => {
     vi.mocked(setFollow).mockResolvedValue();
     vi.mocked(setBlock).mockResolvedValue();
     wrap(<FriendsPage user={me} expire={expire} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Following" }));
     fireEvent.click(await screen.findByRole("button", { name: "Unfollow" }));
     expect(await screen.findByText(/no longer be friends/)).toBeInTheDocument();
     expect(setFollow).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(setFollow).toHaveBeenCalledWith(friend, false, expect.any(String)));
-    fireEvent.click(screen.getByRole("tab", { name: "Blocked · 1" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Blocked" }));
     fireEvent.click(await screen.findByRole("button", { name: "Unblock" }));
     expect(await screen.findByText(/aren't restored/)).toBeInTheDocument();
     expect(setBlock).not.toHaveBeenCalled();
@@ -479,8 +480,16 @@ describe("friends", () => {
     fireEvent.change(screen.getByLabelText("Search usernames"), { target: { value: "bad name!" } });
     expect(screen.getByText(/up to 15 letters/)).toBeInTheDocument();
     expect(searchUsers).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Search usernames"), { target: { value: "Stran" } });
-    expect(await screen.findByText("stranger")).toBeInTheDocument();
+    const box = screen.getByLabelText("Search usernames");
+    fireEvent.change(box, { target: { value: "st" } });
+    expect(screen.getByText(/at least 3 characters/)).toBeInTheDocument();
+    // Typing quickly searches once, after the pause.
+    fireEvent.change(box, { target: { value: "Str" } });
+    fireEvent.change(box, { target: { value: "Stra" } });
+    fireEvent.change(box, { target: { value: "Stran" } });
+    expect(searchUsers).not.toHaveBeenCalled();
+    expect(await screen.findByText("stranger", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(searchUsers).toHaveBeenCalledOnce();
     expect(searchUsers).toHaveBeenCalledWith("stran", null, expect.any(AbortSignal));
   });
 });

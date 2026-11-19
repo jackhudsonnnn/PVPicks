@@ -7,5 +7,5 @@
  * <p>Public types in this package are the module API; everything else is package-private.
  */
 @org.springframework.modulith.ApplicationModule(allowedDependencies = {
-        "bets", "chat", "common", "moderation", "security", "settlement", "social", "sports"})
+        "bets", "chat", "common", "feedback", "moderation", "security", "settlement", "social", "sports"})
 package com.p2picks.app.demo;

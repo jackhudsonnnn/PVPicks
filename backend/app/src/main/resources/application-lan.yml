@@ -20,10 +20,16 @@ pvpicks:
   login-throttle:
     per-account: ${PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT:10}
     per-address: ${PVPICKS_LOGIN_THROTTLE_PER_ADDRESS:50}
+    # Wrong codes per player (or unknown username) per window; the admin can unlock a player from their card.
+    codes-per-player: ${PVPICKS_LOGIN_THROTTLE_CODES_PER_PLAYER:10}
+    # A backstop against spraying many usernames. Docker Desktop shows every phone as one address, so this is shared
+    # by the whole party: generous, so honest typos never reach it.
+    codes-per-address: ${PVPICKS_LOGIN_THROTTLE_CODES_PER_ADDRESS:100}
     window: ${PVPICKS_LOGIN_THROTTLE_WINDOW:PT15M}
-  # The first admin, created on start until its password is set (it logs a one-time setup link).
+  # The LAN admin, created on start with this password (the admin portal's password; players use sign-in codes).
   bootstrap-admin:
     username: ${PVPICKS_BOOTSTRAP_ADMIN:}
+    password: ${PVPICKS_BOOTSTRAP_ADMIN_PASSWORD:}
   public-url: ${PVPICKS_ORIGIN}
   demo:
     enabled: false

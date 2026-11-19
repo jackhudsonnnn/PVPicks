@@ -61,7 +61,7 @@ class SettlementGroupController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(List.copyOf(views));
     }
 
-    /** Settle chosen open receipts with one person: {"kind": "sent"|"received"|"forgiven", "lineIds": [...]}. */
+    /** Settle chosen open receipts with one person: {"kind": "sent"|"received", "lineIds": [...]}. */
     @PostMapping("/people/{userId}/settles")
     ResponseEntity<?> settle(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId,
             @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody JsonNode input) {
@@ -101,8 +101,8 @@ class SettlementGroupController {
         } catch (SettleService.InvalidSettle exception) {
             return error(409, "invalid_settle", exception.getMessage());
         } catch (SettleService.SendLimit exception) {
-            return error(429, "settle_limit", "You two have sent " + SettleRules.SENDS_PER_DAY
-                    + " settle-ups in the last 24 hours. Try again later.");
+            return error(429, "settle_limit", "You two have settled " + SettleRules.SENDS_PER_DAY
+                    + " times in the last 24 hours. Try again later.");
         } catch (SettlementReviewService.ReviewRequired exception) {
             return error(409, "settlement_review_required", "Review the balance change before settling.");
         } catch (MutationAuthentication.ExpiredSession exception) {

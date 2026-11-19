@@ -8,7 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { DeleteAccountSection } from "./delete-account";
-import { ChangePasswordSection } from "@/features/auth";
 import { HUE_BG, type User } from "@/features/people";
 import { DisplaySettings } from "./display-settings";
 import { INVITE_MODES } from "@/features/social";
@@ -44,7 +43,7 @@ const INVITE_ROWS = [
   },
 ] as const;
 
-/** Preferences: who can add you to tables, and your account (username, color, debt cap). */
+/** Preferences: who can add you to tables, and your account (username, color, points limit). */
 export function PreferencesPage({
   user,
   expire,
@@ -92,8 +91,7 @@ export function PreferencesPage({
         // Keyed by username so the form resets to the saved name after a rename.
         <div className="space-y-6">
           <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />
-          <ChangePasswordSection username={user.username} />
-          <DeleteAccountSection onDeleted={onAccountDeleted} />
+          <DeleteAccountSection username={user.username} onDeleted={onAccountDeleted} />
         </div>
       )}
     </div>
@@ -237,7 +235,7 @@ function DebtCapSettings({
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   if (cap.isPending || debt.isPending)
-    return <LoadingList label="Loading debt cap" rows={1} rowClassName="h-24" />;
+    return <LoadingList label="Loading points limit" rows={1} rowClassName="h-24" />;
   if (cap.isError || debt.isError)
     return <p role="alert">{backendErrorMessage(cap.error ?? debt.error)}</p>;
   const locked = debt.data > 0;
@@ -256,19 +254,19 @@ function DebtCapSettings({
 
   return (
     <SettingsSection
-      title="Debt cap"
-      description="Stops you joining or proposing bets that could push your debt past the cap. You can only change it while you owe nothing."
+      title="Points limit"
+      description="Stops you joining or proposing bets that could put you further down than the limit. You can only change it while you're not down."
     >
       <SettingRow
         icon={ShieldAlert}
-        label="Current debt"
-        description="What you owe across tables and open settle-ups."
+        label="Points down"
+        description="How far down you are across tables and open settle-ups."
       >
         <p className="font-semibold">{formatPoints(BigInt(debt.data))} points</p>
       </SettingRow>
       <SettingRow
         icon={ShieldAlert}
-        label="Cap"
+        label="Limit"
         description={on ? `${formatPoints(BigInt(cap.data!))} points` : "Off"}
       >
         <div className="space-y-2">
@@ -281,11 +279,11 @@ function DebtCapSettings({
                 !checked && actions.start({ kind: "debt-cap", capCents: null })
               }
             />
-            <Label htmlFor="debt-cap-on">{on ? "Cap on" : "No cap"}</Label>
+            <Label htmlFor="debt-cap-on">{on ? "Limit on" : "No limit"}</Label>
           </span>
           <form className="flex flex-wrap items-center gap-2" onSubmit={save}>
             <Input
-              aria-label="Debt cap in points"
+              aria-label="Points limit"
               inputMode="numeric"
               placeholder="Points"
               value={text}
@@ -294,12 +292,12 @@ function DebtCapSettings({
               className="max-w-32"
             />
             <Button type="submit" size="sm" disabled={disabled || locked}>
-              {on ? "Change cap" : "Set cap"}
+              {on ? "Change limit" : "Set limit"}
             </Button>
           </form>
           {locked && (
             <p className="text-xs text-muted-foreground">
-              Settle what you owe before changing your cap.
+              Settle what you're down before changing your limit.
             </p>
           )}
           {problem && <p role="alert">{problem}</p>}

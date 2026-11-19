@@ -19,13 +19,14 @@ const account = (username: string, hue: number, role: "PLAYER" | "ADMIN" = "PLAY
 
 const login = vi.fn();
 const loginAs = vi.fn();
+const loginWithCode = vi.fn();
 
 function renderSignIn() {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <SignIn login={login} loginAs={loginAs} notice={null} />
+      <SignIn login={login} loginAs={loginAs} loginWithCode={loginWithCode} notice={null} />
     </QueryClientProvider>,
   );
 }
@@ -34,6 +35,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   login.mockResolvedValue(undefined);
   loginAs.mockResolvedValue(undefined);
+  loginWithCode.mockResolvedValue(undefined);
 });
 
 describe("sign-in", () => {
@@ -54,10 +56,23 @@ describe("sign-in", () => {
     expect(demoAccounts).toHaveBeenCalledWith("hoops", expect.anything());
   });
 
-  it("shows the password form when the backend has no demo", async () => {
+  it("asks players for their code without a demo, with a small way in for the admin", async () => {
     vi.mocked(demoAccounts).mockResolvedValue(null);
     renderSignIn();
-    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+    const code = await screen.findByLabelText("Your code");
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    fireEvent.change(code, { target: { value: "k7-qm" } });
+    // Both are needed: the code alone doesn't say whose it is.
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "dana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(loginWithCode).toHaveBeenCalledWith("dana", "K7-QM"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Admin" }));
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "boss" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "a long password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(login).toHaveBeenCalledWith("boss", "a long password"));
   });
 
   it("keeps checking for the demo while the backend is unreachable", async () => {
@@ -65,7 +80,7 @@ describe("sign-in", () => {
       .mockRejectedValueOnce(new Error("Failed to fetch"))
       .mockResolvedValue({ main: [account("pro", 3)], others: [] });
     renderSignIn();
-    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Your code")).toBeInTheDocument();
     expect(await screen.findByText("Pick an account", {}, { timeout: 5000 })).toBeInTheDocument();
   });
 });

@@ -34,7 +34,8 @@ class DemoWorldTest extends IntegrationTestSupport {
         var none = new org.springframework.beans.factory.support.StaticListableBeanFactory();
         reset = new DemoReset(demo, new DataSourceTransactionManager(source), passwords, Clock.systemUTC(),
                 none.getBeanProvider(DemoBots.class), none.getBeanProvider(DemoHistory.class),
-                none.getBeanProvider(DemoGames.class));
+                none.getBeanProvider(DemoGames.class),
+                new com.p2picks.app.security.SignInCodes(demo, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="));
     }
 
     @AfterEach
@@ -97,8 +98,14 @@ class DemoWorldTest extends IntegrationTestSupport {
         assertThat(count("SELECT count(*) FROM tables WHERE char_length(name) > 14")).isZero();
         assertThat(count("SELECT count(*) FROM users WHERE username = 'admin' AND role = 'ADMIN'")).isEqualTo(1);
         assertThat(passwords.matches(DemoWorld.PASSWORD, demo.queryForObject(
-                "SELECT password_hash FROM users WHERE username = 'pro'", String.class)))
-                .as("the shared demo password works for flows that ask for one").isTrue();
+                "SELECT password_hash FROM users WHERE username = 'admin'", String.class)))
+                .as("the shared demo password signs the admin in").isTrue();
+        assertThat(count("SELECT count(*) FROM users WHERE role = 'PLAYER' AND password_hash <> '!code-only'"))
+                .as("players have no password").isZero();
+        assertThat(count("""
+                SELECT count(*) FROM users u LEFT JOIN sign_in_codes c ON c.user_id = u.id
+                WHERE u.role = 'PLAYER' AND c.user_id IS NULL
+                """)).as("every player has a sign-in code").isZero();
     }
 
     @Test

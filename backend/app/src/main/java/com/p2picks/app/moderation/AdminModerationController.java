@@ -34,8 +34,10 @@ class AdminModerationController {
     }
 
     @GetMapping("/admin/users/flagged")
-    ResponseEntity<?> flagged(@RequestParam(required = false) String cursor) {
-        return page(() -> moderation.flagged(cursor));
+    ResponseEntity<?> flagged(@RequestParam(required = false) String cursor,
+            @RequestParam(required = false) String q) {
+        if (q != null && q.length() > 15) return error(400, "bad_request", "Search up to 15 characters.");
+        return page(() -> moderation.flagged(cursor, q));
     }
 
     /** A page as {items, nextCursor}; a cursor that isn't ours is a 400. */

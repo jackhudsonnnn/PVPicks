@@ -9,6 +9,7 @@ import com.p2picks.app.bets.U2PickDefinition;
 import com.p2picks.app.bets.U2PickProposalService;
 import com.p2picks.app.bets.U2PickResolutionService;
 import com.p2picks.app.demo.DemoRoster.DemoUser;
+import com.p2picks.app.feedback.FeedbackService;
 import com.p2picks.app.moderation.ReportService;
 import com.p2picks.app.security.PasswordlessSignIn;
 import com.p2picks.app.settlement.DebtCapService;
@@ -79,6 +80,7 @@ public class DemoHistory {
     private final SettlementReviewService reviews;
     private final DebtCapService caps;
     private final ReportService reports;
+    private final FeedbackService feedback;
     private final Map<UUID, DemoUser> bots = DemoRoster.users().stream()
             .collect(Collectors.toMap(DemoUser::id, Function.identity()));
 
@@ -87,7 +89,7 @@ public class DemoHistory {
             SportsProposalService sportsBets, BetPickService picks, BetLockService locks,
             U2PickResolutionService u2pickResults, SportsResolutionService sportsResults,
             TablePointsSettlementService points, SettleService settles, SettlementReviewService reviews,
-            DebtCapService caps, ReportService reports) {
+            DebtCapService caps, ReportService reports, FeedbackService feedback) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.json = json;
@@ -105,6 +107,7 @@ public class DemoHistory {
         this.reviews = reviews;
         this.caps = caps;
         this.reports = reports;
+        this.feedback = feedback;
     }
 
     /** What was seeded, for the log and tests. */
@@ -120,6 +123,7 @@ public class DemoHistory {
         run.backdate();
         int pending = run.pending(DemoWorld.PRO, PRO_PENDING);
         int filed = run.reports();
+        run.feedback();
         return new Summary(run.tickets(DemoWorld.PRO), run.tickets(DemoWorld.INTERMEDIATE), pending,
                 run.settlements.size(), filed);
     }
@@ -348,11 +352,9 @@ public class DemoHistory {
                         || line.payee().equals(DemoWorld.INTERMEDIATE);
                 double roll = random.nextDouble();
                 try {
-                    // Paid ones are recorded by the person paid (final at once); some are forgiven.
-                    if (allPaid || intermediate || roll < 0.8) {
+                    // Most are marked settled by the person up (final at once); the rest stay open.
+                    if (allPaid || intermediate || roll < 0.9) {
                         settle(line.payee(), line.payer(), line.id(), SettleRules.Kind.RECEIVED);
-                    } else if (roll < 0.9) {
-                        settle(line.payee(), line.payer(), line.id(), SettleRules.Kind.FORGIVEN);
                     }
                     // Closed a few hours to a few days after the settlement, but never later than now.
                     Instant closed = at.plus(Duration.ofHours(2 + random.nextInt(70)));
@@ -461,7 +463,7 @@ public class DemoHistory {
             String[][] notes = {
                 {"harassment", "Keeps trash talking me after every bet."},
                 {"spam", "Posts the same GIF over and over."},
-                {"settlement", "Says they paid, never did."},
+                {"settlement", "Keeps rejecting settles that were fair."},
                 {"offensive", "Language in the table chat."},
                 {"other", "Something feels off about this account."},
                 {"harassment", "Won't stop pinging the table."}};
@@ -488,6 +490,25 @@ public class DemoHistory {
                 if (outcome == ReportService.Outcome.CREATED) filed++;
             }
             return filed;
+        }
+
+        /** A few pieces of feedback for the admin's inbox, from random demo players. */
+        void feedback() {
+            String[][] items = {
+                {"bug", "The ticker froze on the Knicks game until I refreshed the page."},
+                {"mode", "A first-to-score bet would be great for NFL Sundays."},
+                {"perk", "Let hosts pin one bet to the top of the table."},
+                {"gif", "Please add more celebration GIFs, the overtime ones are gone."},
+                {"other", "Settle-up reminders would save me a lot of nagging."}};
+            List<UUID> players = jdbc.queryForList("""
+                    SELECT id FROM users WHERE role = 'PLAYER' AND status = 'ACTIVE' AND id <> ALL (?::uuid[])
+                    ORDER BY id
+                    """, UUID.class, "{" + DemoWorld.PRO + "," + DemoWorld.INTERMEDIATE + "," + DemoWorld.NEWBIE + "}");
+            if (players.isEmpty()) return;
+            for (String[] item : items) {
+                UUID from = players.get(random.nextInt(players.size()));
+                feedback.submit(as(from), key(), new FeedbackService.Submission(item[0], item[1], null));
+            }
         }
 
         int tickets(UUID user) {

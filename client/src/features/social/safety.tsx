@@ -147,8 +147,9 @@ export function ReportDialog({
                 <div className="space-y-1.5 rounded-lg border border-invite/50 bg-invite/10 px-3 py-2.5 text-xs leading-relaxed">
                   <p className="font-semibold">Settlement disputes are handled privately.</p>
                   <p className="text-muted-foreground">
-                    P2Picks doesn't hold money and can't make anyone pay, so sort it out with {name}{" "}
-                    or your table's host. Report only if it turns into harassment or pressure.
+                    Points have no cash value and P2Picks can't make anyone settle, so sort it out
+                    with {name} or your table's host. Report only if it turns into harassment or
+                    pressure.
                   </p>
                 </div>
               )}

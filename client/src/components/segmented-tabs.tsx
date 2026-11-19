@@ -21,8 +21,10 @@ export interface SegmentedTab<T extends string> {
   id: T;
   label: string;
   icon?: ComponentType<{ className?: string }>;
-  /** Shown greyed out with a small "Soon" tag. */
+  /** Greyed out and not selectable, for example while a change saves. */
   disabled?: boolean;
+  /** Not available yet: greyed out with a small "Soon" tag. */
+  soon?: boolean;
 }
 
 /** Spring for the sliding highlight. The app-wide MotionConfig turns it off for reduced motion. */
@@ -84,7 +86,7 @@ export function SegmentedTabs<T extends string>({
   }, [tabs, dropdownOnly]);
   const activeId = tabs.find((t) => (isActive ? isActive(t.id) : value === t.id))?.id ?? value;
   // Tab-strip keyboard pattern: one Tab stop, arrow keys / Home / End move between options.
-  const enabled = tabs.filter((t) => !t.disabled);
+  const enabled = tabs.filter((t) => !t.disabled && !t.soon);
   const focusable = enabled.some((t) => t.id === activeId) ? activeId : enabled[0]?.id;
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const i = enabled.findIndex((t) => t.id === activeId);
@@ -125,12 +127,12 @@ export function SegmentedTabs<T extends string>({
             </div>
           </SelectTrigger>
           <SelectContent>
-            {tabs.map(({ id, label, icon: Icon, disabled }) => (
-              <SelectItem key={id} value={id} disabled={!!disabled}>
+            {tabs.map(({ id, label, icon: Icon, disabled, soon }) => (
+              <SelectItem key={id} value={id} disabled={!!disabled || !!soon}>
                 <span className="flex items-center gap-2">
                   {Icon && <Icon className="size-4 shrink-0" />}
                   {label}
-                  {disabled && <span className="text-xs text-muted-foreground">Soon</span>}
+                  {soon && <span className="text-xs text-muted-foreground">Soon</span>}
                 </span>
               </SelectItem>
             ))}
@@ -154,7 +156,7 @@ export function SegmentedTabs<T extends string>({
           )}
           style={{ "--tabs-narrow": narrow, "--tabs-wide": wide } as CSSProperties}
         >
-          {tabs.map(({ id, label, icon: Icon, disabled }) => {
+          {tabs.map(({ id, label, icon: Icon, disabled, soon }) => {
             const on = isActive ? isActive(id) : value === id;
             return (
               <button
@@ -164,10 +166,11 @@ export function SegmentedTabs<T extends string>({
                 data-tab-id={id}
                 aria-selected={on}
                 tabIndex={id === focusable ? 0 : -1}
-                disabled={disabled}
+                disabled={disabled || soon}
                 onClick={() => onChange(id)}
                 className={cn(
-                  "relative isolate flex min-w-0 items-center justify-center rounded-lg transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50",
+                  "relative isolate flex min-w-0 items-center justify-center rounded-lg transition-colors duration-200 disabled:cursor-not-allowed",
+                  soon && "opacity-50",
                   size === "lg"
                     ? "py-2 font-display text-base font-bold uppercase tracking-wide"
                     : "py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest",
@@ -191,7 +194,7 @@ export function SegmentedTabs<T extends string>({
                 <span data-tab-label className="truncate">
                   {label}
                 </span>
-                {disabled && (
+                {soon && (
                   <span className="rounded bg-muted px-1 font-mono text-[8px] tracking-wider text-muted-foreground">
                     Soon
                   </span>

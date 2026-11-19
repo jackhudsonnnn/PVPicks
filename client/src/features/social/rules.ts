@@ -2,7 +2,7 @@ import type { Relationships } from "./api";
 
 /** Rules for people lists and search, matching the server. */
 
-type PeopleTab = "friends" | "requests" | "following" | "blocked";
+type PeopleTab = "followers" | "following" | "blocked";
 
 /** Usernames are 1–15 lowercase letters, digits or underscores; search uses the same rule. */
 export function searchTerm(text: string): string | null {
@@ -11,13 +11,10 @@ export function searchTerm(text: string): string | null {
 }
 
 export function peopleIn(tab: PeopleTab, relationships: Relationships): string[] {
-  const { followingIds, followerIds, friendIds, blockedIds } = relationships;
+  const { followingIds, followerIds, blockedIds } = relationships;
   switch (tab) {
-    case "friends":
-      return friendIds;
-    case "requests":
-      // Followers you haven't followed back: following them makes you friends.
-      return followerIds.filter((id) => !followingIds.includes(id));
+    case "followers":
+      return followerIds;
     case "following":
       return followingIds;
     case "blocked":

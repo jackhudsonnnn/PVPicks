@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.mocked(updateProfile).mockResolvedValue({ ...me, username: "new_name" });
 });
 
-describe("debt cap input", () => {
+describe("points limit input", () => {
   it("accepts whole points only", () => {
     expect(parseCap(" 25 ")).toEqual({ cents: 2500 });
     expect(parseCap("2.5")).toHaveProperty("problem");
@@ -102,28 +102,28 @@ describe("preferences page", () => {
     expect(await screen.findByText("Someone already has that username.")).toBeInTheDocument();
   });
 
-  it("sets a debt cap in whole points", async () => {
+  it("sets a points limit in whole points", async () => {
     renderPage();
     fireEvent.click(screen.getByRole("tab", { name: "Account" }));
-    fireEvent.change(await screen.findByLabelText("Debt cap in points"), {
+    fireEvent.change(await screen.findByLabelText("Points limit"), {
       target: { value: "50" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Set cap" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set limit" }));
     await waitFor(() => expect(putDebtCap).toHaveBeenCalledWith(5000, expect.any(String)));
   });
 
-  it("locks the cap while you owe anything", async () => {
+  it("locks the limit while you're down", async () => {
     vi.mocked(getDebt).mockResolvedValue(125);
     vi.mocked(getDebtCap).mockResolvedValue(5000);
     renderPage();
     fireEvent.click(screen.getByRole("tab", { name: "Account" }));
     expect(await screen.findByText("1.25 points")).toBeInTheDocument();
-    expect(screen.getByText(/Settle what you owe/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Debt cap in points")).toBeDisabled();
+    expect(screen.getByText(/Settle what you're down/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Points limit")).toBeDisabled();
     expect(screen.getByRole("switch")).toBeDisabled();
   });
 
-  it("turns the cap off when you owe nothing", async () => {
+  it("turns the limit off when you're not down", async () => {
     vi.mocked(getDebtCap).mockResolvedValue(5000);
     renderPage();
     fireEvent.click(screen.getByRole("tab", { name: "Account" }));
@@ -131,7 +131,7 @@ describe("preferences page", () => {
     await waitFor(() => expect(putDebtCap).toHaveBeenCalledWith(null, expect.any(String)));
   });
 
-  it("deletes the account once you're square, after your password", async () => {
+  it("deletes the account once you're square, after typing your username", async () => {
     vi.mocked(deleteAccount)
       .mockRejectedValueOnce(
         new BackendError("x", 409, "account_not_square", "Settle up", {
@@ -142,15 +142,16 @@ describe("preferences page", () => {
     renderPage();
     fireEvent.click(screen.getByRole("tab", { name: "Account" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete my account" }));
-    fireEvent.change(await screen.findByLabelText("Your password"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Delete forever" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("receipts that aren't paid");
+    const confirm = await screen.findByLabelText(/to confirm/);
+    const remove = screen.getByRole("button", { name: "Delete forever" });
+    fireEvent.change(confirm, { target: { value: "someone else" } });
+    expect(remove).toBeDisabled();
+    fireEvent.change(confirm, { target: { value: me.username } });
+    fireEvent.click(remove);
+    expect(await screen.findByRole("alert")).toHaveTextContent("receipts that aren't settled");
     expect(onAccountDeleted).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Your password"), { target: { value: "secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Delete forever" }));
     await waitFor(() => expect(onAccountDeleted).toHaveBeenCalledOnce());
-    expect(deleteAccount).toHaveBeenLastCalledWith("secret");
+    expect(deleteAccount).toHaveBeenLastCalledWith(me.username);
   });
 });

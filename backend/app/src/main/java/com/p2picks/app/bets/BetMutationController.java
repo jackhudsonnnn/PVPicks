@@ -69,7 +69,7 @@ class BetMutationController {
         } catch (IllegalArgumentException exception) {
             return error(400, "bad_request", "Invalid U2Pick proposal.");
         } catch (BetProposalWriter.DebtCapExceeded exception) {
-            return error(409, "debt_cap_exceeded", "This proposal would exceed the debt cap.");
+            return error(409, "debt_cap_exceeded", "This proposal would put you past your points limit.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }
@@ -110,7 +110,7 @@ class BetMutationController {
         } catch (SportsProposalService.InvalidTerms exception) {
             return error(409, "invalid_terms", exception.getMessage() + ".");
         } catch (BetProposalWriter.DebtCapExceeded exception) {
-            return error(409, "debt_cap_exceeded", "This proposal would exceed the debt cap.");
+            return error(409, "debt_cap_exceeded", "This proposal would put you past your points limit.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }
@@ -221,7 +221,7 @@ class BetMutationController {
         } catch (BetPickService.Closed exception) {
             return error(409, "bet_closed", "The pick window has closed.");
         } catch (BetPickService.DebtCapExceeded exception) {
-            return error(409, "debt_cap_exceeded", "This pick would exceed the debt cap.");
+            return error(409, "debt_cap_exceeded", "This pick would put you past your points limit.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }

@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
+import { startPerfReporting } from "@/lib/perf";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { backendErrorMessage, isUnauthorized } from "@/lib/api-client";
-import { currentUser, SetupPassword, signIn, signInAs, signOut, SignIn } from "@/features/auth";
+import {
+  CodeLinkSignIn,
+  currentUser,
+  signIn,
+  signInAs,
+  signInWithCode,
+  signOut,
+  SignIn,
+} from "@/features/auth";
 import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
 import type { User } from "@/features/people";
 import { AdminWorkspace } from "@/features/admin";
@@ -51,12 +60,20 @@ export function App() {
     queryClient.removeQueries({ queryKey: tablesKey });
   }, [signedOut, queryClient]);
 
+  // Browser timings for the admin Perf tab, sent only while someone is signed in.
+  const signedInId = session.data?.id ?? null;
+  useEffect(() => (signedInId ? startPerfReporting() : undefined), [signedInId]);
+
   async function login(username: string, password: string) {
     await startSession(await signIn(username, password));
   }
 
   async function loginAs(userId: string) {
     await startSession(await signInAs(userId));
+  }
+
+  async function loginWithCode(username: string, code: string) {
+    await startSession(await signInWithCode({ username }, code));
   }
 
   // Every sign-in starts on Home: the URL may still be the previous session's page (possibly another
@@ -109,8 +126,8 @@ export function App() {
       </main>
     );
   }
-  // A setup or reset link works signed in or out: redeeming it signs in as that account.
-  if (pathname === "/setup") return <SetupPassword onDone={startSession} />;
+  // A player's QR link works signed in or out: opening it signs in as that player.
+  if (pathname === "/signin") return <CodeLinkSignIn onDone={startSession} />;
   if (!session.data) {
     if (pathname === "/dev" && devAvailable)
       return <SignedOutDev onReset={() => void resetWorld()} />;
@@ -118,6 +135,7 @@ export function App() {
       <SignIn
         login={login}
         loginAs={loginAs}
+        loginWithCode={loginWithCode}
         notice={notice}
         extras={devAvailable ? <DevLinks active={false} /> : undefined}
       />

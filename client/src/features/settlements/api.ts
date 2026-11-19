@@ -19,7 +19,7 @@ const lineSchema = z.object({
   payeeId: uuid,
   amountCents: exactCents,
   /** Unpaid until a settle closes it. */
-  status: z.enum(["unpaid", "paid", "forgiven"]),
+  status: z.enum(["unpaid", "paid"]),
   revision: z.number().int().min(0).max(2147483647),
   /** The settle that closed it; null while unpaid. */
   settleId: uuid.nullable(),
@@ -29,8 +29,8 @@ const lineSchema = z.object({
 
 const settleSchema = z.object({
   id: uuid,
-  /** sent: the payer says they paid (the receiver can reject until `rejectBy`); received and forgiven are final. */
-  kind: z.enum(["sent", "received", "forgiven"]),
+  /** sent: "Settle" by the person down (the other can reject until `rejectBy`); received: "Mark as settled", final. */
+  kind: z.enum(["sent", "received"]),
   senderId: uuid,
   otherId: uuid,
   /** Who pays the selection's net; null when it netted to zero. */

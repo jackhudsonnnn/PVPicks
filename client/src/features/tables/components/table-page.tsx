@@ -15,6 +15,7 @@ import {
   useBetActions,
   proposeBlock,
   useBet,
+  useHasTickets,
 } from "@/features/bets";
 import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
@@ -176,6 +177,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   };
   const hosting = table.hostIds.includes(user.id);
   const block = proposeBlock(table, user.id);
+  const hasTickets = useHasTickets(user.id);
   const deck = openBets(bets.data ?? []);
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
@@ -203,11 +205,23 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button asChild variant="outline" className="h-10 px-3">
-            <Link to="/tickets" search={{ table: table.id }} aria-label="This table's tickets">
+          {hasTickets ? (
+            <Button asChild variant="outline" className="h-10 px-3">
+              <Link to="/tickets" search={{ table: table.id }} aria-label="This table's tickets">
+                <Ticket /> <span className="hidden sm:inline">Tickets</span>
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="h-10 px-3"
+              disabled
+              aria-label="This table's tickets"
+              title="Tickets show up once a bet starts at one of your tables."
+            >
               <Ticket /> <span className="hidden sm:inline">Tickets</span>
-            </Link>
-          </Button>
+            </Button>
+          )}
           <Button
             variant="hero"
             className="h-10 shrink-0 px-4"

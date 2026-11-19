@@ -57,10 +57,11 @@ paths:
     post:
       operationId: login
       security: []
-      summary: Start a session for a provisioned account
+      summary: Admin sign-in with username and password
       description: >-
-        Dev and LAN accounts are provisioned; production registration policy
-        will be decided after the LAN rehearsal. Failed sign-ins are
+        Admins only: players have no password and sign in with their code
+        (/auth/code). A player's username gets the same 401 as a wrong
+        password. Failed sign-ins are
         throttled (429 `rate_limited`, with Retry-After): by default 10
         failures per account name or 50 per client address within 15
         minutes block further attempts, even correct ones, until the window
@@ -107,20 +108,26 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           $ref: '#/components/responses/RateLimited'
-  /auth/setup:
+  /auth/code:
     post:
-      operationId: redeemSetupCode
+      operationId: signInWithCode
       security: []
-      summary: Set your password with a setup or reset code
+      summary: Player sign-in with their code
       description: >-
-        Redeems a single-use code an admin issued (the link is
-        /setup#<code>; the code stays in the URL fragment). Sets the
-        password, ends the account's other sessions and signs in, like
-        login, which also rotates the CSRF token. A password the rules
-        reject (code `weak_password`) leaves the code unused. Password rules:
-        12 to 64 characters and at most 72 bytes, not containing the
-        username, not a common password. Failed codes count toward the
-        per-address sign-in throttle.
+        Players sign in with the code an admin shows them: typed with their
+        username, or opened from their QR link /signin#<playerId>.<code>,
+        which sends the player's id (so a rename doesn't break the link; the
+        code stays in the URL fragment). Codes are 4 characters from
+        ABCDEFGHJKMNPQRSTUVWXYZ23456789; case, spaces and dashes are
+        ignored, and the username is trimmed and case-insensitive. A code
+        stays the same until an admin rotates it. Wrong codes are throttled
+        per player, or per typed name when it matches nobody (10 per 15
+        minutes by default), with a per-address backstop (100); over a
+        limit, 429 even for a right code until the window ends or an admin
+        clears it. An unknown username and a wrong code get the same 401.
+        A stale or revoked session cookie doesn't block this. Signing in
+        rotates the CSRF token and revokes the caller's existing session,
+        if any.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -130,41 +137,52 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [code, password]
+              description: Exactly one of username (typed) or player (QR link), plus the code.
+              required: [code]
+              minProperties: 2
+              maxProperties: 2
               properties:
+                username:
+                  type: string
+                player:
+                  type: string
+                  format: uuid
                 code:
                   type: string
-                password:
-                  type: string
-                  format: password
       responses:
         '204':
-          description: Password set and signed in; the server sets the session cookie.
+          description: Signed in; the server sets the session cookie.
           headers:
             Set-Cookie:
               schema:
                 type: string
         '400':
-          description: >-
-            Malformed body, an expired, used or unknown code (code
-            `invalid_setup_code`), or a password the rules reject (code
-            `weak_password`, with a message for the player).
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: The username (or player) and code don't match (code `invalid_code`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            Origin or CSRF rejected, or the code is right but the account is
+            frozen (code `account_frozen`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '429':
           $ref: '#/components/responses/RateLimited'
   /auth/password:
     post:
       operationId: changePassword
-      summary: Change your own password
+      summary: Change your own password (admins)
       description: >-
-        Any signed-in account, player or admin. Needs the current password;
-        ends the account's other sessions and keeps this one. Wrong current
-        passwords count toward the sign-in throttle.
+        Admins only; a player gets 403 `not_admin` (players have no
+        password). Needs the current password; ends the account's other
+        sessions and keeps this one. Wrong current passwords count toward
+        the sign-in throttle.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -194,7 +212,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: The current password is wrong (code `wrong_password`), or origin or CSRF rejected.
+          description: >-
+            The current password is wrong (code `wrong_password`), the caller
+            is a player (code `not_admin`), or origin or CSRF rejected.
           content:
             application/json:
               schema:
@@ -1792,14 +1812,15 @@ paths:
       summary: Settle chosen open receipts with one person
       description: >-
         Closes the chosen open receipts between the caller and this person at
-        once. The selection nets, from the caller's side, to what they pay
-        (negative) or receive. `sent`: the net payer says they paid; it
-        counts as paid at once, the receiver can reject it for 48 hours
-        (which reopens the receipts), and the debt cap keeps counting it
-        until then. `received`: the net receiver, or either side at a zero
-        net, records it paid; final at once. `forgiven`: the person owed
-        gives up receipts that are all owed to them; final at once. At most 3
-        sends between the two in any 24 hours (both directions, rejected ones
+        once. Points have no cash value: a settle only records that the two
+        consider those receipts closed. The selection nets, from the
+        caller's side, to points they're down (negative) or up. `sent`
+        ("Settle" in the app): the person down settles; it counts as closed
+        at once, the other person can reject it for 48 hours (which reopens
+        the receipts), and the points limit keeps counting it until then.
+        `received` ("Mark as settled"): the person up, or either side at a
+        zero net, closes them; final at once. At most 3 sent settles between
+        the two in any 24 hours (both directions, rejected ones
         included): 429 `settle_limit`. Other refusals are 409:
         `stale_selection` (a receipt isn't open any more),
         `invalid_settle` (wrong side for this kind),
@@ -1818,7 +1839,7 @@ paths:
               properties:
                 kind:
                   type: string
-                  enum: [sent, received, forgiven]
+                  enum: [sent, received]
                 lineIds:
                   type: array
                   minItems: 1
@@ -2442,7 +2463,7 @@ paths:
         Dev implementation.
         Your receipts with this person, including archived-table history,
         optionally at one table. Every open (unpaid) receipt comes in full,
-        newest first; closed ones (paid or forgiven) come newest first, 20 at
+        newest first; closed ones (paid) come newest first, 20 at
         a time. Pass nextCursor to continue the closed list; that response's
         open list is empty. An unrelated or unknown user yields empty lists.
       parameters:
@@ -2684,7 +2705,8 @@ paths:
       operationId: deleteMyAccount
       summary: Delete your own account
       description: >-
-        Requires your password. Blocked (409 account_not_square, with
+        Confirm by typing your own username (case and surrounding spaces
+        don't matter). Blocked (409 account_not_square, with
         `blockers`) while you're in an Active or Pending bet, have unsettled
         table points, or have open receipts. Deletion removes personal data
         (profile, relationships, invite preferences, chat text and GIFs,
@@ -2693,10 +2715,8 @@ paths:
         bets, the ledger and receipts keep referencing. Moderation records are
         kept. Tables you hosted pass to their earliest-joined active member, or
         are archived if nobody active is left. Ends every session and clears the
-        session cookie. Not idempotency-keyed: after success a retry can only
-        fail authentication. Wrong passwords count toward the sign-in
-        throttle (per account and per address); over it, 429 even with the
-        right password until the window ends.
+        session cookie and the player's sign-in code. Not idempotency-keyed:
+        after success a retry can only fail authentication.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -2706,9 +2726,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [password]
+              required: [username]
               properties:
-                password: {type: string}
+                username: {type: string}
       responses:
         '204':
           description: Deleted.
@@ -2717,9 +2737,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: The password doesn't match (code `wrong_password`).
-        '429':
-          $ref: '#/components/responses/RateLimited'
+          description: That isn't your username (code `wrong_username`).
           content:
             application/json:
               schema:
@@ -2854,9 +2872,14 @@ paths:
     get:
       operationId: listFlaggedUsers
       summary: Players with strikes or a frozen account
-      description: Admin only. Frozen first, then most strikes, then by username, 50 at a time.
+      description: Admin only. Frozen first, then most strikes, then by username, 50 at a time; `q` keeps usernames starting with it.
       parameters:
         - $ref: '#/components/parameters/Cursor'
+        - name: q
+          in: query
+          required: false
+          description: Username prefix, case-insensitive, up to 15 characters.
+          schema: {type: string, maxLength: 15}
       responses:
         '200':
           description: A page of people.
@@ -2885,11 +2908,18 @@ paths:
       operationId: listPlayers
       summary: Player accounts, newest first
       description: >-
-        Admin only, 50 at a time. Whether each has set a password, and when
-        their live setup or reset code expires (codes themselves are never
-        shown again).
+        Admin only, 50 at a time. Each player's last sign-in, when their
+        sign-in code was last issued (GET /admin/players/{playerId}/code
+        shows the code), their strikes and open reports against them. `q`
+        keeps usernames starting with it.
       parameters:
         - $ref: '#/components/parameters/Cursor'
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 15
       responses:
         '200':
           description: A page of players.
@@ -2907,24 +2937,37 @@ paths:
                     maxItems: 50
                     items:
                       type: object
-                      required: [id, username, status, passwordSet, codeExpiresAt, createdAt]
+                      required: [id, username, hue, status, lastSignInAt, codeRotatedAt, createdAt, strikes, openReports]
                       properties:
                         id:
                           type: string
                           format: uuid
                         username:
                           type: string
+                        hue:
+                          type: integer
+                          minimum: 1
+                          maximum: 5
                         status:
                           type: string
                           enum: [ACTIVE, FROZEN]
-                        passwordSet:
-                          type: boolean
-                        codeExpiresAt:
+                        lastSignInAt:
                           type: [string, 'null']
                           format: date-time
+                        codeRotatedAt:
+                          type: [string, 'null']
+                          format: date-time
+                          description: When the sign-in code was last issued (the code itself is never listed).
                         createdAt:
                           type: string
                           format: date-time
+                        strikes:
+                          type: integer
+                          minimum: 0
+                          maximum: 3
+                        openReports:
+                          type: integer
+                          minimum: 0
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2933,13 +2976,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
     post:
       operationId: createPlayer
-      summary: Create a player account and its setup code
+      summary: Create a player account and its sign-in code
       description: >-
         There's no registration: the admin creates each account. The
         username is trimmed and lowercased. The response carries the
-        single-use setup code once (valid 24 hours); issue another with
-        /admin/players/{playerId}/code if it's lost. No retry key: a
-        retry finds the username taken.
+        player's sign-in code (also readable later with GET
+        /admin/players/{playerId}/code). No retry key: a retry finds the
+        username taken.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
@@ -2959,16 +3002,17 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/SetupCode'
-                  - type: object
-                    required: [id, username]
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      username:
-                        type: string
+                type: object
+                additionalProperties: false
+                required: [id, username, code]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  username:
+                    type: string
+                  code:
+                    $ref: '#/components/schemas/SignInCode/properties/code'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2989,22 +3033,41 @@ paths:
         schema:
           type: string
           format: uuid
-    post:
-      operationId: issuePlayerCode
-      summary: Issue a new setup or reset code
+    get:
+      operationId: getPlayerCode
+      summary: A player's sign-in code
       description: >-
-        SETUP while the player has never set a password, RESET after.
-        Cancels their unused code. Redeeming a reset code ends all their
-        sessions.
+        Admin only. The code the player signs in with, for the admin's QR
+        card (the player opens /signin#<code>). Stored encrypted; readable
+        again until it's rotated.
+      responses:
+        '200':
+          description: The code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignInCode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: rotatePlayerCode
+      summary: Rotate a player's sign-in code
+      description: >-
+        Admin only. Issues a new code and ends every session of the player,
+        so the old code and every signed-in device stop working.
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
       responses:
         '200':
-          description: Issued.
+          description: The new code.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SetupCode'
+                $ref: '#/components/schemas/SignInCode'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -3260,6 +3323,547 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           description: Health snapshot could not be collected.
+  /admin/users/{userId}/audit:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUserAudit
+      summary: Everything an admin sees about one player
+      description: >-
+        Admin only. Account, moderation (read-only), people counts, current
+        tables, betting record, settle-ups, the last 30 New York days of
+        activity (who audited them is GET /admin/audit-log?subject=). Picks and
+        participation on bets still Active are left out of every count until
+        the bet locks. Opening an audit is recorded in the
+        admin audit log (once per admin and player per 10 minutes).
+      responses:
+        '200':
+          description: The audit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAudit'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/users/{userId}/activity:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: listUserActivity
+      summary: What a player wrote, newest first
+      description: >-
+        Admin only, 30 at a time. Chat messages and GIFs, polls and the bets
+        they proposed, optionally one kind and only items containing `q`
+        (case-insensitive; text, poll options, bet question and choices). A
+        search (`q` without a cursor) is recorded in the admin audit log.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [message, poll, bet]
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: A page of items.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 30
+                    items:
+                      $ref: '#/components/schemas/ActivityItem'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/audit-log:
+    get:
+      operationId: listAdminAuditLog
+      summary: Which admin audited whom, newest first
+      description: Admin only, 50 at a time. With `subject`, only that player's entries (their audit's "Audited by" list).
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - name: subject
+          in: query
+          required: false
+          description: Only entries about this player.
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: '#/components/schemas/AdminLogEntry'
+                  nextCursor:
+                    type: [string, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/sign-in-lockout:
+    get:
+      operationId: getSignInLockouts
+      summary: Players with wrong sign-in codes, and the address backstop
+      description: >-
+        Admin only. Every player with wrong codes in the current window
+        (locked first), and the busiest address counter. Behind Docker
+        Desktop every phone shares one address, so on the LAN that counter
+        is the whole party's.
+      responses:
+        '200':
+          description: The lockouts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignInLockouts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: clearSignInLockouts
+      summary: Clear every wrong-code counter (players, unknown names, addresses)
+      description: Admin only. Idempotent.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: Cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /admin/sign-in-lockout/players/{playerId}:
+    delete:
+      operationId: clearPlayerSignInLockout
+      summary: Clear one player's wrong codes, so they can sign in at once
+      description: Admin only. Idempotent.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: playerId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204':
+          description: Cleared.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /admin/feedback:
+    get:
+      operationId: listFeedback
+      summary: Player feedback, newest first
+      description: Admin only, 50 at a time, with how many are New and Done overall.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [new, done, all]
+            default: new
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [mode, perk, gif, bug, other]
+      responses:
+        '200':
+          description: A page of feedback.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, nextCursor, counts]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      $ref: '#/components/schemas/FeedbackItem'
+                  nextCursor:
+                    type: [string, 'null']
+                  counts:
+                    type: object
+                    additionalProperties: false
+                    required: [open, done]
+                    properties:
+                      open:
+                        type: integer
+                      done:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/feedback/{feedbackId}:
+    parameters:
+      - name: feedbackId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateFeedback
+      summary: Mark feedback Done or New, with a private note
+      description: >-
+        Admin only. Idempotent. Done records the admin and time (kept if it
+        was already Done); New clears them.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [NEW, DONE]
+                note:
+                  type: [string, 'null']
+                  maxLength: 500
+      responses:
+        '204':
+          description: Saved.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /perf:
+    post:
+      operationId: reportPerf
+      summary: Report browser timings
+      description: >-
+        Any signed-in account; 10 calls a minute. Up to 100 samples: `api`
+        (an API call's method, path and status as the browser saw it,
+        filed under the server route the path matches; unknown paths are
+        dropped; status 0 means no response), `page` (a full page load) and
+        `lcp` (largest contentful paint), the last two under an app route
+        such as `/tables/$tableId`. Invalid samples are skipped.
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [samples]
+              properties:
+                samples:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [kind, path, ms]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [api, page, lcp]
+                      method:
+                        type: string
+                      path:
+                        type: string
+                      status:
+                        type: integer
+                      ms:
+                        type: integer
+                        minimum: 0
+      responses:
+        '204':
+          description: Recorded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /admin/perf:
+    get:
+      operationId: getPerf
+      summary: Request performance over a window
+      description: >-
+        Admin only. From the stored minutes (kept 7 days; the current minute
+        is still filling): totals, one chart point per step (1h: 1 minute,
+        6h: 5 minutes, 24h: 15 minutes, 7d: 1 hour) and every route busiest
+        first. Percentiles are estimated from latency buckets. With
+        `method` and `route`, totals and chart cover only that route.
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d]
+            default: 1h
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [server, client]
+            default: server
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: route
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/perf/live:
+    get:
+      operationId: getPerfLive
+      summary: Live runtime gauges
+      description: >-
+        Admin only. This server instance: uptime, version, database pool,
+        JVM memory, threads and CPU, the outbox backlog and the sports feed
+        status per league.
+      responses:
+        '200':
+          description: The gauges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfLive'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/sports/leagues:
+    get:
+      operationId: listSportsLeagues
+      summary: Leagues with game counts and feed status
+      responses:
+        '200':
+          description: Both leagues.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SportsLeague'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/sports/days:
+    get:
+      operationId: listSportsDays
+      summary: New York dates that have games, newest first
+      description: Admin only, the latest 400 days.
+      parameters:
+        - name: league
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [NBA, NFL]
+      responses:
+        '200':
+          description: Days.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 400
+                items:
+                  $ref: '#/components/schemas/SportsDay'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/sports/games:
+    get:
+      operationId: listSportsGames
+      summary: A league's games on a New York date, by start time
+      parameters:
+        - name: league
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [NBA, NFL]
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Games.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SportsGame'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/sports/games/{gameId}:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      operationId: getSportsGame
+      summary: One game in full
+      description: >-
+        Admin only. The latest state with per-period scores, every player's
+        current stats (as stored, by stat key) and bets on the game by mode
+        and status.
+      responses:
+        '200':
+          description: The game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SportsGameDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/sports/games/{gameId}/snapshots:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+    get:
+      operationId: listGameSnapshots
+      summary: A game's snapshots, oldest first
+      description: Admin only. One per change the poller saw, the latest 5000.
+      responses:
+        '200':
+          description: Snapshots.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 5000
+                items:
+                  $ref: '#/components/schemas/GameSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/sports/games/{gameId}/players/{playerId}/snapshots:
+    parameters:
+      - $ref: '#/components/parameters/GameId'
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listPlayerStatSnapshots
+      summary: One player's stat snapshots in a game, oldest first
+      description: Admin only, the latest 5000.
+      responses:
+        '200':
+          description: Snapshots.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 5000
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [observedAt, played, stats]
+                  properties:
+                    observedAt:
+                      type: string
+                      format: date-time
+                    played:
+                      type: boolean
+                    stats:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     sessionCookie:
@@ -3319,6 +3923,13 @@ components:
       schema:
         type: string
         format: uuid
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^(NBA|NFL)-[A-Za-z0-9_-]+$'
     Cursor:
       name: cursor
       in: query
@@ -3348,19 +3959,47 @@ components:
         minLength: 1
         maxLength: 255
   schemas:
-    SetupCode:
+    SignInCodeValue:
+      type: string
+      pattern: '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$'
+      description: A player's sign-in code; the QR link is /signin#<code>.
+    SignInCode:
       type: object
-      required: [setupCode, purpose, expiresAt]
+      additionalProperties: false
+      required: [code]
       properties:
-        setupCode:
-          type: string
-          description: Shown once; the player opens /setup#<setupCode>.
-        purpose:
-          type: string
-          enum: [SETUP, RESET]
-        expiresAt:
-          type: string
-          format: date-time
+        code:
+          $ref: '#/components/schemas/SignInCodeValue'
+    SignInCodeCounter:
+      type: object
+      additionalProperties: false
+      required: [wrongCodes, locked, resetsAt]
+      properties:
+        wrongCodes: {type: integer, minimum: 0}
+        locked: {type: boolean, description: True once wrongCodes reaches the limit; even right codes are refused until it resets or is cleared.}
+        resetsAt: {type: [string, 'null'], format: date-time}
+    SignInLockouts:
+      type: object
+      additionalProperties: false
+      required: [playerLimit, addressLimit, address, players]
+      properties:
+        playerLimit: {type: integer, minimum: 1}
+        addressLimit: {type: integer, minimum: 1}
+        address:
+          $ref: '#/components/schemas/SignInCodeCounter'
+        players:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, username, hue, wrongCodes, locked, resetsAt]
+            properties:
+              id: {type: string, format: uuid}
+              username: {type: [string, 'null']}
+              hue: {type: [integer, 'null'], minimum: 1, maximum: 5}
+              wrongCodes: {type: integer, minimum: 1}
+              locked: {type: boolean}
+              resetsAt: {type: [string, 'null'], format: date-time}
     AdminHealthSnapshot:
       type: object
       additionalProperties: false
@@ -3605,7 +4244,7 @@ components:
           minimum: 1
         status:
           type: string
-          enum: [unpaid, paid, forgiven]
+          enum: [unpaid, paid]
         revision:
           type: integer
           minimum: 0
@@ -3630,7 +4269,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [sent, received, forgiven]
+          enum: [sent, received]
         senderId:
           type: string
           format: uuid
@@ -4639,10 +5278,11 @@ components:
     ModerationPerson:
       type: object
       additionalProperties: false
-      required: [id, username, status, strikes]
+      required: [id, username, hue, status, strikes]
       properties:
         id: {type: string, format: uuid}
         username: {type: [string, 'null']}
+        hue: {type: [integer, 'null'], minimum: 1, maximum: 5, description: Avatar color; null for a deleted account.}
         status:
           type: string
           enum: [ACTIVE, FROZEN, DELETED]
@@ -4725,6 +5365,405 @@ components:
           type: string
         message:
           type: string
+    UserAudit:
+      type: object
+      additionalProperties: false
+      required: [profile, moderation, people, tables, archivedTables, betting, money, activity]
+      properties:
+        profile:
+          type: object
+          additionalProperties: false
+          required: [id, username, hue, status, createdAt, deletedAt, lastSignInAt, activeSessions, codeRotatedAt]
+          properties:
+            id: {type: string, format: uuid}
+            username: {type: [string, 'null']}
+            hue: {type: [integer, 'null']}
+            status: {type: string, enum: [ACTIVE, FROZEN, DELETED]}
+            createdAt: {type: string, format: date-time}
+            deletedAt: {type: [string, 'null'], format: date-time}
+            lastSignInAt: {type: [string, 'null'], format: date-time}
+            activeSessions: {type: integer}
+            codeRotatedAt: {type: [string, 'null'], format: date-time}
+        moderation:
+          type: object
+          additionalProperties: false
+          required: [strikes, frozen, against, filed, recentAgainst, recentFiled]
+          properties:
+            strikes: {type: integer}
+            frozen: {type: boolean}
+            against: {$ref: '#/components/schemas/ReportCounts'}
+            filed: {$ref: '#/components/schemas/ReportCounts'}
+            recentAgainst:
+              type: array
+              maxItems: 10
+              items: {$ref: '#/components/schemas/AuditReport'}
+            recentFiled:
+              type: array
+              maxItems: 10
+              items: {$ref: '#/components/schemas/AuditReport'}
+        people:
+          type: object
+          additionalProperties: false
+          required: [following, followers, friends, blocking, blockedBy]
+          properties:
+            following: {type: integer}
+            followers: {type: integer}
+            friends: {type: integer}
+            blocking: {type: integer}
+            blockedBy: {type: integer}
+        tables:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, emoji, role, joinedAt, archived, members, messages, polls, betsProposed, picks, netCents]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+              emoji: {type: string}
+              role: {type: string, enum: [HOST, MEMBER]}
+              joinedAt: {type: string, format: date-time}
+              archived: {type: boolean}
+              members: {type: integer}
+              messages: {type: integer}
+              polls: {type: integer}
+              betsProposed: {type: integer}
+              picks: {type: integer}
+              netCents: {type: integer}
+        archivedTables: {type: integer}
+        betting:
+          type: object
+          additionalProperties: false
+          required: [proposed, picks, pending, decided, washed, fourFun, winRate, netCents,
+                     biggestWinCents, biggestLossCents, byMode]
+          properties:
+            proposed: {type: integer}
+            picks:
+              type: integer
+              description: Picks on bets that have locked; Active bets are left out until they lock.
+            pending: {type: integer}
+            decided: {$ref: '#/components/schemas/WinLoss'}
+            washed: {type: integer}
+            fourFun: {$ref: '#/components/schemas/WinLoss'}
+            winRate:
+              type: [number, 'null']
+              minimum: 0
+              maximum: 1
+              description: Won ÷ (won + lost) on settled bets that aren't 4fun.
+            netCents: {type: integer}
+            biggestWinCents: {type: [integer, 'null']}
+            biggestLossCents: {type: [integer, 'null']}
+            byMode:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [mode, won, lost, washed, open]
+                properties:
+                  mode: {$ref: '#/components/schemas/BetMode'}
+                  won: {type: integer}
+                  lost: {type: integer}
+                  washed: {type: integer}
+                  open: {type: integer}
+        money:
+          type: object
+          additionalProperties: false
+          required: [settles, paidCents, collectedCents, sendsRejectedByOthers, rejectedTheirSends, pendingRejectWindow, debtCapCents]
+          properties:
+            settles: {type: integer}
+            paidCents: {type: integer}
+            collectedCents: {type: integer}
+            sendsRejectedByOthers: {type: integer}
+            rejectedTheirSends: {type: integer}
+            pendingRejectWindow: {type: integer}
+            debtCapCents: {type: [integer, 'null']}
+        activity:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            additionalProperties: false
+            required: [date, messages, picks, bets, settles]
+            properties:
+              date: {type: string, format: date}
+              messages: {type: integer}
+              picks: {type: integer}
+              bets: {type: integer}
+              settles: {type: integer}
+    ReportCounts:
+      type: object
+      additionalProperties: false
+      required: [open, resolved, dismissed]
+      properties:
+        open: {type: integer}
+        resolved: {type: integer}
+        dismissed: {type: integer}
+    WinLoss:
+      type: object
+      additionalProperties: false
+      required: [won, lost]
+      properties:
+        won: {type: integer}
+        lost: {type: integer}
+    AuditReport:
+      type: object
+      additionalProperties: false
+      required: [id, reason, note, status, createdAt, otherId, otherName, otherHue, tableName, messageSnapshot]
+      properties:
+        id: {type: string, format: uuid}
+        reason: {type: string, enum: [harassment, settlement, spam, offensive, other]}
+        note: {type: string}
+        status: {type: string, enum: [OPEN, RESOLVED, DISMISSED]}
+        createdAt: {type: string, format: date-time}
+        otherId: {type: string, format: uuid}
+        otherName: {type: [string, 'null']}
+        otherHue: {type: [integer, 'null'], minimum: 1, maximum: 5, description: Avatar color; null for a deleted account.}
+        tableName: {type: [string, 'null']}
+        messageSnapshot: {type: [string, 'null']}
+    ActivityItem:
+      type: object
+      additionalProperties: false
+      required: [kind, id, tableId, tableName, text, options, mode, status, wagerCents, createdAt]
+      properties:
+        kind: {type: string, enum: [message, poll, bet]}
+        id: {type: string, format: uuid}
+        tableId: {type: string, format: uuid}
+        tableName: {type: string}
+        text: {type: string}
+        options:
+          type: [array, 'null']
+          items: {type: string}
+        mode: {type: [string, 'null']}
+        status: {type: [string, 'null']}
+        wagerCents: {type: [integer, 'null']}
+        createdAt: {type: string, format: date-time}
+    AdminLogEntry:
+      type: object
+      additionalProperties: false
+      required: [id, adminId, adminName, adminHue, action, subjectId, subjectName, subjectHue, query, at]
+      properties:
+        id: {type: string, format: uuid}
+        adminId: {type: string, format: uuid}
+        adminName: {type: [string, 'null']}
+        adminHue: {type: [integer, 'null'], minimum: 1, maximum: 5, description: Avatar color; null for a deleted account.}
+        subjectHue: {type: [integer, 'null'], minimum: 1, maximum: 5, description: Avatar color; null for a deleted account.}
+        action: {type: string, enum: [view_user, search_activity]}
+        subjectId: {type: string, format: uuid}
+        subjectName: {type: [string, 'null']}
+        query: {type: [string, 'null']}
+        at: {type: string, format: date-time}
+    FeedbackItem:
+      type: object
+      additionalProperties: false
+      required: [id, userId, username, hue, kind, text, link, status, adminNote, handledBy, handledAt, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        username: {type: [string, 'null']}
+        hue: {type: [integer, 'null'], minimum: 1, maximum: 5, description: Avatar color; null for a deleted account.}
+        kind: {type: string, enum: [mode, perk, gif, bug, other]}
+        text: {type: string}
+        link: {type: [string, 'null']}
+        status: {type: string, enum: [NEW, DONE]}
+        adminNote: {type: [string, 'null']}
+        handledBy: {type: [string, 'null']}
+        handledAt: {type: [string, 'null'], format: date-time}
+        createdAt: {type: string, format: date-time}
+    PerfStats:
+      type: object
+      additionalProperties: false
+      required: [requests, serverErrors, clientErrors, rateLimited, avgMs, p50, p95, p99, maxMs]
+      properties:
+        requests: {type: integer}
+        serverErrors: {type: integer, description: '5xx, or no response for browser samples.'}
+        clientErrors: {type: integer, description: '4xx other than 429.'}
+        rateLimited: {type: integer}
+        avgMs: {type: [integer, 'null']}
+        p50: {type: [integer, 'null']}
+        p95: {type: [integer, 'null']}
+        p99: {type: [integer, 'null']}
+        maxMs: {type: integer}
+    PerfReport:
+      type: object
+      additionalProperties: false
+      required: [window, source, from, to, stepSeconds, method, route, totals, series, routes]
+      properties:
+        window: {type: string, enum: [1h, 6h, 24h, 7d]}
+        source: {type: string, enum: [server, client]}
+        from: {type: string, format: date-time}
+        to: {type: string, format: date-time}
+        stepSeconds: {type: integer}
+        method: {type: [string, 'null']}
+        route: {type: [string, 'null']}
+        totals: {$ref: '#/components/schemas/PerfStats'}
+        series:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [at, stats]
+            properties:
+              at: {type: string, format: date-time}
+              stats: {$ref: '#/components/schemas/PerfStats'}
+        routes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [method, route, stats]
+            properties:
+              method: {type: string, description: 'An HTTP method, or PAGE / LCP for browser page timings.'}
+              route: {type: string}
+              stats: {$ref: '#/components/schemas/PerfStats'}
+    PerfLive:
+      type: object
+      additionalProperties: false
+      required: [checkedAt, startedAt, uptimeSeconds, host, version, database, jvm, outbox, feeds]
+      properties:
+        checkedAt: {type: string, format: date-time}
+        startedAt: {type: string, format: date-time}
+        uptimeSeconds: {type: integer}
+        host: {type: [string, 'null']}
+        version: {type: [string, 'null']}
+        database:
+          type: object
+          additionalProperties: false
+          required: [active, idle, waiting, max]
+          properties:
+            active: {type: [integer, 'null']}
+            idle: {type: [integer, 'null']}
+            waiting: {type: [integer, 'null']}
+            max: {type: [integer, 'null']}
+        jvm:
+          type: object
+          additionalProperties: false
+          required: [heapUsedBytes, heapMaxBytes, threads, processCpu, processors, javaVersion]
+          properties:
+            heapUsedBytes: {type: integer}
+            heapMaxBytes: {type: integer}
+            threads: {type: integer}
+            processCpu: {type: [number, 'null']}
+            processors: {type: integer}
+            javaVersion: {type: string}
+        outbox:
+          type: object
+          additionalProperties: false
+          required: [pending, oldestPendingSeconds]
+          properties:
+            pending: {type: integer}
+            oldestPendingSeconds: {type: [integer, 'null']}
+        feeds:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [league, lastSuccessAt, lastFailureAt, lastFailure]
+            properties:
+              league: {type: string}
+              lastSuccessAt: {type: [string, 'null'], format: date-time}
+              lastFailureAt: {type: [string, 'null'], format: date-time}
+              lastFailure: {type: [string, 'null']}
+    SportsLeague:
+      type: object
+      additionalProperties: false
+      required: [league, games, live, firstDay, lastDay, lastSuccessAt, lastFailureAt, lastFailure]
+      properties:
+        league: {type: string, enum: [NBA, NFL]}
+        games: {type: integer}
+        live: {type: integer}
+        firstDay: {type: [string, 'null'], format: date}
+        lastDay: {type: [string, 'null'], format: date}
+        lastSuccessAt: {type: [string, 'null'], format: date-time}
+        lastFailureAt: {type: [string, 'null'], format: date-time}
+        lastFailure: {type: [string, 'null']}
+    SportsDay:
+      type: object
+      additionalProperties: false
+      required: [date, games, live, finals]
+      properties:
+        date: {type: string, format: date}
+        games: {type: integer}
+        live: {type: integer}
+        finals: {type: integer}
+    SportsTeam:
+      type: object
+      additionalProperties: false
+      required: [abbreviation, name, city, score, periods]
+      properties:
+        abbreviation: {type: string}
+        name: {type: string}
+        city: {type: string}
+        score: {type: [integer, 'null']}
+        periods:
+          type: array
+          items: {type: integer}
+    SportsGame:
+      type: object
+      additionalProperties: false
+      required: [id, league, providerId, status, startsAt, period, clock, away, home, observedAt, snapshots, bets]
+      properties:
+        id: {type: string}
+        league: {type: string, enum: [NBA, NFL]}
+        providerId: {type: string}
+        status: {type: string, enum: [SCHEDULED, LIVE, FINAL, POSTPONED]}
+        startsAt: {type: string, format: date-time}
+        period: {type: [integer, 'null']}
+        clock: {type: [string, 'null']}
+        away: {$ref: '#/components/schemas/SportsTeam'}
+        home: {$ref: '#/components/schemas/SportsTeam'}
+        observedAt: {type: string, format: date-time}
+        snapshots: {type: integer}
+        bets: {type: integer}
+    SportsGameDetail:
+      type: object
+      additionalProperties: false
+      required: [game, firstObservedAt, players, bets]
+      properties:
+        game: {$ref: '#/components/schemas/SportsGame'}
+        firstObservedAt: {type: [string, 'null'], format: date-time}
+        players:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, position, team, played, stats, observedAt, snapshots]
+            properties:
+              id: {type: string}
+              name: {type: string}
+              position: {type: [string, 'null']}
+              team: {type: [string, 'null']}
+              played: {type: boolean}
+              stats: {type: object}
+              observedAt: {type: string, format: date-time}
+              snapshots: {type: integer}
+        bets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [mode, status, count]
+            properties:
+              mode: {$ref: '#/components/schemas/BetMode'}
+              status: {type: string, enum: [ACTIVE, PENDING, SETTLED, WASHED]}
+              count: {type: integer}
+    GameSnapshot:
+      type: object
+      additionalProperties: false
+      required: [observedAt, status, providerState, period, clock, homeScore, awayScore, homePeriods, awayPeriods]
+      properties:
+        observedAt: {type: string, format: date-time}
+        status: {type: string, enum: [SCHEDULED, LIVE, FINAL, POSTPONED]}
+        providerState: {type: [string, 'null']}
+        period: {type: [integer, 'null']}
+        clock: {type: [string, 'null']}
+        homeScore: {type: [integer, 'null']}
+        awayScore: {type: [integer, 'null']}
+        homePeriods:
+          type: array
+          items: {type: integer}
+        awayPeriods:
+          type: array
+          items: {type: integer}
   responses:
     BadRequest:
       description: Invalid request.

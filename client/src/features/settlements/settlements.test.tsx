@@ -93,7 +93,7 @@ function renderScreen() {
 }
 
 async function openLedger(index = 0) {
-  fireEvent.click((await screen.findAllByRole("button", { name: "Ledger" }))[index]!);
+  fireEvent.click((await screen.findAllByRole("button", { name: "Point Ledger" }))[index]!);
   return within(await screen.findByRole("dialog"));
 }
 
@@ -122,7 +122,7 @@ describe("settle-up cards", () => {
     vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     renderScreen();
     expect(await screen.findByText("player")).toBeInTheDocument();
-    expect(screen.getByText("You pay them")).toBeInTheDocument();
+    expect(screen.getByText("You're down")).toBeInTheDocument();
     expect(screen.getByText("1 table · 2 open")).toBeInTheDocument();
     expect(document.querySelector("[data-tone]")?.getAttribute("data-tone")).toBe("owe");
   });
@@ -136,7 +136,7 @@ describe("settle-up cards", () => {
       { ...reviewed, otherUserId: people[3]!, netCents: 0n, pendingSettles: [incoming] },
     ]);
     renderScreen();
-    await screen.findAllByRole("button", { name: "Ledger" });
+    await screen.findAllByRole("button", { name: "Point Ledger" });
     expect(
       [...document.querySelectorAll("[data-tone]")].map((card) => card.getAttribute("data-tone")),
     ).toEqual(["attention", "owe", "owed", "even"]);
@@ -153,35 +153,35 @@ describe("settle-up cards", () => {
 });
 
 describe("the ledger", () => {
-  it("says who owes whom, and waits for the balance review before settling", async () => {
+  it("says who is down, and waits for the balance review before settling", async () => {
     vi.mocked(acknowledgeReview).mockResolvedValue();
     renderScreen();
     const dialog = await openLedger();
     expect(dialog.getByRole("heading", { name: "Ledger" })).toBeInTheDocument();
-    expect(dialog.getByText(/You owe/)).toHaveTextContent("You owe 1.25 pts to player");
+    expect(dialog.getByText(/You're down/)).toHaveTextContent("You're down 1.25 pts with player");
     fireEvent.click(dialog.getByRole("checkbox", { name: /Select all/ }));
-    expect(dialog.getByRole("button", { name: "Send 1.25" })).toBeDisabled();
+    expect(dialog.getByRole("button", { name: "Settle 1.25" })).toBeDisabled();
     fireEvent.click(dialog.getByRole("button", { name: "Got it" }));
     await waitFor(() =>
       expect(acknowledgeReview).toHaveBeenCalledWith(other, revision, expect.any(String)),
     );
   });
 
-  it("nets a selection and offers send, mark received or forgive by side", async () => {
+  it("nets a selection and offers settle or mark as settled by side", async () => {
     vi.mocked(listSettlementGroups).mockResolvedValue([reviewed]);
     vi.mocked(createSettle).mockResolvedValue({ ...incoming, senderId: user.id });
     renderScreen();
     const dialog = await openLedger();
     const [, owesRow, owedRow] = dialog.getAllByRole("checkbox");
     fireEvent.click(owedRow!);
-    expect(dialog.getByText(/pays you/)).toHaveTextContent("player pays you 3.75");
-    expect(dialog.getByRole("button", { name: "Mark 3.75 received" })).toBeInTheDocument();
-    expect(dialog.getByRole("button", { name: "Forgive" })).toBeInTheDocument();
+    expect(dialog.getByText(/You're up/)).toHaveTextContent("You're up 3.75");
+    expect(dialog.getByRole("button", { name: "Mark 3.75 as settled" })).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: /Forgive/ })).not.toBeInTheDocument();
     fireEvent.click(owesRow!);
-    expect(dialog.getByText(/You pay/)).toHaveTextContent("You pay 1.25");
-    expect(dialog.queryByRole("button", { name: "Forgive" })).not.toBeInTheDocument();
-    fireEvent.click(dialog.getByRole("button", { name: "Send 1.25" }));
-    expect(await screen.findByText(/They can reject it for 48 hours/)).toBeInTheDocument();
+    // The header says "You're down" too; the selection's line is the last.
+    expect(dialog.getAllByText(/You're down/).at(-1)).toHaveTextContent(/^You're down 1\.25$/);
+    fireEvent.click(dialog.getByRole("button", { name: "Settle 1.25" }));
+    expect(await screen.findByText(/They have 48 hours to reject it/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() =>
       expect(createSettle).toHaveBeenCalledWith(
@@ -208,7 +208,7 @@ describe("the ledger", () => {
     renderScreen();
     const dialog = await openLedger();
     expect(dialog.getByRole("tab", { name: "History", selected: true })).toBeInTheDocument();
-    expect(await dialog.findAllByText("player sent 3.00")).toHaveLength(2);
+    expect(await dialog.findAllByText("player settled 3.00")).toHaveLength(2);
     expect(dialog.getByText(/Can be rejected for 46h/)).toBeInTheDocument();
     expect(dialog.getByText(/Rejected by you/)).toBeInTheDocument();
     fireEvent.click(dialog.getByRole("button", { name: "Reject" }));
@@ -225,7 +225,7 @@ describe("settling safely", () => {
       .mockResolvedValueOnce(incoming);
     const first = renderScreen();
     const dialog = await openLedger();
-    await settleAll(dialog, "Send 1.25");
+    await settleAll(dialog, "Settle 1.25");
     expect(await dialog.findByText(/may not have been saved/)).toBeInTheDocument();
     const key = vi.mocked(createSettle).mock.calls[0]?.[3];
     expect(key).toBeTruthy();
@@ -252,7 +252,7 @@ describe("settling safely", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("too old to retry safely");
     const dialog = await openLedger();
     fireEvent.click(dialog.getByRole("checkbox", { name: /Select all/ }));
-    expect(dialog.getByRole("button", { name: "Send 1.25" })).toBeDisabled();
+    expect(dialog.getByRole("button", { name: "Settle 1.25" })).toBeDisabled();
     expect(createSettle).not.toHaveBeenCalled();
   });
 
@@ -267,7 +267,7 @@ describe("settling safely", () => {
     });
     renderScreen();
     const dialog = await openLedger();
-    await settleAll(dialog, "Send 1.25");
+    await settleAll(dialog, "Settle 1.25");
     expect(await dialog.findByRole("alert")).toHaveTextContent("storage is unavailable");
     expect(createSettle).not.toHaveBeenCalled();
   });
@@ -280,7 +280,7 @@ describe("settling safely", () => {
       .mockRejectedValueOnce(new BackendError("expired", 401));
     renderScreen();
     const dialog = await openLedger();
-    await settleAll(dialog, "Send 1.25");
+    await settleAll(dialog, "Settle 1.25");
     expect(await dialog.findByText(/may not have been saved/)).toBeInTheDocument();
     const stored = localStorage.getItem(storageKey);
     fireEvent.click(dialog.getByRole("button", { name: "Retry same action" }));

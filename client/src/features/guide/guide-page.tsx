@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Zap, Megaphone, Flag, ArrowRight, Heart, HeartHandshake } from "lucide-react";
+import { Megaphone, Flag, ArrowRight, Heart, HeartHandshake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,42 +12,26 @@ import { useEffect, useState } from "react";
 import { MODES, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
 import { cn } from "@/lib/utils";
-import { SegmentedTabs } from "@/components/segmented-tabs";
 
 import {
-  FILTERS,
   SECTIONS,
   MONEY_POINTS,
   SOCIAL_POINTS,
   SETTLE_POINTS,
   QUICK_PICK_POINTS,
   SAFETY_POINTS,
-  type ModeFilter,
 } from "./constants";
 
 function ModesSection() {
-  const [filter, setFilter] = useState<ModeFilter>("all");
-  // Game modes work for both leagues; U2Pick is the custom, game-free mode.
-  const shown = MODES.filter((m) =>
-    filter === "all" ? true : filter === "u2pick" ? m.custom : !m.custom,
-  );
   return (
     <section id="modes" className="scroll-mt-20 space-y-5">
       <h2 className="text-4xl font-black uppercase">Game modes</h2>
-      <SegmentedTabs
-        size="sm"
-        ariaLabel="Filter game modes"
-        tabs={FILTERS}
-        value={filter}
-        onChange={setFilter}
-        className="max-w-md"
-      />
       <ScrollContainer
         isHorizontal
         isVisible={false}
         className="-mx-4 snap-x gap-3 px-4 pb-2 md:mx-0 md:px-0"
       >
-        {shown.map((m) => {
+        {MODES.map((m) => {
           const Icon = m.icon;
           return (
             <div
@@ -207,9 +191,9 @@ function SettlingUpSection() {
         </p>
         <h2 className="mt-1 text-4xl font-black uppercase leading-none">Settling up</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          If someone won't pay, that's between you and them. Talk it out, bring in the host, and
-          stop betting with people who don't settle. Only report it if it turns into harassment or
-          pressure.
+          Settle-ups clear the points between you and a friend after a host settles a table. Points
+          have no cash value, so there's nothing to collect. If you disagree about a result, talk it
+          out or bring in the host. Only report it if it turns into harassment or pressure.
         </p>
       </div>
       <IconCards items={SETTLE_POINTS} label="Settling up" />
@@ -333,16 +317,16 @@ function MoneySection() {
         </p>
         <h2 className="mt-1 text-4xl font-black uppercase leading-none">How we make money</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          We don't make money from your bets, and we never will. P2Picks is free. It's kept running
-          by people who choose to chip in.
+          P2Picks is free, and points have no cash value. It's kept running by people who choose to
+          chip in.
         </p>
         <p className="mt-3 max-w-2xl rounded-lg border-l-2 border-primary bg-surface px-4 py-3 text-sm font-semibold leading-relaxed">
-          Our promise: any profit from betting would make P2Picks worse for you, so we won't chase
-          it. Hold us to that.
+          Our promise: we'll never sell points, take a cut of anything or charge for anything inside
+          a ticket. Hold us to that.
         </p>
       </div>
 
-      <CardRow label="Points and money">
+      <CardRow label="About points">
         {MONEY_POINTS.map(({ icon: Icon, title, text }) => (
           <div key={title} className={cn(CARD, "rounded-xl border bg-surface p-5")}>
             <div className="flex items-center gap-3">
@@ -371,34 +355,11 @@ function MoneySection() {
         </Button>
       </div>
 
-      <div className="flex gap-4 rounded-xl border bg-surface p-5">
-        <Zap className="size-5 shrink-0 text-primary" />
-        <div className="space-y-1">
-          <h3 className="text-xl font-extrabold uppercase leading-none">
-            An idea: paid Quick Picks feeds
-          </h3>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Subscribing to a{" "}
-            <Link
-              to="/how-to-play"
-              hash="quick-picks"
-              className="text-primary underline underline-offset-2"
-            >
-              Quick Picks
-            </Link>{" "}
-            feed is free today. Later, hosts who make great bets might choose to charge other hosts
-            a subscription, with part of it (say half) helping pay to keep P2Picks running. It would
-            pay for the bets someone writes, never for anything inside a ticket: no cut of any pot,
-            no better odds, and the same rules for every table.
-          </p>
-        </div>
-      </div>
-
       <div className="flex gap-4 rounded-xl border border-dashed p-5">
         <HeartHandshake className="size-5 shrink-0 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Points are mock dollars. P2Picks keeps the ledger but doesn't hold money or set limits.
-          Play with people you trust, and take a break when it stops being fun.
+          Points have no cash value and can't be bought, sold or redeemed. Play with people you
+          trust, and take a break when it stops being fun.
         </p>
       </div>
 

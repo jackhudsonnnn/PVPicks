@@ -18,12 +18,18 @@ import { deleteAccount } from "./api";
 import { deletionProblem } from "./delete-rules";
 
 /**
- * Deleting your account, on the Account tab. Confirmed with your password; the server refuses until you're square
+ * Deleting your account, on the Account tab. Confirmed by typing your username; the server refuses until you're square
  * (no open bets, unsettled table points or open receipts) and says which. On success the session is gone.
  */
-export function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
+export function DeleteAccountSection({
+  username,
+  onDeleted,
+}: {
+  username: string;
+  onDeleted: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState("");
+  const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -32,14 +38,13 @@ export function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
     setBusy(true);
     setProblem(null);
     try {
-      await deleteAccount(password);
+      await deleteAccount(typed);
       setOpen(false);
       onDeleted();
     } catch (error) {
       setProblem(deletionProblem(error) ?? backendErrorMessage(error));
     } finally {
       setBusy(false);
-      setPassword("");
     }
   }
 
@@ -54,7 +59,7 @@ export function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
           onOpenChange={(next) => {
             setOpen(next);
             setProblem(null);
-            setPassword("");
+            setTyped("");
           }}
         >
           <AlertDialogTrigger asChild>
@@ -72,13 +77,15 @@ export function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="space-y-1.5">
-                <Label htmlFor="delete-password">Your password</Label>
+                <Label htmlFor="delete-username">
+                  Type <span className="font-mono font-bold">{username}</span> to confirm
+                </Label>
                 <Input
-                  id="delete-password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  id="delete-username"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  value={typed}
+                  onChange={(event) => setTyped(event.target.value)}
                   required
                 />
               </div>
@@ -89,7 +96,11 @@ export function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
               )}
               <AlertDialogFooter>
                 <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
-                <Button type="submit" variant="destructive" disabled={busy || !password}>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={busy || typed.trim().toLowerCase() !== username.toLowerCase()}
+                >
                   {busy ? "Deleting…" : "Delete forever"}
                 </Button>
               </AlertDialogFooter>

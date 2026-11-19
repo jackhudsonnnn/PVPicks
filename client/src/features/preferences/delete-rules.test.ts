@@ -9,12 +9,12 @@ describe("account deletion problems", () => {
       blockers: ["open_bets", "open_receipts"],
     });
     expect(deletionProblem(error)).toBe(
-      "Settle up first: you're in an Active or Pending bet; you have receipts that aren't paid or forgiven.",
+      "Settle up first: you're in an Active or Pending bet; you have receipts that aren't settled.",
     );
   });
 
-  it("explains a wrong password and leaves other errors to the generic message", () => {
-    expect(deletionProblem(new BackendError("x", 403, "wrong_password"))).toMatch(/password/);
+  it("explains a wrong username and leaves other errors to the generic message", () => {
+    expect(deletionProblem(new BackendError("x", 403, "wrong_username"))).toMatch(/username/);
     expect(deletionProblem(new BackendError("x", 503))).toBeNull();
     expect(deletionProblem(new TypeError("offline"))).toBeNull();
   });

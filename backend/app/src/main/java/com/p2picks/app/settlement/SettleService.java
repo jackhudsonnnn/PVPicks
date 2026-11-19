@@ -135,9 +135,9 @@ public class SettleService {
         jdbc.batchUpdate("INSERT INTO settle_lines (settle_id, line_id) VALUES (?, ?)",
                 selection.stream().map(line -> new Object[] {id, line.id()}).toList());
         int closed = jdbc.update("""
-                UPDATE settlement_lines SET status = ?, settle_id = ?, revision = revision + 1, updated_at = ?
+                UPDATE settlement_lines SET status = 'paid', settle_id = ?, revision = revision + 1, updated_at = ?
                 WHERE id = ANY (?::uuid[]) AND status = 'unpaid'
-                """, kind == SettleRules.Kind.FORGIVEN ? "forgiven" : "paid", id, now,
+                """, id, now,
                 "{" + String.join(",", sorted) + "}");
         if (closed != selection.size()) throw new IllegalStateException("Locked receipts changed");
         idempotency.saveResponseReference(actor, key, CREATE, id);

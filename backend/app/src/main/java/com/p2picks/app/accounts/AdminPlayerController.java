@@ -3,7 +3,6 @@ package com.p2picks.app.accounts;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.p2picks.app.security.AccountSetupCodes;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -20,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The admin's player accounts: list, create (with a setup code) and issue a setup or reset code. {@code /admin/**}
- * is admin-only (SessionSecurity). Codes appear in these responses once and are never stored in plain text, so a
- * lost code is replaced by issuing another (which cancels the old one); that's why these calls take no retry key.
+ * The admin's player accounts: list, create (the response carries the new player's sign-in code), view a player's
+ * code and rotate it (which signs the player out everywhere). {@code /admin/**} is admin-only (SessionSecurity).
+ * No retry keys: a retried create finds the username taken, and a retried rotate just rotates again.
  */
 @RestController
 class AdminPlayerController {
@@ -33,9 +32,11 @@ class AdminPlayerController {
     }
 
     @GetMapping("/admin/players")
-    ResponseEntity<?> list(@RequestParam(required = false) String cursor) {
+    ResponseEntity<?> list(@RequestParam(required = false) String cursor,
+            @RequestParam(required = false) String q) {
+        if (q != null && q.length() > 15) return error(400, "bad_request", "Search up to 15 characters.");
         try {
-            PlayerProvisioning.Page page = players.players(cursor);
+            PlayerProvisioning.Page page = players.players(cursor, q);
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("items", page.items());
             body.put("nextCursor", page.nextCursor());
@@ -53,9 +54,14 @@ class AdminPlayerController {
         return respond(() -> players.create(jwt, input.path("username").textValue()));
     }
 
+    @GetMapping("/admin/players/{playerId}/code")
+    ResponseEntity<?> code(@PathVariable UUID playerId) {
+        return respond(() -> players.reveal(playerId));
+    }
+
     @PostMapping("/admin/players/{playerId}/code")
-    ResponseEntity<?> code(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID playerId) {
-        return respond(() -> players.issueCode(jwt, playerId));
+    ResponseEntity<?> rotate(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID playerId) {
+        return respond(() -> players.rotate(jwt, playerId));
     }
 
     private ResponseEntity<?> respond(java.util.function.Supplier<PlayerProvisioning.Result> action) {
@@ -65,11 +71,11 @@ class AdminPlayerController {
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("id", done.created().id());
                 body.put("username", done.created().username());
-                body.putAll(code(done.created().code()));
+                body.put("code", done.created().code());
                 return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(body);
             }
             if (result instanceof PlayerProvisioning.Result.Code issued) {
-                return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(code(issued.code()));
+                return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("code", issued.code()));
             }
             if (result instanceof PlayerProvisioning.Result.Invalid invalid) {
                 return error(400, "bad_request", invalid.message());
@@ -82,13 +88,5 @@ class AdminPlayerController {
         } catch (MutationAuthentication.ExpiredSession expired) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }
-    }
-
-    private static Map<String, Object> code(AccountSetupCodes.Issued code) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("setupCode", code.code());
-        body.put("purpose", code.purpose().name());
-        body.put("expiresAt", code.expiresAt().toString());
-        return body;
     }
 }

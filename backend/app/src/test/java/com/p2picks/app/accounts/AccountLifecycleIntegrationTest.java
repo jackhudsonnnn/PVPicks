@@ -105,10 +105,11 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
         // Frozen: sessions end, sign-in says why, and the earliest-joined active member hosts the table now.
         mvc.perform(get("/me").cookie(hostSession)).andExpect(status().isUnauthorized());
         Csrf login = csrf();
-        JsonNode refused = json.readTree(mvc.perform(post("/auth/login").header("Origin", "http://127.0.0.1:8080")
+        JsonNode refused = json.readTree(mvc.perform(post("/auth/code").header("Origin", "http://127.0.0.1:8080")
                         .header("X-CSRF-TOKEN", login.token()).cookie(login.cookie())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"mlhost\",\"password\":\"a secure test password\"}"))
+                        .content("{\"player\":\"" + host + "\",\"code\":\""
+                                + signInCodes.reveal(host).orElseThrow() + "\"}"))
                 .andExpect(status().isForbidden()).andReturn().getResponse().getContentAsString());
         assertThat(refused.path("code").asText()).isEqualTo("account_frozen");
         assertThat(role(early)).isEqualTo("HOST");
@@ -120,6 +121,14 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
         JsonNode flagged = json.readTree(mvc.perform(get("/admin/users/flagged").cookie(adminSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(flagged.path("items").toString()).contains("\"status\":\"FROZEN\"").contains("\"strikes\":3");
+        // Search by username prefix, case-insensitive; a non-match is empty.
+        String hostName = jdbc.queryForObject("SELECT username::text FROM users WHERE id = ?", String.class, host);
+        JsonNode found = json.readTree(mvc.perform(get("/admin/users/flagged")
+                        .param("q", hostName.substring(0, 3).toUpperCase()).cookie(adminSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(found.path("items").findValuesAsText("id")).contains(host.toString());
+        assertThat(json.readTree(mvc.perform(get("/admin/users/flagged").param("q", "zz%_none").cookie(adminSession))
+                .andReturn().getResponse().getContentAsString()).path("items")).isEmpty();
 
         // Unfreezing restores sign-in, not hosting; clearing strikes doesn't touch the status.
         mvc.perform(mutate(post("/admin/users/" + host + "/clear-strikes"), adminSession, csrf))
@@ -143,16 +152,18 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
                 UUID.randomUUID(), table, host);
 
         mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"password\":\"not it\"}")).andExpect(status().isForbidden());
+                .content("{\"username\":\"someone\"}")).andExpect(status().isForbidden());
         JsonNode blocked = json.readTree(mvc.perform(mutate(post("/me/delete"), hostSession, csrf)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"a secure test password\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"DLHOST\"}"))
                 .andExpect(status().isConflict()).andReturn().getResponse().getContentAsString());
         assertThat(blocked.path("blockers").toString()).contains("open_bets");
 
         jdbc.update("UPDATE bets SET status = 'WASHED', closed_at = now() WHERE id = ?", bet);
         mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"password\":\"a secure test password\"}")).andExpect(status().isNoContent());
+                .content("{\"username\":\" dlhost \"}")).andExpect(status().isNoContent());
 
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sign_in_codes WHERE user_id = ?", Integer.class, host))
+                .as("a deleted player's code is gone").isZero();
         assertThat(jdbc.queryForObject("SELECT status || ':' || (username IS NULL) FROM users WHERE id = ?",
                 String.class, host)).isEqualTo("DELETED:true");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM follows WHERE follower_id = ? OR followee_id = ?",
@@ -174,34 +185,11 @@ class AccountLifecycleIntegrationTest extends IntegrationTestSupport {
         Cookie hostSession = loginAs("alhost");
         Csrf csrf = csrf();
         mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"password\":\"a secure test password\"}")).andExpect(status().isNoContent());
+                .content("{\"username\":\"alhost\"}")).andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT archived_at IS NOT NULL FROM tables WHERE id = ?", Boolean.class,
                 table)).isTrue();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM table_archive_members WHERE table_id = ?",
                 Integer.class, table)).as("the frozen members can still read the archive").isEqualTo(2);
-    }
-
-    @Test
-    void wrongPasswordsOnDeletionShareTheSignInThrottle() throws Exception {
-        seed("dt");
-        Cookie hostSession = loginAs("dthost");
-        Csrf csrf = csrf();
-        String address = "10.77." + (int) (Math.random() * 250) + "." + (int) (Math.random() * 250);
-        for (int i = 0; i < 10; i++) {
-            mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
-                    .with(request -> {
-                        request.setRemoteAddr(address);
-                        return request;
-                    }).content("{\"password\":\"guess " + i + "\"}")).andExpect(status().isForbidden());
-        }
-        mvc.perform(mutate(post("/me/delete"), hostSession, csrf).contentType(MediaType.APPLICATION_JSON)
-                .with(request -> {
-                    request.setRemoteAddr(address);
-                    return request;
-                }).content("{\"password\":\"a secure test password\"}"))
-                .andExpect(status().isTooManyRequests()).andExpect(header().exists("Retry-After"));
-        assertThat(jdbc.queryForObject("SELECT status FROM users WHERE id = ?", String.class, host))
-                .as("refused even with the right password").isEqualTo("ACTIVE");
     }
 
     /** Walks an admin list's pages; each holds at most 50 and no row repeats. */

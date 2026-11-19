@@ -6,7 +6,7 @@ export const REPORT_REASONS: { id: ReportReason; label: string; description: str
   { id: "harassment", label: "Harassment", description: "Bullying, threats or targeting someone." },
   {
     id: "settlement",
-    label: "Won't pay",
+    label: "Won't settle",
     description: "Refusing to settle up, or pressuring someone to.",
   },
   { id: "spam", label: "Spam", description: "Ads, scams, links or flooding the chat." },

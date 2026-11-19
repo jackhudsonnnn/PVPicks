@@ -1,5 +1,5 @@
-/** The Host panel's points settlement: who pays whom, and settling the table. */
-import { HandCoins } from "lucide-react";
+/** The Host panel's points settlement: who's up and down, and settling the table. */
+import { CheckCheck } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ import { PanelProps, busy } from "./host-shared";
 import { PersonLabel } from "./host-panel";
 import { LoadingList } from "@/components/loading";
 
-/** Each member's points that the next settlement moves; everyone pays or is paid through the host. */
+/** Each member's points that the next settlement moves; everyone nets through the host. */
 export function SettlementPreview({ table, balances, ...people }: PanelProps) {
   const rows = (balances ?? []).filter((b) => b.settleCents !== 0n);
   if (!balances) return <LoadingList label="Loading balances" rows={3} rowClassName="h-6" />;
@@ -40,13 +40,8 @@ export function SettlementPreview({ table, balances, ...people }: PanelProps) {
           <span className="min-w-0 flex-1 break-words">
             <PersonLabel id={row.userId} {...people} />{" "}
             <span className="text-muted-foreground">
-              {row.settleCents > 0n
-                ? row.userId === people.user.id
-                  ? "get paid"
-                  : "gets paid"
-                : row.userId === people.user.id
-                  ? "pay"
-                  : "pays"}
+              {row.userId === people.user.id ? "are " : "is "}
+              {row.settleCents > 0n ? "up" : "down"}
             </span>
           </span>
           <span
@@ -69,7 +64,7 @@ export function SettleSection(props: PanelProps) {
   return (
     <SettingsSection
       title="Settle points"
-      description="Pay everyone out through you so each settle balance goes back to 0. Pending bets keep running. Zero-sum, so you end up with your own result."
+      description="Clear everyone's points through you so each settle balance goes back to 0. Pending bets keep running. Zero-sum, so you end up with your own result."
     >
       <div className="space-y-3 px-4 py-3.5 sm:px-5">
         <SettlementPreview {...props} />
@@ -81,14 +76,14 @@ export function SettleSection(props: PanelProps) {
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button size="sm" disabled={waiting === 0 || busy(betActions)}>
-              <HandCoins /> Settle table points
+              <CheckCheck /> Settle table points
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Settle {table.name}?</AlertDialogTitle>
               <AlertDialogDescription>
-                Everyone's settle balance here goes back to 0. A message in chat shows who pays
+                Everyone's settle balance here goes back to 0. A message in chat shows who's down to
                 whom, and everyone gets receipts on their Friends page. This can't be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>

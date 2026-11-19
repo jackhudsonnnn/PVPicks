@@ -31,9 +31,11 @@ class AuthenticationController {
     private final JdbcTemplate jdbc;
     private final LoginThrottle throttle;
     private final SessionCookies cookies;
+    private final SignInCodes codes;
 
     AuthenticationController(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JdbcTemplate jdbc,
-            LoginThrottle throttle, SessionCookies cookies) {
+            LoginThrottle throttle, SessionCookies cookies, SignInCodes codes) {
+        this.codes = codes;
         this.sessions = sessions;
         this.csrfTokens = csrfTokens;
         this.jdbc = jdbc;
@@ -80,6 +82,61 @@ class AuthenticationController {
         response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(token, Duration.ofHours(8)));
         csrfTokens.saveToken(null, request, response);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /**
+     * A player signs in with their code, typed or opened from their QR link ({@code /signin#CODE}). Wrong codes
+     * count against the address ({@link LoginThrottle#blockedCode}); a frozen account answers 403 only for a right
+     * code.
+     */
+    @PostMapping("/auth/code")
+    ResponseEntity<?> code(@RequestBody JsonNode input, HttpServletRequest request, HttpServletResponse response) {
+        // Typed: {username, code}. A QR link: {player, code}, the player's id, so a rename doesn't break the photo.
+        boolean typed = input.path("username").isTextual();
+        boolean scanned = input.path("player").isTextual();
+        if (!input.isObject() || input.size() != 2 || !input.path("code").isTextual() || typed == scanned) {
+            return error(400, "bad_request", "A username (or player) and a sign-in code are required.");
+        }
+        UUID player = typed ? codes.playerNamed(input.path("username").textValue()).orElse(null)
+                : parseId(input.path("player").textValue());
+        LoginThrottle.CodeSubject subject = player != null ? LoginThrottle.CodeSubject.of(player)
+                : LoginThrottle.CodeSubject.named(typed ? input.path("username").textValue() : "");
+        String address = request.getRemoteAddr();
+        if (throttle.blockedCode(subject, address)) {
+            return ResponseEntity.status(429).header(HttpHeaders.RETRY_AFTER,
+                            Long.toString(throttle.window().toSeconds()))
+                    .cacheControl(CacheControl.noStore())
+                    .body(Map.of("code", "rate_limited",
+                            "message", "Too many wrong codes. Wait a few minutes, or ask the admin to unlock you."));
+        }
+        // An unknown username and a wrong code get the same answer, so sign-in doesn't reveal who exists.
+        if (player == null || !codes.matches(player, input.path("code").textValue())) {
+            throttle.failedCode(subject, address);
+            return error(401, "invalid_code", "That username and code don't match. Check them with the admin.");
+        }
+        Cookie[] cookies = request.getCookies();
+        String previousToken = cookies == null ? null : Arrays.stream(cookies)
+                .filter(cookie -> cookie.getName().equals("session"))
+                .map(Cookie::getValue).findFirst().orElse(null);
+        String token;
+        try {
+            token = sessions.signInWithoutPassword(player, previousToken);
+        } catch (DevelopmentSessions.Frozen frozen) {
+            return error(403, "account_frozen", "This account is frozen.");
+        }
+        if (token == null) return error(401, "invalid_code", "That username and code don't match. Check them with the admin.");
+        throttle.codeSucceeded(player);
+        response.addHeader(HttpHeaders.SET_COOKIE, sessionCookie(token, Duration.ofHours(8)));
+        csrfTokens.saveToken(null, request, response);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    private static UUID parseId(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException notAnId) {
+            return null;
+        }
     }
 
     @PostMapping("/auth/logout")

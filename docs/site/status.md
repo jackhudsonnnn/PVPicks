@@ -10,14 +10,15 @@ planned operations, so it isn't an inventory of what exists.
 
 - Sign-in with an eight-hour HttpOnly cookie session, CSRF and same-origin
   checks. Failed sign-ins are throttled per account name and per address
-  (Redis), and so are wrong passwords when changing your password or deleting
-  your account. Chat, bets, search, follows, feedback, reports, tables and
+  (Redis), and wrong sign-in codes per address. Chat, bets, search, follows, feedback, reports, tables and
   realtime subscriptions are rate limited, and every write counts toward a
   120-a-minute ceiling per account.
-- Accounts from the admin: create a player with a one-time setup link (and
-  QR code), reset links, and change password. No registration. In dev, a passwordless picker over the demo accounts (see
+- Accounts from the admin: each player has a 4-character sign-in code shown
+  as a QR code on their admin card (blurred until shown, rotatable, which
+  signs them out). Players have no password; only the admin does. No
+  registration. In dev, a passwordless picker over the demo accounts (see
   [Demo world](/demo-data)).
-- Profile (username, color), invite preferences and debt cap.
+- Profile (username, color), invite preferences and points limit.
 - Follows, blocks, user search and lookup.
 - Reports go to an admin moderation queue (one open report per person;
   reporting again updates it). Admins dismiss or strike them;
@@ -53,9 +54,9 @@ planned operations, so it isn't an inventory of what exists.
   target already reached) and at resolution (nobody picked the winner, ties,
   pushes, a player who didn't play), listed in the domain rules.
 - Ledger, host points settlement, receipts, and settles: pick receipts with
-  someone and send them (rejectable for 48 hours), mark them received or
-  forgive them, with private balance-change reviews and a 3-sends-a-day
-  limit per pair.
+  someone and settle them (rejectable for 48 hours) or mark them as settled,
+  with private balance-change reviews and a 3-a-day limit per pair. Points
+  have no cash value; the copy never mentions paying.
 
 **Sports data**
 
@@ -76,7 +77,7 @@ planned operations, so it isn't an inventory of what exists.
 
 - 250 demo users (including the 50-person Mosh Pit crowd) with play-style profiles, played by bots through the real
   services. newbie, intermediate and pro are seeded with friends, tables,
-  blocks and history, the admin with open reports. Demo games are always
+  blocks and history, the admin with open reports and feedback. Demo games are always
   live, and the Dev page has a Reset (see [Demo world](/demo-data)).
 
 **Frontend**
@@ -86,7 +87,9 @@ planned operations, so it isn't an inventory of what exists.
   requests, the felt table
   page with chat, Peers and Host panels, the proposal sheet, a Tickets page,
   Friends with settle-up cards, profiles, Preferences, the guide with
-  feedback, and the admin workspace (moderation, site health, players).
+  feedback, and the admin workspace: player audits with a logged audit
+  trail, moderation and a feedback inbox, API and browser performance over 7
+  days, and a sports data explorer (see [Admin dashboard](/admin)).
 - Actions whose outcome is unknown keep their retry key in the browser, so
   they can be retried safely.
 
@@ -100,7 +103,7 @@ planned operations, so it isn't an inventory of what exists.
   rules, "Wash triggers").
 - Registration, and production security and deployment. The LAN watch
   party stack is built (`lan` profile behind Caddy, see
-  [LAN watch party](/lan)); the domain, certificate and dry run are the
-  owner's to do.
+  [LAN watch party](/lan)) and smoke-tested on the Mac; the domain,
+  certificate, settings and dry run are the owner's to do.
 
 Picks are stored in plaintext. The [roadmap](/roadmap) tracks what's next.

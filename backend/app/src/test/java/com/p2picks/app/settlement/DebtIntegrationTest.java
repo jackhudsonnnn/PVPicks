@@ -79,7 +79,6 @@ class DebtIntegrationTest extends IntegrationTestSupport {
         insertDebtReceipt(archived, other, user, other, 30, "unpaid");
         insertDebtReceipt(archived, third, third, user, 9000, "unpaid");
         insertDebtReceipt(archived, other, user, other, 9000, "paid");
-        insertDebtReceipt(archived, other, user, other, 9000, "forgiven");
         mvc.perform(get("/me/debt")).andExpect(status().isUnauthorized());
         Cookie session = loginAs("debtviewer");
         MvcResult response = mvc.perform(get("/me/debt").cookie(session)).andExpect(status().isOk()).andReturn();

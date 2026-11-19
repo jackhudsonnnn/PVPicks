@@ -12,14 +12,15 @@ how you get a clean slate.
 There are no dev passwords. In the dev profile, the sign-in page lists quick
 buttons for **newbie**, **intermediate**, **pro** and **admin**, plus a search
 over every demo user, and signs you in as whoever you pick
-(`GET /dev/demo/accounts`, `POST /dev/demo/sign-in`). Production login stays
-password-based. `provision-dev.sh --init` now makes only the signing and
+(`GET /dev/demo/accounts`, `POST /dev/demo/sign-in`). Demo players also have
+real sign-in codes, like LAN players (the admin's Users cards show them, and
+their QR links work on the same machine). `provision-dev.sh --init` now makes only the signing and
 retry keys; the old `infra/compose/.env.dev-accounts` file is no longer used.
 
 The demo is on exactly when `pvpicks.demo.enabled` is true, which only
-`application-dev.yml` sets (tests turn it off). Every demo account's password
-is **`demo`**, for flows that ask for one (deleting your account) and the
-password form. It's public on purpose: the demo exists only in dev.
+`application-dev.yml` sets (tests turn it off). Players have no password; the
+demo **admin**'s password is **`demo`**, for the admin sign-in form. It's
+public on purpose: the demo exists only in dev.
 
 ## The main accounts
 
@@ -27,8 +28,8 @@ password form. It's public on purpose: the demo exists only in dev.
 |---|---|
 | `newbie` | Completely fresh: no friends, follows, tables, tickets, chat or settle-ups. |
 | `intermediate` | 9 friends, 3 tables, 8 settled tickets from the last 45 days, all settled up. No Active or Pending bets, no blocks or reports. |
-| `pro` | 60 friends and 15 tables (2 more inviting him), including Mosh Pit, the big table (below). Blocks people and is blocked by people who share his tables. About 300 tickets over 90 days, points settled every two weeks per table, older receipts mostly paid (some forgiven, some still open), the latest open. Kept near **20 Pending and 5 Active** bets. |
-| `admin` | The moderation queue with 6 open reports, and site health. |
+| `pro` | 60 friends and 15 tables (2 more inviting him), including Mosh Pit, the big table (below). Blocks people and is blocked by people who share his tables. About 300 tickets over 90 days, points settled every two weeks per table, older receipts mostly settled (some still open), the latest open. Kept near **20 Pending and 5 Active** bets. |
+| `admin` | The [admin dashboard](/admin): 6 open reports, 5 pieces of feedback, every demo player to audit, the bots' traffic in Perf, and the demo games in Sports. |
 
 Active means a bet is still taking picks (a 30–600 second window); Pending
 means it's locked and waiting for its result. Neither count can be fixed, so
@@ -64,7 +65,7 @@ variation from a fixed seed, so a reset rebuilds the same world.
 | Chat | `messagesPerHour` | 0.5 | Messages in each of their tables while online. |
 | | `gifChance`, `reactionChance` | 0.15, 0.2 | GIFs instead of text; reacting to messages. |
 | | `trashTalkChance` | 0.3 | A canned line after a win or loss. |
-| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `FORGIVES` or `REJECTS` when settling up. |
+| Money and activity | `settleStyle` | `PROMPT` | `PROMPT`, `SLOW`, `LENIENT` or `REJECTS` when settling up. |
 | | `activeHours` | all day | When they act (New York time; the same start and end means all day). |
 | | `onlineChance` | 0.9 | Share of their active hours they're actually around. |
 
@@ -77,7 +78,7 @@ Archetypes (each changes only what's listed):
 | Lurker | `joinBetChance` 0.2, `messagesPerHour` 0.05. |
 | Sharp | `pickStyle` `FAVORITE`, `settleStyle` `PROMPT`, `trashTalkChance` 0.05. |
 | Troll | `trashTalkChance` 0.8, `blockChance` 0.1, `reportChance` 0.1, `settleStyle` `REJECTS`. |
-| Friendly | `followBackChance` 0.95, `inviteAcceptChance` 0.9, `settleStyle` `FORGIVES`. |
+| Friendly | `followBackChance` 0.95, `inviteAcceptChance` 0.9, `settleStyle` `LENIENT`. |
 | Maniac | The crowd only, never drawn for regulars: `joinBetChance` 0.95, `proposalsPerHour` 2, `wager` 5–10, `reactionSeconds` 3–30, `messagesPerHour` 4, `gifChance` 0.25, `reactionChance` 0.3, `trashTalkChance` 0.9, `onlineChance` 1, and `blockChance` and `reportChance` 0 so the noise stays in the table instead of the moderation queue. |
 
 Usernames are generated handles that fit the 3–15 character rule. Chat lines
@@ -131,7 +132,7 @@ they do:
 | Someone follows them (after the bots started) | Follow (`followBackChance`) | Anywhere |
 | An invitation | Accept (`inviteAcceptChance`) or decline | Anywhere |
 | Now and then | Follow someone (`followsPerDay`): other demo users, sometimes the pro | Anywhere |
-| Open receipts with someone | Send them all when they owe (`PROMPT` within minutes, `SLOW` and `REJECTS` within hours), mark an even pair received, and sometimes forgive what's owed to them (`FORGIVES`). A `REJECTS` receiver sometimes rejects a send a few minutes in. | Anywhere |
+| Open receipts with someone | Settle them all when down (`PROMPT` within minutes, `SLOW` and `REJECTS` within hours), mark an even pair as settled, and sometimes mark what's owed to them as settled (`LENIENT`). A `REJECTS` bot sometimes rejects a settle a few minutes in. | Anywhere |
 
 The seeded world stays as seeded: follows that existed before the bots
 started never get followed back, and newbie only gets bots if you put him in
@@ -174,7 +175,7 @@ backdates it: someone at the table proposes (a canned U2Pick, or a score bet
 on a made-up past game, `NBA-DEV-history-<n>`), the main account and some
 demo users pick, the bet locks, and the host calls it or the game settles it.
 Every two weeks each of the pro's tables settles points, and older receipts
-are paid, forgiven or left open. Bets, picks, ledger, settlements and receipts
+are marked settled or left open. Bets, picks, ledger, settlements and receipts
 are consistent by construction; only timestamps are rewritten afterwards.
 Chat positions and receipt lines are normally immutable, so their guards are
 off only inside the backdating transaction. Ledger and settlement rows keep
@@ -193,7 +194,7 @@ seconds.
 2. wipes app data: users, sessions, social, tables, bets, chat, ledger,
    settlements, moderation, feedback and the outbox;
 3. keeps sports data (real games, players and stats) so the ticker isn't
-   empty;
+   empty, and request timings (`perf_minutes`);
 4. reseeds the world in one transaction, then the history through the
    services, and clears the bots' sessions, plans and decisions;
 5. signs everyone out, you included, and returns you to the sign-in picker.

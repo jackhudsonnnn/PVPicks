@@ -9,7 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class FeedbackService {
+/** Players' feedback. Public so the demo can file some through the same path players use. */
+public class FeedbackService {
     private final JdbcTemplate jdbc;
     private final IdempotencyGuard idempotency;
     private final MutationAuthentication authentication;
@@ -20,9 +21,9 @@ class FeedbackService {
         this.authentication = authentication;
     }
 
-    enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED }
+    public enum Outcome { CREATED, REPLAYED, CONFLICT, UNAUTHORIZED }
 
-    record Submission(String kind, String text, String link) {
+    public record Submission(String kind, String text, String link) {
         String canonical() {
             return kind + "|" + text.length() + ":" + text + "|"
                     + (link == null ? "-1:" : link.length() + ":" + link);

@@ -325,16 +325,16 @@ function Receipts({
   return (
     <ul className="divide-y rounded-xl border bg-surface">
       {lines.map((line) => {
-        const youPay = line.payerId === user.id;
+        const youreDown = line.payerId === user.id;
         return (
           <li key={line.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
             <span className="min-w-0">
-              <span className="block font-semibold">{youPay ? "You pay" : "They pay you"}</span>
+              <span className="block font-semibold">{youreDown ? "You're down" : "You're up"}</span>
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                {line.status.replaceAll("_", " ")} · {dateTimeLabel(line.createdAt)}
+                {line.status === "paid" ? "settled" : "open"} · {dateTimeLabel(line.createdAt)}
               </span>
             </span>
-            <span className={cn("scoreboard text-lg", youPay ? "text-loss" : "text-win")}>
+            <span className={cn("scoreboard text-lg", youreDown ? "text-loss" : "text-win")}>
               {formatCents(line.amountCents)}
             </span>
           </li>

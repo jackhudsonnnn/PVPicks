@@ -4,6 +4,11 @@ import { getChatUnread, getChatWindow, type ChatMessage } from "./api";
 import { appendNewer, mergeRange, prependOlder } from "./model";
 
 const pageSize = 25;
+/**
+ * How many newer pages a refresh follows before giving up on paging and opening the latest window instead.
+ * A busy table can post hundreds of messages while you're away; paging through them all froze the chat.
+ */
+const catchUpPages = 2;
 
 type ChatState = {
   status: "loading" | "ready" | "error";
@@ -73,19 +78,36 @@ export function useBackendChat(
     [expire, update],
   );
 
-  const loadNewer = useCallback(async () => {
-    let messages = current.current.messages;
-    for (;;) {
-      if (!newerCursor.current) break;
-      const window = await getChatWindow(tableId, { after: newerCursor.current });
-      messages = appendNewer(messages, window.items);
-      if (window.items.length > 0 && window.nextCursor) newerCursor.current = window.nextCursor;
-      if (window.items.length < pageSize) {
-        update({ messages, atEnd: true, newBelow: false });
-        return;
+  /** Loads up to {@code maxPages} newer pages; true once the newest message is loaded. */
+  const loadNewer = useCallback(
+    async (maxPages: number) => {
+      let messages = current.current.messages;
+      for (let page = 0; page < maxPages; page++) {
+        if (!newerCursor.current) return true;
+        const window = await getChatWindow(tableId, { after: newerCursor.current });
+        messages = appendNewer(messages, window.items);
+        if (window.items.length > 0 && window.nextCursor) newerCursor.current = window.nextCursor;
+        if (window.items.length < pageSize) {
+          update({ messages, atEnd: true, newBelow: false });
+          return true;
+        }
+        update({ messages });
       }
-      update({ messages });
-    }
+      return false;
+    },
+    [tableId, update],
+  );
+
+  /** Replaces what's loaded with the latest window, however far behind it was. */
+  const openLatest = useCallback(async () => {
+    const latest = await getChatWindow(tableId, { latest: true });
+    newerCursor.current = latest.nextCursor;
+    update({
+      messages: latest.items,
+      olderCursor: latest.previousCursor,
+      atEnd: true,
+      newBelow: false,
+    });
   }, [tableId, update]);
 
   const load = useCallback(
@@ -106,13 +128,18 @@ export function useBackendChat(
           olderCursor: window.previousCursor,
           atEnd: !unread.firstUnreadMessageId,
         });
-        if (unread.firstUnreadMessageId) await loadNewer();
+        // One more page at most: a busy table can be hundreds behind. Load newer or Jump to latest goes on.
+        if (unread.firstUnreadMessageId) await loadNewer(1);
       }),
     [loadNewer, readOnly, run, tableId, update],
   );
 
+  // A refresh is waiting in the queue; more changes before it starts are covered by it.
+  const refreshQueued = useRef(false);
+
   useEffect(() => {
     alive.current = true;
+    refreshQueued.current = false;
     void load();
     return () => {
       alive.current = false;
@@ -134,30 +161,34 @@ export function useBackendChat(
   );
 
   /** Something changed: fetch arrivals, then refresh the latest window for reactions and removals. */
-  const refresh = useCallback(
-    () =>
-      run(async () => {
-        if (current.current.status !== "ready") return;
-        if (!current.current.atEnd) {
-          update({ newBelow: true });
-          return;
-        }
-        if (!newerCursor.current) {
-          // An empty chat has no cursor to continue from, so start from the latest window.
-          const latest = await getChatWindow(tableId, { latest: true });
-          if (latest.nextCursor) newerCursor.current = latest.nextCursor;
-          update({
-            messages: appendNewer(current.current.messages, latest.items),
-            olderCursor: current.current.olderCursor ?? latest.previousCursor,
-          });
-          return;
-        }
-        await loadNewer();
+  const refresh = useCallback(() => {
+    if (refreshQueued.current) return queue.current;
+    refreshQueued.current = true;
+    return run(async () => {
+      refreshQueued.current = false;
+      if (current.current.status !== "ready") return;
+      if (!current.current.atEnd) {
+        update({ newBelow: true });
+        return;
+      }
+      if (!newerCursor.current) {
+        // An empty chat has no cursor to continue from, so start from the latest window.
         const latest = await getChatWindow(tableId, { latest: true });
-        update({ messages: mergeRange(current.current.messages, latest.items) });
-      }),
-    [loadNewer, run, tableId, update],
-  );
+        if (latest.nextCursor) newerCursor.current = latest.nextCursor;
+        update({
+          messages: appendNewer(current.current.messages, latest.items),
+          olderCursor: current.current.olderCursor ?? latest.previousCursor,
+        });
+        return;
+      }
+      if (!(await loadNewer(catchUpPages))) {
+        await openLatest();
+        return;
+      }
+      const latest = await getChatWindow(tableId, { latest: true });
+      update({ messages: mergeRange(current.current.messages, latest.items) });
+    });
+  }, [loadNewer, openLatest, run, tableId, update]);
 
   /** Re-reads the window around one message, for example after reacting to it. */
   const refreshAround = useCallback(
@@ -169,7 +200,23 @@ export function useBackendChat(
     [run, tableId, update],
   );
 
-  const jumpToLatest = useCallback(() => run(loadNewer), [loadNewer, run]);
+  const loadNewerPage = useCallback(
+    () =>
+      run(async () => {
+        await loadNewer(1);
+      }),
+    [loadNewer, run],
+  );
 
-  return { state, reload: load, loadOlder, refresh, refreshAround, jumpToLatest };
+  const jumpToLatest = useCallback(() => run(openLatest), [openLatest, run]);
+
+  return {
+    state,
+    reload: load,
+    loadOlder,
+    loadNewer: loadNewerPage,
+    refresh,
+    refreshAround,
+    jumpToLatest,
+  };
 }

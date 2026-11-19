@@ -88,22 +88,69 @@ afterEach(() => vi.unstubAllGlobals());
 describe("admin accounts", () => {
   it("see the admin view with live health instead of player screens", async () => {
     vi.mocked(currentUser).mockResolvedValue({ ...player, username: "boss", role: "ADMIN" });
+    const stats = {
+      requests: 0,
+      serverErrors: 0,
+      clientErrors: 0,
+      rateLimited: 0,
+      avgMs: null,
+      p50: null,
+      p95: null,
+      p99: null,
+      maxMs: 0,
+    };
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json({
-          checkedAt: "2026-11-13T12:00:00Z",
-          postgres: "UP",
-          redis: "DOWN",
-          kafka: "NOT_CHECKED",
-        }),
-      ),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/admin/health"))
+          return Response.json({
+            checkedAt: "2026-11-13T12:00:00Z",
+            postgres: "UP",
+            redis: "DOWN",
+            kafka: "NOT_CHECKED",
+          });
+        if (url.includes("/admin/perf/live"))
+          return Response.json({
+            checkedAt: "2026-11-13T12:00:00Z",
+            startedAt: "2026-11-13T11:00:00Z",
+            uptimeSeconds: 3600,
+            host: "box",
+            version: null,
+            database: { active: 1, idle: 9, waiting: 0, max: 10 },
+            jvm: {
+              heapUsedBytes: 100,
+              heapMaxBytes: 1000,
+              threads: 40,
+              processCpu: 0.1,
+              processors: 8,
+              javaVersion: "21",
+            },
+            outbox: { pending: 0, oldestPendingSeconds: null },
+            feeds: [],
+          });
+        if (url.includes("/admin/perf"))
+          return Response.json({
+            window: "1h",
+            source: "server",
+            from: "2026-11-13T11:00:00Z",
+            to: "2026-11-13T12:00:00Z",
+            stepSeconds: 60,
+            method: null,
+            route: null,
+            totals: stats,
+            series: [],
+            routes: [],
+          });
+        return Response.json({ items: [], nextCursor: null });
+      }),
     );
     wrap(<App />);
-    fireEvent.click(await screen.findByRole("tab", { name: "Site health" }));
-    expect(await screen.findByRole("heading", { name: "Site health" })).toBeInTheDocument();
-    expect(await screen.findByText("Up")).toBeInTheDocument();
-    expect(screen.getByText("DOWN")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Perf" }));
+    expect(await screen.findByRole("tablist", { name: "Source" })).toBeInTheDocument();
+    const postgres = await screen.findByText("PostgreSQL");
+    expect(postgres.parentElement).toHaveTextContent("Up");
+    expect(screen.getByText("Redis").parentElement).toHaveTextContent("Down");
     expect(listTables).not.toHaveBeenCalled();
   });
 });

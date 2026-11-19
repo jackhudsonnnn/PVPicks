@@ -9,19 +9,19 @@ import java.util.UUID;
 
 /**
  * Who may settle what, as pure rules (domain rules, "Settle-ups"). A settle closes a chosen set of one pair's open
- * receipts. Seen from the person settling, the selection nets to what they pay (negative) or receive (positive):
+ * receipts. Seen from the person settling, the selection nets to points they're down (negative) or up (positive).
+ * Points have no cash value; a settle only records that the two people consider those receipts closed.
  *
  * <ul>
- *   <li>{@code sent}: the net payer says they paid. Final once {@link #REJECT_WINDOW} passes, unless the receiver
- *       rejects it first (which reopens the receipts).
- *   <li>{@code received}: the net receiver, or either side at a zero net, records it paid. Final at once: it can
- *       only give up money owed to them.
- *   <li>{@code forgiven}: the person owed gives up receipts that are all owed to them. Final at once.
+ *   <li>{@code sent} ("Settle" in the app): the person down settles. Final once {@link #REJECT_WINDOW} passes,
+ *       unless the other person rejects it first (which reopens the receipts).
+ *   <li>{@code received} ("Mark as settled"): the person up, or either side at a zero net, closes them. Final at
+ *       once: it only gives up points owed to them.
  * </ul>
  */
 public final class SettleRules {
     public enum Kind {
-        SENT, RECEIVED, FORGIVEN;
+        SENT, RECEIVED;
 
         String value() {
             return name().toLowerCase();
@@ -33,9 +33,9 @@ public final class SettleRules {
         }
     }
 
-    /** How long the receiver of a sent settle has to reject it. */
+    /** How long the other person has to reject a sent settle. */
     static final Duration REJECT_WINDOW = Duration.ofHours(48);
-    /** Sends between two people (both directions, rejected ones included) in any rolling 24 hours. */
+    /** Sent settles between two people (both directions, rejected ones included) in any rolling 24 hours. */
     static final int SENDS_PER_DAY = 3;
     /** Most receipts one settle can close. */
     static final int MAX_LINES = 500;
@@ -58,11 +58,9 @@ public final class SettleRules {
         int net = net(selection, actor).signum();
         return switch (kind) {
             case SENT -> net < 0 ? null
-                    : "You don't owe on these receipts. Mark them received instead.";
+                    : "You're not down on these receipts. Mark them as settled instead.";
             case RECEIVED -> net >= 0 ? null
-                    : "You owe on these receipts. Send them instead.";
-            case FORGIVEN -> selection.stream().allMatch(line -> line.payeeId().equals(actor)) ? null
-                    : "You can only forgive receipts owed to you.";
+                    : "You're down on these receipts. Settle them instead.";
         };
     }
 

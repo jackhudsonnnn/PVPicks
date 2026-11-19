@@ -1,5 +1,6 @@
 package com.p2picks.app.demo;
 
+import com.p2picks.app.security.SignInCodes;
 import com.p2picks.app.demo.DemoRoster.DemoUser;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -63,8 +64,8 @@ final class DemoWorld {
     DemoReset.Summary seed() {
         Instant now = clock.instant();
         List<DemoUser> bots = DemoRoster.regulars();
-        // The picker signs in without a password; the shared, public demo password is for flows that ask for
-        // one (account deletion) and for the password form. Dev only: production has no demo accounts.
+        // The picker signs in without a password. Players have none (they sign in with a code); the shared, public
+        // demo password is the admin's, for the admin sign-in form. Dev only: production has no demo accounts.
         String hash = passwords.encode(PASSWORD);
         insertUsers(bots, hash, now);
 
@@ -161,7 +162,7 @@ final class DemoWorld {
         List<DemoUser> crowd = DemoRoster.crowd();
         List<Object[]> rows = new ArrayList<>();
         for (DemoUser bot : crowd) {
-            rows.add(new Object[] {bot.id(), bot.username(), bot.hue(), hash,
+            rows.add(new Object[] {bot.id(), bot.username(), bot.hue(), SignInCodes.NO_PASSWORD,
                     Timestamp.from(now.minus(Duration.ofDays(20 + crowdRandom.nextInt(60))))});
         }
         jdbc.batchUpdate("""
@@ -199,7 +200,8 @@ final class DemoWorld {
         jdbc.batchUpdate("""
                 INSERT INTO users (id, username, hue, password_hash, role, status, created_at)
                 VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?)
-                """, rows.stream().map(row -> new Object[] {row[0], row[1], row[2], hash, row[3], row[4]}).toList());
+                """, rows.stream().map(row -> new Object[] {row[0], row[1], row[2],
+                        "ADMIN".equals(row[3]) ? hash : SignInCodes.NO_PASSWORD, row[3], row[4]}).toList());
     }
 
     private void follow(UUID follower, UUID followee) {

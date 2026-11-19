@@ -59,7 +59,8 @@ needs the answer, or the effect must commit atomically with the change.
 
 ### 1. Login throttle — Built
 
-`security.LoginThrottle`, called from `AuthenticationController.login`.
+`security.LoginThrottle`, called from `AuthenticationController.login` (admin
+passwords) and `.code` (player sign-in codes).
 
 Only failed sign-ins count, so legitimate users are never slowed down. By
 default, 10 failures for one account name or 50 from one client address,
@@ -69,6 +70,13 @@ with the right password. A success clears the account name's count. Counters
 use one atomic Lua `INCR`+`PEXPIRE`, and keys hold a SHA-256 of the name or
 address. Configure with `PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT`,
 `PVPICKS_LOGIN_THROTTLE_PER_ADDRESS` and `PVPICKS_LOGIN_THROTTLE_WINDOW`.
+Wrong sign-in codes count per player, keyed by the player's id (or a hash of
+the typed name when it matches nobody), 10 per window
+(`PVPICKS_LOGIN_THROTTLE_CODES_PER_PLAYER`), with a per-address backstop of
+100 (`PVPICKS_LOGIN_THROTTLE_CODES_PER_ADDRESS`); a right code clears the
+player's count. Admins list the counters and clear one player or all with
+`GET`/`DELETE /admin/sign-in-lockout` and `DELETE
+/admin/sign-in-lockout/players/{playerId}`.
 
 **Why Redis.** Counters with expiry, shared by every instance, written on the
 failure path only, with no PostgreSQL write amplification.
@@ -82,7 +90,7 @@ still works against PostgreSQL, with BCrypt as the remaining brake.
 - The address is `getRemoteAddr()`. Behind the dev Compose Vite proxy every
   browser shares one address. The `lan` profile trusts Caddy's forwarded
   headers (`server.forward-headers-strategy: native`), so there it sees each
-  phone. Setup codes and password changes share the throttle.
+  phone. Admin password changes share the password throttle.
 
 ### 2. Ticker cache — Built
 
@@ -159,6 +167,7 @@ limits directly.
 | Follows, blocks | `POST`/`DELETE /follows/*`, `/blocks/*` | 30 a minute each |
 | Feedback | `POST /feedback` | 5 an hour |
 | Reports | `POST /reports` | 10 an hour |
+| Browser timings | `POST /perf` | 10 a minute |
 | New tables | `POST /tables` | 10 an hour |
 | Adding members or sending requests | `POST /tables/*/members` | 30 an hour (each call up to 100 people) |
 | Member search | `GET /tables/*/members` | 60 a minute |
@@ -175,10 +184,13 @@ every 3 seconds, so a busy table can't spend the backstop on its own.
 Two limits stay in PostgreSQL because their rows are business records:
 reports allow 20 new a day and one open report per person
 (`moderation/ReportService.java`), and tomatoes have a cooldown
-(`tables/TomatoService.java`). Password checks outside sign-in (changing
-your password, deleting your account) share the sign-in throttle. In the `lan` profile Caddy
-forwards each phone's address, so per-address limits see real clients. In
-dev, every browser shares the Vite proxy's address.
+(`tables/TomatoService.java`). Changing the admin password shares the
+sign-in throttle. In the `lan` profile Caddy
+forwards the address it sees, but behind Docker Desktop on a Mac that is one
+address (`192.168.65.1`) for every phone, so per-address limits are
+party-wide there, which is why sign-in codes count per player
+([LAN watch party](/lan#the-lan-profile)). In dev, every
+browser shares the Vite proxy's address.
 
 **Why Redis.** Limits must hold across instances. Rate-limit counters are
 the canonical disposable state: losing them briefly only relaxes a limit.
@@ -308,9 +320,11 @@ What to measure, with where it comes from:
 | Connected sockets, closed-by-sweep count | `delivery/RealtimeSessions.java` |
 | Login throttle and rate-limit rejections | `security/LoginThrottle.java`, #4 |
 
-`admin/AdminHealthController.java` reports Kafka as `NOT_CHECKED`. Add a
-broker check and the outbox lag to the admin site-health view; it's a quick
-win.
+The admin Perf tab already shows the outbox backlog and its oldest row's age,
+feed health, the database pool and per-route latency and errors, including
+429s (see [Admin dashboard](/admin#perf)). `admin/AdminHealthController.java`
+still reports Kafka as `NOT_CHECKED`; a broker check and consumer lag are the
+remaining gaps.
 
 ## Not recommended
 

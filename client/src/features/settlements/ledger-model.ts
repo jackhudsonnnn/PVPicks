@@ -2,8 +2,8 @@ import type { SettleKind, SettlementGroup, SettlementLine } from "./api";
 
 /**
  * A settle-up card's color (domain rules, "Settle-ups"):
- * - `attention` (yellow): a balance change to review, or a send to you that you can still reject.
- * - `owe` (red) / `owed` (green): what's open, when nothing needs you right now.
+ * - `attention` (yellow): a balance change to review, or a settle to you that you can still reject.
+ * - `owe` (red, you're down) / `owed` (green, you're up): what's open, when nothing needs you right now.
  * - `even` (neutral): nothing open nets either way.
  */
 export type CardTone = "attention" | "owe" | "owed" | "even";
@@ -43,15 +43,12 @@ export function selectionNet(lines: readonly SettlementLine[], viewerId: string)
 }
 
 /**
- * What you can do with a selection: send it when you pay its net, mark it received when you're paid (or it's
- * even), and forgive it when every receipt is owed to you. The server checks the same rules.
+ * What you can do with a selection: settle it (`sent`) when you're down on its net, or mark it as settled
+ * (`received`) when you're up or it's even. The server checks the same rules.
  */
 export function selectionActions(lines: readonly SettlementLine[], viewerId: string): SettleKind[] {
   if (lines.length === 0) return [];
-  const net = selectionNet(lines, viewerId);
-  const kinds: SettleKind[] = [net < 0n ? "sent" : "received"];
-  if (lines.every((line) => line.payeeId === viewerId)) kinds.push("forgiven");
-  return kinds;
+  return [selectionNet(lines, viewerId) < 0n ? "sent" : "received"];
 }
 
 /** Hours left to reject, rounded up, for "Reject within 31h". */

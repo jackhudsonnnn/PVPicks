@@ -39,6 +39,7 @@ class DevelopmentSessions {
         this.dummyHash = passwords.encode("nonexistent-account");
     }
 
+    /** Password sign-in, for admins only: players have no password and sign in with a code. */
     @Transactional
     public String login(String username, String password, String previousToken) {
         String normalized = PostgresText.trim(username).toLowerCase(Locale.ROOT);
@@ -48,11 +49,11 @@ class DevelopmentSessions {
         }
         List<Account> accounts = jdbc.query("""
                 SELECT id, password_hash, status FROM users
-                WHERE username = ?::citext AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                WHERE username = ?::citext AND role = 'ADMIN' AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
                 """, (rs, row) -> new Account(rs.getObject("id", UUID.class), rs.getString("password_hash"),
                         rs.getString("status")), normalized);
         Account account = accounts.isEmpty() ? null : accounts.getFirst();
-        // Accounts still waiting for their setup code have no usable hash; check the dummy so timing doesn't tell.
+        // An account without a usable hash (or no account) is checked against the dummy, so timing doesn't tell.
         boolean usable = account != null && account.passwordHash().startsWith("$2");
         boolean matches = passwords.matches(password, usable ? account.passwordHash() : dummyHash);
         if (!matches || !usable) {
@@ -63,8 +64,8 @@ class DevelopmentSessions {
     }
 
     /**
-     * Signs in as an active account without a password (dev demo only; see {@link PasswordlessSignIn}). Null when
-     * there's no such account; {@link Frozen} when it's frozen.
+     * Signs in as an active account without a password: a player's sign-in code ({@link SignInCodes}) or the dev
+     * demo picker ({@link PasswordlessSignIn}). Null when there's no such account; {@link Frozen} when it's frozen.
      */
     @Transactional
     String signInWithoutPassword(UUID userId, String previousToken) {
@@ -74,17 +75,6 @@ class DevelopmentSessions {
         if (status.isEmpty()) return null;
         if (status.getFirst().equals("FROZEN")) throw new Frozen();
         return issue(userId, previousToken);
-    }
-
-    /**
-     * Sets a new password, ends every session of the account and signs in afresh (setup and reset codes). The caller
-     * holds the account's row lock and has checked the password policy.
-     */
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
-    String replacePasswordAndSignIn(UUID accountId, String password, String previousToken) {
-        jdbc.update("UPDATE users SET password_hash = ? WHERE id = ?", passwords.encode(password), accountId);
-        jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = ? AND revoked_at IS NULL", accountId);
-        return issue(accountId, previousToken);
     }
 
     /** Whether the password matches the account's (false for an account that has none yet). */

@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+  type ComponentProps,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
@@ -66,10 +74,36 @@ export function TableChat({
   );
   const disabled = table.disabledPermissions[user.id] ?? [];
   const blocked = actions.busy || !!actions.pending || !!actions.storageError;
-  const names = userKey(user.id, "people");
+  const names = useMemo(() => userKey(user.id, "people"), [user.id]);
+  // Rows are memoized, so they get stable handlers that read the latest props and actions.
+  const latest = useRef({ actions, onOpenBet, onSelectUser });
+  latest.current = { actions, onOpenBet, onSelectUser };
+  const react = useCallback(
+    (message: ChatMessage, emoji: string) =>
+      latest.current.actions.start({
+        kind: "react",
+        tableId: table.id,
+        messageId: message.id,
+        emoji: nextReaction(message, user.id, emoji),
+      }),
+    [table.id, user.id],
+  );
+  const vote = useCallback(
+    (message: ChatMessage, option: number) =>
+      message.kind === "poll" &&
+      latest.current.actions.start({
+        kind: "vote",
+        tableId: table.id,
+        messageId: message.id,
+        option: nextVote(message, user.id, option),
+      }),
+    [table.id, user.id],
+  );
+  const openBet = useCallback((betId: string) => latest.current.onOpenBet?.(betId), []);
+  const selectUser = useCallback((userId: string) => latest.current.onSelectUser?.(userId), []);
 
   useMarkRead(table.id, !readOnly && state.atEnd ? state.messages.at(-1)?.id : undefined, expire);
-  const scroller = useChatScroll(state.messages);
+  const { ref: scroller, pinToBottom } = useChatScroll(state.messages);
 
   if (state.status === "loading") return <LoadingChat />;
   if (state.status === "error") {
@@ -127,57 +161,48 @@ export function TableChat({
           ) : (
             <ol role="log" aria-live="polite" className="space-y-3">
               {state.messages.map((message) => (
-                <li key={message.id}>
-                  {message.id === state.firstUnreadId && (
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="h-px flex-1 bg-loss" />
-                      <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-loss">
-                        New messages
-                      </span>
-                      <span className="h-px flex-1 bg-loss" />
-                    </div>
-                  )}
-                  <MessageRow
-                    message={message}
-                    user={user}
-                    expire={expire}
-                    names={names}
-                    tableId={table.id}
-                    onOpenBet={onOpenBet}
-                    onSelectUser={onSelectUser}
-                    social={readOnly ? undefined : social}
-                    canReact={
-                      !readOnly && !disabled.includes("react") && !blocked && canReactTo(message)
-                    }
-                    canVote={!readOnly && !blocked}
-                    onVote={(option) =>
-                      message.kind === "poll" &&
-                      actions.start({
-                        kind: "vote",
-                        tableId: table.id,
-                        messageId: message.id,
-                        option: nextVote(message, user.id, option),
-                      })
-                    }
-                    onReact={(emoji) =>
-                      actions.start({
-                        kind: "react",
-                        tableId: table.id,
-                        messageId: message.id,
-                        emoji: nextReaction(message, user.id, emoji),
-                      })
-                    }
-                  />
-                </li>
+                <ChatRow
+                  key={message.id}
+                  message={message}
+                  unreadDivider={message.id === state.firstUnreadId}
+                  user={user}
+                  expire={expire}
+                  names={names}
+                  tableId={table.id}
+                  onOpenBet={onOpenBet ? openBet : undefined}
+                  onSelectUser={onSelectUser ? selectUser : undefined}
+                  social={readOnly ? undefined : social}
+                  canReact={
+                    !readOnly && !disabled.includes("react") && !blocked && canReactTo(message)
+                  }
+                  canVote={!readOnly && !blocked}
+                  react={react}
+                  vote={vote}
+                />
               ))}
             </ol>
+          )}
+          {!state.atEnd && (
+            <div className="text-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={state.busy}
+                onClick={() => void chat.loadNewer()}
+              >
+                Load newer messages
+              </Button>
+            </div>
           )}
         </ScrollContainer>
         {(!state.atEnd || state.newBelow) && (
           <Button
             type="button"
             size="sm"
-            onClick={() => void chat.jumpToLatest()}
+            onClick={() => {
+              pinToBottom();
+              void chat.jumpToLatest();
+            }}
             className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-lg"
           >
             <ArrowDown /> {state.newBelow ? "New messages · Jump to latest" : "Jump to latest"}
@@ -197,6 +222,35 @@ export function TableChat({
     </section>
   );
 }
+
+type ChatRowProps = Omit<ComponentProps<typeof MessageRow>, "onReact" | "onVote"> & {
+  unreadDivider: boolean;
+  react: (message: ChatMessage, emoji: string) => void;
+  vote: (message: ChatMessage, option: number) => void;
+};
+
+/** One message, re-rendered only when it or its props change: a busy table re-renders often. */
+const ChatRow = memo(function ChatRow({ unreadDivider, react, vote, ...props }: ChatRowProps) {
+  const { message } = props;
+  return (
+    <li>
+      {unreadDivider && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="h-px flex-1 bg-loss" />
+          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-loss">
+            New messages
+          </span>
+          <span className="h-px flex-1 bg-loss" />
+        </div>
+      )}
+      <MessageRow
+        {...props}
+        onReact={(emoji) => react(message, emoji)}
+        onVote={(option) => vote(message, option)}
+      />
+    </li>
+  );
+});
 
 /** Keeps the view pinned to the newest message and preserves position when older history loads. */
 function useChatScroll(messages: ChatMessage[]) {
@@ -235,5 +289,9 @@ function useChatScroll(messages: ChatMessage[]) {
     element.addEventListener("scroll", track);
     return () => element.removeEventListener("scroll", track);
   }, []);
-  return ref;
+  /** The next new message scrolls to the bottom, wherever you were. */
+  const pinToBottom = useCallback(() => {
+    previous.current.nearBottom = true;
+  }, []);
+  return { ref, pinToBottom };
 }

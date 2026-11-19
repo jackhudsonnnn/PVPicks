@@ -62,7 +62,7 @@ public record DemoProfile(
 
     public enum PickStyle { FAVORITE, UNDERDOG, HOME, RANDOM, CONTRARIAN }
 
-    public enum SettleStyle { PROMPT, SLOW, FORGIVES, REJECTS }
+    public enum SettleStyle { PROMPT, SLOW, LENIENT, REJECTS }
 
     /** The casual default every archetype starts from. */
     public static final DemoProfile DEFAULT = new DemoProfile(
@@ -126,7 +126,7 @@ public record DemoProfile(
         LURKER(20, p -> p.joinBetChance(0.2).messagesPerHour(0.05)),
         SHARP(10, p -> p.pickStyle(PickStyle.FAVORITE).settleStyle(SettleStyle.PROMPT).trashTalkChance(0.05)),
         TROLL(5, p -> p.trashTalkChance(0.8).blockChance(0.1).reportChance(0.1).settleStyle(SettleStyle.REJECTS)),
-        FRIENDLY(15, p -> p.followBackChance(0.95).inviteAcceptChance(0.9).settleStyle(SettleStyle.FORGIVES)),
+        FRIENDLY(15, p -> p.followBackChance(0.95).inviteAcceptChance(0.9).settleStyle(SettleStyle.LENIENT)),
         /**
          * The crowd at the pro's big table, never drawn for regulars (weight 0): always online, joins almost every
          * bet within seconds, proposes and chats constantly, bets big and talks trash. They don't block or report,

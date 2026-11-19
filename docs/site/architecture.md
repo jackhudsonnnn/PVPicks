@@ -45,25 +45,26 @@ flowchart LR
   accounts --> tables & chat & social & feedback & settlement & bets
   moderation --> accounts
   devdata --> sports
-  demo --> sports & bets & social & chat & settlement & moderation
+  demo --> sports & bets & social & chat & settlement & moderation & feedback
   users & social & tables & chat & bets & settlement & sports & delivery & feedback --> shared["common + security (open)"]
 ```
 
 | Module | Owns (writes) these tables |
 |---|---|
-| `security` | `auth_sessions`, `account_setup_codes`, `users.password_hash` |
+| `security` | `auth_sessions`, `sign_in_codes` (players' codes), `users.password_hash` (admins only) |
 | `users` | `users` (profile fields) |
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
 | `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions`; the GIF library (`chat/gifs.json`, served at `GET /gifs`). Chat windows read each bet card's question, mode and status from `bets` in the same query. |
 | `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
-| `feedback`, `admin` | `feedback`; site health |
+| `feedback` | `feedback` (submissions and the admin inbox) |
+| `admin` | `admin_audit_log`, `perf_minutes`: player audits (read-only across modules), request timings, health and runtime gauges |
 | `moderation` | `reports`, `admin_user_flags` (strikes): the admin queue, strikes and unfreezing |
 | `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone), and admin-created player accounts and the bootstrapped first admin. Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
-| `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status` |
-| `demo` | Nothing of its own: dev profile only (`pvpicks.demo.enabled`). Seeds the demo world and its history, resets app data (keeping sports data), serves the passwordless sign-in picker through `security.PasswordlessSignIn`, runs the looping demo games through `sports.GameSync` and plays the demo users through the bets, social, chat, settlement and moderation services |
+| `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status`; the admin sports explorer |
+| `demo` | Nothing of its own: dev profile only (`pvpicks.demo.enabled`). Seeds the demo world and its history, resets app data (keeping sports data and request timings), serves the passwordless sign-in picker through `security.PasswordlessSignIn`, runs the looping demo games through `sports.GameSync` and plays the demo users through the bets, social, chat, settlement and moderation services |
 | `devdata` | Nothing of its own: dev profile only, it writes `DEV-` games and stats through `sports.GameSync` and `StatsSync` from scenario files and recorded chunks |
 | `delivery` | `outbox.published_at` and deletion of old published rows; reads sessions, memberships, invitations, blocks and receipt parties to choose realtime audiences |
 

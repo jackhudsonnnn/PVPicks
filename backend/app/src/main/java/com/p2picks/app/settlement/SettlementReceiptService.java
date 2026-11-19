@@ -11,7 +11,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 /**
- * Receipts: one table's points settlement between two people, unpaid until a settle closes it (paid or forgiven).
+ * Receipts: one table's points settlement between two people, unpaid until a settle closes it (paid).
  * Settles change them ({@link SettleService}); this reads them.
  */
 @Service
@@ -40,7 +40,7 @@ public class SettlementReceiptService {
 
     /**
      * Your receipts with one person (optionally at one table): every open one, newest first, and the closed ones
-     * (paid or forgiven) newest first, {@link #PAGE} at a time. A cursor continues the closed list and leaves the open
+     * (paid) newest first, {@link #PAGE} at a time. A cursor continues the closed list and leaves the open
      * one empty. Throws IllegalArgumentException (or DateTimeParseException) on a bad cursor.
      */
     History history(Jwt jwt, UUID otherId, UUID tableId, String cursor) {

@@ -35,10 +35,12 @@ backend/
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
       sports/             sports feed (BallDontLie), game history, players and
-                          player stats, GET /ticker
+                          player stats, GET /ticker, the admin sports explorer
       delivery/           outbox relay to Kafka and cleanup, realtime consumer and
                           the STOMP WebSocket gateway (/ws) with its audience checks
-      feedback/  admin/   feedback submission; admin health
+      feedback/           feedback submission and the admin inbox
+      admin/              player audits and the audit log, request timings
+                          (/perf, /admin/perf), health and runtime gauges
       moderation/         reports (POST /reports) and the admin moderation queue
       accounts/           freeze/unfreeze and account deletion across modules
       devdata/            dev sports data: scenario files and recorded chunks
@@ -117,7 +119,8 @@ backend (serving these docs at `/docs/`) and the client. Run
   [Demo world](/demo-data). The demo exists only in the dev profile (`pvpicks.demo.enabled`
   in `application-dev.yml`; tests turn it off). Demo users are played by bots
   (`demo/DemoBots`) through the real services; `pvpicks.demo.bots.enabled=false`
-  turns them off. Every demo account's password is `demo`.
+  turns them off. Players have no password (they sign in with codes); the demo
+  admin's password is `demo`.
 - Keep the retry key with its database. Replacing a used key makes protected
   mutations fail closed and invalidates chat cursors; rotation and recovery are
   not implemented.
@@ -157,16 +160,20 @@ For a browser origin other than `http://127.0.0.1:8080`, set
 `PVPICKS_DEV_ORIGIN` to the exact loopback origin (the Vite client uses
 `http://127.0.0.1:5173`).
 
-The browser flow is: `GET /auth/csrf`, then `POST /auth/login` with the token in
-`X-CSRF-TOKEN` and a same-origin `Origin`; fetch a new token after login and
-logout. Sessions are HttpOnly, SameSite=Strict cookies that expire after eight
-hours. They are not `Secure` because dev uses HTTP. Failed sign-ins are
+The browser flow is: `GET /auth/csrf`, then `POST /auth/code` (players) or `POST
+/auth/login` (admins) with the token in `X-CSRF-TOKEN` and a same-origin
+`Origin`; fetch a new token after sign-in and sign-out. A stale or revoked
+session cookie never blocks these ways in (`security.JwtCookieFilter`), so a
+player whose code was rotated can sign straight back in with the new one.
+Sessions are HttpOnly, SameSite=Strict cookies that expire after eight hours.
+They are `Secure` in the `lan` profile and not in dev, which uses HTTP. Failed
+password sign-ins are
 throttled in Redis: by default 10 per account name or 50 per client address in
 15 minutes (`PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT`,
 `PVPICKS_LOGIN_THROTTLE_PER_ADDRESS`, `PVPICKS_LOGIN_THROTTLE_WINDOW`). After
-that, attempts get 429 until the window ends. If Redis is down the throttle
-allows every attempt. TLS, secure cookies, rate limits on other endpoints and
-refresh tokens are required before LAN.
+that, attempts get 429 until the window ends. Wrong sign-in codes have their own
+budget ([Kafka & Redis](/kafka-redis)). If Redis is down the throttle allows
+every attempt. Refresh tokens are still to be designed (production).
 
 The handbook is served unauthenticated at `http://127.0.0.1:8080/docs/`.
 

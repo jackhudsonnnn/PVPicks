@@ -132,11 +132,13 @@ class SessionSecurity {
                         authorize.requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/setup").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/code").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/password").authenticated()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
                             .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
                             .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
+                            // Browser timings: players and admins both report them (admin.PerfController).
+                            .requestMatchers(HttpMethod.POST, "/perf").authenticated()
                             .requestMatchers("/admin", "/admin/**").access((authentication, context) ->
                                     new AuthorizationDecision(isActiveRole(authentication.get(), jdbc, "ADMIN")))
                             .anyRequest().access((authentication, context) ->

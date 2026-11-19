@@ -16,6 +16,7 @@ export async function currentUser(signal?: AbortSignal): Promise<CurrentUser | n
   }
 }
 
+/** Admin sign-in with username and password (players sign in with a code). */
 export async function signIn(username: string, password: string): Promise<CurrentUser> {
   const token = await csrf();
   await request("/auth/login", {
@@ -29,13 +30,20 @@ export async function signIn(username: string, password: string): Promise<Curren
   return user;
 }
 
-/** Redeems a setup or reset code (from the admin's link) and signs in as that account. */
-export async function redeemSetupCode(code: string, password: string): Promise<CurrentUser> {
+/** Signs a player in with their code (typed, or from their QR link); case, spaces and dashes don't matter. */
+/**
+ * Signs a player in with their code: typed with their `username`, or from a QR link with their `player` id (stable
+ * across renames).
+ */
+export async function signInWithCode(
+  who: { username: string } | { player: string },
+  code: string,
+): Promise<CurrentUser> {
   const token = await csrf();
-  await request("/auth/setup", {
+  await request("/auth/code", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": token },
-    body: JSON.stringify({ code, password }),
+    body: JSON.stringify({ ...who, code }),
   });
   const user = await currentUser();
   if (!user)
@@ -43,7 +51,7 @@ export async function redeemSetupCode(code: string, password: string): Promise<C
   return user;
 }
 
-/** Changes your own password; your other sessions end. */
+/** Changes your own password (admins only; players have none); your other sessions end. */
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const token = await csrf();
   await request("/auth/password", {

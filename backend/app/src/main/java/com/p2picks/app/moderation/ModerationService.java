@@ -25,7 +25,7 @@ class ModerationService {
 
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, NOT_FOUND, ALREADY_HANDLED }
 
-    record Person(UUID id, String username, String status, int strikes) {}
+    record Person(UUID id, String username, Integer hue, String status, int strikes) {}
     record ReportView(UUID id, String reason, String note, String status, OffsetDateTime createdAt, Person reporter,
                       Person target, UUID tableId, String tableName, String messageSnapshot) {}
     record Page<T>(List<T> items, String nextCursor) {}
@@ -56,9 +56,9 @@ class ModerationService {
         List<ReportView> rows = jdbc.query("""
                 SELECT r.id, r.reason, r.note, r.status, r.created_at, r.table_id, t.name AS table_name,
                        r.message_snapshot,
-                       r.reporter_id, rep.username::text AS reporter_name, rep.status AS reporter_status,
+                       r.reporter_id, rep.username::text AS reporter_name, rep.hue AS reporter_hue, rep.status AS reporter_status,
                        COALESCE(rf.strike_count, 0) AS reporter_strikes,
-                       r.target_id, tgt.username::text AS target_name, tgt.status AS target_status,
+                       r.target_id, tgt.username::text AS target_name, tgt.hue AS target_hue, tgt.status AS target_status,
                        COALESCE(tf.strike_count, 0) AS target_strikes
                 FROM reports r
                 JOIN users rep ON rep.id = r.reporter_id
@@ -74,9 +74,9 @@ class ModerationService {
                         rs.getString("note"), rs.getString("status"),
                         rs.getObject("created_at", OffsetDateTime.class),
                         new Person(rs.getObject("reporter_id", UUID.class), rs.getString("reporter_name"),
-                                rs.getString("reporter_status"), rs.getInt("reporter_strikes")),
+                                (Integer) rs.getObject("reporter_hue", Integer.class), rs.getString("reporter_status"), rs.getInt("reporter_strikes")),
                         new Person(rs.getObject("target_id", UUID.class), rs.getString("target_name"),
-                                rs.getString("target_status"), rs.getInt("target_strikes")),
+                                (Integer) rs.getObject("target_hue", Integer.class), rs.getString("target_status"), rs.getInt("target_strikes")),
                         rs.getObject("table_id", UUID.class), rs.getString("table_name"),
                         rs.getString("message_snapshot")), all, before, before, beforeId, PAGE + 1);
         if (rows.size() <= PAGE) return new Page<>(rows, null);
@@ -88,7 +88,11 @@ class ModerationService {
      * Players with strikes or a frozen account, for the admin's people list: frozen first, then most strikes, then by
      * username, {@link #PAGE} at a time. Throws on a bad cursor.
      */
-    Page<Person> flagged(String cursor) {
+    Page<Person> flagged(String cursor, String search) {
+        // A username prefix, case-insensitive (usernames are stored lowercase), with LIKE wildcards escaped.
+        String prefix = search == null || search.isBlank() ? null
+                : search.trim().toLowerCase(java.util.Locale.ROOT).replace("\\", "\\\\").replace("_", "\\_")
+                        .replace("%", "\\%") + "%";
         Integer frozenRank = null;
         Integer strikesRank = null;
         String afterName = null;
@@ -99,20 +103,21 @@ class ModerationService {
             afterName = parts.get(2);
         }
         List<Person> rows = jdbc.query("""
-                SELECT id, username, status, strikes FROM (
-                    SELECT u.id, u.username::text AS username, u.status, COALESCE(f.strike_count, 0) AS strikes,
+                SELECT id, username, hue, status, strikes FROM (
+                    SELECT u.id, u.username::text AS username, u.hue, u.status, COALESCE(f.strike_count, 0) AS strikes,
                            CASE WHEN u.status = 'FROZEN' THEN 0 ELSE 1 END AS frozen_rank,
                            -COALESCE(f.strike_count, 0) AS strikes_rank
                     FROM users u LEFT JOIN admin_user_flags f ON f.user_id = u.id
                     WHERE u.role = 'PLAYER' AND u.status <> 'DELETED'
                       AND (u.status = 'FROZEN' OR f.strike_count > 0)
+                      AND (?::text IS NULL OR u.username::text LIKE ?)
                 ) flagged
                 WHERE ?::int IS NULL OR (frozen_rank, strikes_rank, username) > (?::int, ?::int, ?::text)
                 ORDER BY frozen_rank, strikes_rank, username
                 LIMIT ?
                 """, (rs, row) -> new Person(rs.getObject("id", UUID.class), rs.getString("username"),
-                        rs.getString("status"), rs.getInt("strikes")),
-                frozenRank, frozenRank, strikesRank, afterName, PAGE + 1);
+                        (Integer) rs.getObject("hue", Integer.class), rs.getString("status"), rs.getInt("strikes")),
+                prefix, prefix, frozenRank, frozenRank, strikesRank, afterName, PAGE + 1);
         if (rows.size() <= PAGE) return new Page<>(rows, null);
         Person last = rows.get(PAGE - 1);
         return new Page<>(rows.subList(0, PAGE), PageCursor.encode(last.status().equals("FROZEN") ? 0 : 1,

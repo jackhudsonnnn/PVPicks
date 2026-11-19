@@ -34,7 +34,7 @@ means mutual follows, not people you already share a table with.
   accounts cannot use player APIs or participate in bets.
 - A remainder rule is snapshotted at lock. The Host rule selects one current
   host randomly and retains the chosen recipient, even if hosting changes later.
-- Debt cap is off by default; changing it requires zero debt. Proposal, pick
+- The points limit (debt cap in code) is off by default; changing it requires zero debt. Proposal, pick
   and lock transactions enforce the cap.
 
 Every mode but Choose Their Fate is available over HTTP and in the frontend:
@@ -62,6 +62,13 @@ in the domain rules ("Wash triggers").
 The current pick schema stores plaintext; an operator with infrastructure
 access can inspect or modify stored data. Player and admin views must enforce
 the Active-bet restrictions on the server. Dev bet reads enforce them.
+
+Admins can audit any player, including what they wrote in every table, but
+never their picks or participation on bets that haven't locked. Each audit and
+search is recorded with the admin who ran it, so access to private messages is
+always traceable ([Admin dashboard](/admin#users)). Browser timings sent to
+`POST /perf` keep only the matched route, status and duration per minute; the
+ids in the paths are discarded and nothing is tied to the account.
 
 ## Tables and chat
 

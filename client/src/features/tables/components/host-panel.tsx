@@ -127,7 +127,7 @@ export function AboutPanel(props: PanelProps) {
       </SettingsSection>
       <SettingsSection
         title="If settled now"
-        description="Everyone pays or gets paid through the host who settles."
+        description="Everyone's points net through the host who settles."
       >
         <div className="space-y-3 px-4 py-3.5 sm:px-5">
           <SettlementPreview {...props} />

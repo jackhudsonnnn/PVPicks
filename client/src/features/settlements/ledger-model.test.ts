@@ -68,13 +68,13 @@ describe("settle-up cards", () => {
 });
 
 describe("a selection", () => {
-  it("is sent by its net payer, marked received by the net receiver, forgiven only when all owed to you", () => {
+  it("is settled by the person down and marked settled by the person up or when even", () => {
     const iOwe = line(me, them, 500n);
     const theyOwe = line(them, me, 300n);
     expect(selectionNet([iOwe, theyOwe], me)).toBe(-200n);
     expect(selectionActions([iOwe, theyOwe], me)).toEqual(["sent"]);
     expect(selectionActions([iOwe, theyOwe], them)).toEqual(["received"]);
-    expect(selectionActions([theyOwe], me)).toEqual(["received", "forgiven"]);
+    expect(selectionActions([theyOwe], me)).toEqual(["received"]);
     expect(selectionActions([line(me, them, 300n), line(them, me, 300n)], me)).toEqual([
       "received",
     ]);

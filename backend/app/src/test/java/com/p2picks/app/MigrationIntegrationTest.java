@@ -557,8 +557,9 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
         UUID sentLine = UUID.randomUUID();
         UUID askedLine = UUID.randomUUID();
         UUID paidLine = UUID.randomUUID();
+        UUID forgivenLine = UUID.randomUUID();
         for (Object[] receipt : List.of(new Object[] {sentLine, "sent"}, new Object[] {askedLine, "forgive_asked"},
-                new Object[] {paidLine, "paid"})) {
+                new Object[] {paidLine, "paid"}, new Object[] {forgivenLine, "forgiven"})) {
             UUID settlement = UUID.randomUUID();
             upgradedJdbc.update("INSERT INTO settlements (id, table_id, host_id) VALUES (?, ?, ?)",
                     settlement, tableId, userId);
@@ -686,7 +687,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 .target(MigrationVersion.fromVersion("22")).load();
         assertThat(hostAttribution.migrate().migrationsExecuted).isEqualTo(1);
         Flyway updated = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword()).load();
-        assertThat(updated.migrate().migrationsExecuted).isEqualTo(17); // V23 through V39
+        assertThat(updated.migrate().migrationsExecuted).isEqualTo(20); // V23 through V42
         // V38: sent became a settle the payee can still reject; asked-to-forgive is open again; paid has a settle.
         assertThat(upgradedJdbc.queryForMap("""
                 SELECT l.status, s.kind, s.sender_id, s.reject_by > now() + interval '47 hours' AS window_open
@@ -698,6 +699,15 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
         assertThat(upgradedJdbc.queryForObject("""
                 SELECT s.kind FROM settlement_lines l JOIN settles s ON s.id = l.settle_id WHERE l.id = ?
                 """, String.class, paidLine)).isEqualTo("received");
+        // V42: a forgive became a received settle and its receipt paid; forgiven is gone for good.
+        assertThat(upgradedJdbc.queryForMap("""
+                SELECT l.status, s.kind FROM settlement_lines l JOIN settles s ON s.id = l.settle_id WHERE l.id = ?
+                """, forgivenLine)).containsEntry("status", "paid").containsEntry("kind", "received");
+        assertThatThrownBy(() -> upgradedJdbc.update("UPDATE settles SET kind = 'forgiven'"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> upgradedJdbc.update(
+                "UPDATE settlement_lines SET status = 'forgiven' WHERE id = ?", forgivenLine))
+                .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> upgradedJdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", userId))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(upgradedJdbc.queryForObject("""

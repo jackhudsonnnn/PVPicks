@@ -65,12 +65,12 @@ class DebtCapController {
             return error(400, "bad_request", "A valid Idempotency-Key is required.");
         }
         if (!input.isObject() || input.size() != 1 || !input.has("capCents")) {
-            return error(400, "bad_request", "Invalid debt cap.");
+            return error(400, "bad_request", "Invalid points limit.");
         }
         JsonNode value = input.path("capCents");
         if (!value.isNull() && (!value.isIntegralNumber() || !value.canConvertToInt()
                 || value.intValue() < 0 || value.intValue() % 100 != 0)) {
-            return error(400, "bad_request", "Debt cap must be a nonnegative whole number of points.");
+            return error(400, "bad_request", "The points limit must be a nonnegative whole number of points.");
         }
         Integer capCents = value.isNull() ? null : value.intValue();
         try {
@@ -80,7 +80,7 @@ class DebtCapController {
                 case UNAUTHORIZED -> error(401, "unauthorized", "Authentication required or credentials invalid.");
             };
         } catch (DebtCapService.OutstandingDebt exception) {
-            return error(409, "conflict", "Clear all debt before changing the debt cap.");
+            return error(409, "conflict", "Settle everything you're down before changing your points limit.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return error(401, "unauthorized", "Authentication required or credentials invalid.");
         }

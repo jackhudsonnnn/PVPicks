@@ -1,6 +1,6 @@
 # Frontend
 
-The app (`src/app/app.tsx`) signs in to the dev backend. From 1100px wide (the `nav` breakpoint) a sidebar holds Home, Tickets, Friends, How to play and
+The app (`src/app/app.tsx`) signs in to the dev backend. From 1100px wide (the `nav` breakpoint) a sidebar holds Tickets, Friends, Home, Guide and
 Preferences, your tables and table requests (below), and your net settle-up points; narrower screens get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The design came from an
@@ -26,7 +26,11 @@ earlier prototype (git tag `prototype-ui`).
     follows, blocks and reports.
 
 - **Signing in:** the sign-in page shows the demo account picker when the
-  backend has the demo, and the password form otherwise. While the backend is
+  backend has the demo (dev), and otherwise asks for the player's username and
+  sign-in code, with a small **Admin** button for the admin's username and
+  password. Opening a player's QR link (`/signin#<playerId>.<code>`) signs
+  them in at once, signed in or out; the link is removed from the address
+  bar. An old code-only link (`/signin#<code>`) is refused. While the backend is
   unreachable (a restart, say), it keeps checking every 3 seconds and switches
   to the picker when it answers. Every sign-in starts on Home, whatever URL the
   last session left open, so a different account never lands on someone
@@ -63,38 +67,44 @@ earlier prototype (git tag `prototype-ui`).
     (`HOME_TICKETS` in `src/lib/use-media-query.ts`).
   - "New table" opens a dialog: a name of up to 14 characters, an icon, and
     people who follow you.
+  - A newcomer (no friends, no tables and no tickets, once all three have
+    loaded) gets **Add friends first** from "New table" and "All tickets"
+    instead: a dialog explaining that P2Picks is played with friends, with a
+    Find friends button to the Friends page (`components/find-friends-dialog.tsx`,
+    `tables/newcomer.ts`).
   - Below the row are deleted tables whose chat you can still read for 90
     days (read-only, at `/archives/<id>`).
 - **Friends:** settle-ups first, as a sideways-scrolling row with one card
   per person you have open receipts with (or a send still in its reject
   window).
-  - A card shows your open net with that person ("You pay them" / "They pay
-    you" / "You're square") and how many tables and open receipts that
+  - A card shows your open net with that person ("You're down" / "You're
+    up" / "You're even") and how many tables and open receipts that
     covers. It's **yellow** when something needs you (a balance change to
     review, or a send to you that you can still reject; the color says it,
-    with no extra text on the card), otherwise **red** when you owe,
-    **green** when you're owed and **neutral** when even. Cards sort
+    with no extra text on the card), otherwise **red** when you're down,
+    **green** when you're up and **neutral** when even. Cards sort
     yellow, red, green, neutral (`settlements/ledger-model.ts`).
-  - **Ledger** opens the dialog (`settlements/ledger-dialog.tsx`), headed
-    "You owe X to name", "You're owed X from name" or "You are even with
+  - **Point Ledger** opens the Ledger dialog (`settlements/ledger-dialog.tsx`), headed
+    "You're down X with name", "You're up X with name" or "You're even with
     name", with two tabs:
     - **Settle:** any balance change to review ("Got it"), then the open
       receipts with checkboxes and Select all. A large, bold line says what
-      the selection comes to ("You pay X", "name pays you X", "These even
+      the selection comes to ("You're down X", "You're up X", "These even
       out", or "Choose receipts to settle."). The selection's net decides
-      the buttons: **Send X** when you pay it, **Mark X received** (or
-      **Settle even**) when you're paid, and **Forgive** when every receipt
-      is owed to you. Each asks to confirm.
-    - **History:** every settle, newest first, a page at a time: who sent,
-      received or forgave how much, over how many receipts, and whether it
-      was rejected or can still be. The receiver of a send gets **Reject**
+      the button: **Settle X** when you're down (they can reject it for 48
+      hours), or **Mark X as settled** (or **Settle even**) when you're up or
+      even. It asks to confirm. There is no Forgive, and nothing mentions
+      paying: points have no cash value.
+    - **History:** every settle, newest first, a page at a time: who settled
+      or marked as settled how much, over how many receipts, and whether it
+      was rejected or can still be. The other person gets **Reject** on a settle
       for 48 hours. It opens on History when you have one to reject.
 - Below settle-ups, **My network** (same heading style), your people in tabs
-  (`social/friends.tsx`), each newest first: **Friends** (mutual follows, by when the second follow happened),
-  **Requests** (people who follow you that you don't follow back: follow
-  them to be friends), **Following**, **Blocked** and **Find** (username
-  search). Followers are friends plus requests, so there's no separate
-  followers list. A line under the tabs, in the same style as the
+  (`social/friends.tsx`), each newest first and without counts: **Find**
+  (username search from 3 characters, sent once typing pauses for 500 ms; the tab it opens on), **Followers** (everyone who follows
+  you: follow someone back to be friends), **Following** and **Blocked**.
+  Friends are people in both Followers and Following, so there's no separate
+  Friends tab. A line under the tabs, in the same style as the
   settle-ups description, explains each one. Every list, search results
   included, is a sideways row of cards the size of the settle-up cards,
   mounting 20 at a time as you scroll. A card shows the person and what they
@@ -120,7 +130,10 @@ earlier prototype (git tag `prototype-ui`).
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
   dropdown under the status tabs: full width on phones, at the right on wider
-  screens), paged. Tickets, Friends and How to play have no visible page
+  screens), paged. Until there's a bet at one of your tables
+  (`GET /me/bets?limit=1` is empty), the Tickets entries in the sidebar and
+  phone tab bar and a table's Tickets button are greyed out and don't link;
+  the page itself still loads if you go to it directly. Tickets, Friends and How to play have no visible page
   title (each keeps a screen-reader heading). Under the question a ticket shows "Proposed by" with the
   proposer's avatar and name (opening their profile at that table,
   `?profile=<id>`); the time is in Details. The footer shows the table's emoji
@@ -152,7 +165,11 @@ earlier prototype (git tag `prototype-ui`).
   the pick count; picks, players and the pot appear after lock.
 
 - **Chat:** each table has a Bets/Chat tab pair. Chat loads at your first
-  unread message (marked "New"), pages older history, sends text (1–2000
+  unread message (marked "New") with at most one page after it, pages older
+  and newer history on request, and Jump to latest opens the newest window
+  instead of paging through a backlog. Live updates fold a burst of changes
+  into one refresh, and a refresh more than two pages behind opens the newest
+  window too, so a busy table like Mosh Pit stays responsive. It sends text (1–2000
   characters) and GIFs from the server's library, toggles one reaction per
   message, and moves your read position forward as new messages reach the
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
@@ -183,28 +200,15 @@ earlier prototype (git tag `prototype-ui`).
 
 - **Preferences:** a Tables tab for who can add you (friends and people you
   follow, each Open, Request or Closed), an Account tab for your username
-  (also your sign-in name), avatar color and debt cap, which can only change
-  while you owe nothing, and your password (current password first; other
-  devices are signed out), and a Display tab (theme, text size, motion, 24-hour
+  (also your sign-in name), avatar color and points limit, which can only change
+  while you're not down (players have no password), and a Display tab (theme, text size, motion, 24-hour
   clock) saved on this device.
-- **Set your password:** `/setup#<code>` (from an admin's setup or reset
-  link) sets a password and signs in, signed in or out. The code stays in
-  the URL fragment and is removed from the address bar afterwards.
 - **How to play:** the game modes, bet lifecycle and payout rules, and a
   feedback form that sends to the backend.
-- **Admin:** an admin account sees only admin tools; it can't join tables,
-  bet or chat.
-  - **Players:** create a player account and show its one-time setup link
-    with a QR code, or issue a new setup or reset link. Links are shown once.
-    Newest first, 50 at a time with "Load more".
-  - **Account:** change the admin's password.
-  - **Moderation:** open reports, with the reported message, to dismiss or
-    strike (the third strike freezes the account and signs it out), plus
-    players with strikes or frozen accounts, to unfreeze or clear strikes.
-    Both lists load 50 at a time with "Load more".
-  - **Site health:** database and cache status.
-- **Account deletion:** Preferences → Account → "Delete my account", with
-  your password (`demo` for demo accounts). It's refused, with the reason, until you're square (no open
+- **Admin:** an admin account sees only the admin workspace (Users, Reports,
+  Perf, Sports); see [Admin dashboard](/admin).
+- **Account deletion:** Preferences → Account → "Delete my account", typing
+  your username to confirm. It's refused, with the reason, until you're square (no open
   bets, unsettled table points or open receipts). A frozen account sees
   "This account is frozen" at sign-in.
 
@@ -231,7 +235,8 @@ an action is still being sent, so the page doesn't jump on every action.
 
 What you're told about an action is a toast, not text on the page. Wherever
 the tab bar shows, toasts sit just above it, never over it (`--toast-bottom` in
-`styles.css`). Errors show
+`styles.css`). Each toast stays 7 seconds and has an x in its top-right
+corner to close it sooner (`components/ui/sonner.tsx`). Errors show
 as toasts; successes are silent (the screen updating is the confirmation)
 unless there's something worth saying, like "Unblocked. Follows are not
 restored." Loading never shows text either: lists, pages, chat, the ticker and
@@ -263,8 +268,11 @@ Code is organized by feature. `client/AGENTS.md` has the detailed rules for what
   A `components/` subfolder is used only once a feature passes about 15 files.
   Other code reaches a feature only through its `index.ts`.
 - `src/components/` and `src/lib/`: shared UI and infrastructure. This covers
-  the HTTP client, retryable mutations, query keys, the realtime client and
-  storage. They never import features.
+  the HTTP client, retryable mutations, query keys, the realtime client,
+  storage and small hooks such as `use-debounced.ts` (search boxes). They never
+  import features. In `components/segmented-tabs.tsx`, a tab's `disabled` only
+  blocks it (for example while a change saves); `soon` greys it out with a
+  "Soon" tag.
 - `src/routes/`: path stubs for TanStack Router's file-based routes (`__root.tsx` is the shell; `routeTree.gen.ts` is generated, don't edit it). They render nothing.
 - `src/test/`: test setup and the isolated-backend helper for the integration
   tests.
@@ -288,8 +296,8 @@ proxies to `http://127.0.0.1:8080`. For a backend on another port, set
 git-ignored `client/.env.local` (`PVPICKS_DEV_BACKEND_URL=http://127.0.0.1:8090`).
 
 Pick an account on the sign-in page; there are no dev passwords (see
-[Demo world](/demo-data)). Every demo account's password is `demo`, for the
-password form and account deletion.
+[Demo world](/demo-data)). Players sign in with codes; the demo admin's
+password is `demo`, for the admin form.
 
 Starting the backend applies pending migrations automatically. Do not expose
 the dev backend or proxy to a network.

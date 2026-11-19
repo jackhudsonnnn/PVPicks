@@ -15,10 +15,10 @@ final class DemoLines {
             "I'm never betting on this team again", "ok I'm back in", "garbage time is my time", "big if true",
             "let's gooo", "brutal", "called it", "can't watch", "that's a cover", "never in doubt",
             "who proposed this one", "I'll take the other side of that", "bench is cooking", "timeout? really?",
-            "pass the snacks", "this line is free money", "I've seen enough", "momentum shift incoming");
+            "pass the snacks", "this line is a lock", "I've seen enough", "momentum shift incoming");
 
     static final List<String> WIN = List.of(
-            "too easy", "pay up 😎", "never in doubt", "keep 'em coming", "thanks for the points",
+            "too easy", "run it back 😎", "never in doubt", "keep 'em coming", "thanks for the points",
             "I told you", "another one", "cash it");
 
     static final List<String> LOSS = List.of(
