@@ -3,6 +3,7 @@ package com.p2picks.app.chat;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
@@ -35,6 +36,9 @@ class ChatSendController {
         if (!IdempotencyGuard.validKey(key)) return error(400, "bad_request", "A valid Idempotency-Key is required.");
         ChatSendService.Submission submission = parse(input);
         if (submission == null) return error(400, "bad_request", "Invalid chat message.");
+        if (submission.kind().equals("text") && AbusiveLanguage.contains(submission.content())) {
+            return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
+        }
         try {
             ChatSendService.Result result = chat.send(jwt, tableId, key, submission);
             return switch (result.outcome()) {

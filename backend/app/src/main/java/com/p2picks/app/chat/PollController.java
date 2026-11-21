@@ -3,6 +3,7 @@ package com.p2picks.app.chat;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
@@ -62,6 +63,9 @@ class PollController {
         }
         if (options.size() < MIN_OPTIONS || options.size() > MAX_OPTIONS) {
             return error(400, "bad_request", "A poll has " + MIN_OPTIONS + " to " + MAX_OPTIONS + " options.");
+        }
+        if (AbusiveLanguage.contains(question) || AbusiveLanguage.containsAny(options)) {
+            return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
         }
         try {
             PollService.Created result = polls.create(jwt, tableId, key, question, options);

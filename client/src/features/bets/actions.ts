@@ -35,6 +35,21 @@ const sportsProposalSchema = z.object({
   durationSec: z.number().int().min(30).max(600),
   forFun: z.boolean(),
 });
+const blackjackRulesSchema = z.object({
+  decks: z.number().int().min(1).max(8),
+  minBetCents: z.number().int().min(10).max(1000),
+  maxBetCents: z.number().int().min(10).max(1000),
+  maxSplits: z.number().int().min(0).max(5),
+  dealerHitsSoft17: z.boolean(),
+  blackjackPays: z.enum(["3:2", "6:5"]),
+  seats: z.number().int().min(1).max(7),
+  doubleOn: z.enum(["any", "9-11"]),
+  doubleAfterSplit: z.boolean(),
+  insurance: z.boolean(),
+  turnOrder: z.enum(["together", "seats"]),
+  joinSec: z.number().int().min(30).max(600),
+  decisionSec: z.number().int().min(10).max(120),
+});
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("propose"), tableId: uuid, proposal: proposalSchema }),
   z.object({ kind: z.literal("propose-sports"), tableId: uuid, proposal: sportsProposalSchema }),
@@ -53,6 +68,25 @@ const intentSchema = z.discriminatedUnion("kind", [
     winningChoice: z.string().min(1).nullable(),
   }),
   z.object({ kind: z.literal("settle-points"), tableId: uuid }),
+  z.object({
+    kind: z.literal("propose-blackjack"),
+    tableId: uuid,
+    rules: blackjackRulesSchema,
+    forFun: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal("blackjack-sit"),
+    tableId: uuid,
+    betId: uuid,
+    betCents: z.number().int().min(10).max(1000),
+  }),
+  z.object({ kind: z.literal("blackjack-leave"), tableId: uuid, betId: uuid }),
+  z.object({
+    kind: z.literal("blackjack-act"),
+    tableId: uuid,
+    betId: uuid,
+    action: z.enum(["hit", "stand", "double", "split", "insurance", "no_insurance", "dealer"]),
+  }),
 ]);
 type BetIntent = z.infer<typeof intentSchema>;
 
@@ -81,6 +115,30 @@ export async function executeBetAction(userId: string, intent: BetIntent, key: s
       { ...rest, config },
     );
     await readProposedBet(response, intent.tableId, userId, intent.proposal.modeId);
+  } else if (intent.kind === "propose-blackjack") {
+    const response = await mutationRequest(
+      `/tables/${encodeURIComponent(intent.tableId)}/bets`,
+      "POST",
+      key,
+      { modeId: "blackjack", rules: intent.rules, forFun: intent.forFun },
+    );
+    await readProposedBet(response, intent.tableId, userId, "blackjack");
+  } else if (intent.kind === "blackjack-sit" || intent.kind === "blackjack-leave") {
+    await mutationRequest(
+      `/bets/${encodeURIComponent(intent.betId)}/blackjack/seat`,
+      intent.kind === "blackjack-sit" ? "PUT" : "DELETE",
+      key,
+      intent.kind === "blackjack-sit" ? { betCents: intent.betCents } : undefined,
+    );
+  } else if (intent.kind === "blackjack-act") {
+    await mutationRequest(
+      `/bets/${encodeURIComponent(intent.betId)}/blackjack/actions`,
+      "POST",
+      key,
+      {
+        action: intent.action,
+      },
+    );
   } else if (intent.kind === "override") {
     await mutationRequest(`/bets/${encodeURIComponent(intent.betId)}/override`, "POST", key, {
       winningChoice: intent.winningChoice,

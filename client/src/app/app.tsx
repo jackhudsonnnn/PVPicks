@@ -12,6 +12,7 @@ import {
   signInWithCode,
   signOut,
   SignIn,
+  AdminSignIn,
 } from "@/features/auth";
 import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
 import type { User } from "@/features/people";
@@ -131,9 +132,9 @@ export function App() {
   if (!session.data) {
     if (pathname === "/dev" && devAvailable)
       return <SignedOutDev onReset={() => void resetWorld()} />;
+    if (pathname === "/admin") return <AdminSignIn login={login} notice={notice} />;
     return (
       <SignIn
-        login={login}
         loginAs={loginAs}
         loginWithCode={loginWithCode}
         notice={notice}

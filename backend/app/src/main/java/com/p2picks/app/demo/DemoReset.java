@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -64,7 +65,7 @@ public class DemoReset {
         DemoBots running = bots.getIfAvailable();
         if (running != null) running.pause();
         try {
-            Summary summary = transaction.execute(status -> wipeAndSeedWorld());
+            Summary summary = wipeAndSeedWithRetries();
             // Every demo player gets a sign-in code, like real players (the admin's QR cards show them).
             codes.issueMissing();
             log.info("Demo world reset: {}", summary);
@@ -84,6 +85,22 @@ public class DemoReset {
             if (running != null) {
                 running.forget();
                 running.resume();
+            }
+        }
+    }
+
+    /**
+     * The wipe locks every app table one after another, so a scheduled job that reads two of them in the other order
+     * (invitation expiry, perf cleanup, the demo games) can deadlock with it. PostgreSQL then rolls the whole wipe
+     * back, so trying again is safe.
+     */
+    private Summary wipeAndSeedWithRetries() {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return transaction.execute(status -> wipeAndSeedWorld());
+            } catch (PessimisticLockingFailureException deadlock) {
+                if (attempt == 5) throw deadlock;
+                log.warn("Demo reset lost a lock race with a background job; retrying ({} of 5)", attempt + 1);
             }
         }
     }

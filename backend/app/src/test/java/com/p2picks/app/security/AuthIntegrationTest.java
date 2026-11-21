@@ -142,7 +142,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    DevelopmentSessions developmentSessions;
+    Sessions sessions;
 
     @Test
     void passwordlessSignInIssuesAWorkingSessionButNotForFrozenOrMissingAccounts() throws Exception {
@@ -150,12 +150,12 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         jdbc.update(
                 "INSERT INTO users (id, username, hue, password_hash, role, status) VALUES (?, ?, ?, ?, ?, ?)",
                 userId, "pwless_user", 1, passwords.encode("unused password"), "PLAYER", "ACTIVE");
-        String token = developmentSessions.signInWithoutPassword(userId, null);
+        String token = sessions.signInWithoutPassword(userId, null);
         mvc.perform(get("/me").cookie(new Cookie("session", token))).andExpect(status().isOk());
-        assertThat(developmentSessions.signInWithoutPassword(UUID.randomUUID(), null)).isNull();
+        assertThat(sessions.signInWithoutPassword(UUID.randomUUID(), null)).isNull();
         jdbc.update("UPDATE users SET status = 'FROZEN' WHERE id = ?", userId);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> developmentSessions.signInWithoutPassword(userId, null))
-                .isInstanceOf(DevelopmentSessions.Frozen.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sessions.signInWithoutPassword(userId, null))
+                .isInstanceOf(Sessions.Frozen.class);
         // The demo's picker endpoints exist only with the demo on; here they're open but absent. A stale session
         // cookie (e.g. after a demo reset wiped sessions) doesn't turn them into a 401.
         mvc.perform(get("/dev/demo/accounts")).andExpect(status().isNotFound());

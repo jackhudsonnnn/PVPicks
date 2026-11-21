@@ -79,6 +79,14 @@ export function proposeBlock(table: Table, userId: string): string | null {
   return null;
 }
 
+/** Why you can't deal Blackjack at this table, or null (hosts choose: hosts only, everyone, or off). */
+export function blackjackBlock(table: Table, userId: string): string | null {
+  if (table.blackjackAccess === "off") return "A host turned off Blackjack at this table.";
+  if (table.blackjackAccess === "hosts" && !table.hostIds.includes(userId))
+    return "Only hosts can deal Blackjack at this table.";
+  return null;
+}
+
 /** Why U2Pick in particular is off at this table, or null. Sports modes don't depend on it. */
 export const u2pickBlock = (table: Table) =>
   table.u2pickEnabled ? null : "A host turned off U2Pick at this table.";

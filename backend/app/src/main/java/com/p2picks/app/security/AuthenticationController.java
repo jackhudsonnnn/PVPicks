@@ -26,14 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 class AuthenticationController {
-    private final DevelopmentSessions sessions;
+    private final Sessions sessions;
     private final CsrfTokenRepository csrfTokens;
     private final JdbcTemplate jdbc;
     private final LoginThrottle throttle;
     private final SessionCookies cookies;
     private final SignInCodes codes;
 
-    AuthenticationController(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JdbcTemplate jdbc,
+    AuthenticationController(Sessions sessions, CsrfTokenRepository csrfTokens, JdbcTemplate jdbc,
             LoginThrottle throttle, SessionCookies cookies, SignInCodes codes) {
         this.codes = codes;
         this.sessions = sessions;
@@ -70,7 +70,7 @@ class AuthenticationController {
         String token;
         try {
             token = sessions.login(username, input.path("password").textValue(), previousToken);
-        } catch (DevelopmentSessions.Frozen frozen) {
+        } catch (Sessions.Frozen frozen) {
             // The password was right; a frozen account is not a guessing attempt.
             return error(403, "account_frozen", "This account is frozen.");
         }
@@ -121,7 +121,7 @@ class AuthenticationController {
         String token;
         try {
             token = sessions.signInWithoutPassword(player, previousToken);
-        } catch (DevelopmentSessions.Frozen frozen) {
+        } catch (Sessions.Frozen frozen) {
             return error(403, "account_frozen", "This account is frozen.");
         }
         if (token == null) return error(401, "invalid_code", "That username and code don't match. Check them with the admin.");

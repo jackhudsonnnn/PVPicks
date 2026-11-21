@@ -3,6 +3,7 @@ package com.p2picks.app.tables;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.MembershipLimits;
 import com.p2picks.app.common.PostgresText;
@@ -47,6 +48,7 @@ class TableCreationController {
         if (!TableProfileValidation.validName(name) || !TableProfileValidation.validEmoji(emoji) || members == null) {
             return error(400, "bad_request", "Invalid table creation request.");
         }
+        if (AbusiveLanguage.contains(name)) return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
         try {
             TableCreationService.Result result = tables.create(jwt, key, name, emoji, members);
             if (result.outcome() != TableCreationService.Outcome.SUCCESS) return failure(result.outcome());

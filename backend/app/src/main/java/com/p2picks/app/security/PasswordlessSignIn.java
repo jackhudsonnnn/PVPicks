@@ -22,12 +22,12 @@ import org.springframework.stereotype.Service;
 public class PasswordlessSignIn {
     public enum Result { SIGNED_IN, NO_SUCH_ACCOUNT, FROZEN }
 
-    private final DevelopmentSessions sessions;
+    private final Sessions sessions;
     private final CsrfTokenRepository csrfTokens;
     private final JwtDecoder decoder;
     private final SessionCookies cookies;
 
-    PasswordlessSignIn(DevelopmentSessions sessions, CsrfTokenRepository csrfTokens, JwtDecoder decoder,
+    PasswordlessSignIn(Sessions sessions, CsrfTokenRepository csrfTokens, JwtDecoder decoder,
             SessionCookies cookies) {
         this.cookies = cookies;
         this.sessions = sessions;
@@ -43,7 +43,7 @@ public class PasswordlessSignIn {
         try {
             String token = sessions.signInWithoutPassword(userId, null);
             return token == null ? null : decoder.decode(token);
-        } catch (DevelopmentSessions.Frozen frozen) {
+        } catch (Sessions.Frozen frozen) {
             return null;
         }
     }
@@ -57,7 +57,7 @@ public class PasswordlessSignIn {
         String token;
         try {
             token = sessions.signInWithoutPassword(userId, previousToken);
-        } catch (DevelopmentSessions.Frozen frozen) {
+        } catch (Sessions.Frozen frozen) {
             return Result.FROZEN;
         }
         if (token == null) return Result.NO_SUCH_ACCOUNT;

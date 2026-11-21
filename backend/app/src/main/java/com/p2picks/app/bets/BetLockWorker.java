@@ -38,7 +38,7 @@ class BetLockWorker {
         do {
             page = jdbc.query("""
                     SELECT id, locks_at, mode FROM bets
-                    WHERE status = 'ACTIVE' AND locks_at <= ?
+                    WHERE status = 'ACTIVE' AND locks_at <= ? AND mode <> 'blackjack'
                       AND (?::timestamptz IS NULL OR (locks_at, id) > (?::timestamptz, ?::uuid))
                     ORDER BY locks_at, id LIMIT ?
                     """, (rs, row) -> new Due(rs.getObject("id", UUID.class),

@@ -16,6 +16,7 @@ export function Composer({
   canGif,
   canPoll,
   blocked,
+  sent,
   send,
   startPoll,
 }: {
@@ -24,19 +25,27 @@ export function Composer({
   /** Whether the table has polls on and you have the poll permission. */
   canPoll: boolean;
   blocked: boolean;
+  /** The last chat action went through; the draft clears only then, so a refused message can be edited. */
+  sent: boolean;
   send: (message: { kind: "text"; text: string } | { kind: "gif"; gifId: string }) => void;
   startPoll: (poll: { question: string; options: string[] }) => void;
 }) {
   const [text, setText] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  // The text being sent: cleared from the box once the send succeeds, kept if it's refused.
+  const [sending, setSending] = useState<string | null>(null);
+  if (sending !== null && !blocked) {
+    setSending(null);
+    if (sent && text.trim() === sending) setText("");
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     const invalid = textProblem(text);
     setProblem(invalid);
     if (invalid) return;
+    setSending(text.trim());
     send({ kind: "text", text: text.trim() });
-    setText("");
   }
 
   if (!canText && !canGif && !canPoll) {
@@ -104,7 +113,12 @@ function GifPicker({ disabled, onPick }: { disabled: boolean; onPick: (gifId: st
       <PopoverContent
         side="top"
         align="start"
-        className="w-[min(22rem,calc(100vw-1.5rem))] space-y-2 bg-sidebar p-2"
+        className="w-[min(22rem,calc(100vw-1.5rem))] space-y-2 bg-sidebar p-2 outline-none"
+        // Focus the panel, not the search box: a focused input opens the phone keyboard over the GIFs.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
       >
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -126,7 +140,10 @@ function GifPicker({ disabled, onPick }: { disabled: boolean; onPick: (gifId: st
             className="bg-surface p-1"
           />
         )}
-        <ScrollContainer isVisible={false} className="grid h-64 grid-cols-2 content-start gap-1.5">
+        <ScrollContainer
+          isVisible={false}
+          className="grid h-64 auto-rows-max grid-cols-2 content-start gap-1.5"
+        >
           {catalog.isPending ? (
             <LoadingList label="Loading GIFs" rows={3} rowClassName="h-24" className="col-span-2" />
           ) : catalog.isError ? (

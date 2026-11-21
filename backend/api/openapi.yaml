@@ -53,6 +53,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CsrfToken'
+  /config:
+    get:
+      operationId: getAppMode
+      security: []
+      summary: Which mode the backend runs in
+      description: >-
+        Signed in or out. `dev` (local development: the demo picker) or
+        `lan` (the LAN watch party: sign-in codes, the party table).
+        Production isn't configured yet. The client chooses its sign-in from
+        this.
+      responses:
+        '200':
+          description: The mode.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [mode]
+                properties:
+                  mode:
+                    type: string
+                    enum: [dev, lan, prod]
   /auth/login:
     post:
       operationId: login
@@ -415,7 +443,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BetProposal'
+              oneOf:
+                - $ref: '#/components/schemas/BetProposal'
+                - $ref: '#/components/schemas/BlackjackProposal'
       responses:
         '201':
           description: Bet created.
@@ -661,6 +691,122 @@ paths:
       responses:
         '204':
           description: Pick cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/blackjack:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    get:
+      operationId: getBlackjackHand
+      summary: A Blackjack hand as table members see it
+      description: >-
+        Seats and bets while the join window is open, then the cards. The
+        dealer's second card is "??" until it's turned over; the shoe is never
+        sent.
+      responses:
+        '200':
+          description: The hand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlackjackHand'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bets/{betId}/blackjack/seat:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    put:
+      operationId: sitAtBlackjack
+      summary: Sit down at a Blackjack hand, or change your bet
+      description: >-
+        While the join window is open. The dealer can't sit; the bet must be
+        within the dealer's minimum and maximum and fit your points limit.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [betCents]
+              properties:
+                betCents:
+                  type: integer
+                  minimum: 10
+                  maximum: 1000
+      responses:
+        '204':
+          description: Seated.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: leaveBlackjack
+      summary: Leave a Blackjack hand before the deal
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Left (or wasn't seated).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/blackjack/actions:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    post:
+      operationId: playBlackjack
+      summary: Make a decision on your Blackjack hand
+      description: >-
+        hit, stand, double or split act on your first unfinished hand (on your
+        turn, when seats take turns); insurance or no_insurance answer the
+        insurance offer; dealer is the dealer's one button on their turn (the
+        hand's dealerMove: flip, hit or stand). A double, split or insurance must fit your points
+        limit (409 debt_cap_exceeded). Not allowed right now: 409
+        blackjack_refused with the reason.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [hit, stand, double, split, insurance, no_insurance, dealer]
+      responses:
+        '204':
+          description: Done.
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -992,6 +1138,8 @@ paths:
                   description: >-
                     Whether members can start new chat polls. Turning it off
                     doesn't close existing polls; they keep taking votes.
+                blackjackAccess:
+                  $ref: '#/components/schemas/BlackjackAccess'
       responses:
         '200':
           description: Updated table.
@@ -3074,6 +3222,96 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /admin/players/{playerId}:
+    parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: deletePlayer
+      summary: Delete a player outright
+      description: >-
+        Admin only, in every mode. Unlike a player deleting themselves, the
+        player needn't be square: every Active or Pending bet they proposed
+        or picked in, at a current table, washes for everyone ("A player's
+        account was deleted", posted in that table's chat; Active bets lock
+        first). Then their account is deleted the same way (personal data
+        removed, memberships ended with host recovery, sessions revoked) and
+        their username becomes free. Points already won or lost, settle-ups
+        and receipts stay, under "Deleted user".
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '200':
+          description: Deleted; how many open bets washed.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [washedBets]
+                properties:
+                  washedBets:
+                    type: integer
+                    minimum: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/lan/party:
+    get:
+      operationId: getLanParty
+      summary: The LAN party table
+      description: >-
+        Admin only, and only on the LAN (404 elsewhere). The table the first
+        player created hosts, which every later player is seated at; null
+        before the first player. `deleted` is true once its host deleted it,
+        after which new players get no table.
+      responses:
+        '200':
+          description: The party table, or null.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [table]
+                properties:
+                  table:
+                    oneOf:
+                      - type: 'null'
+                      - type: object
+                        additionalProperties: false
+                        required: [id, name, emoji, deleted, hostIds, memberIds]
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          name:
+                            type: string
+                          emoji:
+                            type: string
+                          deleted:
+                            type: boolean
+                          hostIds:
+                            type: array
+                            items:
+                              type: string
+                              format: uuid
+                          memberIds:
+                            type: array
+                            items:
+                              type: string
+                              format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /admin/users/{userId}/unfreeze:
     parameters:
       - $ref: '#/components/parameters/UserId'
@@ -4831,7 +5069,7 @@ components:
     Table:
       type: object
       additionalProperties: false
-      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
+      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, blackjackAccess, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
       properties:
         id:
           type: string
@@ -4862,6 +5100,8 @@ components:
         pollsEnabled:
           type: boolean
           description: Whether members can start new chat polls.
+        blackjackAccess:
+          $ref: '#/components/schemas/BlackjackAccess'
         quickPickCode:
           description: Present only for current table hosts.
           $ref: '#/components/schemas/QuickPickCode'
@@ -4985,7 +5225,117 @@ components:
               includesOvertime: false
     BetMode:
       type: string
-      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick]
+      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick, blackjack]
+    BlackjackAccess:
+      type: string
+      enum: [hosts, everyone, off]
+      description: Who may deal Blackjack at the table; hosts set it.
+    BlackjackProposal:
+      type: object
+      additionalProperties: false
+      required: [modeId, forFun]
+      description: >-
+        The proposer deals and banks. Rules left out take their defaults
+        (shown). The dealer's worst case (every seat at the maximum bet, every
+        split taken and every hand doubled and won) must fit their points
+        limit.
+      properties:
+        modeId:
+          const: blackjack
+        forFun:
+          type: boolean
+        rules:
+          type: object
+          additionalProperties: false
+          properties:
+            decks: {type: integer, minimum: 1, maximum: 8, default: 6}
+            minBetCents: {type: integer, minimum: 10, maximum: 1000, default: 100}
+            maxBetCents: {type: integer, minimum: 10, maximum: 1000, default: 1000, description: At least minBetCents.}
+            maxSplits: {type: integer, minimum: 0, maximum: 5, default: 3}
+            dealerHitsSoft17: {type: boolean, default: false}
+            blackjackPays: {type: string, enum: ['3:2', '6:5'], default: '3:2'}
+            seats: {type: integer, minimum: 1, maximum: 7, default: 7}
+            doubleOn: {type: string, enum: [any, 9-11], default: any}
+            doubleAfterSplit: {type: boolean, default: true}
+            insurance: {type: boolean, default: false}
+            turnOrder: {type: string, enum: [together, seats], default: together}
+            joinSec: {type: integer, minimum: 30, maximum: 600, default: 120}
+            decisionSec: {type: integer, minimum: 10, maximum: 120, default: 30}
+    BlackjackHand:
+      type: object
+      required: [phase, dealer, seats]
+      properties:
+        phase:
+          type: string
+          enum: [waiting, insurance, play, dealer, done]
+        dealer:
+          type: array
+          items:
+            type: string
+            description: Rank (A23456789TJQK) then suit (SHDC), or "??" face down.
+        dealerTotal:
+          type: integer
+        dealerMove:
+          type: string
+          enum: [flip, hit, stand]
+          description: On the dealer's turn, what their one button does next.
+        dealerDeadline:
+          type: string
+          format: date-time
+          description: When the dealer's turn plays itself out if they don't act.
+        dealerDeltaCents:
+          type: integer
+        turnSeat:
+          type: integer
+          description: When seats take turns, whose turn it is.
+        seats:
+          type: array
+          items:
+            type: object
+            required: [userId, seat, betCents]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              seat:
+                type: integer
+              betCents:
+                type: integer
+              insuranceCents:
+                type: integer
+              insuranceOpen:
+                type: boolean
+              deadline:
+                type: string
+                format: date-time
+                description: When this seat's decision timer runs out.
+              deltaCents:
+                type: integer
+              hands:
+                type: array
+                items:
+                  type: object
+                  required: [cards, total, soft, stakeCents, doubled, done]
+                  properties:
+                    cards:
+                      type: array
+                      items:
+                        type: string
+                    total:
+                      type: integer
+                    soft:
+                      type: boolean
+                    stakeCents:
+                      type: integer
+                    doubled:
+                      type: boolean
+                    done:
+                      type: boolean
+                    result:
+                      type: string
+                      enum: [win, blackjack, push, lose, bust]
+                    deltaCents:
+                      type: integer
     BetConfig:
       type: object
       additionalProperties:

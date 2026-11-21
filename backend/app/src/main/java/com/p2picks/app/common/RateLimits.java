@@ -39,6 +39,9 @@ public class RateLimits implements WebMvcConfigurer {
             new Rule("chat.reaction", Set.of("PUT", "DELETE"), "/messages/*/reaction", 60, MINUTE),
             new Rule("bets.propose", Set.of("POST"), "/tables/*/bets", 10, MINUTE),
             new Rule("bets.pick", Set.of("PUT", "DELETE"), "/bets/*/pick", 30, MINUTE),
+            new Rule("bets.blackjack.seat", Set.of("PUT", "DELETE"), "/bets/*/blackjack/seat", 30, MINUTE),
+            // A hand can take many hits and splits; a decision timer runs out first.
+            new Rule("bets.blackjack.act", Set.of("POST"), "/bets/*/blackjack/actions", 60, MINUTE),
             new Rule("users.search", Set.of("GET"), "/users", 30, MINUTE),
             new Rule("social.follow", Set.of("POST", "DELETE"), "/follows/*", 30, MINUTE),
             new Rule("social.block", Set.of("POST", "DELETE"), "/blocks/*", 30, MINUTE),
@@ -93,6 +96,7 @@ public class RateLimits implements WebMvcConfigurer {
             Map.entry("POST /users/*/settlement-review/acknowledge", "Once per balance revision."),
             Map.entry("POST /admin/players", "Admins only."),
             Map.entry("POST /admin/players/*/code", "Admins only; rotating signs the player out."),
+            Map.entry("DELETE /admin/players/*", "Admins only; washes the player's open bets."),
             Map.entry("POST /admin/reports/*/dismiss", "Admins only, once per report."),
             Map.entry("POST /admin/reports/*/strike", "Admins only, once per report."),
             Map.entry("POST /admin/users/*/unfreeze", "Admins only."),

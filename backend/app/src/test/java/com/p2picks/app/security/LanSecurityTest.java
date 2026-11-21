@@ -10,13 +10,13 @@ import org.junit.jupiter.api.Test;
 class LanSecurityTest {
     @Test
     void lanRequiresTheHttpsOriginPlayersUse() {
-        new DevOriginFilter("https://p2picks.example.com", true);
-        assertThatThrownBy(() -> new DevOriginFilter("http://p2picks.example.com", true))
+        new OriginFilter("https://p2picks.example.com", true);
+        assertThatThrownBy(() -> new OriginFilter("http://p2picks.example.com", true))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new DevOriginFilter("https://p2picks.example.com/path", true))
+        assertThatThrownBy(() -> new OriginFilter("https://p2picks.example.com/path", true))
                 .isInstanceOf(IllegalArgumentException.class);
-        new DevOriginFilter("http://127.0.0.1:5173", false);
-        assertThatThrownBy(() -> new DevOriginFilter("https://p2picks.example.com", false))
+        new OriginFilter("http://127.0.0.1:5173", false);
+        assertThatThrownBy(() -> new OriginFilter("https://p2picks.example.com", false))
                 .as("dev stays on loopback").isInstanceOf(IllegalArgumentException.class);
     }
 

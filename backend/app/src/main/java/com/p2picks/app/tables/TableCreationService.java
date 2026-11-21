@@ -72,7 +72,7 @@ class TableCreationService {
             return failure(Outcome.TABLE_LIMIT);
         }
         UUID tableId = UUID.randomUUID();
-        insertTable(tableId, name, emoji);
+        TableProvisioning.insertTable(jdbc, tableId, name, emoji);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", tableId, actor);
         outbox.append(OutboxEvent.TABLE_CREATED, tableId, Map.of("tableId", tableId));
         chatMessages.system(tableId, "Table created");
@@ -117,17 +117,6 @@ class TableCreationService {
                 SELECT role FROM table_members WHERE table_id = ? AND user_id = ? FOR UPDATE
                 """, (rs, row) -> rs.getString("role"), tableId, actor);
         return roles.isEmpty() ? null : roles.getFirst();
-    }
-
-    private void insertTable(UUID tableId, String name, String emoji) {
-        for (int attempt = 0; attempt < 8; attempt++) {
-            int inserted = jdbc.update("""
-                    INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, ?, ?, ?)
-                    ON CONFLICT (quickpick_code) DO NOTHING
-                    """, tableId, name, emoji, QuickPickCodes.generate());
-            if (inserted == 1) return;
-        }
-        throw new IllegalStateException("Could not allocate a unique Quick Pick code");
     }
 
     private List<MemberOutcome> addRequested(UUID tableId, UUID actor, List<UUID> requested,

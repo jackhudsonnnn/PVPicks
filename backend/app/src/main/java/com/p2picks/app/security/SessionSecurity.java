@@ -1,6 +1,7 @@
 package com.p2picks.app.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.p2picks.app.common.AppMode;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Objects;
@@ -10,7 +11,6 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -105,7 +105,7 @@ class SessionSecurity {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http, JwtDecoder decoder, CsrfTokenRepository csrfRepository, JdbcTemplate jdbc,
-            Environment environment,
+            AppMode mode,
             @Value("${PVPICKS_ORIGIN:${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}}") String allowedOrigin)
             throws Exception {
         AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
@@ -120,8 +120,7 @@ class SessionSecurity {
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository)
                         .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
                 .authorizeHttpRequests(authorize -> {
-                    String[] profiles = environment.getActiveProfiles();
-                    if (profiles.length == 1 && profiles[0].equals("dev")) {
+                    if (mode == AppMode.DEV) {
                         authorize.requestMatchers(HttpMethod.GET, "/docs", "/docs/**").permitAll()
                                 .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").permitAll()
                                 // The Dev page works signed out (dev only): the demo's picker already lets anyone be
@@ -131,7 +130,7 @@ class SessionSecurity {
                     } else {
                         authorize.requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
-                    authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
+                    authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health", "/config").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/code").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/password").authenticated()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
@@ -147,8 +146,7 @@ class SessionSecurity {
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
-                .addFilterBefore(new DevOriginFilter(allowedOrigin, environment.acceptsProfiles(
-                        org.springframework.core.env.Profiles.of("lan"))), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterBefore(new OriginFilter(allowedOrigin, mode == AppMode.LAN), org.springframework.security.web.csrf.CsrfFilter.class)
                 .addFilterAfter(new JwtCookieFilter(decoder, unauthorized), org.springframework.security.web.csrf.CsrfFilter.class)
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(unauthorized)

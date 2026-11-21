@@ -17,7 +17,13 @@ planned operations, so it isn't an inventory of what exists.
   as a QR code on their admin card (blurred until shown, rotatable, which
   signs them out). Players have no password; only the admin does. No
   registration. In dev, a passwordless picker over the demo accounts (see
-  [Demo world](/demo-data)).
+  [Demo world](/demo-data)). The admin signs in at `/admin` and can delete a
+  player outright (their open bets wash).
+- Three modes, dev, LAN and prod, read from the backend's profile and served
+  at `GET /config` (prod isn't configured yet; see
+  [Architecture](/architecture#three-modes-dev-lan-prod)). On the LAN, the
+  first player created hosts a party table and every later one is seated
+  there as everyone's friend ([LAN watch party](/lan#the-party-table)).
 - Profile (username, color), invite preferences and points limit.
 - Follows, blocks, user search and lookup.
 - Reports go to an admin moderation queue (one open report per person;

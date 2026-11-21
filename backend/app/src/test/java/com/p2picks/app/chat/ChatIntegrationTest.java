@@ -584,7 +584,7 @@ class ChatIntegrationTest extends IntegrationTestSupport {
                 "{\"kind\":\"text\",\"text\":\"  \\t \"}", "{\"kind\":\"text\",\"text\":\"\\u0000\"}",
                 "{\"kind\":\"text\",\"text\":\"\\uD800\"}", "{\"kind\":\"text\",\"text\":4}",
                 "{\"kind\":\"text\",\"text\":\"Hi\",\"extra\":true}",
-                "{\"kind\":\"gif\",\"gifId\":\"g25\"}", "{\"kind\":\"gif\",\"gifId\":\" g1 \"}",
+                "{\"kind\":\"gif\",\"gifId\":\"g999\"}", "{\"kind\":\"gif\",\"gifId\":\" g1 \"}",
                 "{\"kind\":\"gif\",\"gifId\":\"g01\"}")) {
             mvc.perform(chatSendPost(table, session, csrf, "bad-send", invalid)).andExpect(status().isBadRequest());
         }

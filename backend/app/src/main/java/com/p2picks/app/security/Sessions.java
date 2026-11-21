@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class DevelopmentSessions {
+class Sessions {
     /** The password was right but the account is frozen; reported only after a correct password. */
     static class Frozen extends RuntimeException {}
 
@@ -31,7 +31,7 @@ class DevelopmentSessions {
     private final JwtDecoder decoder;
     private final String dummyHash;
 
-    DevelopmentSessions(JdbcTemplate jdbc, PasswordEncoder passwords, JwtEncoder encoder, JwtDecoder decoder) {
+    Sessions(JdbcTemplate jdbc, PasswordEncoder passwords, JwtEncoder encoder, JwtDecoder decoder) {
         this.jdbc = jdbc;
         this.passwords = passwords;
         this.encoder = encoder;

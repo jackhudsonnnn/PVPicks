@@ -3,6 +3,7 @@ package com.p2picks.app.users;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
@@ -41,6 +42,7 @@ class UserProfileController {
                 || hue != null && (hue < 1 || hue > 5)) {
             return error(400, "bad_request", "Invalid profile.");
         }
+        if (AbusiveLanguage.contains(username)) return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
         try {
             var result = profiles.update(jwt, new UserProfileService.Changes(username, hue), key);
             return switch (result.outcome()) {

@@ -1,5 +1,6 @@
 package com.p2picks.app.accounts;
 
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.PageCursor;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.SignInCodes;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -47,11 +49,14 @@ class PlayerProvisioning {
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
     private final SignInCodes codes;
+    private final ApplicationEventPublisher events;
 
-    PlayerProvisioning(JdbcTemplate jdbc, MutationAuthentication authentication, SignInCodes codes) {
+    PlayerProvisioning(JdbcTemplate jdbc, MutationAuthentication authentication, SignInCodes codes,
+            ApplicationEventPublisher events) {
         this.jdbc = jdbc;
         this.authentication = authentication;
         this.codes = codes;
+        this.events = events;
     }
 
     /**
@@ -97,6 +102,7 @@ class PlayerProvisioning {
         if (!username.matches("[a-z0-9_]{3,15}")) {
             return new Result.Invalid("Usernames are 3 to 15 letters, numbers or underscores.");
         }
+        if (AbusiveLanguage.contains(username)) return new Result.Invalid(AbusiveLanguage.MESSAGE);
         if (!authentication.lockActive(jwt)) return new Result.Unauthorized();
         UUID id = UUID.randomUUID();
         int inserted = jdbc.update("""
@@ -105,6 +111,7 @@ class PlayerProvisioning {
                 """, id, username, ThreadLocalRandom.current().nextInt(1, 6), SignInCodes.NO_PASSWORD);
         if (inserted == 0) return new Result.Taken();
         String code = codes.rotate(id, admin(jwt));
+        events.publishEvent(new PlayerCreated(id, username));
         authentication.requireUnexpired(jwt);
         return new Result.Done(new Created(id, username, code));
     }

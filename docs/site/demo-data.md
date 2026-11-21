@@ -42,6 +42,14 @@ the bots hold them:
   results 5–30 minutes after lock, but hold back bets the pro is in while he
   has 20 or fewer Pending. Score bets settle from their games, so the count
   dips when a demo game ends and climbs as you join bets.
+- **Blackjack.** About one proposal in seven is a Blackjack hand the bot
+  deals (where the table's "Who can deal Blackjack" lets it), with house rules
+  varied a little and a 45–120 second join window. Bots sit down at open hands
+  like they join bets (`joinBetChance`), betting toward the dealer's minimum,
+  and play their turns 1–3 seconds after it's their move with a simple basic
+  strategy (`demo/BlackjackBot`: no insurance, split aces and eights, double
+  10 or 11 against a weak dealer card, stand on 17+, soft 18+, and 13–16
+  against a dealer 2–6). They never "pick" on Blackjack.
 
 ## Demo profiles
 
@@ -192,7 +200,7 @@ seconds.
 
 1. pauses the bots;
 2. wipes app data: users, sessions, social, tables, bets, chat, ledger,
-   settlements, moderation, feedback and the outbox;
+   settlements, moderation, feedback, the LAN party record and the outbox, in one transaction that retries up to 5 times if it deadlocks with a background job;
 3. keeps sports data (real games, players and stats) so the ticker isn't
    empty, and request timings (`perf_minutes`);
 4. reseeds the world in one transaction, then the history through the

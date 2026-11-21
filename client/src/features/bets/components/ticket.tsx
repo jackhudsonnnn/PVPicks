@@ -33,6 +33,7 @@ import {
   ticketStatus,
 } from "@/features/bets/ticket-model";
 import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
+import { BlackjackTicket } from "./blackjack-ticket";
 
 interface TicketProps {
   bet: Bet;
@@ -49,7 +50,16 @@ interface TicketProps {
  * A bet as a ticket: tap a choice to pick (asks first), tap your pick again to clear it, call the result from the
  * locked ticket when your settler rule allows. Without `actions` it renders as a preview.
  */
-export function BetTicket({
+export function BetTicket(props: TicketProps & { actions?: BetActions }) {
+  // Blackjack is played on its ticket rather than picked.
+  return props.bet.modeId === "blackjack" ? (
+    <BlackjackTicket {...props} />
+  ) : (
+    <PickTicket {...props} />
+  );
+}
+
+function PickTicket({
   bet,
   table,
   user,
@@ -81,12 +91,29 @@ export function BetTicket({
 
   return (
     <article className={cn("ticket w-full max-w-md overflow-hidden", className)}>
-      <header className="flex h-19 items-center gap-3 px-4">
+      <header className="flex min-h-19 items-center gap-3 py-3 pl-4 pr-10">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-ticket-foreground text-ticket">
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-extrabold uppercase leading-none">{mode.name}</p>
+          {/* Status and clock sit beside the mode, keeping the top-right corner clear for a dialog's close button. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="font-display text-lg font-extrabold uppercase leading-none">
+              {mode.name}
+            </p>
+            <StatusBadge status={status} />
+            {status === "active" && (
+              <span
+                className={cn(
+                  "scoreboard text-lg leading-none",
+                  left <= 15 ? "text-loss" : "text-ticket-foreground",
+                )}
+                aria-label="Time left to change your pick"
+              >
+                {left > 0 ? formatClock(left) : "Locking…"}
+              </span>
+            )}
+          </div>
           <p className="mt-1 line-clamp-2 break-words font-mono text-[11px] leading-tight text-ticket-muted">
             {bet.gameId ? (
               game ? (
@@ -100,20 +127,6 @@ export function BetTicket({
               </>
             )}
           </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <StatusBadge status={status} />
-          {status === "active" && (
-            <span
-              className={cn(
-                "scoreboard text-xl leading-none",
-                left <= 15 ? "text-loss" : "text-ticket-foreground",
-              )}
-              aria-label="Time left to change your pick"
-            >
-              {left > 0 ? formatClock(left) : "Locking…"}
-            </span>
-          )}
         </div>
       </header>
 

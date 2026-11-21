@@ -6,7 +6,8 @@ export type ModeId =
   | "total_disaster"
   | "give_and_take"
   | "prop_hunt"
-  | "u2pick";
+  | "u2pick"
+  | "blackjack";
 
 /** Who may call the outcome of a U2Pick (custom) bet. The server enforces it. */
 export type SettlerRule = "anyone" | "non_participants" | "hosts" | "me";

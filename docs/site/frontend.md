@@ -25,14 +25,15 @@ earlier prototype (git tag `prototype-ui`).
   - Answers use their own retry key (`useInviteActions`), separate from
     follows, blocks and reports.
 
-- **Signing in:** the sign-in page shows the demo account picker when the
-  backend has the demo (dev), and otherwise asks for the player's username and
-  sign-in code, with a small **Admin** button for the admin's username and
-  password. Opening a player's QR link (`/signin#<playerId>.<code>`) signs
+- **Signing in:** the sign-in page asks the backend's mode (`GET /config`,
+  `lib/app-mode.ts`): in dev it shows the demo account picker, otherwise it
+  asks for the player's username and sign-in code. The admin's username and
+  password form is at `/admin` (`auth/admin-sign-in.tsx`), in every mode, and
+  nothing links to it. Opening a player's QR link (`/signin#<playerId>.<code>`) signs
   them in at once, signed in or out; the link is removed from the address
   bar. An old code-only link (`/signin#<code>`) is refused. While the backend is
-  unreachable (a restart, say), it keeps checking every 3 seconds and switches
-  to the picker when it answers. Every sign-in starts on Home, whatever URL the
+  unreachable (a restart, say), it keeps checking the mode every 3 seconds and
+  shows the right sign-in when it answers. Every sign-in starts on Home, whatever URL the
   last session left open, so a different account never lands on someone
   else's page. Signing out, an expired session and a demo reset all return to
   sign-in.
@@ -133,7 +134,11 @@ earlier prototype (git tag `prototype-ui`).
   screens), paged. Until there's a bet at one of your tables
   (`GET /me/bets?limit=1` is empty), the Tickets entries in the sidebar and
   phone tab bar and a table's Tickets button are greyed out and don't link;
-  the page itself still loads if you go to it directly. Tickets, Friends and How to play have no visible page
+  the page itself still loads if you go to it directly. A status tab with no
+  tickets (for the chosen table) is greyed out; if the one you're on empties
+  (your last Active ticket locks), the page moves to the next tab with
+  tickets, or the previous one if none follow (`features/bets/ticket-tabs.ts`;
+  one `limit=1` request per status). Tickets, Friends and How to play have no visible page
   title (each keeps a screen-reader heading). Under the question a ticket shows "Proposed by" with the
   proposer's avatar and name (opening their profile at that table,
   `?profile=<id>`); the time is in Details. The footer shows the table's emoji
@@ -150,7 +155,9 @@ earlier prototype (git tag `prototype-ui`).
   proposed and at lock.
 
 - **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
-  Choose Their Fate, which shows as coming soon), set up a U2Pick, or pick one
+  Choose Their Fate, which shows as coming soon), set up a U2Pick, deal a
+  Blackjack hand (house rules form, every number a min/max stepper, and the
+  dealer's worst case; no preview step), or pick one
   of today's games (NFL only for Scorcerer) and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
   their position and current number, sorted by position) and the line or target, which starts just above them
@@ -161,6 +168,30 @@ earlier prototype (git tag `prototype-ui`).
   and use "Call it" on a locked ticket if its settler rule allows you. Sports
   tickets show the game's score and settle from the feed; hosts can override
   them (wash or set the result) until the table's points are settled.
+  A Blackjack ticket (`bets/components/blackjack-ticket.tsx`) shows the
+  dealer's cards, each seat's hands and result, a bet stepper to sit down
+  during the join window, Insure / No insurance, and Hit / Stand / Double /
+  Split on your turn with your decision countdown. It reads
+  `GET /bets/{id}/blackjack`, refreshing with the table's bet feed and every
+  4 seconds while the hand is live. On the felt, seated players show Seated /
+  Playing and then their result, and the dealer shows Dealer. Hosts choose
+  who can deal under "Who can deal Blackjack" in the Host panel.
+  When a Blackjack hand is the felt's focused bet it's played right on the
+  table (`bets/components/blackjack-felt.tsx`) around the usual ticket stack,
+  which stays as every mode's preview before and after the deal: a shoe at
+  the top right, the dealer's cards at the top, each player's cards in front
+  of their seat (`BlackjackCards`); the stack's pill shows "N in" while the hand is
+  open (like every mode), then whose move it is with your timer, then your
+  result (`BlackjackStatus`); and your insurance or Hit / Stand / Double /
+  Split sit under the pill on your turn, or the dealer's one Flip / Hit /
+  Stand button on theirs (`BlackjackControls`). Everything is dealt from in
+  front of the dealer's seat: their cards and the shoe sit there, and every
+  card slides out of that shoe. Sitting down
+  happens on the ticket (tap it). Cards slide out of the shoe (the opening deal goes round the table
+  twice, in order) and the hole card flips when it's turned over; reduced
+  motion turns the animations off. Once dealt, the felt seats only the
+  players and the dealer, and a finished hand stays on the felt for 20
+  seconds (`FINISHED_HAND_MS`).
   Creating does not place a pick. Active tickets show only your own pick and
   the pick count; picks, players and the pot appear after lock.
 
@@ -246,12 +277,14 @@ names show grey placeholders shaped like what's coming
 
 ## Source layout
 
-Code is organized by feature. `client/AGENTS.md` has the detailed rules for what lives where.
+Code is organized by feature; this section is the rule for what lives where. Code that differs by mode (dev, LAN,
+prod) asks `useAppMode()` (`lib/app-mode.ts`) only where it must: the sign-in screen and the admin's Users tab.
+See [the three modes](/architecture#three-modes-dev-lan-prod).
 
 - `src/app/`: the frame. Session, sign-in routing, the shell, and the realtime
   connection's lifetime.
 - `src/features/<name>/`: one folder per product area:
-  - `auth`: session, sign-in and the demo account picker;
+  - `auth`: session, sign-in (the player's, and the admin's at `/admin`) and the demo account picker;
   - `people`: names, avatars and colors;
   - `tables`: home, the table page, members and host settings;
   - `bets`: tickets, the proposal sheet, the Tickets page and bet rules;

@@ -77,6 +77,7 @@ const table: Table = {
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
+  blackjackAccess: "everyone" as const,
   quickPicksEnabled: true,
   quickPickSharing: true,
   quickPickCode: "K4R7QX",

@@ -15,6 +15,10 @@
     {
       "id": "react",
       "label": "React"
+    },
+    {
+      "id": "roast",
+      "label": "Roast"
     }
   ],
   "gifs": [
@@ -271,6 +275,743 @@
       "tags": [
         "referee",
         "ref"
+      ]
+    },
+    {
+      "id": "g25",
+      "url": "https://media.giphy.com/media/7mRTq9vChHqmlVBAwY/200.webp",
+      "alt": "LeBron: not buying it",
+      "category": "react",
+      "tags": [
+        "lebron",
+        "skeptical",
+        "doubt",
+        "really",
+        "side eye",
+        "nba"
+      ]
+    },
+    {
+      "id": "g26",
+      "url": "https://media.giphy.com/media/eDGVm7YdpzYXTsaIIM/200.webp",
+      "alt": "LeBron stare",
+      "category": "react",
+      "tags": [
+        "lebron",
+        "stare",
+        "staring",
+        "look",
+        "nba"
+      ]
+    },
+    {
+      "id": "g27",
+      "url": "https://media.giphy.com/media/Z5McUn7BTMPhc5DRpj/200.webp",
+      "alt": "LeBron clutch at 1%",
+      "category": "hype",
+      "tags": [
+        "lebron",
+        "clutch",
+        "1%",
+        "comeback",
+        "dunk",
+        "nba"
+      ]
+    },
+    {
+      "id": "g28",
+      "url": "https://media.giphy.com/media/7HTyDjqb4k2yG3ZYJo/200.webp",
+      "alt": "LeBron goofy smile",
+      "category": "react",
+      "tags": [
+        "lebron",
+        "smile",
+        "goofy",
+        "happy",
+        "nba"
+      ]
+    },
+    {
+      "id": "g29",
+      "url": "https://media.giphy.com/media/y7DZKLXqF5EaBvWAGH/200.webp",
+      "alt": "LeBron in a Sixers jersey",
+      "category": "roast",
+      "tags": [
+        "lebron",
+        "76ers",
+        "sixers",
+        "philly",
+        "traitor",
+        "nba"
+      ]
+    },
+    {
+      "id": "g30",
+      "url": "https://media.giphy.com/media/myyu5alYEL9ianv0Su/200.webp",
+      "alt": "LeBron shocked at his phone",
+      "category": "react",
+      "tags": [
+        "lebron",
+        "shocked",
+        "phone",
+        "sticker shock",
+        "omg",
+        "nba"
+      ]
+    },
+    {
+      "id": "g31",
+      "url": "https://media.giphy.com/media/z4WarFokXvsxNx0ByR/200.webp",
+      "alt": "LeBron the GOAT",
+      "category": "hype",
+      "tags": [
+        "lebron",
+        "goat",
+        "greatest",
+        "king",
+        "nba"
+      ]
+    },
+    {
+      "id": "g32",
+      "url": "https://media.giphy.com/media/i9YfqLseqDTlXAWWsj/200.webp",
+      "alt": "LeBron arguing with the ref",
+      "category": "pain",
+      "tags": [
+        "lebron",
+        "ref",
+        "referee",
+        "arguing",
+        "foul",
+        "nba"
+      ]
+    },
+    {
+      "id": "g33",
+      "url": "https://media.giphy.com/media/uypubDRjnv0icWp2hV/200.webp",
+      "alt": "Conor McGregor",
+      "category": "hype",
+      "tags": [
+        "conor",
+        "mcgregor",
+        "ufc",
+        "strut",
+        "confident"
+      ]
+    },
+    {
+      "id": "g34",
+      "url": "https://media.giphy.com/media/3oFzm2wZ6rqg67tNio/200.webp",
+      "alt": "Royal Rumble beatdown",
+      "category": "roast",
+      "tags": [
+        "wwe",
+        "royal rumble",
+        "beat up",
+        "beatdown",
+        "wrestling",
+        "destroyed"
+      ]
+    },
+    {
+      "id": "g35",
+      "url": "https://media.giphy.com/media/1OlBAUl9I1Avm/100.webp",
+      "alt": "UFC fight",
+      "category": "roast",
+      "tags": [
+        "ufc",
+        "mma",
+        "fight",
+        "knockout",
+        "ko"
+      ]
+    },
+    {
+      "id": "g36",
+      "url": "https://media.giphy.com/media/xUPJPlFxssGpmLemru/200.webp",
+      "alt": "SpongeBob foghorn wake-up",
+      "category": "react",
+      "tags": [
+        "spongebob",
+        "wake up",
+        "foghorn",
+        "asleep",
+        "sleeping"
+      ]
+    },
+    {
+      "id": "g37",
+      "url": "https://media.giphy.com/media/Gtnf8Fok8An9m/200.webp",
+      "alt": "Poop",
+      "category": "pain",
+      "tags": [
+        "poop",
+        "crap",
+        "shit",
+        "gross",
+        "stinks"
+      ]
+    },
+    {
+      "id": "g38",
+      "url": "https://media.giphy.com/media/oL3OCpR7Bhi2Q617Th/200.webp",
+      "alt": "Dinosaur on the toilet",
+      "category": "pain",
+      "tags": [
+        "poop",
+        "toilet",
+        "dinosaur",
+        "volcano",
+        "crap",
+        "shit"
+      ]
+    },
+    {
+      "id": "g39",
+      "url": "https://media.giphy.com/media/afWj3IJLPU8W4/200.webp",
+      "alt": "Dumb and Dumber turn around",
+      "category": "react",
+      "tags": [
+        "dumb and dumber",
+        "turn",
+        "turns",
+        "tuxedo",
+        "harry",
+        "lloyd"
+      ]
+    },
+    {
+      "id": "g40",
+      "url": "https://media.giphy.com/media/cPRmMuHQboize/200.webp",
+      "alt": "Harry in shock",
+      "category": "pain",
+      "tags": [
+        "dumb and dumber",
+        "harry",
+        "shocked",
+        "loss",
+        "bengals",
+        "what"
+      ]
+    },
+    {
+      "id": "g41",
+      "url": "https://media.giphy.com/media/LXjFLBeyIzXUs/200.webp",
+      "alt": "Dumb and Dumber cane",
+      "category": "roast",
+      "tags": [
+        "dumb and dumber",
+        "cane",
+        "lloyd",
+        "harry",
+        "smack"
+      ]
+    },
+    {
+      "id": "g42",
+      "url": "https://media.giphy.com/media/3o6Ztn2s2y1ZgSEMGQ/200.webp",
+      "alt": "Lloyd Christmas",
+      "category": "react",
+      "tags": [
+        "dumb and dumber",
+        "lloyd",
+        "lloyd christmas",
+        "weird"
+      ]
+    },
+    {
+      "id": "g43",
+      "url": "https://media.giphy.com/media/soeW4oKUsnKHkn2typ/200.webp",
+      "alt": "Patrick Bateman zooms in",
+      "category": "react",
+      "tags": [
+        "american psycho",
+        "patrick bateman",
+        "bale",
+        "zoom",
+        "stare"
+      ]
+    },
+    {
+      "id": "g44",
+      "url": "https://media.giphy.com/media/YHYmMLkOmqoo/200.webp",
+      "alt": "Patrick Bateman: ooh",
+      "category": "react",
+      "tags": [
+        "american psycho",
+        "patrick bateman",
+        "bale",
+        "ooh",
+        "oooo",
+        "impressed"
+      ]
+    },
+    {
+      "id": "g45",
+      "url": "https://media.giphy.com/media/3k03Ft974KXPAkhnGk/200.webp",
+      "alt": "Patrick Bateman locked in",
+      "category": "hype",
+      "tags": [
+        "american psycho",
+        "patrick bateman",
+        "bale",
+        "focus",
+        "locked in",
+        "chad",
+        "sigma"
+      ]
+    },
+    {
+      "id": "g46",
+      "url": "https://media.giphy.com/media/3YuR0bdGXlP6U/200.webp",
+      "alt": "Patrick Bateman smirk",
+      "category": "react",
+      "tags": [
+        "american psycho",
+        "patrick bateman",
+        "bale",
+        "smirk",
+        "smug"
+      ]
+    },
+    {
+      "id": "g47",
+      "url": "https://media.giphy.com/media/PwLYfy05MBVVm/200.webp",
+      "alt": "Walter White cooking",
+      "category": "hype",
+      "tags": [
+        "breaking bad",
+        "walter white",
+        "walt",
+        "cooking",
+        "chemistry",
+        "locked in"
+      ]
+    },
+    {
+      "id": "g48",
+      "url": "https://media.giphy.com/media/kUo63tSytK1k4/200.webp",
+      "alt": "Walter White reaction",
+      "category": "react",
+      "tags": [
+        "breaking bad",
+        "walter white",
+        "walt",
+        "reaction"
+      ]
+    },
+    {
+      "id": "g49",
+      "url": "https://media.giphy.com/media/kbCOCUKMuwe9fM8bBL/200.webp",
+      "alt": "Hank realizing",
+      "category": "react",
+      "tags": [
+        "breaking bad",
+        "hank",
+        "realizing",
+        "realization",
+        "oh no"
+      ]
+    },
+    {
+      "id": "g50",
+      "url": "https://media.giphy.com/media/ngEYWg5UOm6fa5MQRB/200.webp",
+      "alt": "Walter White caricature",
+      "category": "react",
+      "tags": [
+        "breaking bad",
+        "walter white",
+        "walt",
+        "cartoon",
+        "funny"
+      ]
+    },
+    {
+      "id": "g51",
+      "url": "https://media.giphy.com/media/F6GXj8gTsUKzc7r49I/200.webp",
+      "alt": "Walter White apple",
+      "category": "react",
+      "tags": [
+        "breaking bad",
+        "walter white",
+        "walt",
+        "apple",
+        "weird"
+      ]
+    },
+    {
+      "id": "g52",
+      "url": "https://media.giphy.com/media/xUA7aU0JQQcm6z1LXi/200.webp",
+      "alt": "Saul Goodman turns",
+      "category": "react",
+      "tags": [
+        "better call saul",
+        "saul",
+        "saul goodman",
+        "turn",
+        "look"
+      ]
+    },
+    {
+      "id": "g53",
+      "url": "https://media.giphy.com/media/3osxYeFT1QcxgzEXss/200.webp",
+      "alt": "Saul Goodman strut",
+      "category": "hype",
+      "tags": [
+        "better call saul",
+        "saul",
+        "saul goodman",
+        "walk",
+        "strut",
+        "suit"
+      ]
+    },
+    {
+      "id": "g54",
+      "url": "https://media.giphy.com/media/3pZjE2Z0HNVMk/200.webp",
+      "alt": "USB won't go in",
+      "category": "pain",
+      "tags": [
+        "usb",
+        "plug",
+        "fail",
+        "struggle",
+        "try again"
+      ]
+    },
+    {
+      "id": "g55",
+      "url": "https://media.giphy.com/media/jOt4670Q0fhGvh2CKL/200.webp",
+      "alt": "Getting tenderized",
+      "category": "roast",
+      "tags": [
+        "cooked",
+        "cooking",
+        "meat",
+        "tenderize",
+        "pound",
+        "beat"
+      ]
+    },
+    {
+      "id": "g56",
+      "url": "https://media.giphy.com/media/cWuCpYskQfi34aGiJQ/200.webp",
+      "alt": "Face blowing up",
+      "category": "react",
+      "tags": [
+        "the boys",
+        "blow",
+        "face",
+        "inflate",
+        "explode",
+        "mad"
+      ]
+    },
+    {
+      "id": "g57",
+      "url": "https://media.giphy.com/media/HxJpUTPYXUZ9jLw2LP/200.webp",
+      "alt": "Sad Homelander",
+      "category": "pain",
+      "tags": [
+        "the boys",
+        "homelander",
+        "sad",
+        "crying",
+        "upset"
+      ]
+    },
+    {
+      "id": "g58",
+      "url": "https://media.giphy.com/media/J6TPQrZMSyJSqClqBs/200.webp",
+      "alt": "Pi'erre Bourne showing off his chain",
+      "category": "money",
+      "tags": [
+        "pierre bourne",
+        "pi'erre",
+        "chain",
+        "drip",
+        "flex",
+        "rich"
+      ]
+    },
+    {
+      "id": "g59",
+      "url": "https://media.giphy.com/media/hfnLd6h8fd4KCJtQkM/200.webp",
+      "alt": "Kanye stare",
+      "category": "react",
+      "tags": [
+        "kanye",
+        "ye",
+        "stare",
+        "blank",
+        "straight face"
+      ]
+    },
+    {
+      "id": "g60",
+      "url": "https://media.giphy.com/media/3QWfMsI8IaarXxtBt6/200.webp",
+      "alt": "Sad Vince McMahon",
+      "category": "pain",
+      "tags": [
+        "vince mcmahon",
+        "wwe",
+        "sad",
+        "upset",
+        "disappointed"
+      ]
+    },
+    {
+      "id": "g61",
+      "url": "https://media.giphy.com/media/UiBmJv6Hh6FfW/100.webp",
+      "alt": "Vince McMahon throwing money",
+      "category": "money",
+      "tags": [
+        "vince mcmahon",
+        "wwe",
+        "money",
+        "make it rain",
+        "rich"
+      ]
+    },
+    {
+      "id": "g62",
+      "url": "https://media.giphy.com/media/dwmTtW4IuyDzOpLgqO/200.webp",
+      "alt": "Trump dancing",
+      "category": "hype",
+      "tags": [
+        "trump",
+        "dance",
+        "dancing",
+        "celebrate",
+        "win"
+      ]
+    },
+    {
+      "id": "g63",
+      "url": "https://media.giphy.com/media/acgXBmnZjOS0lYImih/200.webp",
+      "alt": "Cat cringe",
+      "category": "react",
+      "tags": [
+        "cat",
+        "cringe",
+        "yikes",
+        "awkward"
+      ]
+    },
+    {
+      "id": "g64",
+      "url": "https://media.giphy.com/media/7TqDfr0EN8mnMguHOz/200.webp",
+      "alt": "Cringe face",
+      "category": "react",
+      "tags": [
+        "cringe",
+        "yikes",
+        "sour",
+        "ew",
+        "gross"
+      ]
+    },
+    {
+      "id": "g65",
+      "url": "https://media.giphy.com/media/s5wFafpHxqKbIEERl9/200.webp",
+      "alt": "Streamer cracking up",
+      "category": "react",
+      "tags": [
+        "lol",
+        "laughing",
+        "cracking up",
+        "funny",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g66",
+      "url": "https://media.giphy.com/media/2zmamokHAKhDiVl8dN/200.webp",
+      "alt": "Speed wincing",
+      "category": "react",
+      "tags": [
+        "speed",
+        "ishowspeed",
+        "wince",
+        "cringe",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g67",
+      "url": "https://media.giphy.com/media/IfPE0x5gfa5ctKpph6/200.webp",
+      "alt": "Flight cracking up",
+      "category": "react",
+      "tags": [
+        "flight",
+        "flightreacts",
+        "lol",
+        "laughing",
+        "cracking up",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g68",
+      "url": "https://media.giphy.com/media/xuZFsH7SNJhjaf76OS/200.webp",
+      "alt": "Shocked stare",
+      "category": "react",
+      "tags": [
+        "shocked",
+        "stunned",
+        "what",
+        "wtf",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g69",
+      "url": "https://media.giphy.com/media/tcArPzBCa8SqsyDfro/200.webp",
+      "alt": "Streamer: WTF",
+      "category": "react",
+      "tags": [
+        "wtf",
+        "what",
+        "shocked",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g70",
+      "url": "https://media.giphy.com/media/D8KHcYvxuQDpseiSgO/200.webp",
+      "alt": "Flight: WTF",
+      "category": "react",
+      "tags": [
+        "flight",
+        "flightreacts",
+        "wtf",
+        "shocked",
+        "what",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g71",
+      "url": "https://media.giphy.com/media/8YeWeoq9LUBJKFi1mG/200.webp",
+      "alt": "Losing it watching the game",
+      "category": "hype",
+      "tags": [
+        "laughing",
+        "lol",
+        "screaming",
+        "nba",
+        "game",
+        "streamer"
+      ]
+    },
+    {
+      "id": "g72",
+      "url": "https://media.giphy.com/media/Cmhc4y2dQbfzz8CRnO/200.webp",
+      "alt": "Angry Birds shoe car",
+      "category": "hype",
+      "tags": [
+        "angry birds",
+        "car",
+        "ride",
+        "lets go",
+        "chaos"
+      ]
+    },
+    {
+      "id": "g73",
+      "url": "https://media.giphy.com/media/BmmfETghGOPrW/200.webp",
+      "alt": "Zach Galifianakis calculating",
+      "category": "react",
+      "tags": [
+        "zach galifianakis",
+        "hangover",
+        "calculate",
+        "math",
+        "thinking",
+        "odds"
+      ]
+    },
+    {
+      "id": "g74",
+      "url": "https://media.giphy.com/media/dUHdTk3tvry9NETa67/200.webp",
+      "alt": "The Office: excited",
+      "category": "hype",
+      "tags": [
+        "the office",
+        "excited",
+        "yes",
+        "happy",
+        "celebrate"
+      ]
+    },
+    {
+      "id": "g75",
+      "url": "https://media.giphy.com/media/NDzVwpclOqiprMcfLZ/200.webp",
+      "alt": "Iron Man stare",
+      "category": "react",
+      "tags": [
+        "iron man",
+        "tony stark",
+        "marvel",
+        "stare",
+        "look"
+      ]
+    },
+    {
+      "id": "g76",
+      "url": "https://media.giphy.com/media/cmaasv6S8tJUafi0Ej/200.webp",
+      "alt": "Sad Tony Stark",
+      "category": "pain",
+      "tags": [
+        "iron man",
+        "tony stark",
+        "marvel",
+        "sad",
+        "crying",
+        "upset"
+      ]
+    },
+    {
+      "id": "g77",
+      "url": "https://media.giphy.com/media/qmfpjpAT2fJRK/200.webp",
+      "alt": "Tony Stark eye roll",
+      "category": "react",
+      "tags": [
+        "iron man",
+        "tony stark",
+        "marvel",
+        "eye roll",
+        "whatever",
+        "annoyed"
+      ]
+    },
+    {
+      "id": "g78",
+      "url": "https://media.giphy.com/media/yRd32T3jY8lXmL2JWc/200.webp",
+      "alt": "Surprised Iron Man",
+      "category": "react",
+      "tags": [
+        "iron man",
+        "tony stark",
+        "marvel",
+        "surprised",
+        "shocked",
+        "what"
+      ]
+    },
+    {
+      "id": "g79",
+      "url": "https://media.giphy.com/media/NLy8qqrVcP4IMg2QFY/200.webp",
+      "alt": "Shaq as Thanos, shocked",
+      "category": "react",
+      "tags": [
+        "shaq",
+        "thanos",
+        "marvel",
+        "infinity war",
+        "shocked",
+        "what",
+        "nba"
       ]
     }
   ]

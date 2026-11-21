@@ -16,8 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class TableSettingsService {
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
-    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled) {}
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled) {}
+    /** {@code blackjackAccess}: who may deal Blackjack, {@code hosts}, {@code everyone} or {@code off}. */
+    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled, String blackjackAccess) {
+        Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled) {
+            this(hostsOnlyBets, u2pickEnabled, pollsEnabled, null);
+        }
+    }
+    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
+            String blackjackAccess) {}
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
@@ -40,10 +46,10 @@ class TableSettingsService {
         if (!authentication.lockActive(jwt)) return Outcome.UNAUTHORIZED;
         authentication.requireUnexpired(jwt);
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled, polls_enabled FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, polls_enabled, blackjack_access FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
                 """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled"),
-                rs.getBoolean("polls_enabled")), tableId);
+                rs.getBoolean("polls_enabled"), rs.getString("blackjack_access")), tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return Outcome.NOT_FOUND;
@@ -56,7 +62,8 @@ class TableSettingsService {
         if (!roles.getFirst().equals("HOST")) return Outcome.FORBIDDEN;
 
         IdempotencyGuard.Claim claim = idempotency.claim(userId, key, "table.settings.update.v1",
-                tableId + "|" + changes.hostsOnlyBets() + "|" + changes.u2pickEnabled() + "|" + changes.pollsEnabled(),
+                tableId + "|" + changes.hostsOnlyBets() + "|" + changes.u2pickEnabled() + "|" + changes.pollsEnabled()
+                        + (changes.blackjackAccess() == null ? "" : "|" + changes.blackjackAccess()),
                 IdempotencyGuard.SuccessStatus.OK);
         authentication.requireUnexpired(jwt);
         if (claim == IdempotencyGuard.Claim.CONFLICT) return Outcome.CONFLICT;
@@ -69,12 +76,23 @@ class TableSettingsService {
                 && changes.u2pickEnabled() != current.u2pickEnabled();
         boolean pollsChanged = changes.pollsEnabled() != null
                 && changes.pollsEnabled() != current.pollsEnabled();
-        if (hostsChanged || u2pickChanged || pollsChanged) {
+        boolean blackjackChanged = changes.blackjackAccess() != null
+                && !changes.blackjackAccess().equals(current.blackjackAccess());
+        if (hostsChanged || u2pickChanged || pollsChanged || blackjackChanged) {
             jdbc.update("""
                     UPDATE tables SET hosts_only_bets = COALESCE(?, hosts_only_bets),
-                        u2pick_enabled = COALESCE(?, u2pick_enabled), polls_enabled = COALESCE(?, polls_enabled)
+                        u2pick_enabled = COALESCE(?, u2pick_enabled), polls_enabled = COALESCE(?, polls_enabled),
+                        blackjack_access = COALESCE(?, blackjack_access)
                     WHERE id = ?
-                    """, changes.hostsOnlyBets(), changes.u2pickEnabled(), changes.pollsEnabled(), tableId);
+                    """, changes.hostsOnlyBets(), changes.u2pickEnabled(), changes.pollsEnabled(),
+                    changes.blackjackAccess(), tableId);
+            if (blackjackChanged) {
+                chatMessages.system(tableId, switch (changes.blackjackAccess()) {
+                    case "hosts" -> "Only hosts can deal Blackjack";
+                    case "off" -> "Blackjack turned off";
+                    default -> "Anyone can deal Blackjack";
+                });
+            }
             if (hostsChanged) {
                 chatMessages.system(tableId, changes.hostsOnlyBets()
                         ? "Only hosts can propose new bets" : "Host-only bet proposals turned off");

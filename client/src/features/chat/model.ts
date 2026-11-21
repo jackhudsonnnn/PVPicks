@@ -27,6 +27,14 @@ export function prependOlder(items: ChatMessage[], loaded: ChatMessage[]): ChatM
   return fresh.length ? [...fresh, ...loaded] : loaded;
 }
 
+// Settlement amounts are bigints, which JSON.stringify rejects on its own.
+const bigintSafe = (_key: string, value: unknown) =>
+  typeof value === "bigint" ? `${value}n` : value;
+
+function sameMessage(a: ChatMessage, b: ChatMessage) {
+  return JSON.stringify(a, bigintSafe) === JSON.stringify(b, bigintSafe);
+}
+
 /**
  * Replaces the loaded range that a refreshed window covers, so reactions update and messages hidden since
  * (for example after a block) disappear. A window that does not overlap the loaded range is ignored: placing
@@ -53,7 +61,7 @@ export function mergeRange(loaded: ChatMessage[], items: ChatMessage[]): ChatMes
     ...before.filter((m) => !windowIds.has(m.id)),
     ...items.map((m) => {
       const old = kept.get(m.id);
-      return old && JSON.stringify(old) === JSON.stringify(m) ? old : m;
+      return old && sameMessage(old, m) ? old : m;
     }),
     ...after.filter((m) => !windowIds.has(m.id)),
   ];

@@ -7,6 +7,7 @@ export type { BetActions } from "./components/bet-controls";
 export { ProposeBetSheet } from "./components/propose-sheet";
 export { StatusBadge } from "./components/status-badge";
 export { BetTicket } from "./components/ticket";
+export { BlackjackCards, BlackjackControls, BlackjackStatus } from "./components/blackjack-felt";
 export { TicketsPage } from "./components/tickets-page";
 export { MODES } from "./modes";
 export { formatClock, potCents, proposeBlock, secondsLeft, ticketStatus } from "./ticket-model";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
@@ -12,6 +12,7 @@ import { listTables } from "@/features/tables";
 import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
 import { BetTicket } from "./ticket";
+import { ticketTab } from "@/features/bets/ticket-tabs";
 import { useBetActions } from "@/features/bets/actions";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
@@ -42,7 +43,20 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
     retry: false,
   });
   const tableId = tables.data?.some((t) => t.id === requested) ? requested : undefined;
-  const [tab, setTab] = useState<Status>("ACTIVE");
+  const [picked, setTab] = useState<Status>("ACTIVE");
+  // One ticket per status says which tabs have any; empty ones are disabled, and if yours empties (your last
+  // Active ticket locks) you move to the next one with tickets. Refreshed with the list (same "my-bets" prefix).
+  const probes = useQueries({
+    queries: STATUS_ORDER.map((status) => ({
+      queryKey: userKey(user.id, "my-bets", tableId ?? "all", status, "any"),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        listMyBets({ status, limit: 1, ...(tableId ? { tableId } : {}) }, signal),
+      retry: false,
+    })),
+  });
+  const empty = new Set(STATUS_ORDER.filter((_, i) => probes[i]!.data?.items.length === 0));
+  const tab = ticketTab(STATUS_ORDER, picked, empty);
+  if (tab !== picked) setTab(tab);
   const key = userKey(user.id, "my-bets", tableId ?? "all", tab);
   const bets = useInfiniteQuery({
     queryKey: key,
@@ -84,7 +98,11 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
           ariaLabel="Ticket status"
           size="sm"
           fitContent
-          tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
+          tabs={TABS.map((t) => ({
+            id: t.id,
+            label: t.label,
+            disabled: t.id !== tab && empty.has(t.id),
+          }))}
           value={tab}
           onChange={setTab}
         />

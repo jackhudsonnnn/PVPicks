@@ -7,6 +7,9 @@
 {
 	# No admin API: config changes mean a restart.
 	admin off
+	# Browsers send no server name when opening an IP address (the quick test without a domain), and Docker's port
+	# forwarding hides which address was dialled, so fall back to this site's certificate.
+	default_sni {$PVPICKS_LAN_HOST}
 }
 
 {$PVPICKS_LAN_HOST} {

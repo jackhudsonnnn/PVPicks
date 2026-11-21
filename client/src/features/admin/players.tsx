@@ -17,16 +17,20 @@ import { userKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import {
   createPlayer,
+  deletePlayer,
+  getLanParty,
   getPlayerCode,
   listPlayers,
   rotatePlayerCode,
   signInLink,
   type AdminPlayer,
+  type LanParty,
 } from "./api";
 import { ago } from "./format";
 import { NameAvatar } from "./avatar";
 import { useDebounced } from "@/lib/use-debounced";
 import { lockedById, useLockouts } from "./lockout-state";
+import { useAppMode } from "@/lib/app-mode";
 
 /**
  * Player accounts: search by username, open one's audit, create a player, and show or rotate their sign-in code.
@@ -59,6 +63,25 @@ export function PlayerList({
   const playerList = players.data?.pages.flatMap((page) => page.items) ?? [];
   const { lockouts, clear } = useLockouts(user);
   const locked = lockedById(lockouts.data?.players);
+  const lan = useAppMode() === "lan";
+  const party = useQuery({
+    queryKey: userKey(user.id, "admin-party"),
+    queryFn: ({ signal }) => getLanParty(signal),
+    enabled: lan,
+    retry: false,
+  });
+  const remove = useMutation({
+    mutationFn: (player: AdminPlayer) => deletePlayer(player.id),
+    onSuccess: (washed, player) => {
+      if (selected === player.id) onClose();
+      toast.success(
+        `Deleted ${player.username}.${washed ? ` ${washed} open bet${washed === 1 ? "" : "s"} washed.` : ""}`,
+      );
+      void queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: userKey(user.id, "admin-party") });
+    },
+    onError: (failure) => toast.error(backendErrorMessage(failure)),
+  });
   const [creating, setCreating] = useState(false);
   const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,6 +99,7 @@ export function PlayerList({
       setCreating(false);
       toast.success(`${created.username} is ready. Their QR code is on their card.`);
       await queryClient.invalidateQueries({ queryKey: key });
+      void queryClient.invalidateQueries({ queryKey: userKey(user.id, "admin-party") });
     } catch (failure) {
       setError(
         failure instanceof BackendError && failure.code === "username_taken"
@@ -117,6 +141,7 @@ export function PlayerList({
           <UserPlus /> New player
         </Button>
       </div>
+      {lan && <PartyBanner party={party.data} loading={party.isPending} />}
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent>
           <DialogTitle>New player</DialogTitle>
@@ -184,6 +209,15 @@ export function PlayerList({
                 </span>
               </button>
               <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+                {lan &&
+                  party.data &&
+                  !party.data.deleted &&
+                  party.data.hostIds.includes(player.id) && <Chip tone="good">Host</Chip>}
+                {lan &&
+                  party.data &&
+                  !party.data.deleted &&
+                  !party.data.hostIds.includes(player.id) &&
+                  party.data.memberIds.includes(player.id) && <Chip>At the table</Chip>}
                 {player.status === "FROZEN" && <Chip tone="bad">Frozen</Chip>}
                 {locked.has(player.id) && (
                   <>
@@ -214,6 +248,15 @@ export function PlayerList({
                 onShow={() => onOpen(player.id)}
                 onHide={onClose}
               />
+              <ConfirmAction
+                label="Delete account"
+                variant="ghost"
+                className="w-full text-loss hover:text-loss"
+                title={`Delete ${player.username}?`}
+                description="This can't be undone, and it can disrupt their tables: every open bet they're in washes for everyone, they leave every table (if they're a table's only host, its earliest member takes over), and their code stops working. Points already won or lost and their receipts stay, as Deleted user. Their username becomes free."
+                disabled={remove.isPending}
+                onConfirm={() => remove.mutate(player)}
+              />
             </div>
           ))}
           {players.hasNextPage && !players.isFetchingNextPage && (
@@ -226,6 +269,39 @@ export function PlayerList({
         </ScrollContainer>
       )}
     </section>
+  );
+}
+
+/**
+ * The LAN party table, above the player cards (LAN only): the first player created hosts "New Table", and every
+ * later player is seated there and made friends with everyone at it. Once deleted, it stays gone.
+ */
+function PartyBanner({ party, loading }: { party: LanParty | undefined; loading: boolean }) {
+  if (loading) return null;
+  return (
+    <p className="rounded-lg border bg-surface px-3 py-2 text-sm">
+      {!party ? (
+        <>
+          <span className="font-semibold">No party table yet.</span> The next player you create
+          hosts it, and everyone after joins it as friends.
+        </>
+      ) : party.deleted ? (
+        <>
+          <span className="font-semibold">
+            {party.emoji} {party.name} was deleted.
+          </span>{" "}
+          New players don't join a table.
+        </>
+      ) : (
+        <>
+          <span className="font-semibold">
+            {party.emoji} {party.name}
+          </span>{" "}
+          · {party.memberIds.length} {party.memberIds.length === 1 ? "player" : "players"}. New
+          players join it as friends of everyone there.
+        </>
+      )}
+    </p>
   );
 }
 

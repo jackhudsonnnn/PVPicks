@@ -103,6 +103,8 @@ export async function mutationRequest(
 
 export function backendErrorMessage(error: unknown): string {
   if (error instanceof BackendError) {
+    // Slurs are refused anywhere you write (chat, polls, bets, names): say so plainly.
+    if (error.code === "abusive_language" && error.detail) return error.detail;
     if (error.status === 403)
       return "This account cannot access that action, or the request was rejected.";
     if (error.status === 404) return "This item is unavailable or you no longer have access.";

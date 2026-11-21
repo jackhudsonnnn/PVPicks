@@ -40,6 +40,7 @@ const intentSchema = z.discriminatedUnion("kind", [
     hostsOnlyBets: z.boolean().optional(),
     u2pickEnabled: z.boolean().optional(),
     pollsEnabled: z.boolean().optional(),
+    blackjackAccess: z.enum(["hosts", "everyone", "off"]).optional(),
   }),
   z.object({
     kind: z.literal("remainder"),
@@ -137,6 +138,9 @@ export function useTableActions(
                 ? {}
                 : { u2pickEnabled: intent.u2pickEnabled }),
               ...(intent.pollsEnabled === undefined ? {} : { pollsEnabled: intent.pollsEnabled }),
+              ...(intent.blackjackAccess === undefined
+                ? {}
+                : { blackjackAccess: intent.blackjackAccess }),
             },
             key,
           );

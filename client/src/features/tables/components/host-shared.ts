@@ -84,6 +84,13 @@ export const SWITCHES = [
   },
 ] as const;
 
+/** Who may deal Blackjack at the table (proposing it makes you the dealer). */
+export const BLACKJACK_ACCESS = [
+  { id: "everyone", label: "Everyone" },
+  { id: "hosts", label: "Hosts" },
+  { id: "off", label: "Off" },
+] as const;
+
 export const busy = (actions: { busy: boolean; pending: unknown; storageError: unknown }) =>
   actions.busy || !!actions.pending || !!actions.storageError;
 

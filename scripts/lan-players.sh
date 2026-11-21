@@ -5,7 +5,8 @@ set -euo pipefail
 # Runbook). Guests scan the QR, or type their username and code.
 # Signs in as the admin (password prompted, never echoed or stored). With `qrencode` installed, each link is also
 # drawn as a QR code in the terminal for guests to scan. A code keeps working until the admin rotates it (Users tab,
-# each player's card). Existing usernames are reported and skipped.
+# each player's card). Existing usernames are reported and skipped. Each new player is seated at the LAN party table
+# as everyone's friend; the very first player ever created hosts it, so create your own account first.
 #
 #   scripts/lan-players.sh p2picks.example.com owner alice bob carol
 

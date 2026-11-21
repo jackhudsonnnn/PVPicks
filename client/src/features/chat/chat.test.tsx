@@ -51,6 +51,7 @@ const table: Table = {
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
+  blackjackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -195,6 +196,29 @@ describe("table chat", () => {
     );
   });
 
+  it("keeps a refused message in the box to edit, and clears a sent one", async () => {
+    const { BackendError } = await import("@/lib/api-client");
+    vi.mocked(sendChatMessage).mockRejectedValueOnce(
+      new BackendError(
+        "Backend request failed.",
+        400,
+        "abusive_language",
+        "That has language that isn't allowed here.",
+      ),
+    );
+    renderChat();
+    await screen.findByText("hello 2");
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "something nasty" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByLabelText("Message")).toBeEnabled());
+    expect(screen.getByLabelText("Message")).toHaveValue("something nasty");
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "something nice" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue(""));
+  });
+
   it("keeps an uncertain send and retries it with the same key", async () => {
     vi.mocked(sendChatMessage).mockRejectedValueOnce(new TypeError("offline"));
     renderChat();
@@ -228,6 +252,20 @@ describe("table chat", () => {
     await waitFor(() =>
       expect(setReaction).toHaveBeenLastCalledWith(message(1).id, "😂", expect.any(String)),
     );
+  });
+
+  it("shows a new reaction without a reload", async () => {
+    vi.mocked(getChatWindow)
+      .mockResolvedValueOnce({ items: [message(1)], previousCursor: null, nextCursor: "after-1" })
+      .mockResolvedValue({
+        items: [message(1, { reactions: [{ userId: me.id, emoji: "😂" }] })],
+        previousCursor: null,
+        nextCursor: "after-1",
+      });
+    renderChat();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a reaction" }));
+    fireEvent.click(screen.getByRole("button", { name: "React 😂" }));
+    expect(await screen.findByRole("button", { name: "😂 1, including you" })).toBeInTheDocument();
   });
 
   it("respects disabled text, GIF and reaction permissions", async () => {

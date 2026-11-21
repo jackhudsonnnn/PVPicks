@@ -57,6 +57,24 @@ describe("chat history", () => {
     expect(merged[2]?.reactions).toEqual([{ userId: me, emoji: "🔥" }]);
   });
 
+  it("updates reactions next to a points-settled card (bigint amounts)", () => {
+    const settled: ChatMessage = {
+      id: "123e4567-e89b-42d3-a456-426614174199",
+      tableId: table,
+      kind: "settlement",
+      createdAt: "2026-11-13T12:00:00Z",
+      settlementId: "123e4567-e89b-42d3-a456-426614174198",
+      settlementSummary: {
+        hostId: me,
+        lines: [{ payerId: me, payeeId: other, amountCents: 125n }],
+      },
+    };
+    const loaded = [text(1), settled];
+    const merged = mergeRange(loaded, [text(1, [{ userId: me, emoji: "😂" }]), { ...settled }]);
+    expect(merged[0]?.reactions).toEqual([{ userId: me, emoji: "😂" }]);
+    expect(merged[1]).toBe(settled);
+  });
+
   it("drops messages that disappeared from the covered range and extends at the live end", () => {
     const loaded = [text(1), text(2), text(3)];
     expect(ids(mergeRange(loaded, [text(2), text(4)]))).toEqual([

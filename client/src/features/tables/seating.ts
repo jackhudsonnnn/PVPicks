@@ -6,7 +6,7 @@ const SEAT_CAP = 8;
 
 /**
  * Who sits at the felt. While the focused bet is Active nobody's participation is public yet, so everyone sits;
- * once it locks, only the people in it (pickers and No guess). You take the bottom seat when you're seated; the
+ * once it locks, only the people in it (pickers and No guess; for Blackjack, the seated players and the dealer). You take the bottom seat when you're seated; the
  * rest keep table order.
  */
 export function arrangeSeats(
@@ -16,8 +16,17 @@ export function arrangeSeats(
   cap = SEAT_CAP,
 ) {
   const inBet =
-    focused?.status === "PENDING" && focused.picks && focused.noGuessUserIds
-      ? new Set([...focused.picks.map((pick) => pick.userId), ...focused.noGuessUserIds])
+    // A finished Blackjack hand stays on the felt a little while; keep its players where its cards are.
+    (focused?.status === "PENDING" ||
+      (focused?.modeId === "blackjack" && focused.status !== "ACTIVE")) &&
+    focused.picks &&
+    focused.noGuessUserIds
+      ? new Set([
+          ...focused.picks.map((pick) => pick.userId),
+          ...focused.noGuessUserIds,
+          // Blackjack's dealer is in every hand without a seat of their own.
+          ...(focused.modeId === "blackjack" ? [focused.proposerId] : []),
+        ])
       : null;
   const eligible = inBet ? memberIds.filter((id) => inBet.has(id)) : memberIds;
   const others = eligible.filter((id) => id !== me);
@@ -43,6 +52,7 @@ export function seatStatus(
   me: string,
 ): { label: string; tone: SeatTone } | null {
   if (!bet) return null;
+  if (bet.modeId === "blackjack") return blackjackSeat(bet, userId, me);
   if (bet.status === "ACTIVE") {
     if (userId !== me) return null;
     if (bet.myParticipation === "picked") return { label: bet.myPick!, tone: "pick" };
@@ -63,9 +73,44 @@ export function seatStatus(
     : { label: `Lost ${formatCents(-delta)}`, tone: "loss" };
 }
 
-/** Open bets for the deck, newest first. */
-export function openBets(bets: Bet[]) {
+/**
+ * Blackjack has no picks: players sit with a bet against the dealer (the proposer). Seated players are the bet's
+ * participants, which the server lists as No guess; the dealer's chip says so.
+ */
+function blackjackSeat(
+  bet: Bet,
+  userId: string,
+  me: string,
+): { label: string; tone: SeatTone } | null {
+  const dealer = userId === bet.proposerId;
+  const seated =
+    bet.status === "ACTIVE"
+      ? userId === me && bet.myParticipation !== "not_joined"
+      : !!bet.noGuessUserIds?.includes(userId);
+  if (!dealer && !seated) return null;
+  if (bet.status === "ACTIVE") return { label: dealer ? "Dealer" : "Seated", tone: "pick" };
+  if (bet.status === "PENDING") return { label: dealer ? "Dealer" : "Playing", tone: "pick" };
+  if (bet.status === "WASHED") return { label: STATUSES.WASHED.label, tone: "washed" };
+  const delta = bet.deltasCents?.[userId] ?? 0;
+  if (bet.forFun || delta === 0) return { label: dealer ? "Dealer" : "Push", tone: "pass" };
+  return delta > 0
+    ? { label: `Won ${formatCents(delta, true)}`, tone: "win" }
+    : { label: `Lost ${formatCents(-delta)}`, tone: "loss" };
+}
+
+/** How long a finished Blackjack hand stays on the felt, so everyone sees how it ended. */
+export const FINISHED_HAND_MS = 20_000;
+
+/** Open bets for the deck, newest first, plus a Blackjack hand that just finished. */
+export function openBets(bets: Bet[], now = Date.now()) {
   return bets
-    .filter((bet) => bet.status === "ACTIVE" || bet.status === "PENDING")
+    .filter(
+      (bet) =>
+        bet.status === "ACTIVE" ||
+        bet.status === "PENDING" ||
+        (bet.modeId === "blackjack" &&
+          !!bet.closedAt &&
+          now - Date.parse(bet.closedAt) < FINISHED_HAND_MS),
+    )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

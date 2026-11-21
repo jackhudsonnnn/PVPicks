@@ -14,6 +14,8 @@ const tableSchema = z.object({
   u2pickEnabled: z.boolean(),
   /** Whether members can start new chat polls (existing polls stay open either way). */
   pollsEnabled: z.boolean(),
+  /** Who may deal Blackjack here; hosts set it. */
+  blackjackAccess: z.enum(["hosts", "everyone", "off"]),
   quickPicksEnabled: z.boolean(),
   quickPickSharing: z.boolean(),
   quickPickCode: z.string().optional(),
@@ -25,6 +27,7 @@ const tableSchema = z.object({
 });
 
 export type Table = z.infer<typeof tableSchema>;
+export type BlackjackAccess = Table["blackjackAccess"];
 
 /** Most tables one account can be in, and most members one table can have (enforced by the server). */
 export const TABLES_PER_USER = 100;
@@ -130,7 +133,12 @@ export async function updateTableProfile(
 
 export async function updateTableSettings(
   tableId: string,
-  change: { hostsOnlyBets?: boolean; u2pickEnabled?: boolean; pollsEnabled?: boolean },
+  change: {
+    hostsOnlyBets?: boolean;
+    u2pickEnabled?: boolean;
+    pollsEnabled?: boolean;
+    blackjackAccess?: BlackjackAccess;
+  },
   key: string,
 ) {
   await mutationRequest(`${tablePath(tableId)}/settings`, "PATCH", key, change);

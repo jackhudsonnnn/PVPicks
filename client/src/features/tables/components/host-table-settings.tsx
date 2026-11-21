@@ -1,6 +1,6 @@
 /** The Host panel's table name and icon, switches, Quick Picks and deletion. */
 import { useEffect, useState } from "react";
-import { Check, Copy, Radio, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Check, Copy, Radio, RefreshCw, Spade, Trash2, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +25,17 @@ import { Switch } from "@/components/ui/switch";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { TABLE_EMOJIS } from "@/features/tables/emojis";
 import { cn } from "@/lib/utils";
-import type { RemainderRule } from "@/features/tables/api";
+import type { BlackjackAccess, RemainderRule } from "@/features/tables/api";
+import { SegmentedTabs } from "@/components/segmented-tabs";
 import { tableNameProblem } from "@/features/tables/rules";
-import { PanelProps, REMAINDER, SWITCHES, busy, hasOpenBets } from "./host-shared";
+import {
+  BLACKJACK_ACCESS,
+  PanelProps,
+  REMAINDER,
+  SWITCHES,
+  busy,
+  hasOpenBets,
+} from "./host-shared";
 
 export function TableDetailsSection({ table, bets, tableActions }: PanelProps) {
   const [name, setName] = useState(table.name);
@@ -64,6 +72,22 @@ export function TableDetailsSection({ table, bets, tableActions }: PanelProps) {
           }
         />
       ))}
+      <SettingRow
+        icon={Spade}
+        label="Who can deal Blackjack"
+        description="Whoever proposes Blackjack deals and banks the hand."
+      >
+        <SegmentedTabs<BlackjackAccess>
+          size="sm"
+          className="mt-3"
+          ariaLabel="Who can deal Blackjack"
+          tabs={BLACKJACK_ACCESS.map((a) => ({ id: a.id, label: a.label, disabled }))}
+          value={table.blackjackAccess}
+          onChange={(access) =>
+            tableActions.start({ kind: "settings", tableId: table.id, blackjackAccess: access })
+          }
+        />
+      </SettingRow>
       <div className="space-y-1.5 px-4 py-3.5 sm:px-5">
         <label htmlFor="remainder-rule" className="text-sm font-semibold">
           Leftover cents go to

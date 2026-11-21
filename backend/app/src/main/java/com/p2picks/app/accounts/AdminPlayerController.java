@@ -11,6 +11,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,15 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The admin's player accounts: list, create (the response carries the new player's sign-in code), view a player's
- * code and rotate it (which signs the player out everywhere). {@code /admin/**} is admin-only (SessionSecurity).
+ * code, rotate it (which signs the player out everywhere) and delete the account. {@code /admin/**} is admin-only (SessionSecurity).
  * No retry keys: a retried create finds the username taken, and a retried rotate just rotates again.
  */
 @RestController
 class AdminPlayerController {
     private final PlayerProvisioning players;
+    private final AccountDeletionService deletion;
 
-    AdminPlayerController(PlayerProvisioning players) {
+    AdminPlayerController(PlayerProvisioning players, AccountDeletionService deletion) {
         this.players = players;
+        this.deletion = deletion;
     }
 
     @GetMapping("/admin/players")
@@ -62,6 +65,25 @@ class AdminPlayerController {
     @PostMapping("/admin/players/{playerId}/code")
     ResponseEntity<?> rotate(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID playerId) {
         return respond(() -> players.rotate(jwt, playerId));
+    }
+
+    /**
+     * Deletes a player outright, square or not: their open bets wash for everyone at those tables (domain rules,
+     * "Admin account deletion"). The admin UI warns about that first. The body reports how many bets washed.
+     */
+    @DeleteMapping("/admin/players/{playerId}")
+    ResponseEntity<?> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID playerId) {
+        try {
+            AccountDeletionService.AdminResult result = deletion.deleteByAdmin(jwt, playerId);
+            return switch (result.outcome()) {
+                case DELETED -> ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                        .body(Map.of("washedBets", result.washedBets()));
+                case WRONG_USERNAME -> error(404, "not_found", "Not found.");
+                default -> error(401, "unauthorized", "Authentication required or credentials invalid.");
+            };
+        } catch (MutationAuthentication.ExpiredSession expired) {
+            return error(401, "unauthorized", "Authentication required or credentials invalid.");
+        }
     }
 
     private ResponseEntity<?> respond(java.util.function.Supplier<PlayerProvisioning.Result> action) {

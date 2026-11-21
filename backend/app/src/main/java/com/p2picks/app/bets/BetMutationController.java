@@ -5,6 +5,7 @@ import static com.p2picks.app.common.ApiErrors.error;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.p2picks.app.bets.U2PickSettler;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.security.MutationAuthentication;
 import java.util.ArrayList;
@@ -39,9 +40,12 @@ class BetMutationController {
     private final HostOverrideService overrides;
     private final BetReadController reads;
 
+    private final BlackjackService blackjack;
+
     BetMutationController(U2PickProposalService proposals, SportsProposalService sportsProposals,
             BetPickService picks, U2PickResolutionService resolutions, HostOverrideService overrides,
-            BetReadController reads) {
+            BetReadController reads, BlackjackService blackjack) {
+        this.blackjack = blackjack;
         this.overrides = overrides;
         this.proposals = proposals;
         this.sportsProposals = sportsProposals;
@@ -57,11 +61,18 @@ class BetMutationController {
         if (SportsProposalService.MODES.contains(input.path("modeId").asText(""))) {
             return proposeSports(jwt, tableId, key, input);
         }
+        if (input.path("modeId").asText("").equals(BlackjackService.MODE)) {
+            return proposeBlackjack(jwt, tableId, key, input);
+        }
         U2PickProposalService.Proposal proposal;
         try {
             proposal = parseProposal(input);
         } catch (IllegalArgumentException exception) {
             return error(400, "bad_request", "Invalid U2Pick proposal.");
+        }
+        if (AbusiveLanguage.contains(proposal.definition().question())
+                || AbusiveLanguage.containsAny(proposal.definition().choices())) {
+            return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
         }
         try {
             var result = proposals.create(jwt, tableId, proposal, key);
@@ -111,6 +122,29 @@ class BetMutationController {
             return error(409, "invalid_terms", exception.getMessage() + ".");
         } catch (BetProposalWriter.DebtCapExceeded exception) {
             return error(409, "debt_cap_exceeded", "This proposal would put you past your points limit.");
+        } catch (MutationAuthentication.ExpiredSession exception) {
+            return unauthorized();
+        }
+    }
+
+    /** Blackjack: {@code {modeId, rules, forFun}}; the proposer deals (domain rules, "Blackjack"). */
+    private ResponseEntity<?> proposeBlackjack(Jwt jwt, UUID tableId, String key, JsonNode input) {
+        BlackjackRules rules;
+        try {
+            if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "forFun"))
+                    || !input.path("forFun").isBoolean()) {
+                throw new IllegalArgumentException("Invalid proposal");
+            }
+            rules = BlackjackRules.parse(input.get("rules"));
+        } catch (IllegalArgumentException exception) {
+            return error(400, "bad_request", "Invalid Blackjack rules: " + exception.getMessage() + ".");
+        }
+        try {
+            var result = blackjack.propose(jwt, tableId, rules, input.path("forFun").booleanValue(), key);
+            return created(jwt, result.outcome().name(), result.betId());
+        } catch (BetProposalWriter.DebtCapExceeded exception) {
+            return error(409, "debt_cap_exceeded",
+                    "Your points limit can't cover a full table at this maximum bet. Lower it, or the seats.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }

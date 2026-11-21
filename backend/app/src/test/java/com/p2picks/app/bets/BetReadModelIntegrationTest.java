@@ -155,9 +155,9 @@ class BetReadModelIntegrationTest extends IntegrationTestSupport {
             assertThat(modeSchema.validate(mode)).isEmpty();
             if (mode.path("available").asBoolean()) available.add(mode.path("id").asText());
         });
-        assertThat(modes.size()).isEqualTo(8);
+        assertThat(modes.size()).isEqualTo(9);
         // Every mode but Choose Their Fate, which needs GOAT play-by-play.
         assertThat(available).containsExactly("u2pick", "total_disaster", "give_and_take", "either_or", "prop_hunt",
-                "king_of_the_hill", "scorcerer");
+                "king_of_the_hill", "scorcerer", "blackjack");
     }
 }

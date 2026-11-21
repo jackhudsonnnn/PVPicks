@@ -69,7 +69,7 @@ class RealtimeConsumer {
         Routes routes = new Routes(UUID.fromString(event.path("id").asText()), event.path("createdAt").asText());
         JsonNode payload = event.path("payload");
         switch (type) {
-            case BET_CREATED, BET_PICK_COUNT_CHANGED, BET_LOCKED, BET_RESOLVED -> {
+            case BET_CREATED, BET_PICK_COUNT_CHANGED, BET_LOCKED, BET_RESOLVED, BET_BLACKJACK_CHANGED -> {
                 UUID table = uuid(payload, "tableId");
                 routes.table(table, RealtimeGateway.TableFeed.BETS, Invalidation.BET_CHANGED,
                         uuid(payload, "betId"), null);

@@ -14,6 +14,7 @@ import { getRelationships, listInvites } from "@/features/social/api";
 import type { Invalidation } from "@/lib/realtime-connection";
 import { getChatUnread, getChatWindow } from "@/features/chat/api";
 import { getDemo, getDevSports } from "@/features/devdata/api";
+import { getAppMode } from "@/lib/app-mode-api";
 
 // Several components may listen to one destination (the table view feed carries table and tomato changes), so keep
 // each component's latest listener.
@@ -59,6 +60,8 @@ vi.mock("@tanstack/react-router", () => ({
   useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
     select({ location: route }),
 }));
+// The LAN's code sign-in unless a test says otherwise; the dev picker has its own tests.
+vi.mock("@/lib/app-mode-api", () => ({ getAppMode: vi.fn(async () => "lan") }));
 vi.mock("@/features/auth/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/auth/api")>()),
   currentUser: vi.fn(),
@@ -126,6 +129,7 @@ const table = {
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
+  blackjackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -166,6 +170,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   route.pathname = "/";
   vi.mocked(getDemo).mockResolvedValue(null);
+  vi.mocked(getAppMode).mockResolvedValue("lan");
   vi.mocked(getDevSports).mockResolvedValue(null);
   vi.mocked(listTableBets).mockResolvedValue([]);
   vi.mocked(listMyBets).mockResolvedValue({ items: [], nextCursor: null });
@@ -317,6 +322,22 @@ describe("backend app", () => {
     renderApp();
     expect(await screen.findByText(/204 people, 18 tables/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("keeps the admin's password form at /admin, off the players' sign-in", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    renderApp();
+    expect(await screen.findByLabelText("Your code")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Admin" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+  });
+
+  it("shows the admin sign-in at /admin", async () => {
+    vi.mocked(currentUser).mockResolvedValue(null);
+    route.pathname = "/admin";
+    renderApp();
+    expect(await screen.findByRole("heading", { name: "Admin sign-in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
   });
 
   it("shows the sign-in form without dev icons on a backend without dev data", async () => {

@@ -46,6 +46,7 @@ flowchart LR
   moderation --> accounts
   devdata --> sports
   demo --> sports & bets & social & chat & settlement & moderation & feedback
+  lan --> accounts & tables & social
   users & social & tables & chat & bets & settlement & sports & delivery & feedback --> shared["common + security (open)"]
 ```
 
@@ -64,6 +65,8 @@ flowchart LR
 | `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone), and admin-created player accounts and the bootstrapped first admin. Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
 | `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
 | `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status`; the admin sports explorer |
+| `lan` | `lan_party`: LAN only (`pvpicks.lan.party.enabled`). Seats each new player at the party table on `accounts.PlayerCreated`, through `tables.TableProvisioning` and `social.Friendships` ([LAN watch party](/lan#the-party-table)) |
+| `config` | Nothing: `GET /config` (the app mode), the mode check before Flyway, and the dev docs endpoint |
 | `demo` | Nothing of its own: dev profile only (`pvpicks.demo.enabled`). Seeds the demo world and its history, resets app data (keeping sports data and request timings), serves the passwordless sign-in picker through `security.PasswordlessSignIn`, runs the looping demo games through `sports.GameSync` and plays the demo users through the bets, social, chat, settlement and moderation services |
 | `devdata` | Nothing of its own: dev profile only, it writes `DEV-` games and stats through `sports.GameSync` and `StatsSync` from scenario files and recorded chunks |
 | `delivery` | `outbox.published_at` and deletion of old published rows; reads sessions, memberships, invitations, blocks and receipt parties to choose realtime audiences |
@@ -86,6 +89,40 @@ public dev docs and health remain available. No account-role change API exists.
 Migration V24 rejects ordinary role updates; privileged database operators can
 bypass the guard. The request-level boundary alone does not stop an in-flight
 request after an out-of-band role change.
+
+## Three modes: dev, LAN, prod
+
+The app has three settings, and the backend runs as exactly one,
+`common.AppMode` (shared, so security can use it), read from its single Spring profile:
+
+| Mode | Profile | What's different |
+|---|---|---|
+| **dev** | `dev` | The demo world and bots, the passwordless picker, the Dev page, DEV games and the handbook. HTTP on loopback. |
+| **lan** | `lan` | The one-night [LAN watch party](/lan): HTTPS behind Caddy, sign-in codes only, the party table, real feeds. |
+| **prod** | (none yet) | Not configured: the backend refuses to start without exactly one of `dev` and `lan`. |
+
+How code is split (owner decision, 2026-11-18: reuse as much as possible):
+
+- **Shared code never asks which mode it's in.** Almost everything (bets,
+  tables, chat, settlement, accounts, admin) is the same everywhere. Admin
+  account deletion, for example, is in `accounts` and works in every mode.
+- **Mode-only features live in their own modules**: `demo` and `devdata`
+  (dev), `lan` (LAN). Each is switched on by a property only that mode's
+  `application-<mode>.yml` sets (`pvpicks.demo.enabled`,
+  `pvpicks.lan.party.enabled`), not by the profile name, so integration
+  tests (which all run under `dev`) can turn one on. Shared modules don't
+  depend on them; they hook in through events (`accounts.PlayerCreated`) or
+  small server-side APIs (`tables.TableProvisioning`, `social.Friendships`).
+- **Where shared code must differ**, it asks for the `AppMode` bean:
+  `security.SessionSecurity` (dev opens `/dev/**` and the handbook) and
+  `security.OriginFilter` (dev wants an HTTP loopback origin, LAN an HTTPS
+  one).
+- **Settings** that only tune behavior (intervals, throttles, cookie
+  security) stay plain properties in each mode's YAML.
+- **The client** asks `GET /config` (`lib/app-mode.ts`) and branches only at
+  the edges: the sign-in screen (demo picker in dev, codes otherwise) and the
+  admin's Users tab (the party table on LAN). The admin password form is at
+  `/admin` in every mode.
 
 ## Shared betting and mode boundaries
 

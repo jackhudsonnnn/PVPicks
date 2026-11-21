@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   AnimatePresence,
@@ -10,9 +10,13 @@ import {
 } from "motion/react";
 import { Button } from "@/components/ui/button";
 import {
+  BlackjackCards,
+  BlackjackControls,
+  BlackjackStatus,
   StatusBadge,
   MODES,
   type Bet,
+  type BetActions,
   formatClock,
   potCents,
   secondsLeft,
@@ -79,6 +83,7 @@ export function Felt({
   onOpenPeers,
   onSelectUser,
   onPropose,
+  betActions,
   ...people
 }: People & {
   table: Table;
@@ -91,9 +96,13 @@ export function Felt({
   onSelectUser: (userId: string) => void;
   /** Omitted when you can't start bets here. */
   onPropose?: (() => void) | undefined;
+  /** Lets a focused Blackjack hand be played right on the felt. */
+  betActions?: BetActions | undefined;
 }) {
   const { user } = people;
   const { seated, rail } = arrangeSeats(table.memberIds, user.id, focused);
+  // A focused Blackjack hand is played right on the felt, around its ticket in the stack.
+  const blackjack = focused?.modeId === "blackjack" ? focused : undefined;
   const reduced = !!useReducedMotionConfig();
   const seatTransition = { duration: reduced ? 0 : 0.18 };
   // Keep mounted nodes in table order even when your bottom seat has a different index.
@@ -109,6 +118,16 @@ export function Felt({
         <span className="pointer-events-none absolute left-1/2 top-[16%] -translate-x-1/2 font-display text-xs font-black uppercase tracking-[0.3em] text-foreground/15 sm:text-sm">
           P2Picks
         </span>
+        {blackjack && (
+          <BlackjackCards
+            bet={blackjack}
+            user={user}
+            seatSpot={(id) => {
+              const slot = slots.find((s) => s.id === id);
+              return slot ? seatPosition(slot.index, Math.max(seatCount, 2)) : undefined;
+            }}
+          />
+        )}
         <div className="absolute inset-0 flex items-center justify-center">
           <BetStack
             bets={bets}
@@ -116,6 +135,13 @@ export function Felt({
             onFocus={onFocus}
             onOpen={onOpenBet}
             onPropose={onPropose}
+            label={blackjack && <BlackjackStatus bet={blackjack} {...people} />}
+            footer={
+              blackjack &&
+              betActions && (
+                <BlackjackControls bet={blackjack} table={table} user={user} actions={betActions} />
+              )
+            }
           />
         </div>
         {slots.map(({ id, index }) => {
@@ -219,7 +245,7 @@ function Seat({
         <span className="block truncate text-[10px] font-semibold leading-tight sm:text-[11px]">
           {name}
         </span>
-        <span
+        {/* <span
           className={cn(
             "block font-mono text-[9px] leading-tight sm:text-[10px]",
             settle === undefined || settle === 0n
@@ -231,7 +257,7 @@ function Seat({
           title="Points at this table that the next settlement moves"
         >
           {settle === undefined ? "–" : formatCents(settle, true)}
-        </span>
+        </span> */}
       </span>
       {chip && (
         <span
@@ -254,12 +280,18 @@ function BetStack({
   onFocus,
   onOpen,
   onPropose,
+  label,
+  footer,
 }: {
   bets: Bet[];
   focusedId: string | undefined;
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
   onPropose?: (() => void) | undefined;
+  /** Replaces the pill's "N in" / pot for the focused bet (Blackjack's status). */
+  label?: ReactNode;
+  /** Under the pill without moving the stack (Blackjack's controls). */
+  footer?: ReactNode;
 }) {
   const reduced = !!useReducedMotionConfig();
   const idx = Math.max(
@@ -304,7 +336,7 @@ function BetStack({
   cards.sort((a, b) => bets.indexOf(a.bet) - bets.indexOf(b.bet));
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="relative flex flex-col items-center gap-2">
       <motion.div
         className="relative h-28 w-28 touch-pan-y sm:h-40 sm:w-44"
         onPanEnd={(_, info) => {
@@ -353,7 +385,9 @@ function BetStack({
           </button>
         )}
         <span className="whitespace-nowrap px-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-foreground sm:text-[10px]">
-          {pot === null ? (
+          {label ? (
+            label
+          ) : pot === null ? (
             <>{focused.pickCount} in</>
           ) : (
             <span className="text-primary">{focused.forFun ? "4fun" : formatCents(pot)}</span>
@@ -375,6 +409,9 @@ function BetStack({
           </button>
         )}
       </div>
+      {footer && (
+        <div className="absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2">{footer}</div>
+      )}
     </div>
   );
 }

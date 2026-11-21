@@ -16,6 +16,7 @@ const betSchema = z
       "give_and_take",
       "prop_hunt",
       "u2pick",
+      "blackjack",
     ]),
     config: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])),
     question: z.string(),

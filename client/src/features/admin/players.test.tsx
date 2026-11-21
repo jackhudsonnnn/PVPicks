@@ -3,7 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BackendError } from "@/lib/api-client";
-import { createPlayer, getPlayerCode, listPlayers, rotatePlayerCode } from "./api";
+import {
+  createPlayer,
+  deletePlayer,
+  getLanParty,
+  getPlayerCode,
+  listPlayers,
+  rotatePlayerCode,
+} from "./api";
+import { getAppMode } from "@/lib/app-mode-api";
 import { PlayerList } from "./players";
 import { clearSignInLockout, getSignInLockouts } from "./dashboard-api";
 
@@ -19,7 +27,10 @@ vi.mock("./api", async (importOriginal) => ({
   createPlayer: vi.fn(),
   getPlayerCode: vi.fn(),
   rotatePlayerCode: vi.fn(),
+  deletePlayer: vi.fn(),
+  getLanParty: vi.fn(),
 }));
+vi.mock("@/lib/app-mode-api", () => ({ getAppMode: vi.fn() }));
 
 const admin = { id: "123e4567-e89b-42d3-a456-426614174000", username: "admin", hue: 4 };
 const player = (username: string, signedIn: boolean, strikes = 0) => ({
@@ -66,6 +77,7 @@ function renderPlayers(onOpen = vi.fn()) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getAppMode).mockResolvedValue("dev");
   vi.mocked(getSignInLockouts).mockResolvedValue({
     playerLimit: 10,
     addressLimit: 100,
@@ -210,5 +222,51 @@ describe("admin players", () => {
     expect(await screen.findByText("Locked out")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unlock dana" }));
     await waitFor(() => expect(clearSignInLockout).toHaveBeenCalledWith(dana.id));
+  });
+
+  it("deletes a player after a warning about their tables, and says how many bets washed", async () => {
+    vi.mocked(listPlayers).mockResolvedValue({ items: [player("dana", true)], nextCursor: null });
+    vi.mocked(deletePlayer).mockResolvedValue(2);
+    renderPlayers();
+    fireEvent.click(await screen.findByRole("button", { name: "Delete account" }));
+    expect(
+      await screen.findByText(/every open bet they're in washes for everyone/),
+    ).toBeInTheDocument();
+    expect(deletePlayer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(deletePlayer).toHaveBeenCalledWith(player("dana", true).id));
+    await waitFor(() => expect(listPlayers).toHaveBeenCalledTimes(2));
+    expect(getLanParty).not.toHaveBeenCalled();
+  });
+
+  it("shows the LAN party table and who's at it", async () => {
+    vi.mocked(getAppMode).mockResolvedValue("lan");
+    const host = player("dana", true);
+    const guest = player("eli", false);
+    vi.mocked(listPlayers).mockResolvedValue({
+      items: [guest, host, player("frank", false)],
+      nextCursor: null,
+    });
+    vi.mocked(getLanParty).mockResolvedValue({
+      id: "123e4567-e89b-42d3-a456-426614174099",
+      name: "New Table",
+      emoji: "🏈",
+      deleted: false,
+      hostIds: [host.id],
+      memberIds: [host.id, guest.id],
+    });
+    renderPlayers();
+    expect(await screen.findByText(/🏈 New Table/)).toBeInTheDocument();
+    expect(screen.getByText(/2 players/)).toBeInTheDocument();
+    expect(screen.getByText("Host")).toBeInTheDocument();
+    expect(screen.getAllByText("At the table")).toHaveLength(1);
+  });
+
+  it("says when there's no party table yet", async () => {
+    vi.mocked(getAppMode).mockResolvedValue("lan");
+    vi.mocked(listPlayers).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(getLanParty).mockResolvedValue(null);
+    renderPlayers();
+    expect(await screen.findByText(/The next player you create hosts it/)).toBeInTheDocument();
   });
 });

@@ -29,19 +29,30 @@ public class BetProposalWriter {
 
     public record Result(Outcome outcome, UUID betId) {}
 
+    /** Which table switch, if any, the mode answers to beyond "hosts only bets". */
+    enum Gate { NONE, U2PICK, BLACKJACK }
+
     /**
      * A validated bet to insert. {@code lockBy} is the latest moment picks may lock (a game's start); the deadline
      * is the pick window's end or {@code lockBy}, whichever is first, ignoring a {@code lockBy} already past.
      */
     record NewBet(String mode, String gameId, String configJson, String question, String choicesJson,
                   long wagerCents, boolean forFun, int durationSec, String settlerRule, Boolean includesOvertime,
-                  Instant lockBy) {
+                  Instant lockBy, long riskCents) {
         NewBet {
             Objects.requireNonNull(mode, "mode");
             if (wagerCents < 0 || (!forFun && (wagerCents < 10 || wagerCents > 1000))) {
                 throw new IllegalArgumentException("Invalid wager");
             }
+            if (riskCents < 0) throw new IllegalArgumentException("Invalid risk");
             if (durationSec < 30 || durationSec > 600) throw new IllegalArgumentException("Invalid pick window");
+        }
+
+        /** A bet whose proposer risks its wager (every mode but Blackjack, where the dealer risks the table). */
+        NewBet(String mode, String gameId, String configJson, String question, String choicesJson, long wagerCents,
+                boolean forFun, int durationSec, String settlerRule, Boolean includesOvertime, Instant lockBy) {
+            this(mode, gameId, configJson, question, choicesJson, wagerCents, forFun, durationSec, settlerRule,
+                    includesOvertime, lockBy, wagerCents);
         }
     }
 
@@ -70,7 +81,7 @@ public class BetProposalWriter {
      * {@link ModeUnavailable} to refuse.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public Result create(Jwt jwt, UUID tableId, String key, String operation, String fingerprint, boolean u2pick,
+    public Result create(Jwt jwt, UUID tableId, String key, String operation, String fingerprint, Gate gate,
             Supplier<NewBet> bet) {
         if (!IdempotencyGuard.validKey(key)) throw new IllegalArgumentException("Invalid idempotency key");
         Objects.requireNonNull(tableId, "tableId");
@@ -81,10 +92,10 @@ public class BetProposalWriter {
             return failure(Outcome.FORBIDDEN);
         }
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, blackjack_access FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
                 """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"),
-                        rs.getBoolean("u2pick_enabled")), tableId);
+                        rs.getBoolean("u2pick_enabled"), rs.getString("blackjack_access")), tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return failure(Outcome.NOT_FOUND);
@@ -107,13 +118,20 @@ public class BetProposalWriter {
             return new Result(Outcome.REPLAYED, betId);
         }
         Settings settings = tables.getFirst();
-        if ((u2pick && !settings.u2pickEnabled()) || (settings.hostsOnlyBets() && !member.role().equals("HOST"))) {
+        boolean host = member.role().equals("HOST");
+        boolean gated = switch (gate) {
+            case NONE -> false;
+            case U2PICK -> !settings.u2pickEnabled();
+            case BLACKJACK -> settings.blackjackAccess().equals("off")
+                    || (settings.blackjackAccess().equals("hosts") && !host);
+        };
+        if (gated || (settings.hostsOnlyBets() && !host)) {
             idempotency.discardNewClaim(actor, key);
             authentication.requireUnexpired(jwt);
             return failure(Outcome.FORBIDDEN);
         }
         NewBet row = bet.get();
-        if (!debt.canRiskForLockedUser(actor, row.wagerCents(), row.forFun())) throw new DebtCapExceeded();
+        if (!debt.canRiskForLockedUser(actor, row.riskCents(), row.forFun())) throw new DebtCapExceeded();
         UUID betId = UUID.randomUUID();
         jdbc.update("""
                 WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AS at)
@@ -148,7 +166,7 @@ public class BetProposalWriter {
         return new Result(outcome, null);
     }
 
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled) {}
+    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, String blackjackAccess) {}
 
     private record Member(String role, boolean canBet) {}
 }

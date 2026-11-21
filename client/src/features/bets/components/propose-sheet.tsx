@@ -13,6 +13,8 @@ import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { Section, Stepper } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
+import { BlackjackSetup } from "./blackjack-setup";
+import { DEFAULT_RULES, rulesProblem, type BlackjackRules } from "@/features/bets/blackjack";
 import { type ModeDef, useModeAvailability } from "@/features/bets/modes";
 import { ModeGrid } from "./mode-grid";
 import type { SettlerRule } from "@/features/bets/types";
@@ -35,7 +37,7 @@ import type { User } from "@/features/people";
 import { BetFacts } from "./bet-details";
 import type { BetActions } from "./bet-controls";
 import { BetTicket } from "./ticket";
-import { proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
+import { blackjackBlock, proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
 import {
   canPush,
   DEFAULT_LINE,
@@ -92,6 +94,7 @@ export function ProposeBetSheet({
   const [overtime, setOvertime] = useState(true);
   const [stat, setStat] = useState<string | null>(null);
   const [playerIds, setPlayerIds] = useState<string[]>([]);
+  const [rules, setRules] = useState<BlackjackRules>(DEFAULT_RULES);
   const ticker = useTicker(user.id);
   const sportsMode: SportsMode | null = mode && isSportsMode(mode.id) ? mode.id : null;
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
@@ -111,13 +114,15 @@ export function ProposeBetSheet({
   const busy = actions.busy || !!actions.pending || !!actions.storageError;
   const problem = !mode
     ? null
-    : mode.custom
-      ? (u2pickBlock(table) ?? customBetProblem(question, options))
-      : !game
-        ? "Pick a game."
-        : playerMode
-          ? playerProblem(playerMode, pickedStats, line)
-          : null;
+    : mode.dealer
+      ? (blackjackBlock(table, user.id) ?? rulesProblem(rules))
+      : mode.custom
+        ? (u2pickBlock(table) ?? customBetProblem(question, options))
+        : !game
+          ? "Pick a game."
+          : playerMode
+            ? playerProblem(playerMode, pickedStats, line)
+            : null;
 
   function pickGame(next: TickerGame) {
     setGameId(next.id);
@@ -259,10 +264,17 @@ export function ProposeBetSheet({
     setOvertime(true);
     setStat(null);
     setPlayerIds([]);
+    setRules(DEFAULT_RULES);
   }
 
   function submit() {
     if (!mode || problem || block || busy) return;
+    if (mode.dealer) {
+      actions.start({ kind: "propose-blackjack", tableId: table.id, rules, forFun });
+      onOpenChange(false);
+      reset();
+      return;
+    }
     if (sportsMode && game) {
       actions.start({
         kind: "propose-sports",
@@ -359,7 +371,20 @@ export function ProposeBetSheet({
               />
             </div>
           ) : !mode ? (
-            <ModeGrid table={table} availability={availability} block={block} onPick={pickMode} />
+            <ModeGrid
+              table={table}
+              userId={user.id}
+              availability={availability}
+              block={block}
+              onPick={pickMode}
+            />
+          ) : mode.dealer ? (
+            <BlackjackSetup
+              rules={rules}
+              onChange={setRules}
+              forFun={forFun}
+              onForFun={setForFun}
+            />
           ) : (
             <div className="space-y-6">
               {sportsMode ? (
@@ -586,10 +611,14 @@ export function ProposeBetSheet({
               variant="hero"
               size="lg"
               className="w-full"
-              onClick={() => (previewing ? submit() : setPreviewing(true))}
-              disabled={!!problem || !!block || (previewing && busy)}
+              onClick={() => (previewing || mode.dealer ? submit() : setPreviewing(true))}
+              disabled={!!problem || !!block || ((previewing || !!mode.dealer) && busy)}
             >
-              {previewing ? (
+              {mode.dealer ? (
+                <>
+                  <Send /> Open the table
+                </>
+              ) : previewing ? (
                 <>
                   <Send /> Send · {forFun ? "4fun" : `${formatCents(wager)} pts`}
                 </>

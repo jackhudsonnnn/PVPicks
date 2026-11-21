@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Table } from "@/features/tables";
 import { MODES, type ModeDef } from "@/features/bets/modes";
-import { u2pickBlock } from "@/features/bets/ticket-model";
+import { blackjackBlock, u2pickBlock } from "@/features/bets/ticket-model";
 
 const LEAGUE_BADGES = [
   { id: "nfl", label: "NFL", className: "border-primary/30 bg-primary/10 text-primary" },
@@ -19,11 +19,13 @@ const LEAGUE_BADGES = [
  */
 export function ModeGrid({
   table,
+  userId,
   availability,
   block,
   onPick,
 }: {
   table: Table;
+  userId: string;
   /** From `useModeAvailability`, loaded with the sheet so it's ready when the grid opens. */
   availability: ReadonlyMap<string, boolean> | undefined;
   /** Why the viewer can't propose anything here, or null. */
@@ -35,7 +37,9 @@ export function ModeGrid({
       {MODES.map((m) => {
         const Icon = m.icon;
         const available = availability?.get(m.id) ?? false;
-        const modeBlock = block ?? (m.custom ? u2pickBlock(table) : null);
+        const modeBlock =
+          block ??
+          (m.custom ? u2pickBlock(table) : m.dealer ? blackjackBlock(table, userId) : null);
         const off = !available || !!modeBlock;
         return (
           <Button
@@ -49,7 +53,7 @@ export function ModeGrid({
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <Icon className="size-5" />
               </span>
-              {!m.custom && (
+              {!m.custom && !m.dealer && (
                 <span className="flex flex-wrap justify-end gap-1">
                   {LEAGUE_BADGES.map((l) => (
                     <span

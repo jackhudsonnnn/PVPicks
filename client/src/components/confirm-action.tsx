@@ -25,7 +25,7 @@ export function ConfirmAction({
   description: string;
   disabled: boolean;
   onConfirm: () => void;
-  variant?: "outline" | "default" | "destructive";
+  variant?: "outline" | "default" | "destructive" | "ghost";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);

@@ -72,9 +72,9 @@ public class BetPickService {
             return Outcome.FORBIDDEN;
         }
         List<Bet> bets = jdbc.query("""
-                SELECT status, wager_cents, is_4fun FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
+                SELECT status, wager_cents, is_4fun, mode FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
                 """, (rs, row) -> new Bet(rs.getString("status"), rs.getLong("wager_cents"),
-                        rs.getBoolean("is_4fun")), betId, tableId);
+                        rs.getBoolean("is_4fun"), rs.getString("mode")), betId, tableId);
         if (bets.isEmpty()) throw new IllegalStateException("Bet disappeared during pick");
 
         String operation = choice == null ? "bet.pick.clear.v1" : "bet.pick.put.v1";
@@ -84,6 +84,8 @@ public class BetPickService {
         if (claim == IdempotencyGuard.Claim.CONFLICT) return Outcome.CONFLICT;
         if (claim == IdempotencyGuard.Claim.REPLAY) return Outcome.REPLAYED;
         Bet bet = bets.getFirst();
+        // Blackjack is played at its seats (BlackjackService), never picked.
+        if (bet.mode().equals(BlackjackService.MODE)) throw new InvalidChoice();
         if (!bet.status().equals("ACTIVE")) throw new Closed();
         requireBeforeDeadline(betId);
         if (choice != null) {
@@ -127,5 +129,5 @@ public class BetPickService {
         if (!Boolean.TRUE.equals(open)) throw new Closed();
     }
 
-    private record Bet(String status, long wager, boolean forFun) {}
+    private record Bet(String status, long wager, boolean forFun, String mode) {}
 }

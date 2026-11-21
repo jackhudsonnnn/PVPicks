@@ -33,9 +33,13 @@ class EndpointCoverageTest extends IntegrationTestSupport {
             "DELETE /tables/*/quick-picks/subscribe",
             "POST /bets/*/wash");
 
-    /** Dev-only endpoints are off in the test context (their features are disabled), so they may be missing. */
-    private static boolean devOnly(String endpoint) {
-        return endpoint.substring(endpoint.indexOf(' ') + 1).startsWith("/dev/");
+    /**
+     * Dev-only and LAN-only endpoints are off in the test context (their features are disabled), so they may be
+     * missing.
+     */
+    private static boolean modeOnly(String endpoint) {
+        String path = endpoint.substring(endpoint.indexOf(' ') + 1);
+        return path.startsWith("/dev/") || path.startsWith("/admin/lan/");
     }
 
     /** Served but deliberately outside the API contract (the developer docs site). */
@@ -85,7 +89,7 @@ class EndpointCoverageTest extends IntegrationTestSupport {
 
         Set<String> unserved = new TreeSet<>(contract);
         unserved.removeAll(served);
-        unserved.removeIf(EndpointCoverageTest::devOnly);
+        unserved.removeIf(EndpointCoverageTest::modeOnly);
         assertThat(unserved).as("openapi.yaml operations nobody serves (add to PLANNED only if on the roadmap)")
                 .containsExactlyInAnyOrderElementsOf(PLANNED);
     }
@@ -112,7 +116,7 @@ class EndpointCoverageTest extends IntegrationTestSupport {
 
         Set<String> stale = new TreeSet<>(RateLimits.EXEMPT.keySet());
         stale.removeAll(writes);
-        stale.removeIf(EndpointCoverageTest::devOnly);
+        stale.removeIf(EndpointCoverageTest::modeOnly);
         assertThat(stale).as("RateLimits.EXEMPT entries for endpoints that don't exist").isEmpty();
         for (Map.Entry<String, String> exemption : RateLimits.EXEMPT.entrySet()) {
             assertThat(exemption.getValue()).as("reason for " + exemption.getKey()).isNotBlank();

@@ -10,15 +10,15 @@ import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-final class DevOriginFilter extends OncePerRequestFilter {
+final class OriginFilter extends OncePerRequestFilter {
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
     private final String allowedOrigin;
 
     /**
-     * Dev accepts an HTTP loopback origin; the lan profile requires an HTTPS origin (the LAN hostname Caddy
+     * Rejects cross-origin writes: only the one allowed origin may POST, PUT or DELETE. Dev accepts an HTTP loopback origin; the lan profile requires an HTTPS origin (the LAN hostname Caddy
      * serves), because its cookies are Secure.
      */
-    DevOriginFilter(String allowedOrigin, boolean lan) {
+    OriginFilter(String allowedOrigin, boolean lan) {
         URI origin = URI.create(allowedOrigin);
         boolean shape = origin.getHost() != null && origin.getUserInfo() == null && origin.getRawPath() != null
                 && origin.getRawPath().isEmpty() && origin.getQuery() == null && origin.getFragment() == null;

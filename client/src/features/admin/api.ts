@@ -131,10 +131,10 @@ export async function listPlayers(
   );
 }
 
-async function post(path: string, body?: object) {
+async function post(path: string, body?: object, method: "POST" | "DELETE" = "POST") {
   const token = await csrf();
   return request(path, {
-    method: "POST",
+    method,
     headers: {
       "X-CSRF-TOKEN": token,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -168,6 +168,40 @@ export async function getPlayerCode(playerId: string, signal?: AbortSignal): Pro
 export async function rotatePlayerCode(playerId: string): Promise<string> {
   return (await read(await post(`/admin/players/${encodeURIComponent(playerId)}/code`), signInCode))
     .code;
+}
+
+/**
+ * Deletes a player outright, square or not: their open bets wash for everyone at those tables. Returns how many
+ * washed.
+ */
+export async function deletePlayer(playerId: string): Promise<number> {
+  return (
+    await read(
+      await post(`/admin/players/${encodeURIComponent(playerId)}`, undefined, "DELETE"),
+      z.object({ washedBets: z.number().int().min(0) }),
+    )
+  ).washedBets;
+}
+
+const partySchema = z.object({
+  table: z
+    .object({
+      id: idSchema,
+      name: z.string(),
+      emoji: z.string(),
+      deleted: z.boolean(),
+      hostIds: z.array(idSchema),
+      memberIds: z.array(idSchema),
+    })
+    .nullable(),
+});
+export type LanParty = z.infer<typeof partySchema>["table"];
+
+/** The LAN party table (LAN only): null before the first player is created. */
+export async function getLanParty(signal?: AbortSignal): Promise<LanParty> {
+  return (
+    await read(await request("/admin/lan/party", signal ? { signal } : undefined), partySchema)
+  ).table;
 }
 
 /** The QR link a player opens; the code stays in the fragment, so it never reaches server logs. */

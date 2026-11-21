@@ -170,7 +170,7 @@ export function SegmentedTabs<T extends string>({
                 onClick={() => onChange(id)}
                 className={cn(
                   "relative isolate flex min-w-0 items-center justify-center rounded-lg transition-colors duration-200 disabled:cursor-not-allowed",
-                  soon && "opacity-50",
+                  (soon || (disabled && !on)) && "opacity-50",
                   size === "lg"
                     ? "py-2 font-display text-base font-bold uppercase tracking-wide"
                     : "py-1.5 font-mono text-[11px] font-bold uppercase tracking-widest",

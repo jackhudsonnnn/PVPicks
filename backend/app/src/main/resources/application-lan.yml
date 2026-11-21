@@ -33,6 +33,11 @@ pvpicks:
   public-url: ${PVPICKS_ORIGIN}
   demo:
     enabled: false
+  # The party table: the first player created hosts "New Table", every later one is seated there (docs: LAN watch
+  # party). Only this profile turns it on.
+  lan:
+    party:
+      enabled: true
   sports:
     balldontlie:
       api-key: ${PVPICKS_BALLDONTLIE_API_KEY:}

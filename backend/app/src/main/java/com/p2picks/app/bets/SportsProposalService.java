@@ -119,7 +119,7 @@ public class SportsProposalService {
         fingerprint.put("forFun", proposal.forFun());
         fingerprint.put("stat", proposal.stat());
         fingerprint.set("players", json.valueToTree(proposal.players()));
-        return writer.create(jwt, tableId, key, OPERATION, write(fingerprint), false, () -> {
+        return writer.create(jwt, tableId, key, OPERATION, write(fingerprint), BetProposalWriter.Gate.NONE, () -> {
             GameLookup.Game game = games.find(proposal.gameId())
                     .orElseThrow(() -> new BetProposalWriter.ModeUnavailable("Game not found"));
             if (game.status() != GameStatus.SCHEDULED && game.status() != GameStatus.LIVE) {

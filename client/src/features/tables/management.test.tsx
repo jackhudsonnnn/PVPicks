@@ -90,6 +90,7 @@ const table: Table = {
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
+  blackjackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],

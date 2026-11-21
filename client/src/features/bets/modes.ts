@@ -3,6 +3,7 @@ import {
   Flame,
   PenLine,
   Scale,
+  Spade,
   Split,
   Swords,
   Target,
@@ -25,6 +26,8 @@ export interface ModeDef {
   icon: LucideIcon;
   /** U2Pick: no game; the proposer writes the question and options and picks who settles it. */
   custom?: boolean;
+  /** Blackjack: no game; the proposer deals and banks a hand. */
+  dealer?: boolean;
 }
 
 export const MODES: ModeDef[] = [
@@ -92,6 +95,15 @@ export const MODES: ModeDef[] = [
       "Bet on anything. Write the question and the options, then choose who gets to call the result: anyone, people not in it, hosts, or just you.",
     icon: PenLine,
     custom: true,
+  },
+  {
+    id: "blackjack",
+    name: "Blackjack",
+    tagline: "You deal, they play",
+    description:
+      "Deal a hand of Blackjack and bank it: set the house rules, everyone sits down with a bet, and the dealer plays automatically. Players win or lose against you.",
+    icon: Spade,
+    dealer: true,
   },
 ];
 

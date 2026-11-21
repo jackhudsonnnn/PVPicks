@@ -1,7 +1,8 @@
 # Admin dashboard
 
 An admin account sees only the admin workspace. It can't join tables, bet or chat, and player APIs refuse it. To
-play, the owner creates a player account for themselves under Users.
+play, the owner creates a player account for themselves under Users. The admin signs in with a password at
+`/admin`, in every mode; nothing links there, so players only ever see their own sign-in.
 
 The workspace is built for desktop, and still works on a phone. Its layout matches the player app's: a sidebar on
 desktop with the four sections (**Users**, **Reports**, **Perf**, **Sports**), sign out beside the logo and
@@ -30,7 +31,12 @@ From here an admin can:
   log) shows their QR; tapping the shown QR, or their name again, deselects them and blurs it. **Copy link**
   copies the `/signin#<playerId>.<code>` link (the id, so a rename doesn't break it) even while blurred, without
   showing the code;
-- **Rotate** a code (after a confirmation): a new code, and the player is signed out on every device.
+- **Rotate** a code (after a confirmation): a new code, and the player is signed out on every device;
+- **Delete account** (after a warning that it can disrupt their tables): deletes the player outright, even with
+  open bets, which wash for everyone ([Admin account deletion](/reference/domain-rules#admin-account-deletion)).
+  A toast says how many bets washed, and the username becomes free;
+- on the LAN only, see the [party table](/lan#the-party-table): a line above the cards gives its name and size (or
+  says it doesn't exist yet, or was deleted), and cards show **Host** or **At the table**.
 
 Players scan the QR code or type their username and code to sign in, and may photograph it to get back in later. See
 [LAN watch party](/lan#accounts-and-sign-in-codes) for how codes are stored and throttled.
@@ -161,6 +167,8 @@ All `/admin/**` endpoints are admin-only (`security.SessionSecurity`). Full shap
 | Endpoint | Module | Purpose |
 |---|---|---|
 | `GET /admin/players?q=&cursor=` | `accounts` | Players by username prefix, with strikes and open reports |
+| `POST /admin/players`, `GET`/`POST /admin/players/{id}/code`, `DELETE /admin/players/{id}` | `accounts` | Create a player, show or rotate their code, delete them |
+| `GET /admin/lan/party` | `lan` | The LAN party table (LAN only) |
 | `GET /admin/users/{id}/audit` | `admin` | The audit (logged) |
 | `GET /admin/users/{id}/activity?kind=&q=&cursor=` | `admin` | What they wrote (a search is logged) |
 | `GET /admin/audit-log?cursor=` | `admin` | The admin audit log |

@@ -67,6 +67,48 @@ Owner decisions, 2026-11-14:
   `SocialAccountCleanup`, `FeedbackAccountCleanup`,
   `SettlementAccountChanges`; the checks are in `BetAccountChecks`).
 
+### Abusive language filter
+
+Owner decision, 2026-11-20. Slurs and hate speech are refused in everything
+people write for others to see: chat messages, poll questions and options,
+U2Pick questions and options, table names (new and renamed), usernames (your
+own and players an admin creates). Swearing and trash talk stay allowed. A
+match is refused with 400 `abusive_language`, "That has language that isn't
+allowed here."; nothing is posted, no strike is given, and the chat box keeps
+the text so it can be edited.
+
+The terms are in `moderation/abusive-terms.txt` (backend resources), checked
+by `common/AbusiveLanguage`. Before matching, text loses accents and invisible
+characters, look-alike letters and symbol swaps become letters (n1gg@), and
+runs of single letters are joined (f a g, n.i.g.g.e.r). Terms match whole
+words, stretched (never with fewer letters, so "Niger" isn't caught) and with
+a plural s or z; terms marked `*` also match inside run-together words.
+Ordinary words that contain a term (raccoon, spiced, retardant, fagioli) pass.
+Tests: `AbusiveLanguageTest`, `AbusiveLanguageIntegrationTest`.
+
+### Admin account deletion
+
+Owner decisions, 2026-11-18. The admin can delete any player outright
+(`DELETE /admin/players/{playerId}`, **Delete account** on their card after
+a warning), in every mode, without them being square:
+
+- Every Active or Pending bet they proposed or picked in, at a current table,
+  washes for everyone: "A player's account was deleted", with a chat line in
+  that table naming the bet. Active bets lock first, so one that locking
+  already washes (nobody picked, one side only) keeps that reason. Wagers
+  come back; no points move. The count of washed bets is returned.
+  (`bets.AccountBetWashes` locks every affected user in UUID order, then each
+  bet's table and bet, like every other bet write.)
+- Then the account is deleted exactly as above: personal data removed,
+  memberships ended with host recovery, sessions revoked, code forgotten, and
+  the username freed.
+- Points already won or lost on settled bets, settle-ups and receipts stay,
+  under "Deleted user". The host can still settle the table's points, and
+  whoever is up on a receipt with them can close it with Mark as settled
+  (tested in `AdminDeletionIntegrationTest`). The disruption the warning means
+  is the washed bets, the player vanishing from their tables mid-game, and
+  points with them that can only be closed one-sidedly.
+
 ## What the client may decide
 
 The server owns every rule, and it tells the client what the viewer may do, so
@@ -129,6 +171,10 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | No automatic result 48 hours after the game's scheduled start (game stuck, or player stats never delivered; suspended games keep their own rule) | Sports | "No result from the feed" | Implemented |
 | Team scoring totals from player stats still disagree with the score once the grace period has passed, or a touchdown and a field goal first appear in the same update | Scorcerer | "Couldn't tell the scoring play" | Implemented |
 | Nobody called the result 7 days after lock (checked every ten minutes; Quick Pick originals with copies are skipped) | U2Pick | "Nobody called the result" | Implemented |
+| The admin deleted a player who proposed or picked in it ([Admin account deletion](#admin-account-deletion)) | All | "A player's account was deleted" | Implemented |
+| Nobody sat down by the deal | Blackjack | "Nobody sat down" | Implemented |
+| The dealer left the table or was deleted before the deal | Blackjack | "The dealer left the table" | Implemented |
+| The dealer's points limit can't cover even one seat at the deal | Blackjack | "The dealer's points limit couldn't cover anyone" | Implemented |
 
 Every wash trigger for the LAN modes is implemented and tested (owner
 decisions, 2026-11-15). Hosts can still override any automatic wash.
@@ -495,7 +541,9 @@ table's chat feed.
 Dev chat sending requires current table membership and the corresponding text
 or GIF permission. The user delegated the text limit; it is 1–2000 Unicode
 code points after trimming. GIFs come only from the catalog in
-`chat/gifs.json`; its IDs are the accepted ones.
+`chat/gifs.json`; its IDs are the accepted ones. IDs are never reused or
+removed, since sent messages look their GIF up by ID. The picker's search
+needs every word to appear in a GIF's caption, tags or category.
 A send atomically stores a message, internal outbox event and retry claim.
 Matching retries recheck current access, permission and unchanged message content,
 then return the original 201 message without later reactions. If the message
@@ -741,6 +789,74 @@ each other equal amounts). Sorted yellow, red, green, neutral.
 Realtime: every settle and rejection sends the private `settlements.changed`
 invalidation to the two people. The pending-review list, each person's
 review, and group reads stay private to the pair.
+
+## Blackjack
+
+Owner decisions, 2026-11-20. One ticket is one hand. Whoever proposes it is
+the **dealer** and **banks** it: each player's bet is against the dealer, not
+a pot. The ledger entries are zero-sum like every bet's: each seat's result,
+and the dealer gets minus their sum.
+
+- **Who can deal** is a table setting, `blackjackAccess`: `everyone`
+  (default), `hosts` or `off`. "Only hosts start bets" applies too.
+- **Rules**, set by the dealer, each held to a minimum and maximum (the server
+  refuses anything outside them; missing ones take the default):
+
+  | Rule | Range | Default |
+  |---|---|---|
+  | Decks | 1–8 | 6 |
+  | Minimum / maximum bet | 0.10–10 points (min ≤ max) | 1 / 10 |
+  | Max splits | 0–5 | 3 |
+  | Seats | 1–7 | 7 |
+  | Join window | 30 s–10 min | 2 min |
+  | Decision timer | 10 s–2 min | 30 s |
+  | Blackjack pays | 3:2 or 6:5 | 3:2 |
+  | Dealer hits soft 17 | on/off | off (stands) |
+  | Double on | any two cards, or 9–11 | any |
+  | Double after split | on/off | on |
+  | Insurance | on/off | off |
+  | Turns | everyone at once, or seat by seat | at once |
+
+- **Join window**: players sit down with a bet between the minimum and
+  maximum (the dealer can't), can change it or leave, until the deal. A seat's
+  bet must fit the player's points limit.
+- **The deal** (when the window closes, by the worker): seats that can no
+  longer bet or afford their bet are dropped; then, from the last to sit, seats
+  are dropped until the dealer's worst case fits their points limit. Two cards
+  each, the dealer's second face down. The shoe is shuffled per hand on the
+  server and never sent.
+- **Insurance** (if on, when the dealer shows an ace): everyone decides at once;
+  it costs half the bet (rounded down) and pays 2:1 if the dealer has a natural.
+- **Peek**: on an ace or ten the dealer checks for a natural, and if so the
+  hand ends: player naturals push, everything else loses.
+- **Play**: hit, stand, double (one card, stake doubled), split (equal values,
+  up to the max; split aces get one card each and can't be re-split; a split
+  21 isn't a natural). Reaching 21 stands automatically. Seat by seat, only the
+  current seat acts. A player whose **decision timer** runs out stands (and
+  declines insurance).
+- **Dealer's turn** (owner decision, 2026-11-20, for suspense): once the
+  players are done, the dealer taps one button that does what the rules
+  require: **Flip** (turn the hole card), then **Hit** while under 17 (or on a
+  soft 17 if the rules say so), then **Stand** to pay out; a bust pays out by
+  itself. If the dealer doesn't tap within the decision timer, the rest plays
+  itself. No dealer turn when every player hand is bust or a paid natural.
+- **Payouts** per hand: win 1:1, natural 3:2 or 6:5 (rounded down to the cent),
+  push 0, lose or bust −stake; insurance on top.
+- **Points limit**: proposing needs the dealer's worst case with every seat
+  taken at the maximum bet (every split taken, every hand doubled and won) to
+  fit their limit. While a hand is in play, a player's whole stake and the
+  dealer's worst case for the seats taken count as pending (balances and
+  debt). A double, split or insurance that would pass a player's limit is
+  refused.
+- 4fun hands play the same with nothing at stake.
+- Blackjack is never picked: `PUT /bets/{id}/pick` on a Blackjack bet is
+  400 `invalid_choice` (seats are the only way in).
+
+In code: `bets/BlackjackRules` (limits), `bets/BlackjackGame` (the pure hand),
+`bets/BlackjackService` (propose, seats, deal, decisions, payouts),
+`bets/BlackjackWorker` (deals and timeouts every second); V44. Tests:
+`BlackjackGameTest`, `BlackjackIntegrationTest`; client
+`features/bets/blackjack.ts` and its test.
 
 ## Membership limits
 

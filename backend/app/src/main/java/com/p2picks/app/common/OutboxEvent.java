@@ -31,6 +31,8 @@ public enum OutboxEvent {
     BET_PICK_COUNT_CHANGED("bet", "bet.pick_count.changed.v1"),
     BET_LOCKED("bet", "bet.locked.v1"),
     BET_RESOLVED("bet", "bet.resolved.v1"),
+    /** A Blackjack hand moved on: someone sat, acted or timed out (domain rules, "Blackjack"). */
+    BET_BLACKJACK_CHANGED("bet", "bet.blackjack.changed.v1"),
 
     SETTLEMENT_CREATED("settlement", "settlement.created.v1"),
     SETTLEMENT_LINE_CHANGED("settlement_line", "settlement.line.changed.v1"),

@@ -1,6 +1,8 @@
 package com.p2picks.app.config;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import com.p2picks.app.common.AppMode;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -10,31 +12,32 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
-class DevelopmentOnlyProfileTest {
+class AppModeTest {
 
     @Test
-    void acceptsTheDevAndLanProfiles() {
+    void readsTheDevAndLanProfiles() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("dev");
-        assertDoesNotThrow(() -> new DevelopmentOnlyProfile(environment));
+        assertEquals(AppMode.DEV, AppMode.of(environment));
+        assertEquals("dev", AppMode.of(environment).id());
 
         environment.setActiveProfiles("lan");
-        assertDoesNotThrow(() -> new DevelopmentOnlyProfile(environment));
+        assertEquals(AppMode.LAN, AppMode.of(environment));
     }
 
     @Test
-    void rejectsMissingOrUnimplementedProfiles() {
+    void rejectsMissingMixedOrUnconfiguredProfiles() {
         MockEnvironment environment = new MockEnvironment();
-        assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
+        assertThrows(IllegalStateException.class, () -> AppMode.of(environment));
 
         environment.setActiveProfiles("prod");
-        assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
+        assertThrows(IllegalStateException.class, () -> AppMode.of(environment));
 
         environment.setActiveProfiles("dev", "lan");
-        assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
+        assertThrows(IllegalStateException.class, () -> AppMode.of(environment));
 
         environment.setActiveProfiles("dev", "prod");
-        assertThrows(IllegalStateException.class, () -> new DevelopmentOnlyProfile(environment));
+        assertThrows(IllegalStateException.class, () -> AppMode.of(environment));
     }
 
     @Test
@@ -44,7 +47,7 @@ class DevelopmentOnlyProfileTest {
         Flyway flyway = mock(Flyway.class);
 
         assertThrows(IllegalStateException.class,
-                () -> new DevelopmentFlywayConfiguration().developmentMigrationStrategy(environment).migrate(flyway));
+                () -> new ModeConfiguration().checkedMigrationStrategy(environment).migrate(flyway));
         verify(flyway, never()).migrate();
     }
 }

@@ -12,11 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
 class PasswordService {
     enum ChangeResult { CHANGED, WRONG_PASSWORD, UNAUTHORIZED, NOT_ADMIN }
 
-    private final DevelopmentSessions sessions;
+    private final Sessions sessions;
     private final MutationAuthentication authentication;
     private final JdbcTemplate jdbc;
 
-    PasswordService(DevelopmentSessions sessions, MutationAuthentication authentication, JdbcTemplate jdbc) {
+    PasswordService(Sessions sessions, MutationAuthentication authentication, JdbcTemplate jdbc) {
         this.sessions = sessions;
         this.authentication = authentication;
         this.jdbc = jdbc;

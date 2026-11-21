@@ -66,7 +66,7 @@ public class U2PickProposalService {
         fingerprint.put("forFun", proposal.forFun());
         fingerprint.put("settledBy", proposal.settlerRule().name());
 
-        BetProposalWriter.Result result = writer.create(jwt, tableId, key, OPERATION, write(fingerprint), true,
+        BetProposalWriter.Result result = writer.create(jwt, tableId, key, OPERATION, write(fingerprint), BetProposalWriter.Gate.U2PICK,
                 () -> new BetProposalWriter.NewBet("u2pick", null, configJson, proposal.definition().question(),
                         choicesJson, proposal.wagerCents(), proposal.forFun(), proposal.durationSec(),
                         proposal.settlerRule().name().toLowerCase(java.util.Locale.ROOT), null, null));

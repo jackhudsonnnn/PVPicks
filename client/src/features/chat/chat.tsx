@@ -215,6 +215,7 @@ export function TableChat({
           canGif={!disabled.includes("gifs")}
           canPoll={table.pollsEnabled && !disabled.includes("polls")}
           blocked={blocked}
+          sent={actions.succeeded}
           send={(message) => actions.start({ kind: "send", tableId: table.id, message })}
           startPoll={(poll) => actions.start({ kind: "poll", tableId: table.id, ...poll })}
         />

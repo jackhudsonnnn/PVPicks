@@ -3,6 +3,7 @@ package com.p2picks.app.tables;
 import static com.p2picks.app.common.ApiErrors.error;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2picks.app.common.AbusiveLanguage;
 import com.p2picks.app.common.IdempotencyGuard;
 import com.p2picks.app.common.PostgresText;
 import com.p2picks.app.security.MutationAuthentication;
@@ -42,6 +43,7 @@ class TableProfileController {
                 || emoji != null && !TableProfileValidation.validEmoji(emoji)) {
             return error(400, "bad_request", "Invalid table details.");
         }
+        if (AbusiveLanguage.contains(name)) return error(400, "abusive_language", AbusiveLanguage.MESSAGE);
         try {
             return switch (profiles.update(jwt, tableId, new TableProfileService.Changes(name, emoji), key)) {
                 case UPDATED, REPLAYED -> tableReads.get(jwt, tableId);
