@@ -313,10 +313,15 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void scorcererIsNflOnly() throws Exception {
+    void nbaScorcererBetsOnWhichTeamScoresTheNextBasketAndHow() throws Exception {
         seed("sc", Instant.now().plusSeconds(3600));
         Cookie aliceSession = loginAs("sca");
-        propose(aliceSession, csrf(), "scorcerer", "{}", 409);
+        UUID bet = propose(aliceSession, csrf(), "scorcerer", "{}", 201);
+        assertThat(jdbc.queryForObject("SELECT question FROM bets WHERE id = ?", String.class, bet))
+                .isEqualTo("NYK @ BOS: next basket?");
+        assertThat(json.readTree(jdbc.queryForObject("SELECT choices::text FROM bets WHERE id = ?", String.class,
+                bet))).extracting(JsonNode::asText)
+                .containsExactly("NYK 3", "NYK 2", "BOS 3", "BOS 2", "No more scores");
     }
 
     @Test

@@ -1,30 +1,29 @@
 # Player stats
 
 The player modes (Either Or, Prop Hunt, King Of The Hill) resolve on live
-per-player game stats, and Scorcerer (NFL) on team totals of those stats checked against the score. This page
+per-player game stats, and Scorcerer (NFL and NBA) on team totals of those stats checked against the score. This page
 describes where that data comes from, how it's stored, how each mode reads it,
 and the edge cases they handle. All of it is implemented.
 
 ## Source and plan
 
 BallDontLie serves per-player game stats for both leagues on the **All-Star**
-plan ($9.99/month per league). The stats update during games, so they work
+plan ($9.99/month per league), which the project has for the NBA and the NFL
+(bought after the GOAT trial, 2026-11). The stats update during games, so they work
 for live bets. GOAT is needed only for play-by-play, sportsbook odds and
 player props, and advanced stats. Choose Their Fate (how a drive ends) has
 an All-Star design for the NFL (below), but it stays "Coming soon" until
 turnovers on downs can be detected.
-Scorcerer works on All-Star for the NFL from team totals of player stats
-(below); NBA baskets come too fast for that.
+Scorcerer works on All-Star for both leagues from team totals of player
+stats (below); NBA ones wash more often, because baskets come fast.
 
 Every endpoint the app calls (games, player stats, active players) is on
-All-Star, so switching from the trial is configuration only:
-
-1. If BallDontLie issues a new key, replace `PVPICKS_BALLDONTLIE_API_KEY` in
-   `infra/compose/.env`.
-2. Add `PVPICKS_SPORTS_POLL_INTERVAL=PT15S` and
-   `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` there. That's about 8 score and 20
-   stats requests a minute, within All-Star's 60 with room for manual checks.
-3. Redeploy the backend.
+All-Star. The LAN stack polls at All-Star rates (`PVPICKS_SPORTS_POLL_INTERVAL=PT15S`
+and `PVPICKS_SPORTS_STATS_INTERVAL=PT3S` in `.env.lan`): about 8 score and 20
+stats requests a minute, within All-Star's 60 with room for manual checks.
+Dev's defaults stay at 5 requests a minute (`PT60S` and `PT20S`), so a dev
+stack sharing the key doesn't eat into a party's budget. Set the two
+intervals in `infra/compose/.env` to poll faster in dev.
 
 | League | Endpoint | Rows |
 |---|---|---|
@@ -53,13 +52,13 @@ this order:
 3. Otherwise, the next page of a league's active-player list, when a
    refresh is due or in progress. While games are live and a refresh is due,
    every fourth request goes to it instead, so a game day can't starve it.
-   On the trial's 5 requests a minute that's a full refresh about every half
-   hour during games (and live stats about a quarter slower); on All-Star it
+   At dev's 5 requests a minute that's a full refresh about every half hour
+   during games (and live stats about a quarter slower); at All-Star rates it
    takes a few minutes.
 
 A rate-limited response pauses polling for a minute. Scores and player stats
-share the plan's request budget. With the 5-requests-a-minute trial, that's
-two for scores and three for player stats, so with five NBA games live each
+share the plan's request budget. At dev's 5 requests a minute, that's two for
+scores and three for player stats, so with five NBA games live each
 one's stats refresh about once a minute. With All-Star (60 a minute), the
 interval can drop to every few seconds.
 
@@ -81,6 +80,7 @@ same keys.
 | NFL | `receiving_yards` | Receiving Yards | `receiving_yards` |
 | NFL | `receptions` | Receptions | `receptions` |
 | NFL | `field_goals`, `extra_points` | Not offered; Scorcerer's team totals | `field_goals_made`, `extra_points_made` |
+| NBA | `twos`, `free_throws` | Not offered; Scorcerer's team totals | `fgm` minus `fg3m`, `ftm` |
 | NFL | `touchdowns` | Touchdowns | `rushing_touchdowns` + `receiving_touchdowns` + `kick_return_touchdowns` + `punt_return_touchdowns` + `fumbles_touchdowns` + `interception_touchdowns` |
 
 Rules every mode can rely on:
@@ -167,7 +167,7 @@ players; two players with the same name are told apart by team.
 | Either Or | The two players | After Final plus the 20-minute grace: whoever has more | Tie; a player didn't play |
 | Prop Hunt | Over / Under the line | After Final plus the grace | The line must start above the player's number, and passing it before lock washes; push on a whole line; didn't play |
 | King Of The Hill | The two players, then Neither | As soon as someone reaches the target (mid-game); Neither after Final plus the grace | The target must start above both; reaching it before lock washes; both reaching it in the same update; didn't play (for Neither) |
-| Scorcerer (NFL) | Touchdown, Field goal, No more TDs or FGs | When the first touchdown or field goal after lock shows in the team totals (and they explain the score); No more TDs or FGs after Final plus the grace | A touchdown and a field goal first seen together; stats behind the score at lock while the score moves again; totals that still don't explain the score after the grace (see below) |
+| Scorcerer | Away big, away small, home big, home small (NFL touchdown and field goal, NBA 3 and 2), No more scores | When the first such score after lock shows in the team totals (and they explain the score); No more scores after Final plus the grace | Two different scores first seen together; stats behind the score at lock while the score moves again; totals that still don't explain the score after the grace (see below) |
 
 **Overtime counts** off: values are the last observed before the game was
 first seen in overtime, and a target reached in overtime doesn't count.
@@ -177,36 +177,54 @@ Code: `bets/PlayerOutcome`, `bets/ScorcererOutcome`, `bets/PlayerLockRules`,
 
 ## Scorcerer from team totals
 
-Implemented (owner decisions, 2026-11-15). Score jumps alone can't tell some
-plays apart: a safety, a two-point conversion and a defensive two-point return
-all add 2, and two scores between updates are unreadable. So Scorcerer reads
-**what** scored from team totals of player stats, uses the score to check
-them, and **safeties don't count**.
+Implemented (owner decisions, 2026-11-15; teams and the NBA added 2026-11-21).
+Score jumps alone can't tell some plays apart. In the NFL, a safety, a
+two-point conversion and a defensive two-point return all add 2; in the NBA,
+two free throws add 2 like a basket. Two scores between updates are
+unreadable either way. So Scorcerer reads **what** scored, and for which
+team, from team totals of player stats, and uses the score to check them.
 
-- **Choices.** Touchdown, Field goal and No more TDs or FGs.
+- **Choices**, away team first:
+  - NFL: `<away> touchdown`, `<away> field goal`, `<home> touchdown`,
+    `<home> field goal`, No more scores. Safeties and every other 2-point play
+    don't count.
+  - NBA: `<away> 3`, `<away> 2`, `<home> 3`, `<home> 2`, No more scores. Free
+    throws don't count.
 - **Team totals.** For each team in the game, sum over its players' lines:
-  `touchdowns` (every type), `field_goals` (`field_goals_made`) and
-  `extra_points` (`extra_points_made`). The last two are canonical NFL keys
-  that aren't offered as bet stats; kickers carry them. A player without a
-  line counts as 0. `PlayerStatsLookup.scoringTotals` replays
-  `player_stat_snapshots` to give the totals after every observation.
-- **Explaining the score.** The totals explain a team's score when the score
-  minus 6 per touchdown, 3 per field goal and 1 per extra point is an even
-  number from 0 to 4: up to two 2-point plays (safeties, two-point
-  conversions, defensive returns) that the feed doesn't report.
+  - NFL: `touchdowns` (every type), `field_goals` (`field_goals_made`) and
+    `extra_points` (`extra_points_made`);
+  - NBA: `threes` (`fg3m`), `twos` (`fgm` minus `fg3m`) and `free_throws`
+    (`ftm`).
+
+  The scoring keys that aren't offered as bet stats are canonical but hidden
+  (`StatLine.SCORING`). A player without a line counts as 0.
+  `PlayerStatsLookup.scoringTotals` replays `player_stat_snapshots` to give
+  the totals after every observation.
+- **Explaining the score.**
+  - NFL: the totals explain a team's score when the score minus 6 per
+    touchdown, 3 per field goal and 1 per extra point is an even number from
+    0 to 4. That leaves room for up to two 2-point plays, which the feed
+    doesn't report.
+  - NBA: 3, 2 and 1 per free throw must add up to the score exactly.
 - **Baseline.** The totals at lock must explain the score at lock. If the
   stats were behind, later observations may catch up while the score stands
   still. If the score moves again first, the bet washes.
-- **Next score.** The first observation after the baseline where either
-  team's touchdowns or field goals rise decides it, once the latest totals
-  explain the latest score (until then it waits). Everything else is skipped:
-  extra points, two-point conversions, defensive returns, safeties, and a try
-  that lands after lock for a touchdown before it. No touchdown or field goal
-  by Final means No more TDs or FGs, after the grace period.
-- **Wash.** "Couldn't tell the scoring play" when a touchdown and a field goal
-  first appear in the same observation (two touchdowns, or two field goals,
-  still decide it), or when the totals still don't explain the score once the
-  grace period has passed. Hosts can override.
+- **Next score.** The first observation after the baseline where any of the
+  four counts rises (either team's big or small score) decides it, once the
+  latest totals explain the latest score (until then it waits). Everything
+  else is skipped: extra points, two-point conversions, defensive returns,
+  safeties, free throws, and an NFL try that lands after lock for a
+  touchdown before it. Nothing by Final means No more scores, after the grace
+  period.
+- **Wash.** "Couldn't tell the scoring play" when two different counts first
+  rise in the same observation, since their order is unknown. Two of the same
+  kind for one team still decide it. It also washes when the totals still
+  don't explain the score once the grace period has passed. Hosts can
+  override.
+  - NBA teams score about every 15 seconds, so two baskets often land between
+    stats updates, and NBA Scorcerer washes far more often than the NFL's.
+    The owner accepted that (2026-11-21). Short pick windows on live games
+    help.
 
 **Evidence.** In the 2026-11-15 NFL recordings (12 games), each player's
 latest row gives team totals that match the score exactly for 20 of 24
@@ -219,7 +237,7 @@ That case is what the disagreement wash is for.
 
 Not scheduled: after LAN, and blocked on one open problem. NFL only; NBA
 possessions (about 14 seconds each) end faster than stats update. Decided
-2026-11-15. The design uses the same team totals as the planned
+2026-11-15. The design uses the same team totals as
 [Scorcerer](#scorcerer-from-team-totals).
 
 - **Question.** How does the drive in progress when picks lock end?

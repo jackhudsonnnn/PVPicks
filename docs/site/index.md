@@ -23,9 +23,12 @@ features:
     link: /roadmap
 ---
 
-::: warning Development only
-The backend is not ready for real users or network exposure. See
-[Project status](/status) for what's built.
+::: info Where it stands
+P2Picks runs in three modes. **dev** is local, with a demo world. **LAN** is a
+watch party on one Wi-Fi network and has run real parties
+([LAN watch party](/lan)). **prod** isn't set up yet: it's the next
+milestone, the MVP, after more security hardening and UI cleanup
+([Roadmap](/roadmap)). [Project status](/status) lists what's built.
 :::
 
 ## Documentation hierarchy

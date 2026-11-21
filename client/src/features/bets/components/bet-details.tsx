@@ -22,6 +22,7 @@ import { type Bet, getBetLiveStats } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
+import { BlackjackFacts, BlackjackPlayers } from "./blackjack-details";
 
 const SETTLER = {
   anyone: "Anyone at the table",
@@ -75,6 +76,18 @@ export function BetFacts({
   peopleKey,
   onNavigate,
 }: Props & { onNavigate?: () => void }) {
+  if (bet.modeId === "blackjack") {
+    return (
+      <BlackjackFacts
+        bet={bet}
+        table={table}
+        user={user}
+        expire={expire}
+        peopleKey={peopleKey}
+        onNavigate={onNavigate}
+      />
+    );
+  }
   const pot = potCents(bet);
   const windowSec = Math.round((Date.parse(bet.locksAt) - Date.parse(bet.createdAt)) / 1000);
   return (
@@ -127,7 +140,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
   const steps: { label: string; at?: string | undefined; reached: boolean }[] = [
     { label: "Proposed", at: dateTimeLabel(bet.createdAt), reached: true },
     {
-      label: "Picks locked",
+      label: bet.modeId === "blackjack" ? "Cards dealt" : "Picks locked",
       at: dateTimeLabel(bet.lockedAt ?? bet.locksAt),
       reached: status !== "active",
     },
@@ -209,46 +222,51 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 
           {bet.gameId && <LiveStats betId={bet.id} />}
 
-          <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
-            {rows ? (
-              rows.length === 0 ? (
-                <p className="py-1.5 text-sm text-muted-foreground">Nobody joined.</p>
-              ) : (
-                rows.map(({ id, pick }) => {
-                  const d = bet.deltasCents?.[id];
-                  return (
-                    <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
-                      <PersonAvatar
-                        id={id}
-                        user={user}
-                        expire={expire}
-                        queryKey={peopleKey}
-                        size="xs"
-                      />
-                      <span className="min-w-0 flex-1 break-words">
-                        <PersonName id={id} user={user} expire={expire} queryKey={peopleKey} />
-                      </span>
-                      <span className="break-words text-muted-foreground">{pick}</span>
-                      {d !== undefined && (
-                        <span
-                          className={cn(
-                            "w-16 text-right font-mono text-xs font-bold",
-                            d > 0 ? "text-win" : "text-loss",
-                          )}
-                        >
-                          {formatCents(d, true)}
+          {bet.modeId === "blackjack" ? (
+            <BlackjackPlayers {...props} />
+          ) : (
+            <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
+              {rows ? (
+                rows.length === 0 ? (
+                  <p className="py-1.5 text-sm text-muted-foreground">Nobody joined.</p>
+                ) : (
+                  rows.map(({ id, pick }) => {
+                    const d = bet.deltasCents?.[id];
+                    return (
+                      <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
+                        <PersonAvatar
+                          id={id}
+                          user={user}
+                          expire={expire}
+                          queryKey={peopleKey}
+                          size="xs"
+                        />
+                        <span className="min-w-0 flex-1 break-words">
+                          <PersonName id={id} user={user} expire={expire} queryKey={peopleKey} />
                         </span>
-                      )}
-                    </div>
-                  );
-                })
-              )
-            ) : (
-              <p className="py-1.5 text-sm text-muted-foreground">
-                {bet.myPick ? `Your pick: ${bet.myPick}. ` : ""}Other picks stay private until lock.
-              </p>
-            )}
-          </FactSection>
+                        <span className="break-words text-muted-foreground">{pick}</span>
+                        {d !== undefined && (
+                          <span
+                            className={cn(
+                              "w-16 text-right font-mono text-xs font-bold",
+                              d > 0 ? "text-win" : "text-loss",
+                            )}
+                          >
+                            {formatCents(d, true)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )
+              ) : (
+                <p className="py-1.5 text-sm text-muted-foreground">
+                  {bet.myPick ? `Your pick: ${bet.myPick}. ` : ""}Other picks stay private until
+                  lock.
+                </p>
+              )}
+            </FactSection>
+          )}
           <p className="font-mono text-[10px] text-muted-foreground">Ticket #{bet.id}</p>
         </ScrollContainer>
       </DialogContent>

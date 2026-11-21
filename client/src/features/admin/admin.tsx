@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { BarChart3, Flag, KeyRound, LogOut, Trophy, Users } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  ExternalLink,
+  Flag,
+  KeyRound,
+  LogOut,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { SegmentedTabs } from "@/components/segmented-tabs";
@@ -70,6 +79,23 @@ export function AdminWorkspace({ user, logout }: { user: User; logout: () => Pro
               </button>
             );
           })}
+          <div className="my-1 border-t" />
+          {/* The handbook opens in a new tab; on LAN and in production only an admin session can read it. */}
+          <a
+            href="/docs/"
+            target="_blank"
+            rel="noopener"
+            className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
+          >
+            <BookOpen className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block">Handbook</span>
+              <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                Architecture, rules and runbooks
+              </span>
+            </span>
+            <ExternalLink className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+          </a>
         </nav>
         <div className="mt-auto shrink-0 border-t p-4">
           <Button variant="outline" size="sm" className="w-full" onClick={() => setPassword(true)}>
@@ -89,6 +115,11 @@ export function AdminWorkspace({ user, logout }: { user: User; logout: () => Pro
       <header className="glass-bar sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b px-3 nav:hidden">
         <Logo badge={<AdminBadge />} />
         <div className="flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="icon" asChild>
+            <a href="/docs/" target="_blank" rel="noopener" aria-label="Handbook" title="Handbook">
+              <BookOpen />
+            </a>
+          </Button>
           <Button
             variant="ghost"
             size="icon"

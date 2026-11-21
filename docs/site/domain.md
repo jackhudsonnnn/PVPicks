@@ -38,7 +38,7 @@ means mutual follows, not people you already share a table with.
   and lock transactions enforce the cap.
 
 Every mode but Choose Their Fate is available over HTTP and in the frontend:
-U2Pick, the score modes, the player modes and Scorcerer (NFL), with points
+U2Pick, the score modes, the player modes, Scorcerer and Blackjack, with points
 settlement and receipts. When a bet washes, at lock or at resolution, is listed
 in the domain rules ("Wash triggers").
 

@@ -25,10 +25,13 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
     public record Stat(String key, String label) {}
 
     /**
-     * NFL scoring keys that aren't offered as bet stats: Scorcerer sums them per team, with {@code touchdowns}, to
-     * tell touchdowns from field goals. Kickers carry them.
+     * Scoring keys that aren't offered as bet stats: Scorcerer sums them per team to tell what scored. NFL: kickers'
+     * field goals and extra points (with {@code touchdowns}); NBA: made 2-pointers and free throws (with
+     * {@code threes}).
      */
-    public static final List<String> NFL_SCORING = List.of("field_goals", "extra_points");
+    public static final Map<League, List<String>> SCORING = Map.of(
+            League.NFL, List.of("field_goals", "extra_points"),
+            League.NBA, List.of("twos", "free_throws"));
 
     public StatLine {
         Objects.requireNonNull(league, "league");
@@ -47,6 +50,9 @@ public record StatLine(League league, String gameProviderId, FeedPlayer player, 
         stats.put("assists", count(row, "ast"));
         stats.put("threes", count(row, "fg3m"));
         stats.put("stocks", count(row, "stl") + count(row, "blk"));
+        // Made field goals include threes; Scorcerer counts the rest as twos, and free throws apart.
+        stats.put("twos", count(row, "fgm") - count(row, "fg3m"));
+        stats.put("free_throws", count(row, "ftm"));
         return new StatLine(League.NBA, game, player, minutesPlayed(row.path("min").asText("")), stats);
     }
 

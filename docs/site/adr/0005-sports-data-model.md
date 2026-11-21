@@ -28,6 +28,8 @@ https://nba.balldontlie.io and https://nfl.balldontlie.io; check before buying):
 
 The GOAT 7-day trial is limited to 5 requests a minute.
 
+**Update (2026-11):** All-Star for both leagues is bought; the trial is over.
+
 Decided 2026-11-13: All-Star for both NBA and NFL, upgrading as the app grows.
 Until it is bought, development runs on a GOAT trial (all endpoints, 5
 requests a minute, 7 days); nothing may depend on GOAT-only endpoints. All-Star

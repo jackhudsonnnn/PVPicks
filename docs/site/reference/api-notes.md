@@ -1,6 +1,6 @@
 # API behavior notes
 
-Per-endpoint behavior and known limits of the dev backend that the OpenAPI
+Per-endpoint behavior and known limits of the backend that the OpenAPI
 file (`backend/api/openapi.yaml`) doesn't spell out: retries, visibility,
 paging and what's still missing. The OpenAPI file is the contract; the domain
 rules are the business rules. The [realtime contract](/reference/realtime-contract) covers the WebSocket
@@ -8,7 +8,7 @@ destinations.
 
 ## By area
 
-- Authentication: the dev-only eight-hour cookie session, CSRF flow, login,
+- Authentication: the eight-hour cookie session, CSRF flow, login,
   logout and `/me`. Failed logins are throttled (429 `rate_limited` with
   `Retry-After`); the passwordless demo sign-in is not. In dev, `/dev/demo/accounts` and `/dev/demo/sign-in` sign
   in as any demo account without a password; like login, they ignore a stale
@@ -64,8 +64,10 @@ destinations.
   filter blocked text and GIF authors, and permit bet cards. PUT accepts one
   ICU4J 76.1 RGI emoji sequence. A matching retry rechecks access without
   reapplying. Reaction changes invalidate the table's chat feed.
-- Dev chat sending validates the current text/GIF permission, trims text to
-  1–2000 Unicode code points and restricts GIF IDs to the catalog in `chat/gifs.json` (`GET /gifs`).
+- Chat sending validates the current text/GIF permission, trims text to
+  1–2000 Unicode code points, refuses slurs (400 `abusive_language`, like
+  polls, U2Pick text, table names and usernames) and restricts GIF IDs to
+  the catalog in `chat/gifs.json` (`GET /gifs`).
   A retry rechecks access and returns the original 201 representation without
   resending; if the message was removed or its content changed, it returns 404.
   The retry record stores a message reference, not a copy of the text. Rate
@@ -218,6 +220,18 @@ destinations.
   into `bets.baseline` (`{"proposed": {...}, "locked": {...}}`, keyed
   `combined`, `margin`, `player:<id>`, `home_td`, `home_fg`, `away_td`,
   `away_fg`); `BetLiveStats` reads them back with the current values.
+
+- Blackjack (domain rules, "Blackjack"): `POST /tables/{id}/bets` with
+  `{modeId: "blackjack", rules, forFun}` proposes (the proposer deals; rules
+  outside their limits are 400; a worst case past the points limit is 409
+  `debt_cap_exceeded`). `PUT`/`DELETE /bets/{id}/blackjack/seat` sit down
+  (`{betCents}`) or leave while the join window is open.
+  `POST /bets/{id}/blackjack/actions` takes `hit`, `stand`, `double`,
+  `split`, `insurance`, `no_insurance`, or `dealer` (the dealer's one
+  button); anything the hand doesn't allow is 409 `blackjack_refused` with
+  the reason. `GET /bets/{id}/blackjack` is the hand for table members: no
+  shoe, and the hole card is `"??"` until it's turned. `PUT /bets/{id}/pick`
+  on a Blackjack bet is 400.
 
 - `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one
   person, `{open, closed, nextCursor}`. Every open receipt comes in full (you

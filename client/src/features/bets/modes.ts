@@ -60,7 +60,7 @@ export const MODES: ModeDef[] = [
     name: "Scorcerer",
     tagline: "Call the next score",
     description:
-      "Will the next score be a touchdown or a field goal, or neither before the end? Safeties don't count.",
+      "Which team scores next, and how: a touchdown or field goal (NFL), or a 3 or a 2 (NBA)? Or no more scores before the end. Safeties and free throws don't count.",
     icon: Flame,
   },
   {
@@ -101,7 +101,7 @@ export const MODES: ModeDef[] = [
     name: "Blackjack",
     tagline: "You deal, they play",
     description:
-      "Deal a hand of Blackjack and bank it: set the house rules, everyone sits down with a bet, and the dealer plays automatically. Players win or lose against you.",
+      "Deal a hand of Blackjack and bank it: set the house rules, everyone sits down with a bet, then you flip, hit and stand on the dealer's turn. Players win or lose against you.",
     icon: Spade,
     dealer: true,
   },

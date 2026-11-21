@@ -70,10 +70,20 @@ export const isPlayerMode = (mode: string): mode is PlayerMode =>
   (PLAYER_MODES as readonly string[]).includes(mode);
 
 /**
- * Scorcerer: is the next NFL touchdown or field goal a touchdown or a field goal? Safeties and other 2-point plays
- * don't count. NFL only, read from team totals of player stats.
+ * Scorcerer: which team scores next, and how, away team first. NFL: touchdown or field goal (safeties and other
+ * 2-point plays don't count). NBA: a 3 or a 2 (free throws don't count). Read from team totals of player stats; the
+ * server builds the same choices.
  */
-export const SCORCERER_CHOICES = ["Touchdown", "Field goal", "No more TDs or FGs"];
+export function scorcererChoices(league: "NBA" | "NFL", away: string, home: string) {
+  const [big, small] = league === "NFL" ? ["touchdown", "field goal"] : ["3", "2"];
+  return [
+    `${away} ${big}`,
+    `${away} ${small}`,
+    `${home} ${big}`,
+    `${home} ${small}`,
+    "No more scores",
+  ];
+}
 
 /** Every mode that binds to a game. */
 export type SportsMode = ScoreMode | PlayerMode | "scorcerer";
@@ -101,11 +111,12 @@ export function playerTerms(
   line: number,
   home: string,
   away: string,
+  league: "NBA" | "NFL" = "NFL",
 ) {
   if (mode === "scorcerer")
     return {
-      question: `${away} @ ${home}: next touchdown or field goal?`,
-      choices: SCORCERER_CHOICES,
+      question: `${away} @ ${home}: ${league === "NFL" ? "next touchdown or field goal?" : "next basket?"}`,
+      choices: scorcererChoices(league, away, home),
     };
   const stat = statLabel.toLowerCase();
   const names = playerNames(players);

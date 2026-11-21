@@ -71,7 +71,7 @@ describe("blackjack rules", () => {
       blackjackPays: "6:5",
       seats: 3,
       doubleOn: "9-11",
-      doubleAfterSplit: false,
+      doubleAfterSplit: true,
       insurance: true,
       turnOrder: "seats",
       joinSec: 60,

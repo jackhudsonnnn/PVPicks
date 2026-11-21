@@ -50,11 +50,13 @@ Integration tests use disposable Testcontainers and require Docker. The
 [Backend](/backend) page cover local JDK selection,
 configuration, and the dev stack.
 
-::: tip Disposable local environment
-The project is pre-MVP and the dev environment is local: development data is
-disposable, and you may reset or migrate the database, rebuild infrastructure
-or regenerate credentials. Pending Flyway migrations run automatically when the
-backend starts. Never commit credentials or expose the dev stack to a network.
+::: tip Disposable dev environment
+The dev environment is local, and its data is disposable: you may reset or
+migrate the database, rebuild infrastructure or regenerate credentials. Pending
+Flyway migrations run automatically when the backend starts. Never commit
+credentials or expose the dev stack to a network. A LAN stack is different
+while a party is on: its data belongs to real players (see
+[Documentation decisions](/decisions#operational-safety)).
 :::
 
 ## Run the stack
@@ -72,8 +74,8 @@ account.
   WebSocket) to the backend and keeps the browser's Origin, which the backend
   checks against `PVPICKS_DEV_ORIGIN` (default the app's address). See
   [Frontend](/frontend) for running it outside Docker.
-- The lock worker locks U2Pick bets at their deadline and the outbox relay
-  publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or
+- The lock worker locks bets at their deadline (and deals Blackjack hands),
+  and the outbox relay publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or
   `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns either off.
 - Live scores need `PVPICKS_BALLDONTLIE_API_KEY`; without it the ticker says
   they're unavailable, and the demo's DEV games still run.
@@ -82,6 +84,7 @@ account.
 
 ## Authentication for API development
 
-The dev backend uses an HttpOnly session cookie, same-origin checks, and a CSRF
-token. Read the backend setup notes for the exact flow. LAN and production
-profiles remain intentionally gated.
+Every mode uses an HttpOnly session cookie, same-origin checks, and a CSRF
+token; [Backend](/backend) has the exact flow. Dev adds a passwordless picker
+over the demo accounts. The `lan` profile is the watch-party setup behind
+Caddy ([LAN watch party](/lan)). Production isn't configured yet.

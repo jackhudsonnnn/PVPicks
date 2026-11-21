@@ -89,7 +89,8 @@ export function rulesFromConfig(config: Record<string, unknown>): BlackjackRules
     blackjackPays: config["blackjackPays"] === "6:5" ? "6:5" : "3:2",
     seats: num("seats"),
     doubleOn: config["doubleOn"] === "9-11" ? "9-11" : "any",
-    doubleAfterSplit: yes("doubleAfterSplit"),
+    // Always on (owner decision, 2026-11-20); older hands may say "no".
+    doubleAfterSplit: true,
     insurance: yes("insurance"),
     turnOrder: config["turnOrder"] === "seats" ? "seats" : "together",
     joinSec: num("joinSec"),

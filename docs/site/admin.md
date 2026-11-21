@@ -5,8 +5,10 @@ play, the owner creates a player account for themselves under Users. The admin s
 `/admin`, in every mode; nothing links there, so players only ever see their own sign-in.
 
 The workspace is built for desktop, and still works on a phone. Its layout matches the player app's: a sidebar on
-desktop with the four sections (**Users**, **Reports**, **Perf**, **Sports**), sign out beside the logo and
-**Change password** at the bottom; on a phone, a top bar (change password, sign out) and a bottom tab bar.
+desktop with the four sections (**Users**, **Reports**, **Perf**, **Sports**) and a **Handbook** link under them,
+sign out beside the logo and **Change password** at the bottom; on a phone, a top bar (handbook, change password, sign
+out) and a bottom tab bar. The handbook (these docs) opens in a new tab; on LAN and in production only an admin
+session can read it.
 
 The address bar always holds the current view: tab, player, perf window and route, sports league, day, game and
 panel. For example, `/?tab=perf&window=24h&route=GET+/tables/{tableId}`. A copied link or a screenshot of the

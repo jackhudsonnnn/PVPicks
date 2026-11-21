@@ -169,7 +169,7 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | A tie on a 0-point spread (a moneyline) | Give And Take | "Push" | Implemented (the push rule) |
 | Stats behind the score at lock, and the score moves again before they catch up | Scorcerer | "Couldn't tell the scoring play" | Implemented |
 | No automatic result 48 hours after the game's scheduled start (game stuck, or player stats never delivered; suspended games keep their own rule) | Sports | "No result from the feed" | Implemented |
-| Team scoring totals from player stats still disagree with the score once the grace period has passed, or a touchdown and a field goal first appear in the same update | Scorcerer | "Couldn't tell the scoring play" | Implemented |
+| Team scoring totals from player stats still disagree with the score once the grace period has passed, or two different scores (either team's touchdown or field goal, or 3 or 2) first appear in the same update | Scorcerer | "Couldn't tell the scoring play" | Implemented |
 | Nobody called the result 7 days after lock (checked every ten minutes; Quick Pick originals with copies are skipped) | U2Pick | "Nobody called the result" | Implemented |
 | The admin deleted a player who proposed or picked in it ([Admin account deletion](#admin-account-deletion)) | All | "A player's account was deleted" | Implemented |
 | Nobody sat down by the deal | Blackjack | "Nobody sat down" | Implemented |
@@ -178,9 +178,11 @@ debt cap) are dropped first. "No guess" isn't a pick.
 
 Every wash trigger for the LAN modes is implemented and tested (owner
 decisions, 2026-11-15). Hosts can still override any automatic wash.
-Scorcerer ignores safeties and every other 2-point play: its choices are
-Touchdown, Field goal and No more TDs or FGs, and it tells them apart from
-team totals of player stats (see [Player stats](/player-stats#scorcerer-from-team-totals)).
+Scorcerer bets on which team scores next and how, away team first: in the
+NFL a touchdown or a field goal (safeties and every other 2-point play don't
+count), in the NBA a 3 or a 2 (free throws don't count), or No more scores.
+It tells them apart from team totals of player stats (see
+[Player stats](/player-stats#scorcerer-from-team-totals)).
 
 Add any further mode-specific trigger to these tables, at lock or at
 resolution, with its reason and tests.
@@ -207,10 +209,11 @@ an authorized member-called result. Sports modes validate game-specific data,
 baselines and applicable overtime rules; their outcomes come from the feed,
 and only a host may override them (see Sports outcomes and host overrides).
 Neither mode may bypass the shared transactional lifecycle.
-The current proposal transaction handles U2Pick only. When sports proposal
-validation is added, reuse or extract its common authorization, retry, debt-cap
-and deadline mechanics; do not reuse U2Pick's custom definition or settler
-rules for game data or feed results.
+Every mode proposes through one shared transaction (`bets/BetProposalWriter`):
+authorization, the retry key, the table's betting switches (a mode gate for
+U2Pick and Blackjack), the debt cap and the deadline. Modes supply only the
+validated bet row; U2Pick's custom definition and settler rules stay
+U2Pick's.
 The user chose debt caps as the only spending limit: the prototype's separate
 100-point virtual-balance checks on proposal and joining will not be enforced.
 
@@ -666,7 +669,9 @@ table has no host at lock, reject the transition and surface the invariant
 violation instead of falling back to a winner. Table creation, host changes,
 account deletion and locking must serialize as necessary to preserve host
 continuity and a consistent lock-time selection. The internal lock transition
-implements the snapshot; the optional worker currently schedules U2Pick only.
+implements the snapshot. The lock worker locks U2Pick and sports bets at
+their deadline; Blackjack has its own worker that deals and times out
+decisions (see Blackjack).
 
 The dev relationships read returns only the caller's outgoing blocks, never
 the list of people who blocked them. It filters follow rows across blocks in

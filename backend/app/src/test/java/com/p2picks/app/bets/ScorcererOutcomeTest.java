@@ -16,12 +16,15 @@ import org.junit.jupiter.api.Test;
 class ScorcererOutcomeTest {
     private static final Instant LOCK = Instant.parse("2026-11-15T19:00:00Z");
     private static final Instant FINAL_AT = LOCK.plusSeconds(3600);
+    // DET hosts GB.
     private static final SportsOutcome.Terms TERMS = new SportsOutcome.Terms("scorcerer", null, true,
-            SportsProposalService.SCORCERER_CHOICES, null, List.of(), LOCK);
+            ScorcererOutcome.choices(League.NFL, "GB", "DET"), null, List.of(), LOCK);
     private static final SportsOutcome.Result WASH = new SportsOutcome.Result.Wash(ScorcererOutcome.UNREADABLE);
-    private static final SportsOutcome.Result TD = new SportsOutcome.Result.Winner("Touchdown");
-    private static final SportsOutcome.Result FG = new SportsOutcome.Result.Winner("Field goal");
-    private static final SportsOutcome.Result NEITHER = new SportsOutcome.Result.Winner("No more TDs or FGs");
+    private static final SportsOutcome.Result TD = new SportsOutcome.Result.Winner("DET touchdown");
+    private static final SportsOutcome.Result FG = new SportsOutcome.Result.Winner("DET field goal");
+    private static final SportsOutcome.Result GB_TD = new SportsOutcome.Result.Winner("GB touchdown");
+    private static final SportsOutcome.Result GB_FG = new SportsOutcome.Result.Winner("GB field goal");
+    private static final SportsOutcome.Result NEITHER = new SportsOutcome.Result.Winner("No more scores");
     private static final SportsOutcome.Result WAIT = new SportsOutcome.Result.Wait();
 
     /** A game whose current score is the last score update's. */
@@ -66,7 +69,7 @@ class ScorcererOutcomeTest {
     @Test
     void theFirstTouchdownOrFieldGoalAfterLockDecides() {
         assertThat(atLock().score(120, 14, 3).stats(130, 2, 0, 2, 0, 1, 0).live()).isEqualTo(TD);
-        assertThat(atLock().score(120, 7, 6).stats(130, 1, 0, 1, 0, 2, 0).live()).isEqualTo(FG);
+        assertThat(atLock().score(120, 7, 6).stats(130, 1, 0, 1, 0, 2, 0).live()).isEqualTo(GB_FG);
         assertThat(atLock().live()).as("nothing yet").isEqualTo(WAIT);
     }
 
@@ -77,7 +80,7 @@ class ScorcererOutcomeTest {
         // A DET touchdown before lock with its two-point try after lock, then a GB touchdown.
         Feed late = new Feed().score(-120, 6, 0).stats(-110, 1, 0, 0, 0, 0, 0).score(60, 8, 0)
                 .score(600, 8, 7).stats(610, 1, 0, 0, 1, 0, 1);
-        assertThat(late.live()).isEqualTo(TD);
+        assertThat(late.live()).isEqualTo(GB_TD);
         // A defensive two-point return after a DET touchdown isn't the next score either.
         Feed returned = new Feed().score(-120, 6, 0).stats(-110, 1, 0, 0, 0, 0, 0).score(60, 6, 2)
                 .score(600, 9, 2).stats(610, 1, 1, 0, 0, 0, 0);
@@ -89,7 +92,7 @@ class ScorcererOutcomeTest {
         // DET's touchdown is in the score before lock but reaches the stats only after it.
         Feed lagging = new Feed().score(-30, 7, 3).stats(-200, 0, 0, 0, 0, 1, 0).stats(40, 1, 0, 1, 0, 1, 0)
                 .score(600, 7, 6).stats(610, 1, 0, 1, 0, 2, 0);
-        assertThat(lagging.live()).as("the late touchdown is the baseline, not the next score").isEqualTo(FG);
+        assertThat(lagging.live()).as("the late touchdown is the baseline, not the next score").isEqualTo(GB_FG);
         // If the score moves again before the stats catch up, the two can't be told apart.
         Feed tangled = new Feed().score(-30, 7, 3).stats(-200, 0, 0, 0, 0, 1, 0).score(20, 7, 6)
                 .stats(40, 1, 0, 1, 0, 2, 0);
@@ -100,7 +103,9 @@ class ScorcererOutcomeTest {
     void aTouchdownAndAFieldGoalInOneObservationWash() {
         assertThat(atLock().score(120, 17, 3).stats(130, 2, 1, 2, 0, 1, 0).live()).isEqualTo(WASH);
         assertThat(atLock().score(120, 14, 10).stats(130, 2, 0, 2, 1, 1, 1).live())
-                .as("two touchdowns still decide it").isEqualTo(TD);
+                .as("a touchdown for each team: order unknown").isEqualTo(WASH);
+        assertThat(atLock().score(120, 21, 3).stats(130, 3, 0, 3, 0, 1, 0).live())
+                .as("two touchdowns for one team still decide it").isEqualTo(TD);
     }
 
     @Test
@@ -122,6 +127,57 @@ class ScorcererOutcomeTest {
 
     @Test
     void aStatlessPregameLockStartsFromZero() {
-        assertThat(new Feed().score(300, 0, 3).stats(310, 0, 0, 0, 0, 1, 0).live()).isEqualTo(FG);
+        assertThat(new Feed().score(300, 0, 3).stats(310, 0, 0, 0, 0, 1, 0).live()).isEqualTo(GB_FG);
+    }
+
+    // ----- NBA: 3s and 2s, free throws ignored, totals must match the score exactly. BOS hosts NYK.
+
+    private static final SportsOutcome.Terms NBA = new SportsOutcome.Terms("scorcerer", null, true,
+            ScorcererOutcome.choices(League.NBA, "NYK", "BOS"), null, List.of(), LOCK);
+
+    private static SportsOutcome.Result nba(Feed feed, GameStatus status, Instant now) {
+        ScoreUpdate last = feed.scores.isEmpty() ? new ScoreUpdate(LOCK, null, 0, 0) : feed.scores.getLast();
+        GameLookup.Game game = new GameLookup.Game("NBA-1", League.NBA, status, null, LOCK.minusSeconds(3600),
+                status == GameStatus.FINAL ? FINAL_AT : null, new GameLookup.Team("BOS", last.home(), List.of()),
+                new GameLookup.Team("NYK", last.away(), List.of()));
+        return ScorcererOutcome.decide(NBA, game, null, now, feed.scores, feed.totals);
+    }
+
+    /** BOS 10 – NYK 8 at lock: BOS two 3s and two 2s; NYK one 3, two 2s and a free throw. */
+    private static Feed nbaAtLock() {
+        return new Feed().score(-60, 10, 8).stats(-50, 2, 2, 0, 1, 2, 1);
+    }
+
+    @Test
+    void nbaChoicesNameTheTeamAwayFirst() {
+        assertThat(ScorcererOutcome.choices(League.NBA, "NYK", "BOS"))
+                .containsExactly("NYK 3", "NYK 2", "BOS 3", "BOS 2", "No more scores");
+        assertThat(ScorcererOutcome.choices(League.NFL, "GB", "DET")).containsExactly("GB touchdown",
+                "GB field goal", "DET touchdown", "DET field goal", "No more scores");
+    }
+
+    @Test
+    void nbaTheFirstBasketAfterLockDecidesAndFreeThrowsDont() {
+        Instant live = LOCK.plusSeconds(600);
+        // Two NYK free throws, then a BOS 3.
+        Feed freeThrowsFirst = nbaAtLock().score(30, 10, 10).stats(40, 2, 2, 0, 1, 2, 3)
+                .score(90, 13, 10).stats(100, 3, 2, 0, 1, 2, 3);
+        assertThat(nba(freeThrowsFirst, GameStatus.LIVE, live)).isEqualTo(new SportsOutcome.Result.Winner("BOS 3"));
+        Feed nykTwo = nbaAtLock().score(30, 10, 10).stats(40, 2, 2, 0, 1, 3, 1);
+        assertThat(nba(nykTwo, GameStatus.LIVE, live)).isEqualTo(new SportsOutcome.Result.Winner("NYK 2"));
+    }
+
+    @Test
+    void nbaTwoBasketsOfDifferentKindsInOneUpdateWash() {
+        Feed tangled = nbaAtLock().score(30, 12, 11).stats(40, 2, 3, 0, 2, 2, 1);
+        assertThat(nba(tangled, GameStatus.LIVE, LOCK.plusSeconds(600))).isEqualTo(WASH);
+    }
+
+    @Test
+    void nbaTotalsMustMatchTheScoreExactly() {
+        // The stats show a BOS 2 but the score hasn't moved yet: wait.
+        Feed ahead = nbaAtLock().stats(40, 2, 3, 0, 1, 2, 1);
+        assertThat(nba(ahead, GameStatus.LIVE, LOCK.plusSeconds(600))).isEqualTo(WAIT);
+        assertThat(nba(nbaAtLock(), GameStatus.FINAL, FINAL_AT.plus(SportsOutcome.GRACE))).isEqualTo(NEITHER);
     }
 }

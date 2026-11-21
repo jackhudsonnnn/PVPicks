@@ -241,13 +241,13 @@ class SportsIntegrationTest extends IntegrationTestSupport {
                 new StatLine(League.NFL, id, kicker, true, Map.of("field_goals", 1, "extra_points", 2))),
                 start.plusSeconds(120));
 
-        List<PlayerStatsLookup.ScoringTotals> totals = lookup.scoringTotals(gameId, "DET", "GB");
+        List<PlayerStatsLookup.ScoringTotals> totals = lookup.scoringTotals(gameId, League.NFL, "DET", "GB");
         assertThat(totals).containsExactly(
                 new PlayerStatsLookup.ScoringTotals(start.plusSeconds(60), new PlayerStatsLookup.TeamScoring(1, 1, 1),
                         new PlayerStatsLookup.TeamScoring(1, 0, 1)),
                 new PlayerStatsLookup.ScoringTotals(start.plusSeconds(120), new PlayerStatsLookup.TeamScoring(2, 1, 2),
                         new PlayerStatsLookup.TeamScoring(1, 0, 1)));
-        assertThat(totals.getLast().home().points()).isEqualTo(17);
+        assertThat(totals.getLast().home().points(League.NFL)).isEqualTo(17);
     }
 
     @Test

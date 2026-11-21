@@ -198,7 +198,8 @@ describe("U2Pick betting", () => {
     expect(screen.getByRole("button", { name: "Preview ticket" })).toBeDisabled();
     expect(screen.getByText("Write what you're betting on.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Bet question"), { target: { value: " Who wins? " } });
-    fireEvent.click(screen.getByRole("button", { name: "Add 1.00 points" }));
+    // The wager slider: Page Up jumps ten 0.10 steps, 1.00 to 2.00.
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Wager in points" }), { key: "PageUp" });
     fireEvent.click(screen.getByRole("tab", { name: "5m" }));
     fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
     expect(await screen.findByText("Preview ticket", { selector: "h2" })).toBeInTheDocument();

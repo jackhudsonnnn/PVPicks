@@ -113,6 +113,11 @@ class SessionSecurity {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"code\":\"unauthorized\",\"message\":\"Authentication required or credentials invalid.\"}");
         };
+        // A browser opening the handbook without an admin session goes to the admin sign-in.
+        AuthenticationEntryPoint entry = (request, response, exception) -> {
+            if (isDocs(request)) response.sendRedirect("/admin");
+            else unauthorized.commence(request, response, exception);
+        };
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.disable())
                 // The session cookie authenticates every request, so Spring would treat each one as a new
@@ -128,7 +133,15 @@ class SessionSecurity {
                                 // same-origin checks still apply to its POSTs.
                                 .requestMatchers("/dev/**").permitAll();
                     } else {
-                        authorize.requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
+                        // The handbook is for the admin on LAN and in production (owner decision, 2026-11-21): it
+                        // describes security and operations. The admin portal links to it.
+                        authorize.requestMatchers(HttpMethod.GET, "/docs", "/docs/**").access((authentication,
+                                        context) -> new AuthorizationDecision(
+                                        isActiveRole(authentication.get(), jdbc, "ADMIN")))
+                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").access((authentication,
+                                        context) -> new AuthorizationDecision(
+                                        isActiveRole(authentication.get(), jdbc, "ADMIN")))
+                                .requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
                     authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health", "/config").permitAll()
                             .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/code").permitAll()
@@ -147,15 +160,24 @@ class SessionSecurity {
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
                 .addFilterBefore(new OriginFilter(allowedOrigin, mode == AppMode.LAN), org.springframework.security.web.csrf.CsrfFilter.class)
-                .addFilterAfter(new JwtCookieFilter(decoder, unauthorized), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterAfter(new JwtCookieFilter(decoder, entry), org.springframework.security.web.csrf.CsrfFilter.class)
                 .exceptionHandling(errors -> errors
-                        .authenticationEntryPoint(unauthorized)
+                        .authenticationEntryPoint(entry)
                         .accessDeniedHandler((request, response, exception) -> {
+                            if (isDocs(request)) {
+                                response.sendRedirect("/admin");
+                                return;
+                            }
                             response.setStatus(403);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             response.getWriter().write("{\"code\":\"forbidden\",\"message\":\"Request forbidden.\"}");
                         }));
         return http.build();
+    }
+
+    private static boolean isDocs(jakarta.servlet.http.HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.equals("/docs") || path.startsWith("/docs/");
     }
 
     private static boolean isActiveRole(Authentication authentication, JdbcTemplate jdbc, String role) {

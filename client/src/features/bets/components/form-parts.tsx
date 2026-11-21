@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 import { Minus, Plus } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { formatCents } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 /** Labeled block inside the proposal sheet. */
 export function Section({ label, children }: { label: string; children: ReactNode }) {
@@ -59,6 +63,93 @@ export function Stepper({
       >
         <Plus className="size-4" />
       </button>
+    </div>
+  );
+}
+
+/** The 4fun switch at the top of every proposal's wager section. */
+export function FunToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border bg-surface p-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">4fun</span>
+        <span className="block text-xs text-muted-foreground">
+          No points at stake and nothing tracked. Just bragging rights.
+        </span>
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} aria-label="4fun bet" />
+    </div>
+  );
+}
+
+/** The box wagers sit in; faded and inert for a 4fun bet. */
+export function WagerBox({ off, children }: { off: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "space-y-4 rounded-xl border bg-surface p-3 transition-opacity",
+        off && "pointer-events-none opacity-40",
+      )}
+      aria-disabled={off || undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A points amount on a slider: the value large, the slider under it, its range below. */
+export function WagerSlider({
+  label,
+  value,
+  min,
+  max,
+  step = 10,
+  disabled,
+  onChange,
+}: {
+  /** Names it on screen ("Minimum") and for screen readers; a lone wager needs none on screen. */
+  label?: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  disabled?: boolean;
+  onChange: (cents: number) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-baseline justify-between gap-3">
+        {label && (
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            {label}
+          </span>
+        )}
+        <span
+          className={cn("scoreboard text-3xl leading-none text-primary", !label && "mr-auto")}
+          aria-live="polite"
+        >
+          {formatCents(value)}
+        </span>
+      </div>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        disabled={!!disabled}
+        thumbLabel={label ? `${label} in points` : "Wager in points"}
+        onValueChange={([v]) => v !== undefined && onChange(v)}
+      />
+      <p className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>Min {formatCents(min)}</span>
+        <span>Max {formatCents(max)}</span>
+      </p>
     </div>
   );
 }

@@ -1,11 +1,24 @@
 # P2Picks
 
-P2Picks is a peer-to-peer betting app for friend groups: a React frontend and
-a development-only Spring Boot backend. It's pre-MVP and not ready for real
-users or a network: everything runs locally in Docker, and the dev data is
-disposable.
+P2Picks is a peer-to-peer betting app for friend groups. Friends sit at
+tables, chat, and bet against each other on live NBA and NFL games, on custom
+questions, or at a hand of Blackjack. Everything is settled in points, which
+have no cash value. It's a React frontend and a Spring Boot backend, run with
+Docker Compose.
 
-All documentation lives in the docs site (source in `docs/site/`).
+It runs in one of three modes:
+
+- **dev**: on your machine, with a lived-in demo world and bots. Its data is
+  disposable. That's [Run it](#run-it) below.
+- **LAN**: a watch party on one Wi-Fi network, served over HTTPS from the
+  host's Mac. It has been used at real parties. See
+  [Host a LAN party](#host-a-lan-party).
+- **prod**: not set up yet. Production is the next milestone, the MVP, after
+  more security hardening and UI cleanup.
+
+All documentation lives in the docs site (source in `docs/site/`). In dev it's
+open at `/docs/`; on LAN (and later in production) it's for the admin only,
+from the **Handbook** link in the admin portal.
 
 ## Run it
 
@@ -81,3 +94,67 @@ The app's source (`client/`) is mounted into its container, so edits reload
 in the browser. The **Dev** page (flask icon beside the logo, also on the
 sign-in page, no sign-in needed) resets the demo world and runs test games. See **Demo world** and **Dev sports data** in the
 docs.
+
+## Host a LAN party
+
+The LAN stack runs on the host's Mac and serves `https://lan.p2picks.com` to
+phones on the same Wi-Fi. The name's DNS is on Cloudflare and points at the
+Mac's local address, with a Let's Encrypt certificate. **LAN watch party** in
+the docs has the design, the guest flow and troubleshooting. Run everything
+from the repository root, with this shorthand:
+
+```sh
+alias lan="docker compose -f infra/compose/docker-compose.lan.yml --env-file infra/compose/.env.lan"
+```
+
+**First time on a Mac**
+
+1. `./scripts/provision-lan.sh --init`, then fill in `infra/compose/.env.lan`:
+   `PVPICKS_LAN_HOST=lan.p2picks.com`, the admin's username and password
+   (`PVPICKS_BOOTSTRAP_ADMIN`, `PVPICKS_BOOTSTRAP_ADMIN_PASSWORD`) and the
+   BallDontLie key.
+2. Save a Cloudflare API token (the **Edit zone DNS** template, limited to
+   `p2picks.com`) where certbot can read it and nobody else can:
+
+   ```sh
+   mkdir -p ~/.secrets && printf 'dns_cloudflare_api_token = <token>\n' > ~/.secrets/cloudflare.ini && chmod 600 ~/.secrets/cloudflare.ini
+   ```
+
+3. Get the certificate (it lasts 90 days) and copy it to Caddy:
+
+   ```sh
+   docker run --rm -v "$HOME/.p2picks-letsencrypt:/etc/letsencrypt" -v "$HOME/.secrets/cloudflare.ini:/cloudflare.ini:ro" \
+     certbot/dns-cloudflare:v3.0.1 certonly --non-interactive --agree-tos --register-unsafely-without-email \
+     --dns-cloudflare --dns-cloudflare-credentials /cloudflare.ini --dns-cloudflare-propagation-seconds 30 -d lan.p2picks.com
+   cp -L ~/.p2picks-letsencrypt/live/lan.p2picks.com/{fullchain,privkey}.pem infra/caddy/certs/
+   ```
+
+**At each location**
+
+1. Join the Wi-Fi and find the Mac's address: `ipconfig getifaddr en0`.
+2. In Cloudflare (p2picks.com → DNS → Records), set the `lan` A record to that
+   address. Keep **Proxy status** off (grey cloud): Cloudflare's proxy can't
+   reach a home network. The name and the certificate stay the same, so
+   guests' links and QR codes keep working.
+3. Reserve that address for the Mac in the router, so it doesn't change
+   during the night.
+4. `lan up -d --build --wait`, then sign in at `https://lan.p2picks.com/admin`.
+   Create your own player first, since the first player hosts the party table,
+   then everyone else's (in Users, or with `scripts/lan-players.sh`).
+5. Check one phone opens the site. If it can't find the name, the router is
+   blocking public names that point at local addresses: add a local DNS entry
+   for `lan.p2picks.com` on the router.
+
+During the night, keep the Mac plugged in and awake (`caffeinate -dims`), and
+watch the admin's Perf tab.
+
+**Every 90 days**, renew the certificate and copy it again:
+
+```sh
+docker run --rm -v "$HOME/.p2picks-letsencrypt:/etc/letsencrypt" -v "$HOME/.secrets/cloudflare.ini:/cloudflare.ini:ro" certbot/dns-cloudflare:v3.0.1 renew
+cp -L ~/.p2picks-letsencrypt/live/lan.p2picks.com/{fullchain,privkey}.pem infra/caddy/certs/ && lan restart caddy
+```
+
+**After the party**, optionally keep a copy
+(`lan exec postgres pg_dump -U p2picks p2picks > night.sql`), then wipe it with
+`lan down -v`.

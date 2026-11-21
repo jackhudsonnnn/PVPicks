@@ -13,51 +13,26 @@ import {
   currentHand,
   myTurn,
   rulesFromConfig,
+  secondsUntil,
   type BlackjackHand,
   type BlackjackSeat,
 } from "@/features/bets/blackjack";
 import { Card, DealerButton, PlayControls, SeatControls } from "./blackjack-parts";
 import { RESULT, signed, useBlackjackHand } from "@/features/bets/blackjack-hand";
 
-function Hands({ seat, active }: { seat: BlackjackSeat; active: number }) {
-  return (
-    <div className="flex flex-wrap gap-3">
-      {(seat.hands ?? []).map((hand, i) => (
-        <div
-          key={i}
-          className={cn(
-            "space-y-1 rounded-lg p-1.5",
-            i === active && "bg-ticket-foreground/8 ring-1 ring-ticket-foreground/30",
-          )}
-        >
-          <div className="flex gap-1">
-            {hand.cards.map((c, j) => (
-              <Card key={j} code={c} small />
-            ))}
-          </div>
-          <p className="font-mono text-[10px] text-ticket-muted">
-            {hand.soft && hand.total < 21 ? `soft ${hand.total}` : hand.total}
-            {hand.doubled && " · doubled"}
-            {hand.result && (
-              <span
-                className={cn(
-                  "ml-1 font-bold",
-                  (hand.deltaCents ?? 0) > 0 && "text-status-resolved",
-                  (hand.deltaCents ?? 0) < 0 && "text-loss",
-                )}
-              >
-                · {RESULT[hand.result]}
-              </span>
-            )}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
+/** Cards in the ticket come out of the shoe at the felt's top left. */
+const SHOE_FROM_DEALER = { x: -64, y: 0 };
+const SHOE_FROM_SEAT = { x: -48, y: -110 };
+/** Seconds between cards in the opening deal. */
+const DEAL_GAP = 0.14;
 
-function SeatRow({
+const BACK = "border-white/40 bg-[repeating-linear-gradient(45deg,#b91c1c_0_3px,#7f1d1d_3px_6px)]";
+
+/** One player's spot on the ticket's felt: name, bet, their hands, and how it's going. */
+function Spot({
   seat,
+  order,
+  players,
   hand,
   user,
   expire,
@@ -65,6 +40,8 @@ function SeatRow({
   now,
 }: {
   seat: BlackjackSeat;
+  order: number;
+  players: number;
   hand: BlackjackHand;
   user: User;
   expire: () => void;
@@ -73,43 +50,114 @@ function SeatRow({
 }) {
   const person = usePerson(seat.userId, user, expire, peopleKey);
   const deciding = myTurn(hand, seat);
-  const left = seat.deadline
-    ? Math.max(0, Math.ceil((Date.parse(seat.deadline) - now) / 1000))
-    : null;
+  const active = deciding ? currentHand(seat) : -1;
+  const left = deciding ? secondsUntil(seat.deadline, now) : null;
   return (
     <li
       className={cn(
-        "space-y-2 rounded-lg border border-ticket-foreground/15 p-2.5",
-        deciding && "border-ticket-foreground/60",
+        "min-w-0 space-y-1.5 rounded-lg border border-white/10 bg-black/20 p-2",
+        deciding && "border-primary/70 bg-primary/10",
       )}
     >
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-1.5 text-[11px]">
         <PersonAvatar id={seat.userId} size="xs" user={user} expire={expire} queryKey={peopleKey} />
-        <span className="min-w-0 flex-1 truncate font-semibold">
+        <span className="min-w-0 flex-1 truncate font-semibold text-white">
           {seat.userId === user.id ? "You" : (person?.name ?? "…")}
         </span>
-        <span className="font-mono text-[11px] text-ticket-muted">
-          {formatCents(seat.betCents)}
-          {seat.insuranceCents ? ` · insured ${formatCents(seat.insuranceCents)}` : ""}
-        </span>
-        {deciding && left !== null && (
-          <span className={cn("scoreboard text-base", left <= 5 ? "text-loss" : "")}>{left}s</span>
-        )}
-        {seat.deltaCents !== undefined && (
-          <span
-            className={cn(
-              "font-mono text-xs font-bold",
-              seat.deltaCents > 0 && "text-status-resolved",
-              seat.deltaCents < 0 && "text-loss",
-            )}
-          >
-            {signed(seat.deltaCents)}
+        {left !== null ? (
+          <span className={cn("scoreboard text-sm", left <= 5 ? "text-loss" : "text-white")}>
+            {left}s
           </span>
+        ) : (
+          <span className="font-mono text-[10px] text-white/60">{formatCents(seat.betCents)}</span>
         )}
       </div>
-      {seat.hands && <Hands seat={seat} active={deciding ? currentHand(seat) : -1} />}
+      {seat.hands ? (
+        <div className="flex flex-wrap gap-1.5">
+          {seat.hands.map((h, i) => (
+            <div
+              key={i}
+              className={cn("space-y-1 rounded-md p-1", i === active && "ring-2 ring-primary")}
+            >
+              <div className="flex -space-x-2">
+                {h.cards.map((code, c) => (
+                  <Card
+                    key={`${c}-${code}`}
+                    code={code}
+                    small
+                    from={SHOE_FROM_SEAT}
+                    delay={
+                      h.cards.length <= 2 && seat.hands!.length === 1
+                        ? (c * (players + 1) + order) * DEAL_GAP
+                        : 0
+                    }
+                  />
+                ))}
+              </div>
+              <p
+                className={cn(
+                  "font-mono text-[10px] font-bold text-white/80",
+                  (h.deltaCents ?? 0) > 0 && "text-win",
+                  (h.deltaCents ?? 0) < 0 && "text-loss",
+                )}
+              >
+                {h.result ? RESULT[h.result] : h.soft && h.total < 21 ? `soft ${h.total}` : h.total}
+                {h.doubled && " · 2×"}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="font-mono text-[10px] text-white/60">Bet {formatCents(seat.betCents)}</p>
+      )}
+      {seat.deltaCents !== undefined && (
+        <p
+          className={cn(
+            "font-mono text-[11px] font-bold",
+            seat.deltaCents > 0 ? "text-win" : seat.deltaCents < 0 ? "text-loss" : "text-white/70",
+          )}
+        >
+          {seat.deltaCents === 0 ? "Push" : signed(seat.deltaCents)}
+          {seat.insuranceCents ? ` · insured ${formatCents(seat.insuranceCents)}` : ""}
+        </p>
+      )}
     </li>
   );
+}
+
+/** What's happening, in one line under the felt. */
+function statusLine(
+  data: BlackjackHand,
+  bet: Bet,
+  user: User,
+  mine: BlackjackSeat | undefined,
+  now: number,
+  joinLeft: number,
+) {
+  const dealing = bet.proposerId === user.id;
+  if (data.phase === "waiting")
+    return dealing
+      ? `You're dealing. Cards come out in ${formatClock(Math.max(0, joinLeft))}.`
+      : mine
+        ? `You're in for ${formatCents(mine.betCents)}. Cards come out in ${formatClock(Math.max(0, joinLeft))}.`
+        : "Sit down before the cards come out.";
+  if (data.phase === "insurance") return "The dealer shows an ace: insurance?";
+  if (data.phase === "dealer") {
+    const left = secondsUntil(data.dealerDeadline, now);
+    return dealing ? `Your turn to deal${left !== null ? ` · ${left}s` : ""}.` : "Dealer's turn…";
+  }
+  if (data.phase === "done") {
+    if (mine?.deltaCents !== undefined)
+      return mine.deltaCents === 0
+        ? "Push."
+        : `You ${mine.deltaCents > 0 ? "won" : "lost"} ${formatCents(Math.abs(mine.deltaCents))}.`;
+    if (dealing && data.dealerDeltaCents !== undefined)
+      return `As dealer: ${data.dealerDeltaCents === 0 ? "even" : signed(data.dealerDeltaCents)}.`;
+    return "Hand over.";
+  }
+  if (mine && myTurn(data, mine)) return "Your move.";
+  if (mine && currentHand(mine) >= 0) return "Waiting for your turn…";
+  return "Players deciding…";
 }
 
 /**
@@ -146,6 +194,7 @@ export function BlackjackTicket({
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
   const data = hand.data;
   const mine = data?.seats.find((s) => s.userId === user.id);
+  const revealed = !!data && data.dealer[1] !== undefined && data.dealer[1] !== "??";
   const start = (intent: Parameters<BetActions["start"]>[0]) => {
     actions?.start(intent);
   };
@@ -219,42 +268,71 @@ export function BlackjackTicket({
           <p className="text-sm text-ticket-muted">The hand can't be shown right now.</p>
         ) : (
           <>
-            {data.dealer.length > 0 && (
-              <div className="space-y-1">
-                <div className="flex gap-1">
-                  {data.dealer.map((c, i) => (
-                    <Card key={i} code={c} />
-                  ))}
-                </div>
-                <p className="font-mono text-[10px] text-ticket-muted">
-                  Dealer{data.dealerTotal !== undefined && ` · ${data.dealerTotal}`}
-                  {data.dealerTotal !== undefined && data.dealerTotal > 21 && " · bust"}
-                  {data.dealerDeltaCents !== undefined &&
-                    data.dealerDeltaCents !== 0 &&
-                    ` · ${signed(data.dealerDeltaCents)}`}
-                </p>
-              </div>
-            )}
-
-            {data.seats.length === 0 ? (
-              <p className="text-sm text-ticket-muted">
-                {status === "washed" ? bet.washReason : "Nobody has sat down yet."}
-              </p>
-            ) : (
-              <ul className="space-y-2" aria-label="Seats">
-                {data.seats.map((seat) => (
-                  <SeatRow
-                    key={seat.userId}
-                    seat={seat}
-                    hand={data}
-                    user={user}
-                    expire={expire}
-                    peopleKey={peopleKey}
-                    now={now}
+            {/* The table: the dealer and the shoe at the top, everyone's spot below. */}
+            <div className="space-y-3 rounded-xl bg-[radial-gradient(ellipse_at_top,#1f6b3a,#0f3d22)] p-3 shadow-inner">
+              <div className="flex items-center gap-3">
+                <span className="relative block h-14 w-10 shrink-0" aria-hidden>
+                  <span
+                    className={cn(
+                      "absolute inset-0 translate-x-1 translate-y-1 rounded-md border shadow",
+                      BACK,
+                    )}
                   />
-                ))}
-              </ul>
-            )}
+                  <span className={cn("absolute inset-0 rounded-md border shadow-md", BACK)} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  {data.dealer.length > 0 ? (
+                    <div className="flex -space-x-3">
+                      {data.dealer.map((code, c) => (
+                        <Card
+                          key={`${c}-${code}`}
+                          code={code}
+                          // Face down, cards slide from the shoe in deal order; turned over, the hole card flips.
+                          from={revealed && c === 1 ? undefined : SHOE_FROM_DEALER}
+                          delay={
+                            !revealed
+                              ? (c * (data.seats.length + 1) + data.seats.length) * DEAL_GAP
+                              : 0
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/60">Waiting to deal</p>
+                  )}
+                  <p className="mt-1 font-mono text-[10px] font-bold uppercase tracking-wider text-white/80">
+                    Dealer · {isDealer ? "you" : (dealer?.name ?? "…")}
+                    {data.dealerTotal !== undefined &&
+                      ` · ${data.dealerTotal > 21 ? "bust" : data.dealerTotal}`}
+                  </p>
+                </div>
+              </div>
+              {data.seats.length === 0 ? (
+                <p className="py-2 text-center text-xs text-white/60">
+                  {status === "washed" ? bet.washReason : "Nobody has sat down yet."}
+                </p>
+              ) : (
+                <ul className="grid grid-cols-2 gap-2" aria-label="Seats">
+                  {data.seats.map((seat, order) => (
+                    <Spot
+                      key={seat.userId}
+                      seat={seat}
+                      order={order}
+                      players={data.seats.length}
+                      hand={data}
+                      user={user}
+                      expire={expire}
+                      peopleKey={peopleKey}
+                      now={now}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <p className="text-sm font-semibold" aria-live="polite">
+              {statusLine(data, bet, user, mine, now, left)}
+            </p>
 
             {status === "active" && !isDealer && canBetAt(table, user.id) && left > 0 && (
               <SeatControls
@@ -269,11 +347,6 @@ export function BlackjackTicket({
                 onLeave={() => start({ kind: "blackjack-leave", tableId: table.id, betId: bet.id })}
               />
             )}
-            {status === "active" && isDealer && (
-              <p className="text-xs text-ticket-muted">
-                You're dealing. Cards come out when the timer ends.
-              </p>
-            )}
             {mine && myTurn(data, mine) && (
               <PlayControls
                 hand={data}
@@ -286,24 +359,18 @@ export function BlackjackTicket({
               />
             )}
             {isDealer && data.dealerMove && (
-              <div className="space-y-1">
-                <p className="text-xs text-ticket-muted">Your turn to deal.</p>
-                <DealerButton
-                  move={data.dealerMove}
-                  disabled={blocked}
-                  onTap={() =>
-                    start({
-                      kind: "blackjack-act",
-                      tableId: table.id,
-                      betId: bet.id,
-                      action: "dealer",
-                    })
-                  }
-                />
-              </div>
-            )}
-            {mine && data.phase === "play" && !myTurn(data, mine) && currentHand(mine) >= 0 && (
-              <p className="text-xs text-ticket-muted">Waiting for your turn…</p>
+              <DealerButton
+                move={data.dealerMove}
+                disabled={blocked}
+                onTap={() =>
+                  start({
+                    kind: "blackjack-act",
+                    tableId: table.id,
+                    betId: bet.id,
+                    action: "dealer",
+                  })
+                }
+              />
             )}
           </>
         )}

@@ -281,7 +281,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
             onOpenPeers={() => chooseTab("peers")}
             onSelectUser={setProfileId}
             onPropose={block ? undefined : () => setProposing(true)}
-            betActions={betActions}
             user={user}
             expire={expire}
             peopleKey={peopleKey}

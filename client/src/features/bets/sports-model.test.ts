@@ -5,7 +5,6 @@ import {
   playerProblem,
   playerTerms,
   proposableGames,
-  SCORCERER_CHOICES,
   scoreLine,
   scoreTerms,
   startingLine,
@@ -75,9 +74,19 @@ describe("player modes", () => {
     expect(playerTerms("king_of_the_hill", "Points", [ann, ben], 30, "BOS", "NYK").choices).toEqual(
       ["Ann Archer", "Ben Baker", "Neither"],
     );
-    expect(playerTerms("scorcerer", "", [], 0, "DET", "GB")).toEqual({
+    expect(playerTerms("scorcerer", "", [], 0, "DET", "GB", "NFL")).toEqual({
       question: "GB @ DET: next touchdown or field goal?",
-      choices: SCORCERER_CHOICES,
+      choices: [
+        "GB touchdown",
+        "GB field goal",
+        "DET touchdown",
+        "DET field goal",
+        "No more scores",
+      ],
+    });
+    expect(playerTerms("scorcerer", "", [], 0, "BOS", "NYK", "NBA")).toEqual({
+      question: "NYK @ BOS: next basket?",
+      choices: ["NYK 3", "NYK 2", "BOS 3", "BOS 2", "No more scores"],
     });
     expect(playerNames([ann, { ...ann, team: "NYK" }])).toEqual([
       "Ann Archer (BOS)",

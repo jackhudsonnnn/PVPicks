@@ -1,7 +1,7 @@
 # The LAN watch party's front door (docs: LAN watch party). The only service on the network: HTTPS on 443, and port
 # 80 redirects to it. /api/* goes to the backend (WebSockets included), everything else to the client's server.
 #
-# PVPICKS_LAN_HOST is the name phones open (p2picks.<domain>). PVPICKS_LAN_TLS is either the certificate files
+# PVPICKS_LAN_HOST is the name phones open (lan.p2picks.com). PVPICKS_LAN_TLS is either the certificate files
 # obtained before the party ("/certs/fullchain.pem /certs/privkey.pem") or "internal" (Caddy's own CA, for testing
 # on the Mac with a name like localhost; phones won't trust it).
 {
@@ -23,6 +23,11 @@
 		# QR sign-in links carry the code in the fragment, which browsers never send; this keeps the path private too.
 		Referrer-Policy "no-referrer"
 		-Server
+	}
+
+	# The handbook, for the signed-in admin (the backend checks; anyone else is sent to /admin).
+	handle /docs* {
+		reverse_proxy backend:8080
 	}
 
 	handle_path /api/* {

@@ -46,7 +46,8 @@ public class SportsResolutionService {
         }
         if (terms.mode().equals(SportsProposalService.SCORCERER)) {
             return ScorcererOutcome.decide(terms, game, suspendedSince, now, stats.scores(gameId), game == null
-                    ? List.of() : stats.scoringTotals(gameId, game.home().abbreviation(), game.away().abbreviation()));
+                    ? List.of() : stats.scoringTotals(gameId, game.league(), game.home().abbreviation(),
+                    game.away().abbreviation()));
         }
         return SportsOutcome.decide(terms, game, suspendedSince, now);
     }

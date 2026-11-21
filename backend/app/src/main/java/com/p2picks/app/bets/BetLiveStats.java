@@ -97,11 +97,15 @@ public class BetLiveStats {
                     away + " + " + home + (bet.includesOvertime() ? "" : ", regulation only"), line, "Line"));
             case "give_and_take" -> List.of(new Tracked("margin", home + " margin",
                     home + " minus " + away, line, "Spread"));
-            case "scorcerer" -> List.of(
-                    new Tracked("away_td", away + " touchdowns", null, null, null),
-                    new Tracked("away_fg", away + " field goals", null, null, null),
-                    new Tracked("home_td", home + " touchdowns", null, null, null),
-                    new Tracked("home_fg", home + " field goals", null, null, null));
+            case "scorcerer" -> {
+                String big = game.league() == com.p2picks.app.sports.League.NFL ? "touchdowns" : "3-pointers";
+                String small = game.league() == com.p2picks.app.sports.League.NFL ? "field goals" : "2-pointers";
+                yield List.of(
+                        new Tracked("away_big", away + " " + big, null, null, null),
+                        new Tracked("away_small", away + " " + small, null, null, null),
+                        new Tracked("home_big", home + " " + big, null, null, null),
+                        new Tracked("home_small", home + " " + small, null, null, null));
+            }
             case "either_or", "prop_hunt", "king_of_the_hill" -> {
                 String stat = bet.config().path("stat").asText();
                 String statLabel = PlayerStatsLookup.label(game.league(), stat);
@@ -134,13 +138,13 @@ public class BetLiveStats {
                     : SportsOutcome.combinedScore(game, bet.includesOvertime()));
             case "give_and_take" -> values.put("margin", home - away);
             case "scorcerer" -> {
-                var totals = stats.scoringTotals(bet.gameId(), game.home().abbreviation(),
+                var totals = stats.scoringTotals(bet.gameId(), game.league(), game.home().abbreviation(),
                         game.away().abbreviation());
                 var last = totals.isEmpty() ? null : totals.getLast();
-                values.put("away_td", last == null ? 0 : last.away().touchdowns());
-                values.put("away_fg", last == null ? 0 : last.away().fieldGoals());
-                values.put("home_td", last == null ? 0 : last.home().touchdowns());
-                values.put("home_fg", last == null ? 0 : last.home().fieldGoals());
+                values.put("away_big", last == null ? 0 : last.away().big());
+                values.put("away_small", last == null ? 0 : last.away().small());
+                values.put("home_big", last == null ? 0 : last.home().big());
+                values.put("home_small", last == null ? 0 : last.home().small());
             }
             case "either_or", "prop_hunt", "king_of_the_hill" -> {
                 String stat = bet.config().path("stat").asText();

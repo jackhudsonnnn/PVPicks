@@ -45,6 +45,12 @@ cover.
   - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
     HTTP adapters), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
     `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
+    Blackjack: `BlackjackGameTest` (the pure hand, including 500 random hands
+    checked zero-sum) and `BlackjackIntegrationTest` (propose, seats, deal,
+    turns, timeouts, the dealer's turn, the points limit, the host setting);
+    `demo.BlackjackBotTest` covers the bots' strategy.
+  - `common.AbusiveLanguageTest` and `AbusiveLanguageIntegrationTest`: the
+    slur filter and every endpoint it guards.
   - `settlement`: `PointsSettlementIntegrationTest`, `SettleIntegrationTest`
     (settles, rejection windows, the daily send limit, history and
     balance-change reviews), `SettleRulesTest` (who may settle what) and

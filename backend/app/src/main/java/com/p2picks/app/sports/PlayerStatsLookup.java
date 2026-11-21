@@ -108,24 +108,36 @@ public class PlayerStatsLookup {
         return at.isEmpty() || at.getFirst() == null ? null : at.getFirst().toInstant();
     }
 
-    /** One team's scoring plays as its players' stat lines count them (NFL). */
-    public record TeamScoring(int touchdowns, int fieldGoals, int extraPoints) {
+    /**
+     * One team's scoring plays as its players' stat lines count them: the two kinds Scorcerer bets on ({@code big}
+     * and {@code small}) and the one-pointers it ignores. NFL: touchdowns, field goals, extra points. NBA: 3-pointers,
+     * 2-pointers, free throws.
+     */
+    public record TeamScoring(int big, int small, int ones) {
         public static final TeamScoring NONE = new TeamScoring(0, 0, 0);
 
-        /** The points these plays explain; 2-point plays (safeties, conversions) aren't in the feed. */
-        public int points() {
-            return 6 * touchdowns + 3 * fieldGoals + extraPoints;
+        /** The points these plays explain. NFL 2-point plays (safeties, conversions) aren't in the feed. */
+        public int points(League league) {
+            return league == League.NFL ? 6 * big + 3 * small + ones : 3 * big + 2 * small + ones;
         }
     }
 
     /** Both teams' scoring totals as of one stats observation. */
     public record ScoringTotals(Instant observedAt, TeamScoring home, TeamScoring away) {}
 
+    /** The stat keys behind {@link TeamScoring}'s big, small and ones, per league. */
+    private static List<String> scoringKeys(League league) {
+        return league == League.NFL ? List.of("touchdowns", "field_goals", "extra_points")
+                : List.of("threes", "twos", "free_throws");
+    }
+
     /**
-     * Each team's touchdowns, field goals and extra points, summed over its players' lines, after every stats
-     * observation that changed one (oldest first). A player without a line counts as 0.
+     * Each team's scoring plays, summed over its players' lines, after every stats observation that changed one
+     * (oldest first). A player without a line counts as 0.
      */
-    public List<ScoringTotals> scoringTotals(String gameId, String homeAbbreviation, String awayAbbreviation) {
+    public List<ScoringTotals> scoringTotals(String gameId, League league, String homeAbbreviation,
+            String awayAbbreviation) {
+        List<String> keys = scoringKeys(league);
         Map<String, String> teams = new java.util.HashMap<>();
         Map<String, Map<String, Integer>> lines = new java.util.HashMap<>();
         List<ScoringTotals> totals = new java.util.ArrayList<>();
@@ -138,27 +150,25 @@ public class PlayerStatsLookup {
                 """, rs -> {
             Instant at = rs.getTimestamp("observed_at").toInstant();
             if (current[0] != null && !at.equals(current[0])) {
-                totals.add(sum(current[0], teams, lines, homeAbbreviation, awayAbbreviation));
+                totals.add(sum(current[0], keys, teams, lines, homeAbbreviation, awayAbbreviation));
             }
             current[0] = at;
             String player = rs.getString("player_id");
             teams.put(player, rs.getString("team_abbreviation"));
             lines.put(player, stats(rs.getString("stats")));
         }, gameId);
-        if (current[0] != null) totals.add(sum(current[0], teams, lines, homeAbbreviation, awayAbbreviation));
+        if (current[0] != null) totals.add(sum(current[0], keys, teams, lines, homeAbbreviation, awayAbbreviation));
         return List.copyOf(totals);
     }
 
-    private static ScoringTotals sum(Instant at, Map<String, String> teams, Map<String, Map<String, Integer>> lines,
-            String home, String away) {
+    private static ScoringTotals sum(Instant at, List<String> keys, Map<String, String> teams,
+            Map<String, Map<String, Integer>> lines, String home, String away) {
         int[][] counts = new int[2][3];
         lines.forEach((player, line) -> {
             String team = teams.get(player);
             int side = home.equals(team) ? 0 : away.equals(team) ? 1 : -1;
             if (side < 0) return;
-            counts[side][0] += line.getOrDefault("touchdowns", 0);
-            counts[side][1] += line.getOrDefault("field_goals", 0);
-            counts[side][2] += line.getOrDefault("extra_points", 0);
+            for (int k = 0; k < 3; k++) counts[side][k] += line.getOrDefault(keys.get(k), 0);
         });
         return new ScoringTotals(at, new TeamScoring(counts[0][0], counts[0][1], counts[0][2]),
                 new TeamScoring(counts[1][0], counts[1][1], counts[1][2]));

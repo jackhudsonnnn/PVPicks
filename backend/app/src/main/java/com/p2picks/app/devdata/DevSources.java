@@ -94,8 +94,8 @@ final class DevSources {
         Map<String, List<StatLine>> lines = new LinkedHashMap<>();
         Set<String> known = new java.util.LinkedHashSet<>(
                 StatLine.STATS.get(league).stream().map(StatLine.Stat::key).toList());
-        // NFL kickers' field goals and extra points, which Scorcerer needs to explain the score.
-        if (league == League.NFL) known.addAll(StatLine.NFL_SCORING);
+        // The scoring keys Scorcerer needs to explain the score (NFL kicks, NBA twos and free throws).
+        known.addAll(StatLine.SCORING.get(league));
         for (ObjectNode player : players.values()) {
             String key = player.path("id").asText();
             String game = gameIds.get(player.path("game").asText());

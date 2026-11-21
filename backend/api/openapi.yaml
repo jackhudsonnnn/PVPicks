@@ -426,7 +426,7 @@ paths:
         that game: one for prop_hunt, two for either_or and king_of_the_hill)
         plus config.line for prop_hunt (half points, above the player's
         current number) and king_of_the_hill (a whole-number target above
-        both players' numbers); scorcerer (NFL only) takes no config. The
+        both players' numbers); scorcerer (NFL and NBA) takes no config. The
         server builds the question and choices from the stored game and
         players. Terms the game can't take answer 409 invalid_terms. A game
         bet can be proposed until its game is Final, canceled or postponed
@@ -5351,7 +5351,8 @@ components:
       description: >-
         Snapshots of what a sports bet's mode follows (see GET
         /bets/{betId}/live), keyed by what they track: combined, margin,
-        player:<id>, home_td, home_fg, away_td, away_fg.
+        player:<id>, and for scorcerer away_big, away_small, home_big,
+        home_small (NFL touchdowns and field goals, NBA 3s and 2s).
       properties:
         proposed:
           type: object

@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Proposals for the sports modes. Score modes: Total Disaster (over/under the combined score) and Give And Take
  * (the home team's spread). Player modes, both players from the bet's game: Either Or (who gets more of a stat),
- * Prop Hunt (one player over/under a line) and King Of The Hill (first to a target, or Neither). Scorcerer (NFL):
- * how the next score is made. The server builds the question and choices from the stored game and players, so
+ * Prop Hunt (one player over/under a line) and King Of The Hill (first to a target, or Neither). Scorcerer (NFL and NBA):
+ * which team scores next and how. The server builds the question and choices from the stored game and players, so
  * clients can't mislabel them. A bet can be proposed until its game is Final, canceled or postponed; picks lock at
  * the window's end or the game's start, whichever is first (domain rules, "Sports bet rules").
  */
@@ -32,8 +32,6 @@ public class SportsProposalService {
     static final String SCORCERER = "scorcerer";
     static final Set<String> MODES = Set.of("total_disaster", "give_and_take", "either_or", "prop_hunt",
             "king_of_the_hill", SCORCERER);
-    /** Safeties and other 2-point plays don't count (owner decision, 2026-11-15). */
-    static final List<String> SCORCERER_CHOICES = List.of("Touchdown", "Field goal", "No more TDs or FGs");
     private static final String OPERATION = "bet.sports.propose.v1";
     private static final BigDecimal HALF = new BigDecimal("0.5");
 
@@ -150,8 +148,10 @@ public class SportsProposalService {
         }
         if (SCORE_MODES.contains(proposal.mode())) return terms(proposal.mode(), proposal.line(), home, away);
         if (proposal.mode().equals(SCORCERER)) {
-            if (game.league() != League.NFL) throw new InvalidTerms("Scorcerer is NFL only");
-            return new Terms(away + " @ " + home + ": next touchdown or field goal?", SCORCERER_CHOICES);
+            // Away team first (owner decision, 2026-11-21). NFL: safeties and other 2-point plays don't count; NBA:
+            // free throws don't.
+            String what = game.league() == League.NFL ? "next touchdown or field goal?" : "next basket?";
+            return new Terms(away + " @ " + home + ": " + what, ScorcererOutcome.choices(game.league(), away, home));
         }
         if (!PlayerStatsLookup.isStat(game.league(), proposal.stat())) throw new InvalidTerms("Unknown stat");
         List<PlayerStatsLookup.GamePlayer> picked = new ArrayList<>();

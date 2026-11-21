@@ -1,6 +1,7 @@
 # Frontend
 
-The app (`src/app/app.tsx`) signs in to the dev backend. From 1100px wide (the `nav` breakpoint) a sidebar holds Tickets, Friends, Home, Guide and
+The app (`src/app/app.tsx`) is the same in every mode; it asks the backend
+which one it's in (`GET /config`, below). From 1100px wide (the `nav` breakpoint) a sidebar holds Tickets, Friends, Home, Guide and
 Preferences, your tables and table requests (below), and your net settle-up points; narrower screens get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The design came from an
@@ -156,42 +157,41 @@ earlier prototype (git tag `prototype-ui`).
 
 - **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
   Choose Their Fate, which shows as coming soon), set up a U2Pick, deal a
-  Blackjack hand (house rules form, every number a min/max stepper, and the
-  dealer's worst case; no preview step), or pick one
-  of today's games (NFL only for Scorcerer) and set the terms: the line
+  Blackjack hand (house rules form with each number held to its minimum and
+  maximum, and the dealer's worst case; no preview step), or pick one
+  of today's games and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
   their position and current number, sorted by position) and the line or target, which starts just above them
   (player modes, `bets/components/player-setup.tsx`); and whether overtime
-  counts. Then the wager (+0.01/+0.10/+1.00 steps,
-  0.10 to 10.00, or 4fun) and the pick window, preview the ticket, send. On a
+  counts. Then the wager (a slider, 0.10 to 10.00 in 0.10 steps, or 4fun) and
+  the pick window, preview the ticket, send. Blackjack's form uses the same
+  layout: Game and Setup sections, then the wager with a Minimum and a
+  Maximum slider (moving one past the other carries it along) and the join
+  window as the last section. On a
   ticket, tap a choice to pick (you confirm first), tap it again to clear it,
   and use "Call it" on a locked ticket if its settler rule allows you. Sports
   tickets show the game's score and settle from the feed; hosts can override
   them (wash or set the result) until the table's points are settled.
-  A Blackjack ticket (`bets/components/blackjack-ticket.tsx`) shows the
-  dealer's cards, each seat's hands and result, a bet stepper to sit down
-  during the join window, Insure / No insurance, and Hit / Stand / Double /
-  Split on your turn with your decision countdown. It reads
+  Blackjack is played on its ticket (`bets/components/blackjack-ticket.tsx`),
+  laid out as a small table: a felt panel with the shoe and the dealer's cards
+  at the top and every player's spot below (cards, total or result, their
+  timer), cards sliding out of the shoe in deal order and the hole card
+  flipping; then a status line and your controls (bet slider to sit down
+  during the join window, Insure / No insurance, Hit / Stand / Double /
+  Split, or the dealer's one Flip / Hit / Stand button). It reads
   `GET /bets/{id}/blackjack`, refreshing with the table's bet feed and every
-  4 seconds while the hand is live. On the felt, seated players show Seated /
-  Playing and then their result, and the dealer shows Dealer. Hosts choose
-  who can deal under "Who can deal Blackjack" in the Host panel.
-  When a Blackjack hand is the felt's focused bet it's played right on the
-  table (`bets/components/blackjack-felt.tsx`) around the usual ticket stack,
-  which stays as every mode's preview before and after the deal: a shoe at
-  the top right, the dealer's cards at the top, each player's cards in front
-  of their seat (`BlackjackCards`); the stack's pill shows "N in" while the hand is
-  open (like every mode), then whose move it is with your timer, then your
-  result (`BlackjackStatus`); and your insurance or Hit / Stand / Double /
-  Split sit under the pill on your turn, or the dealer's one Flip / Hit /
-  Stand button on theirs (`BlackjackControls`). Everything is dealt from in
-  front of the dealer's seat: their cards and the shoe sit there, and every
-  card slides out of that shoe. Sitting down
-  happens on the ticket (tap it). Cards slide out of the shoe (the opening deal goes round the table
-  twice, in order) and the hole card flips when it's turned over; reduced
-  motion turns the animations off. Once dealt, the felt seats only the
-  players and the dealer, and a finished hand stays on the felt for 20
-  seconds (`FINISHED_HAND_MS`).
+  4 seconds while the hand is live. The table felt stays light
+  (`bets/components/blackjack-felt.tsx`): the usual ticket stack, its pill
+  showing "N in", whose move it is or your result (`BlackjackStatus`), a
+  pulsing "Your move · 12s" button under it that opens the ticket
+  (`BlackjackPrompt`), and seat chips with each player's total or result and
+  "Dealer" on the dealer's seat (`useBlackjackSeatChips`); no cards on the
+  felt. Details shows Blackjack's own sections (`blackjack-details.tsx`):
+  Hand, House rules and Players with each seat's bet, hand results and
+  points, plus the dealer's. Hosts choose who can deal under "Who can deal
+  Blackjack" in the Host panel. Once dealt, the felt seats only the players
+  and the dealer, and a finished hand stays on the felt for 20 seconds
+  (`FINISHED_HAND_MS`).
   Creating does not place a pick. Active tickets show only your own pick and
   the pick count; picks, players and the pot appear after lock.
 

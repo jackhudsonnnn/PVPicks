@@ -1,23 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { formatCents } from "@/lib/money";
-import { canStep, PICK_WINDOWS, stepWager, WAGER_DEFAULT_CENTS } from "./wager";
+import { PICK_WINDOWS, WAGER_DEFAULT_CENTS, WAGER_MAX_CENTS, WAGER_MIN_CENTS } from "./wager";
 
 describe("wager amounts", () => {
   it("defaults to 1.00", () => {
     expect(WAGER_DEFAULT_CENTS).toBe(100);
   });
 
-  it("steps by whole cents", () => {
-    expect(stepWager(100, 1)).toBe(101);
-    expect(stepWager(101, 10)).toBe(111);
-    expect(stepWager(111, 100)).toBe(211);
-  });
-
-  it("never goes above 10.00", () => {
-    expect(stepWager(950, 100)).toBe(1000);
-    expect(canStep(950, 100)).toBe(false);
-    expect(canStep(999, 1)).toBe(true);
-    expect(canStep(1000, 1)).toBe(false);
+  it("slides from 0.10 to 10.00, the range the server accepts", () => {
+    expect(WAGER_MIN_CENTS).toBe(10);
+    expect(WAGER_MAX_CENTS).toBe(1000);
   });
 
   it("offers only pick windows the server accepts", () => {

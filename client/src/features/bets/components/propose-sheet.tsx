@@ -11,7 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { Section, Stepper } from "./form-parts";
+import { FunToggle, Section, Stepper, WagerBox, WagerSlider } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
 import { BlackjackSetup } from "./blackjack-setup";
 import { DEFAULT_RULES, rulesProblem, type BlackjackRules } from "@/features/bets/blackjack";
@@ -20,14 +20,11 @@ import { ModeGrid } from "./mode-grid";
 import type { SettlerRule } from "@/features/bets/types";
 import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
 import {
-  canStep,
   PICK_WINDOW_DEFAULT,
   PICK_WINDOWS,
-  stepWager,
   WAGER_DEFAULT_CENTS,
   WAGER_MAX_CENTS,
   WAGER_MIN_CENTS,
-  WAGER_STEPS_CENTS,
 } from "@/features/bets/wager";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -99,8 +96,7 @@ export function ProposeBetSheet({
   const sportsMode: SportsMode | null = mode && isSportsMode(mode.id) ? mode.id : null;
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
   const playerMode: PlayerMode | null = mode && isPlayerMode(mode.id) ? mode.id : null;
-  // Scorcerer reads NFL score jumps, so it only offers NFL games.
-  const leagues: TickerGame["league"][] = sportsMode === "scorcerer" ? ["NFL"] : ["NBA", "NFL"];
+  const leagues: TickerGame["league"][] = ["NBA", "NFL"];
   const games = proposableGames(ticker.data).filter((g) => leagues.includes(g.league));
   const game = games.find((g) => g.id === gameId);
   const roster = useGamePlayers(user.id, playerMode ? (game?.id ?? null) : null);
@@ -154,7 +150,7 @@ export function ProposeBetSheet({
     setPlayerIds([]);
     setStat(null);
     if (isSportsMode(next.id)) {
-      const allowed = next.id === "scorcerer" ? ["NFL"] : ["NBA", "NFL"];
+      const allowed = ["NBA", "NFL"];
       const open = proposableGames(ticker.data).filter((g) => allowed.includes(g.league));
       const startLeague = allowed.includes(league) ? league : "NFL";
       const first = open.find((g) => g.league === startLeague) ?? open[0];
@@ -209,6 +205,7 @@ export function ProposeBetSheet({
                 line,
                 game.home.abbreviation,
                 game.away.abbreviation,
+                game.league,
               ),
             }
           : {
@@ -465,9 +462,12 @@ export function ProposeBetSheet({
                   )}
                   {sportsMode === "scorcerer" && (
                     <p className="text-sm text-muted-foreground">
-                      Picks are on how the first score after picks lock is made: a touchdown, a
-                      field goal, a safety, or no more scoring before the end. If two scores land
-                      between updates, the bet washes.
+                      Picks are on which team scores first after picks lock, and how:{" "}
+                      {league === "NFL"
+                        ? "a touchdown or a field goal (safeties and 2-point plays don't count)"
+                        : "a 3 or a 2 (free throws don't count)"}
+                      , or no more scores before the end. If two different scores land between
+                      updates, the bet washes.
                     </p>
                   )}
                   {scoreMode && (
@@ -532,57 +532,16 @@ export function ProposeBetSheet({
 
               <Section label="Wager (points each)">
                 <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-4 rounded-xl border bg-surface p-3">
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold">4fun</span>
-                      <span className="block text-xs text-muted-foreground">
-                        No points at stake and nothing tracked. Just bragging rights.
-                      </span>
-                    </span>
-                    <Switch checked={forFun} onCheckedChange={setForFun} aria-label="4fun bet" />
-                  </div>
-                  <div
-                    className={cn(
-                      "space-y-2.5 rounded-xl border bg-surface p-3 transition-opacity",
-                      forFun && "pointer-events-none opacity-40",
-                    )}
-                    aria-disabled={forFun || undefined}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className="scoreboard text-3xl leading-none text-primary"
-                        aria-live="polite"
-                        aria-label="Wager in points"
-                      >
-                        {formatCents(wager)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setWager(WAGER_MIN_CENTS)}
-                        disabled={forFun || wager === WAGER_MIN_CENTS}
-                        className="rounded-md px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-                      >
-                        Reset to {formatCents(WAGER_MIN_CENTS)}
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {WAGER_STEPS_CENTS.map((step) => (
-                        <button
-                          key={step}
-                          type="button"
-                          onClick={() => setWager((w) => stepWager(w, step))}
-                          disabled={forFun || !canStep(wager, step)}
-                          aria-label={`Add ${formatCents(step)} points`}
-                          className="rounded-lg border bg-background py-2 scoreboard text-base transition-colors hover:border-primary disabled:opacity-40 disabled:hover:border-border"
-                        >
-                          +{formatCents(step)}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Min {formatCents(WAGER_MIN_CENTS)} · Max {formatCents(WAGER_MAX_CENTS)}
-                    </p>
-                  </div>
+                  <FunToggle checked={forFun} onChange={setForFun} />
+                  <WagerBox off={forFun}>
+                    <WagerSlider
+                      value={wager}
+                      min={WAGER_MIN_CENTS}
+                      max={WAGER_MAX_CENTS}
+                      disabled={forFun}
+                      onChange={setWager}
+                    />
+                  </WagerBox>
                 </div>
               </Section>
 

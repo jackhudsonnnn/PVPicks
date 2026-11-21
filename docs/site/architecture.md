@@ -57,7 +57,7 @@ flowchart LR
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
 | `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions`; the GIF library (`chat/gifs.json`, served at `GET /gifs`). Chat windows read each bet card's question, mode and status from `bets` in the same query. |
-| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
+| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries`, `blackjack_rounds`, `blackjack_seats` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback` | `feedback` (submissions and the admin inbox) |
 | `admin` | `admin_audit_log`, `perf_minutes`: player audits (read-only across modules), request timings, health and runtime gauges |
@@ -97,7 +97,7 @@ The app has three settings, and the backend runs as exactly one,
 
 | Mode | Profile | What's different |
 |---|---|---|
-| **dev** | `dev` | The demo world and bots, the passwordless picker, the Dev page, DEV games and the handbook. HTTP on loopback. |
+| **dev** | `dev` | The demo world and bots, the passwordless picker, the Dev page, DEV games and the handbook without sign-in. HTTP on loopback. |
 | **lan** | `lan` | The one-night [LAN watch party](/lan): HTTPS behind Caddy, sign-in codes only, the party table, real feeds. |
 | **prod** | (none yet) | Not configured: the backend refuses to start without exactly one of `dev` and `lan`. |
 
@@ -114,7 +114,7 @@ How code is split (owner decision, 2026-11-18: reuse as much as possible):
   depend on them; they hook in through events (`accounts.PlayerCreated`) or
   small server-side APIs (`tables.TableProvisioning`, `social.Friendships`).
 - **Where shared code must differ**, it asks for the `AppMode` bean:
-  `security.SessionSecurity` (dev opens `/dev/**` and the handbook) and
+  `security.SessionSecurity` (dev opens `/dev/**` and the handbook; LAN and prod keep the handbook for admins) and
   `security.OriginFilter` (dev wants an HTTP loopback origin, LAN an HTTPS
   one).
 - **Settings** that only tune behavior (intervals, throttles, cookie

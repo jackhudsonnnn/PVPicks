@@ -45,7 +45,8 @@ backend/
       accounts/           freeze/unfreeze and account deletion across modules
       devdata/            dev sports data: scenario files and recorded chunks
       demo/               the dev demo world: users, history, games, bots, reset
-      config/             dev-only profile guard, Flyway, developer docs
+      lan/                the LAN party table (lan profile only)
+      config/             the mode (dev, LAN, prod) and GET /config, Flyway, developer docs
       common/  security/  shared infrastructure (open modules): IdempotencyGuard,
                           Outbox/OutboxEvent, ApiErrors, PostgresText;
                           sessions, filters, MutationAuthentication
@@ -221,7 +222,8 @@ keys. To try it on this Mac before the domain exists, set
   `PVPICKS_SPORTS_PLAYERS_INTERVAL` (default `PT10M`; every fourth request
   while games are live, so it always finishes). A rate-limited response
   pauses this for a minute. Scores and player data share the plan's request
-  budget (the GOAT trial allows 5 a minute: 2 for scores, 3 for player data).
+  budget. Dev's defaults use 5 a minute (2 for scores, 3 for player data); LAN
+  polls at All-Star rates ([Player stats](/player-stats#source-and-plan)).
 - `GET /ticker` is cached in Redis. A poll that changes a game invalidates
   it after commit; otherwise entries live `PVPICKS_TICKER_CACHE_TTL` (default
   `PT5S`). Code or scripts that write `games` without `GameSync` must call

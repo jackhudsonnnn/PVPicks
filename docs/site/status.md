@@ -4,7 +4,9 @@ What's built today, not the intended final product. The
 <a href="/docs/source/openapi.yaml" download>OpenAPI file</a> includes both implemented and
 planned operations, so it isn't an inventory of what exists.
 
-## Available (dev only)
+## Available
+
+Everything here runs in dev and on LAN, unless marked as one or the other.
 
 **Accounts and social**
 
@@ -26,6 +28,9 @@ planned operations, so it isn't an inventory of what exists.
   there as everyone's friend ([LAN watch party](/lan#the-party-table)).
 - Profile (username, color), invite preferences and points limit.
 - Follows, blocks, user search and lookup.
+- Slurs and hate speech are refused in chat, polls, U2Pick questions and
+  options, table names and usernames (swearing and trash talk are fine; see
+  the domain rules, "Abusive language filter").
 - Reports go to an admin moderation queue (one open report per person;
   reporting again updates it). Admins dismiss or strike them;
   three strikes freeze the account (signed out, can't sign in).
@@ -53,9 +58,17 @@ planned operations, so it isn't an inventory of what exists.
   result or wash.
 - Sports modes on NBA and NFL games, before or during a game: the score modes
   (Total Disaster, Give And Take), the player modes (Either Or, Prop Hunt,
-  King Of The Hill) and Scorcerer (NFL). They settle from the feed (most 20
+  King Of The Hill) and Scorcerer (which team scores next and how: NFL
+  touchdown or field goal, NBA 3 or 2). They settle from the feed (most 20
   minutes after Final, King Of The Hill and Scorcerer as soon as it's
   decided), and hosts can wash or set a result until points are settled.
+- Blackjack: the proposer deals and banks one hand. They set the house rules,
+  each held to a minimum and maximum, and hosts choose who can deal. Players
+  sit down with a bet, play hit, stand, double, split and insurance against
+  a decision timer, and the dealer flips, hits and stands with one button.
+  In-play stakes count toward the points limit. It's played on the ticket;
+  the felt shows each seat's total and result (see the domain rules,
+  "Blackjack").
 - Wash triggers at lock (nobody picked, everyone on one option, a line or
   target already reached) and at resolution (nobody picked the winner, ties,
   pushes, a player who didn't play), listed in the domain rules.
@@ -81,14 +94,14 @@ planned operations, so it isn't an inventory of what exists.
 
 **Demo world (dev)**
 
-- 250 demo users (including the 50-person Mosh Pit crowd) with play-style profiles, played by bots through the real
-  services. newbie, intermediate and pro are seeded with friends, tables,
+- 250 demo users (including the 50-person Mosh Pit crowd) with play-style
+  profiles, played by bots through the real services, Blackjack included. newbie, intermediate and pro are seeded with friends, tables,
   blocks and history, the admin with open reports and feedback. Demo games are always
   live, and the Dev page has a Reset (see [Demo world](/demo-data)).
 
 **Frontend**
 
-- Every feature above, organized by feature folder (see the client README).
+- Every feature above, organized by feature folder (see [Frontend](/frontend)).
   Home with table and request cards and a Tickets column, sidebar tables and
   requests, the felt table
   page with chat, Peers and Host panels, the proposal sheet, a Tickets page,
@@ -103,13 +116,12 @@ planned operations, so it isn't an inventory of what exists.
 
 - Quick Pick subscriptions and copying results between tables.
 - Choose Their Fate (an NFL design exists, blocked on detecting turnovers on
-  downs; see [Player stats](/player-stats#choose-their-fate-from-team-totals-design-blocked)),
-  and Scorcerer for the NBA.
+  downs; see [Player stats](/player-stats#choose-their-fate-from-team-totals-design-blocked)).
 - More mode-specific wash triggers (planned by the owner; see the domain
   rules, "Wash triggers").
-- Registration, and production security and deployment. The LAN watch
-  party stack is built (`lan` profile behind Caddy, see
-  [LAN watch party](/lan)) and smoke-tested on the Mac; the domain,
-  certificate, settings and dry run are the owner's to do.
+- Production: hosting, backups, observability and Google sign-in for
+  players (the MVP milestone, with more security hardening and UI cleanup;
+  see the [roadmap](/roadmap)). LAN is done: real parties have run on
+  `https://lan.p2picks.com` ([LAN watch party](/lan)).
 
 Picks are stored in plaintext. The [roadmap](/roadmap) tracks what's next.

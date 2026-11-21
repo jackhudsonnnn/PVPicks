@@ -27,6 +27,8 @@ public record BlackjackRules(int decks, long minBetCents, long maxBetCents, int 
             "joinSec", "decisionSec");
 
     public BlackjackRules {
+        // Owner decision, 2026-11-20: doubling after a split is always allowed, whatever a client sends.
+        doubleAfterSplit = true;
         range("decks", decks, MIN_DECKS, MAX_DECKS);
         range("minBetCents", minBetCents, MIN_BET, MAX_BET);
         range("maxBetCents", maxBetCents, minBetCents, MAX_BET);
