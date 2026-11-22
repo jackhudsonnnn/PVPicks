@@ -33,7 +33,7 @@ import {
   ticketStatus,
 } from "@/features/bets/ticket-model";
 import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
-import { BlackjackTicket } from "./blackjack-ticket";
+import { JackblackTicket } from "./jackblack-ticket";
 
 interface TicketProps {
   bet: Bet;
@@ -51,9 +51,9 @@ interface TicketProps {
  * locked ticket when your settler rule allows. Without `actions` it renders as a preview.
  */
 export function BetTicket(props: TicketProps & { actions?: BetActions }) {
-  // Blackjack is played on its ticket rather than picked.
-  return props.bet.modeId === "blackjack" ? (
-    <BlackjackTicket {...props} />
+  // Jackblack is played on its ticket rather than picked.
+  return props.bet.modeId === "jackblack" ? (
+    <JackblackTicket {...props} />
   ) : (
     <PickTicket {...props} />
   );

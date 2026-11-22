@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Table } from "@/features/tables";
 import { MODES, type ModeDef } from "@/features/bets/modes";
-import { blackjackBlock, u2pickBlock } from "@/features/bets/ticket-model";
+import { jackblackBlock, u2pickBlock } from "@/features/bets/ticket-model";
 
 const LEAGUE_BADGES = [
   { id: "nfl", label: "NFL", className: "border-primary/30 bg-primary/10 text-primary" },
@@ -39,7 +39,7 @@ export function ModeGrid({
         const available = availability?.get(m.id) ?? false;
         const modeBlock =
           block ??
-          (m.custom ? u2pickBlock(table) : m.dealer ? blackjackBlock(table, userId) : null);
+          (m.custom ? u2pickBlock(table) : m.dealer ? jackblackBlock(table, userId) : null);
         const off = !available || !!modeBlock;
         return (
           <Button

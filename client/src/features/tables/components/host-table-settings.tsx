@@ -14,42 +14,25 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { TABLE_EMOJIS } from "@/features/tables/emojis";
 import { cn } from "@/lib/utils";
-import type { BlackjackAccess, RemainderRule } from "@/features/tables/api";
+import type { JackblackAccess } from "@/features/tables/api";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { tableNameProblem } from "@/features/tables/rules";
-import {
-  BLACKJACK_ACCESS,
-  PanelProps,
-  REMAINDER,
-  SWITCHES,
-  busy,
-  hasOpenBets,
-} from "./host-shared";
+import { JACKBLACK_ACCESS, PanelProps, SWITCHES, busy, hasOpenBets } from "./host-shared";
 
-export function TableDetailsSection({ table, bets, tableActions }: PanelProps) {
+export function TableDetailsSection({ table, tableActions }: PanelProps) {
   const [name, setName] = useState(table.name);
   const [emoji, setEmoji] = useState(table.emoji);
   const [problem, setProblem] = useState<string | null>(null);
-  const [remainderBlocked, setRemainderBlocked] = useState(false);
   useEffect(() => {
     setName(table.name);
     setEmoji(table.emoji);
   }, [table.name, table.emoji]);
   const dirty = name.trim() !== table.name || emoji !== table.emoji;
   const disabled = busy(tableActions);
-  const active = (bets ?? []).some((bet) => bet.status === "ACTIVE");
-  const rule = REMAINDER.find((r) => r.id === table.remainderRule)!;
   const emojis = TABLE_EMOJIS.includes(table.emoji) ? TABLE_EMOJIS : [table.emoji, ...TABLE_EMOJIS];
   return (
     <SettingsSection title="Table details" description="Only hosts can change these.">
@@ -74,69 +57,20 @@ export function TableDetailsSection({ table, bets, tableActions }: PanelProps) {
       ))}
       <SettingRow
         icon={Spade}
-        label="Who can deal Blackjack"
-        description="Whoever proposes Blackjack deals and banks the hand."
+        label="Who can propose Jackblack"
+        description="Everyone who joins a Jackblack game takes a turn dealing."
       >
-        <SegmentedTabs<BlackjackAccess>
+        <SegmentedTabs<JackblackAccess>
           size="sm"
           className="mt-3"
-          ariaLabel="Who can deal Blackjack"
-          tabs={BLACKJACK_ACCESS.map((a) => ({ id: a.id, label: a.label, disabled }))}
-          value={table.blackjackAccess}
+          ariaLabel="Who can propose Jackblack"
+          tabs={JACKBLACK_ACCESS.map((a) => ({ id: a.id, label: a.label, disabled }))}
+          value={table.jackblackAccess}
           onChange={(access) =>
-            tableActions.start({ kind: "settings", tableId: table.id, blackjackAccess: access })
+            tableActions.start({ kind: "settings", tableId: table.id, jackblackAccess: access })
           }
         />
       </SettingRow>
-      <div className="space-y-1.5 px-4 py-3.5 sm:px-5">
-        <label htmlFor="remainder-rule" className="text-sm font-semibold">
-          Leftover cents go to
-        </label>
-        <Select
-          value={table.remainderRule}
-          onValueChange={(value) =>
-            tableActions.start({
-              kind: "remainder",
-              tableId: table.id,
-              rule: value as RemainderRule,
-            })
-          }
-          onOpenChange={(open) => {
-            if (open && active) setRemainderBlocked(true);
-          }}
-          disabled={disabled}
-          {...(active ? { open: false } : {})}
-        >
-          <SelectTrigger id="remainder-rule" className="h-10 bg-sidebar">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {REMAINDER.map((r) => (
-              <SelectItem key={r.id} value={r.id}>
-                {r.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          {rule.description} For a single bet's payout when its pot doesn't split evenly to the
-          cent. Each bet keeps the rule it had when its picks locked.
-        </p>
-        <AlertDialog open={remainderBlocked} onOpenChange={setRemainderBlocked}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Can't change this right now</AlertDialogTitle>
-              <AlertDialogDescription>
-                A bet at this table is still taking picks. Try again once every active bet has
-                locked.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogAction>OK</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
       <form
         className="space-y-3 px-4 py-3.5 sm:px-5"
         onSubmit={(event) => {

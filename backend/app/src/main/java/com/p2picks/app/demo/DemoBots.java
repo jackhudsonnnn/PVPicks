@@ -3,7 +3,7 @@ package com.p2picks.app.demo;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.bets.BetPickService;
-import com.p2picks.app.bets.BlackjackService;
+import com.p2picks.app.bets.JackblackService;
 import com.p2picks.app.bets.SportsProposalService;
 import com.p2picks.app.bets.U2PickDefinition;
 import com.p2picks.app.bets.U2PickProposalService;
@@ -90,7 +90,7 @@ public class DemoBots {
     private final SettlementReviewService reviews;
     private final TablePointsSettlementService pointsSettlement;
     private final PlayerStatsLookup playerStats;
-    private final BlackjackService blackjack;
+    private final JackblackService jackblack;
 
     private final Map<UUID, DemoUser> bots = DemoRoster.users().stream()
             .collect(Collectors.toMap(DemoUser::id, Function.identity()));
@@ -100,7 +100,7 @@ public class DemoBots {
     private final PriorityQueue<Planned> queue = new PriorityQueue<>((a, b) -> a.at().compareTo(b.at()));
     private final Map<UUID, UUID> trashTalk = new LinkedHashMap<>();
     private final Map<UUID, Integer> talkPerBet = new HashMap<>();
-    /** Blackjack hands a bot dealer has a tap queued for. */
+    /** Jackblack games a bot dealer has a tap queued for. */
     private final Set<UUID> dealing = new HashSet<>();
     private final Map<String, Integer> done = new java.util.TreeMap<>();
     private Instant since;
@@ -115,8 +115,8 @@ public class DemoBots {
             SocialMutationService social, InvitationResponseService invitations, ChatSendService chat,
             ReactionService reactions, GifCatalog gifs, ReportService reports, SettleService settles,
             SettlementReviewService reviews, TablePointsSettlementService pointsSettlement,
-            PlayerStatsLookup playerStats, BlackjackService blackjack) {
-        this.blackjack = blackjack;
+            PlayerStatsLookup playerStats, JackblackService jackblack) {
+        this.jackblack = jackblack;
         this.jdbc = jdbc;
         this.json = json;
         this.clock = clock;
@@ -186,7 +186,7 @@ public class DemoBots {
             World world = world(now);
             if (world.members.isEmpty() && world.botIds.isEmpty()) return;
             planPicks(world, now);
-            planBlackjack(world, now);
+            planJackblack(world, now);
             planProposals(world, now);
             planResults(world, now);
             planChat(world, now);
@@ -208,7 +208,7 @@ public class DemoBots {
     private record Member(UUID table, UUID user, boolean host, boolean canBet, boolean canText, boolean canReact,
             boolean canGif) {}
 
-    private record Table(UUID id, boolean hostsOnlyBets, boolean u2pickEnabled, String blackjackAccess) {}
+    private record Table(UUID id, boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess) {}
 
     private record World(UUID pro, Set<UUID> mainIds, Map<UUID, Table> tables, List<Member> members,
             Set<UUID> proTables, Set<UUID> botIds) {
@@ -227,13 +227,13 @@ public class DemoBots {
                 "SELECT id FROM users WHERE id = ANY (?::uuid[]) AND status = 'ACTIVE'", UUID.class, array(bots.keySet())));
         Map<UUID, Table> tables = new LinkedHashMap<>();
         jdbc.query("""
-                SELECT DISTINCT t.id, t.hosts_only_bets, t.u2pick_enabled, t.blackjack_access FROM tables t
+                SELECT DISTINCT t.id, t.hosts_only_bets, t.u2pick_enabled, t.jackblack_access FROM tables t
                 JOIN table_members m ON m.table_id = t.id
                 WHERE t.archived_at IS NULL AND m.user_id = ANY (?::uuid[])
                 """, rs -> {
                     UUID id = rs.getObject("id", UUID.class);
                     tables.put(id, new Table(id, rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled"),
-                            rs.getString("blackjack_access")));
+                            rs.getString("jackblack_access")));
                 }, array(mainIds));
         List<Member> members = tables.isEmpty() ? List.of() : jdbc.query("""
                 SELECT table_id, user_id, role, can_bet, can_text, can_react, can_send_gifs FROM table_members
@@ -272,8 +272,8 @@ public class DemoBots {
                     .put(rs.getObject("user_id", UUID.class), rs.getString("choice"));
         }, array(open.stream().map(OpenBet::id).toList()));
         for (OpenBet bet : open) {
-            // Blackjack is played at its seats (planBlackjack), not picked.
-            if (bet.mode().equals(BlackjackService.MODE)) continue;
+            // Jackblack is played at the table (planJackblack), not picked.
+            if (bet.mode().equals(JackblackService.MODE)) continue;
             Map<UUID, String> betPicks = picked.getOrDefault(bet.id(), Map.of());
             for (Member member : world.botsIn(bet.table(), bots)) {
                 if (!member.canBet() || betPicks.containsKey(member.user())) continue;
@@ -336,63 +336,49 @@ public class DemoBots {
     }
 
     /**
-     * Blackjack: bots sit down at open hands at their tables (like joining a bet), then play their own turns with
-     * {@link BlackjackBot}'s strategy a second or two after it's their move.
+     * Jackblack: bots join open games at their tables (like joining a bet), then play their own steps with
+     * {@link JackblackBot}'s strategy a second or two after the cards come out, and tap the dealer's button when it's
+     * their round to deal.
      */
-    private void planBlackjack(World world, Instant now) {
+    private void planJackblack(World world, Instant now) {
         for (OpenBet bet : openBets(world.tables.keySet(), now)) {
-            if (!bet.mode().equals(BlackjackService.MODE)) continue;
-            List<Map<String, Object>> rows = jdbc.queryForList("""
-                    SELECT proposer_id, (config ->> 'minBetCents')::bigint AS min,
-                           (config ->> 'maxBetCents')::bigint AS max FROM bets WHERE id = ?
-                    """, bet.id());
-            if (rows.isEmpty()) continue;
-            UUID dealer = (UUID) rows.getFirst().get("proposer_id");
-            long min = ((Number) rows.getFirst().get("min")).longValue();
-            long max = ((Number) rows.getFirst().get("max")).longValue();
+            if (!bet.mode().equals(JackblackService.MODE)) continue;
             for (Member member : world.botsIn(bet.table(), bots)) {
-                if (!member.canBet() || member.user().equals(dealer)) continue;
+                if (!member.canBet()) continue;
                 DemoUser bot = bots.get(member.user());
-                if (!BotMind.online(bot.id(), bot.profile(), now) || !decide("bj-sit", bet.id(), bot.id())) continue;
+                if (!BotMind.online(bot.id(), bot.profile(), now) || !decide("jb-join", bet.id(), bot.id())) continue;
                 if (random.nextDouble() >= bot.profile().joinBetChance()) continue;
                 Duration delay = BotMind.delay(random, bot.profile(),
                         Duration.between(now, bet.locksAt().minus(LOCK_MARGIN)));
-                long cents = BlackjackBot.bet(random, min, max);
-                plan(now.plus(delay), "blackjack-sit",
-                        () -> act(bot.id(), jwt -> blackjack.sit(jwt, bet.id(), cents, key()).name()));
+                plan(now.plus(delay), "jackblack-join",
+                        () -> act(bot.id(), jwt -> jackblack.join(jwt, bet.id(), key()).name()));
             }
         }
         if (world.botIds.isEmpty()) return;
-        // A bot dealing taps its one button (flip, hit, stand) a moment after each card, for the suspense.
-        for (Map<String, Object> hand : jdbc.queryForList("""
-                SELECT id, proposer_id FROM bets
-                WHERE mode = 'blackjack' AND status = 'PENDING' AND proposer_id = ANY (?::uuid[])
-                """, array(world.botIds))) {
-            UUID betId = (UUID) hand.get("id");
-            UUID dealer = (UUID) hand.get("proposer_id");
-            if (dealing.contains(betId) || blackjack.dealerMove(betId).isEmpty()) continue;
-            dealing.add(betId);
-            plan(now.plusMillis(1500 + random.nextInt(1500)), "blackjack-deal", () -> {
-                dealing.remove(betId);
-                if (blackjack.dealerMove(betId).isEmpty()) return "SKIPPED";
-                return act(dealer, jwt -> blackjack.act(jwt, betId, "dealer", key()).name());
-            });
-        }
         jdbc.query("""
-                SELECT s.bet_id, s.user_id FROM blackjack_seats s JOIN bets b ON b.id = s.bet_id
-                WHERE b.mode = 'blackjack' AND b.status = 'PENDING' AND s.user_id = ANY (?::uuid[])
+                SELECT p.bet_id, p.user_id FROM jackblack_players p JOIN bets b ON b.id = p.bet_id
+                WHERE b.mode = 'jackblack' AND b.status = 'PENDING' AND p.user_id = ANY (?::uuid[])
                 """, rs -> {
                     UUID betId = rs.getObject("bet_id", UUID.class);
                     UUID botId = rs.getObject("user_id", UUID.class);
-                    blackjack.turn(betId, botId).ifPresent(turn -> {
-                        // One decision per situation: the same cards and phase aren't decided twice.
-                        String situation = betId + ":" + turn.phase() + ":" + turn.cards();
-                        if (!decided.add("bj-act:" + situation + ":" + botId)) return;
-                        plan(now.plusMillis(800 + random.nextInt(2500)), "blackjack-act", () -> {
-                            var current = blackjack.turn(betId, botId);
+                    // Dealing: one tap (flip, hit, stand) a moment after each card, for the suspense.
+                    if (jackblack.dealerMove(betId, botId).isPresent() && dealing.add(betId)) {
+                        plan(now.plusMillis(1500 + random.nextInt(1500)), "jackblack-deal", () -> {
+                            dealing.remove(betId);
+                            if (jackblack.dealerMove(betId, botId).isEmpty()) return "SKIPPED";
+                            return act(botId, jwt -> jackblack.act(jwt, betId, "deal", key()).name());
+                        });
+                    }
+                    jackblack.turn(betId, botId).ifPresent(turn -> {
+                        // One decision per situation: the same cards aren't decided twice.
+                        if (!decided.add("jb-act:" + betId + ":" + turn.cards() + ":" + turn.dealerUp() + ":" + botId)) {
+                            return;
+                        }
+                        plan(now.plusMillis(800 + random.nextInt(2500)), "jackblack-act", () -> {
+                            var current = jackblack.turn(betId, botId);
                             if (current.isEmpty()) return "SKIPPED";
-                            String move = BlackjackBot.move(current.get());
-                            return act(botId, jwt -> blackjack.act(jwt, betId, move, key()).name());
+                            String move = JackblackBot.move(current.get());
+                            return act(botId, jwt -> jackblack.act(jwt, betId, move, key()).name());
                         });
                     });
                 }, array(world.botIds));
@@ -415,13 +401,14 @@ public class DemoBots {
                     "{" + bot.profile().leagues().stream().map(Enum::name).collect(Collectors.joining(",")) + "}");
             long wager = BotMind.wager(random, bot.profile());
             boolean forFun = random.nextDouble() < 0.1;
-            // Now and then a bot deals a hand of Blackjack, where the table lets it.
-            boolean canDeal = table.blackjackAccess().equals("everyone")
-                    || (table.blackjackAccess().equals("hosts") && member.host());
+            // Now and then a bot proposes Jackblack, where the table lets it.
+            boolean canDeal = table.jackblackAccess().equals("everyone")
+                    || (table.jackblackAccess().equals("hosts") && member.host());
             if (canDeal && random.nextDouble() < 0.15) {
-                var rules = BlackjackBot.rules(random);
-                return act(bot.id(), jwt -> blackjack.propose(jwt, member.table(), rules, forFun, key()).outcome()
-                        .name());
+                var rules = JackblackBot.rules(random);
+                long ante = forFun ? 100 : Math.min(wager, 200);
+                return act(bot.id(), jwt -> jackblack.propose(jwt, member.table(), rules, ante, 60, forFun, key())
+                        .outcome().name());
             }
             int window = 90 + random.nextInt(511);
             // Only the modes this bot likes (all when its profile names none) that the table allows.

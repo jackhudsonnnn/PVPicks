@@ -79,11 +79,11 @@ export function proposeBlock(table: Table, userId: string): string | null {
   return null;
 }
 
-/** Why you can't deal Blackjack at this table, or null (hosts choose: hosts only, everyone, or off). */
-export function blackjackBlock(table: Table, userId: string): string | null {
-  if (table.blackjackAccess === "off") return "A host turned off Blackjack at this table.";
-  if (table.blackjackAccess === "hosts" && !table.hostIds.includes(userId))
-    return "Only hosts can deal Blackjack at this table.";
+/** Why you can't propose Jackblack at this table, or null (hosts choose: hosts only, everyone, or off). */
+export function jackblackBlock(table: Table, userId: string): string | null {
+  if (table.jackblackAccess === "off") return "A host turned off Jackblack at this table.";
+  if (table.jackblackAccess === "hosts" && !table.hostIds.includes(userId))
+    return "Only hosts can propose Jackblack at this table.";
   return null;
 }
 

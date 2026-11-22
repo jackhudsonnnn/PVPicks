@@ -49,8 +49,6 @@ describe("table bets", () => {
       status: "PENDING",
       picks: [{ userId: user.id, choice: "Yes" }],
       noGuessUserIds: [],
-      remainderRule: "host",
-      remainderHostId: user.id,
     };
     const fetch = vi.fn().mockResolvedValueOnce(json([bet, locked]));
     vi.stubGlobal("fetch", fetch);

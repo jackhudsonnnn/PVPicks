@@ -30,7 +30,7 @@ public class BetProposalWriter {
     public record Result(Outcome outcome, UUID betId) {}
 
     /** Which table switch, if any, the mode answers to beyond "hosts only bets". */
-    enum Gate { NONE, U2PICK, BLACKJACK }
+    enum Gate { NONE, U2PICK, JACKBLACK }
 
     /**
      * A validated bet to insert. {@code lockBy} is the latest moment picks may lock (a game's start); the deadline
@@ -48,7 +48,7 @@ public class BetProposalWriter {
             if (durationSec < 30 || durationSec > 600) throw new IllegalArgumentException("Invalid pick window");
         }
 
-        /** A bet whose proposer risks its wager (every mode but Blackjack, where the dealer risks the table). */
+        /** A bet whose proposer risks its wager (every mode but Jackblack, where each player risks their worst case). */
         NewBet(String mode, String gameId, String configJson, String question, String choicesJson, long wagerCents,
                 boolean forFun, int durationSec, String settlerRule, Boolean includesOvertime, Instant lockBy) {
             this(mode, gameId, configJson, question, choicesJson, wagerCents, forFun, durationSec, settlerRule,
@@ -92,10 +92,10 @@ public class BetProposalWriter {
             return failure(Outcome.FORBIDDEN);
         }
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled, blackjack_access FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, jackblack_access FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
                 """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"),
-                        rs.getBoolean("u2pick_enabled"), rs.getString("blackjack_access")), tableId);
+                        rs.getBoolean("u2pick_enabled"), rs.getString("jackblack_access")), tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return failure(Outcome.NOT_FOUND);
@@ -122,8 +122,8 @@ public class BetProposalWriter {
         boolean gated = switch (gate) {
             case NONE -> false;
             case U2PICK -> !settings.u2pickEnabled();
-            case BLACKJACK -> settings.blackjackAccess().equals("off")
-                    || (settings.blackjackAccess().equals("hosts") && !host);
+            case JACKBLACK -> settings.jackblackAccess().equals("off")
+                    || (settings.jackblackAccess().equals("hosts") && !host);
         };
         if (gated || (settings.hostsOnlyBets() && !host)) {
             idempotency.discardNewClaim(actor, key);
@@ -166,7 +166,7 @@ public class BetProposalWriter {
         return new Result(outcome, null);
     }
 
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, String blackjackAccess) {}
+    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess) {}
 
     private record Member(String role, boolean canBet) {}
 }

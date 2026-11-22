@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { formatCents } from "@/lib/money";
-import { PICK_WINDOWS } from "@/features/bets/wager";
-import { RULE_LIMITS, dealerWorstCase, type BlackjackRules } from "@/features/bets/blackjack";
-import { FunToggle, Section, Stepper, WagerBox, WagerSlider } from "./form-parts";
-
-function seconds(sec: number) {
-  return sec < 60 ? `${sec}s` : `${sec / 60}m`;
-}
+import {
+  PLAYER_LIMITS,
+  RULE_LIMITS,
+  worstCase,
+  type JackblackRules,
+} from "@/features/bets/jackblack";
+import { Section, Stepper } from "./form-parts";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -22,52 +22,30 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
-function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (on: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold">{label}</span>
-        <span className="block text-xs text-muted-foreground">{description}</span>
-      </span>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
-    </div>
-  );
-}
-
 /**
- * The dealer's house rules for a Blackjack hand, laid out like every proposal: the game's rules, the table setup,
- * then the wager (a minimum and a maximum slider, like other modes' wager) and the join window like the pick window.
- * Every number is held inside its minimum and maximum; double after split is always on.
+ * Jackblack's own rules, laid out like every proposal's Game and Setup sections. The ante and the join window are
+ * the sheet's shared wager slider and window tabs, under these. Every number is held inside its minimum and
+ * maximum.
  */
-export function BlackjackSetup({
+export function JackblackSetup({
   rules,
   onChange,
-  forFun,
-  onForFun,
 }: {
-  rules: BlackjackRules;
-  onChange: (rules: BlackjackRules) => void;
-  forFun: boolean;
-  onForFun: (on: boolean) => void;
+  rules: JackblackRules;
+  onChange: (rules: JackblackRules) => void;
 }) {
-  const set = <K extends keyof BlackjackRules>(key: K, value: BlackjackRules[K]) =>
+  const set = <K extends keyof JackblackRules>(key: K, value: JackblackRules[K]) =>
     onChange({ ...rules, [key]: value });
-  const bet = RULE_LIMITS.betCents;
   return (
-    <div className="space-y-6">
+    <>
       <Section label="Game">
+        <p className="text-sm text-muted-foreground">
+          Everyone who joins deals once per rotation, in a random order, and banks that round
+          against the rest. Choices are made together: new cards come out once everyone has chosen
+          or the timer runs out, so nobody sees anyone's card before deciding.
+        </p>
         <Row label="Blackjack pays">
-          <SegmentedTabs<BlackjackRules["blackjackPays"]>
+          <SegmentedTabs<JackblackRules["blackjackPays"]>
             size="sm"
             ariaLabel="Blackjack pays"
             tabs={[
@@ -78,54 +56,30 @@ export function BlackjackSetup({
             onChange={(v) => set("blackjackPays", v)}
           />
         </Row>
-        <Row label="Double down on">
-          <SegmentedTabs<BlackjackRules["doubleOn"]>
-            size="sm"
-            ariaLabel="Double down on"
-            tabs={[
-              { id: "any", label: "Any two cards" },
-              { id: "9-11", label: "9, 10 or 11" },
-            ]}
-            value={rules.doubleOn}
-            onChange={(v) => set("doubleOn", v)}
+        <div className="flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">Doubling</span>
+            <span className="block text-xs text-muted-foreground">
+              {rules.doubling
+                ? "Players can double any two cards, after splits too."
+                : "No doubling down."}
+            </span>
+          </span>
+          <Switch
+            checked={rules.doubling}
+            onCheckedChange={(on) => set("doubling", on)}
+            aria-label="Doubling"
           />
-        </Row>
-        <Toggle
-          label="Dealer hits soft 17"
-          description={
-            rules.dealerHitsSoft17 ? "The dealer draws on A-6." : "The dealer stands on every 17."
-          }
-          checked={rules.dealerHitsSoft17}
-          onChange={(on) => set("dealerHitsSoft17", on)}
-        />
-        <Toggle
-          label="Insurance"
-          description="When you show an ace, players can insure for half their bet (pays 2:1)."
-          checked={rules.insurance}
-          onChange={(on) => set("insurance", on)}
-        />
-        <Row label="Decks" hint={`${RULE_LIMITS.decks.min}–${RULE_LIMITS.decks.max}`}>
-          <Stepper
-            value={rules.decks}
-            step={1}
-            min={RULE_LIMITS.decks.min}
-            max={RULE_LIMITS.decks.max}
-            label="Decks"
-            onChange={(v) => set("decks", v)}
-          />
-        </Row>
-      </Section>
-
-      <Section label="Setup">
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <Row label="Seats" hint={`${RULE_LIMITS.seats.min}–${RULE_LIMITS.seats.max}`}>
+          <Row label="Decks" hint={`${RULE_LIMITS.decks.min}–${RULE_LIMITS.decks.max}`}>
             <Stepper
-              value={rules.seats}
+              value={rules.decks}
               step={1}
-              min={RULE_LIMITS.seats.min}
-              max={RULE_LIMITS.seats.max}
-              label="Seats"
-              onChange={(v) => set("seats", v)}
+              min={RULE_LIMITS.decks.min}
+              max={RULE_LIMITS.decks.max}
+              label="Decks"
+              onChange={(v) => set("decks", v)}
             />
           </Row>
           <Row
@@ -142,79 +96,57 @@ export function BlackjackSetup({
             />
           </Row>
         </div>
-        <Row label="Decision timer" hint="10s–2m">
-          <Stepper
-            value={rules.decisionSec}
-            step={5}
-            min={RULE_LIMITS.decisionSec.min}
-            max={RULE_LIMITS.decisionSec.max}
-            label="Decision timer"
-            format={seconds}
-            onChange={(v) => set("decisionSec", v)}
-          />
-        </Row>
-        <Row label="Turns">
-          <SegmentedTabs<BlackjackRules["turnOrder"]>
-            size="sm"
-            ariaLabel="Turns"
-            tabs={[
-              { id: "together", label: "Everyone at once" },
-              { id: "seats", label: "Seat by seat" },
-            ]}
-            value={rules.turnOrder}
-            onChange={(v) => set("turnOrder", v)}
-          />
-        </Row>
       </Section>
 
-      <Section label="Wager (points each)">
-        <div className="space-y-3">
-          <FunToggle checked={forFun} onChange={onForFun} />
-          <WagerBox off={forFun}>
-            <WagerSlider
-              label="Minimum"
-              value={rules.minBetCents}
-              min={bet.min}
-              max={bet.max}
-              disabled={forFun}
-              // Raising the minimum past the maximum carries the maximum along.
-              onChange={(v) =>
-                onChange({ ...rules, minBetCents: v, maxBetCents: Math.max(v, rules.maxBetCents) })
-              }
+      <Section label="Setup">
+        <div className="grid grid-cols-2 gap-3">
+          <Row label="Rotations" hint="1–3">
+            <Stepper
+              value={rules.rotations}
+              step={1}
+              min={RULE_LIMITS.rotations.min}
+              max={RULE_LIMITS.rotations.max}
+              label="Rotations"
+              onChange={(v) => set("rotations", v)}
             />
-            <WagerSlider
-              label="Maximum"
-              value={rules.maxBetCents}
-              min={bet.min}
-              max={bet.max}
-              disabled={forFun}
-              onChange={(v) =>
-                onChange({ ...rules, maxBetCents: v, minBetCents: Math.min(v, rules.minBetCents) })
-              }
+          </Row>
+          <Row label="Decision timer" hint="10–60s">
+            <Stepper
+              value={rules.decisionSec}
+              step={5}
+              min={RULE_LIMITS.decisionSec.min}
+              max={RULE_LIMITS.decisionSec.max}
+              label="Decision timer"
+              format={(v) => `${v}s`}
+              onChange={(v) => set("decisionSec", v)}
             />
-          </WagerBox>
-          {!forFun && (
-            <p className="text-xs text-muted-foreground">
-              Worst case for you:{" "}
-              <span className="font-semibold text-foreground">
-                {formatCents(dealerWorstCase(rules))} points
-              </span>{" "}
-              (every seat at the max bet, every split taken, every hand doubled and won). It has to
-              fit your points limit.
-            </p>
-          )}
+          </Row>
         </div>
       </Section>
+    </>
+  );
+}
 
-      <Section label="Join window">
-        <SegmentedTabs<string>
-          size="sm"
-          ariaLabel="Join window"
-          tabs={PICK_WINDOWS.map((t) => ({ id: String(t.sec), label: t.label }))}
-          value={String(rules.joinSec)}
-          onChange={(v) => set("joinSec", Number(v))}
-        />
-      </Section>
-    </div>
+/** Under the wager slider: what a game can hold against your points limit. */
+export function JackblackWorstCase({
+  rules,
+  anteCents,
+}: {
+  rules: JackblackRules;
+  anteCents: number;
+}) {
+  return (
+    <p className="text-xs text-muted-foreground">
+      Worst case per player:{" "}
+      <span className="font-semibold text-foreground">
+        {formatCents(worstCase(rules, anteCents, PLAYER_LIMITS.min))}
+      </span>{" "}
+      with 2 players, up to{" "}
+      <span className="font-semibold text-foreground">
+        {formatCents(worstCase(rules, anteCents, PLAYER_LIMITS.max))}
+      </span>{" "}
+      with 7 (every hand split, doubled and lost). It's held against each player's points limit
+      while the game is on.
+    </p>
   );
 }

@@ -48,7 +48,6 @@ const locked: Bet = {
     { userId: b, choice: "No" },
   ],
   noGuessUserIds: ["123e4567-e89b-42d3-a456-426614174003"],
-  remainderRule: "host",
 };
 
 describe("ticket model", () => {
@@ -113,11 +112,10 @@ describe("who can propose", () => {
     emoji: "🍺",
     memberIds: [me, a],
     hostIds: [a],
-    remainderRule: "host",
     hostsOnlyBets: false,
     u2pickEnabled: true,
     pollsEnabled: true,
-    blackjackAccess: "everyone" as const,
+    jackblackAccess: "everyone" as const,
     quickPicksEnabled: false,
     quickPickSharing: false,
     subscribedTo: [],

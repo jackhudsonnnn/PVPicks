@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 class BetResolutionWriter {
     record LockedBet(UUID id, UUID tableId, long wagerCents, boolean forFun, List<String> choices,
-                     PayoutCalculator.Remainder remainder, List<PayoutCalculator.Participant> participants) {}
+                     List<PayoutCalculator.Participant> participants) {}
 
     private final JdbcTemplate jdbc;
     private final Outbox outbox;
@@ -54,7 +54,7 @@ class BetResolutionWriter {
             winningChoice = null;
         } else {
             PayoutCalculator.Result result = PayoutCalculator.settle(bet.id(), bet.participants(),
-                    new Money(bet.wagerCents()), bet.forFun(), bet.choices(), winningChoice, bet.remainder());
+                    new Money(bet.wagerCents()), bet.forFun(), bet.choices(), winningChoice);
             if (result instanceof PayoutCalculator.Result.Resolved resolved) {
                 status = "SETTLED";
                 washReason = null;

@@ -192,11 +192,11 @@ class LedgerStorageTest {
                 table, code);
         jdbc.update("""
                 INSERT INTO bets (id, table_id, proposer_id, mode, config, question, choices,
-                                  wager_cents, is_4fun, status, locks_at, locked_at, remainder_rule)
+                                  wager_cents, is_4fun, status, locks_at, locked_at)
                 VALUES (?, ?, ?, 'u2pick', '{}'::jsonb, 'Test?', '["Yes","No"]'::jsonb,
-                        100, false, 'SETTLED', now(), now(), 'earliest'),
+                        100, false, 'SETTLED', now(), now()),
                        (?, ?, ?, 'u2pick', '{}'::jsonb, 'Fun?', '["Yes","No"]'::jsonb,
-                        0, true, 'SETTLED', now(), now(), 'earliest')
+                        0, true, 'SETTLED', now(), now())
                 """, bet, table, first, funBet, table, first);
         return new Fixture(table, bet, funBet, first, second);
     }

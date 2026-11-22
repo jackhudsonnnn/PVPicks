@@ -23,7 +23,6 @@ const locked: Bet = {
   viewerCanOverride: false,
   picks: [],
   noGuessUserIds: [],
-  remainderRule: "host",
 };
 
 describe("awaitingPointsSettlement", () => {

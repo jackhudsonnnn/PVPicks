@@ -10,9 +10,8 @@ import {
 } from "motion/react";
 import { Button } from "@/components/ui/button";
 import {
-  BlackjackPrompt,
-  BlackjackStatus,
-  useBlackjackSeatChips,
+  JackblackStatus,
+  useJackblackSeatChips,
   StatusBadge,
   MODES,
   type Bet,
@@ -97,9 +96,9 @@ export function Felt({
 }) {
   const { user } = people;
   const { seated, rail } = arrangeSeats(table.memberIds, user.id, focused);
-  // A focused Blackjack hand is played right on the felt, around its ticket in the stack.
-  const blackjack = focused?.modeId === "blackjack" ? focused : undefined;
-  const blackjackChip = useBlackjackSeatChips(blackjack, user);
+  // A focused Jackblack game shows on the felt: its status in the pill and each player's chip.
+  const jackblack = focused?.modeId === "jackblack" ? focused : undefined;
+  const jackblackChip = useJackblackSeatChips(jackblack, user);
   const reduced = !!useReducedMotionConfig();
   const seatTransition = { duration: reduced ? 0 : 0.18 };
   // Keep mounted nodes in table order even when your bottom seat has a different index.
@@ -122,16 +121,7 @@ export function Felt({
             onFocus={onFocus}
             onOpen={onOpenBet}
             onPropose={onPropose}
-            label={blackjack && <BlackjackStatus bet={blackjack} {...people} />}
-            footer={
-              blackjack && (
-                <BlackjackPrompt
-                  bet={blackjack}
-                  user={user}
-                  onOpen={() => onOpenBet(blackjack.id)}
-                />
-              )
-            }
+            label={jackblack && <JackblackStatus bet={jackblack} user={user} />}
           />
         </div>
         {slots.map(({ id, index }) => {
@@ -148,7 +138,7 @@ export function Felt({
               <Seat
                 id={id}
                 focused={focused}
-                chipOverride={blackjack ? blackjackChip(id) : undefined}
+                chipOverride={jackblack ? jackblackChip(id) : undefined}
                 balance={balances?.find((b) => b.userId === id)}
                 onClick={() => onSelectUser(id)}
                 {...people}
@@ -196,7 +186,7 @@ function Seat({
 }: People & {
   id: string;
   focused: Bet | undefined;
-  /** A Blackjack hand's chip for this seat (its total or result), in place of the pick chip. */
+  /** A Jackblack game's chip for this seat (its total or result), in place of the pick chip. */
   chipOverride?: { label: string; tone: SeatTone } | null | undefined;
   balance: TableBalance | undefined;
   onClick: () => void;
@@ -275,17 +265,14 @@ function BetStack({
   onOpen,
   onPropose,
   label,
-  footer,
 }: {
   bets: Bet[];
   focusedId: string | undefined;
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
   onPropose?: (() => void) | undefined;
-  /** Replaces the pill's "N in" / pot for the focused bet (Blackjack's status). */
+  /** Replaces the pill's "N in" / pot for the focused bet (Jackblack's status). */
   label?: ReactNode;
-  /** Under the pill without moving the stack (Blackjack's controls). */
-  footer?: ReactNode;
 }) {
   const reduced = !!useReducedMotionConfig();
   const idx = Math.max(
@@ -403,9 +390,6 @@ function BetStack({
           </button>
         )}
       </div>
-      {footer && (
-        <div className="absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2">{footer}</div>
-      )}
     </div>
   );
 }

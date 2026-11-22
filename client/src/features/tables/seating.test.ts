@@ -36,7 +36,6 @@ const locked: Bet = {
     { userId: b, choice: "No" },
   ],
   noGuessUserIds: [c],
-  remainderRule: "proposer",
 };
 
 describe("seating", () => {

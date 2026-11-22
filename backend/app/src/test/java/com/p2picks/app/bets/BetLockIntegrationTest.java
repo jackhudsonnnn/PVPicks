@@ -71,7 +71,7 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
                 (?, 'lockfrozen', 1, ?, 'PLAYER', 'FROZEN'),
                 (?, 'locklimited', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, exact, hash, over, hash, frozen, hash, limited, hash);
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code, remainder_rule) VALUES (?, 'Lock', 'T', 'V8R5QA', 'host')", table);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Lock', 'T', 'V8R5QA')", table);
         jdbc.update("""
                 INSERT INTO table_members (table_id, user_id, role, can_bet) VALUES
                 (?, ?, 'HOST', true), (?, ?, 'MEMBER', true), (?, ?, 'MEMBER', true),
@@ -90,8 +90,6 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
                 .containsExactly(exact);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, bet))
                 .isEqualTo(4);
-        assertThat(jdbc.queryForObject("SELECT remainder_host_id FROM bets WHERE id = ?", UUID.class, bet))
-                .isEqualTo(host);
         assertThat(betLocks.lock(bet)).isEqualTo(BetLockService.Outcome.ALREADY_LOCKED);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'bet.locked.v1'
@@ -107,25 +105,6 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void betLockRollsBackWhenHostRemainderHasNoHost() {
-        UUID player = UUID.randomUUID();
-        UUID table = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO users (id, username, hue, password_hash, role, status)
-                VALUES (?, 'locknohost', 1, ?, 'PLAYER', 'ACTIVE')
-                """, player, passwords.encode("a secure test password"));
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code, remainder_rule) VALUES (?, 'No host', 'T', 'V8R6QA', 'host')", table);
-        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')", table, player);
-        jdbc.update("INSERT INTO debt_caps (user_id, cap_cents) VALUES (?, 0)", player);
-        UUID bet = insertDebtBet(table, player, player, "ACTIVE", false, true, false, 100, 0);
-        assertThatThrownBy(() -> betLocks.lock(bet)).isInstanceOf(IllegalStateException.class);
-        assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet)).isEqualTo("ACTIVE");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, bet)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'bet.locked.v1'",
-                Integer.class, bet.toString())).isZero();
-    }
-
-    @Test
     void simultaneousBetLocksSerializeSharedDebtExposure() throws Exception {
         UUID host = UUID.randomUUID();
         UUID player = UUID.randomUUID();
@@ -138,8 +117,8 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
                 (?, 'lockraceuser', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, player, hash);
         jdbc.update("""
-                INSERT INTO tables (id, name, emoji, quickpick_code, remainder_rule) VALUES
-                (?, 'First', 'T', 'V8R7QA', 'earliest'), (?, 'Second', 'T', 'V8R8QA', 'earliest')
+                INSERT INTO tables (id, name, emoji, quickpick_code) VALUES
+                (?, 'First', 'T', 'V8R7QA'), (?, 'Second', 'T', 'V8R8QA')
                 """, firstTable, secondTable);
         jdbc.update("""
                 INSERT INTO table_members (table_id, user_id, role) VALUES
@@ -190,7 +169,7 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
                 (?, 'locknewhost', 1, ?, 'PLAYER', 'ACTIVE'),
                 (?, 'locknewuser', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, player, hash);
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code, remainder_rule) VALUES (?, 'Race', 'T', 'V8R9QA', 'earliest')", table);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Race', 'T', 'V8R9QA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
         UUID bet = insertDebtBet(table, player, host, "ACTIVE", false, false, false, 100, 0);
@@ -218,7 +197,7 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
             while (!waiting && System.nanoTime() < deadline) {
                 waiting = Boolean.TRUE.equals(jdbc.queryForObject("""
                         SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock'
-                            AND query LIKE 'SELECT remainder_rule FROM tables WHERE id = %')
+                            AND query LIKE 'SELECT id FROM tables WHERE id = % FOR UPDATE')
                         """, Boolean.class));
                 if (!waiting) Thread.sleep(25);
             }

@@ -40,12 +40,12 @@ class BetMutationController {
     private final HostOverrideService overrides;
     private final BetReadController reads;
 
-    private final BlackjackService blackjack;
+    private final JackblackService jackblack;
 
     BetMutationController(U2PickProposalService proposals, SportsProposalService sportsProposals,
             BetPickService picks, U2PickResolutionService resolutions, HostOverrideService overrides,
-            BetReadController reads, BlackjackService blackjack) {
-        this.blackjack = blackjack;
+            BetReadController reads, JackblackService jackblack) {
+        this.jackblack = jackblack;
         this.overrides = overrides;
         this.proposals = proposals;
         this.sportsProposals = sportsProposals;
@@ -61,8 +61,8 @@ class BetMutationController {
         if (SportsProposalService.MODES.contains(input.path("modeId").asText(""))) {
             return proposeSports(jwt, tableId, key, input);
         }
-        if (input.path("modeId").asText("").equals(BlackjackService.MODE)) {
-            return proposeBlackjack(jwt, tableId, key, input);
+        if (input.path("modeId").asText("").equals(JackblackService.MODE)) {
+            return proposeJackblack(jwt, tableId, key, input);
         }
         U2PickProposalService.Proposal proposal;
         try {
@@ -127,24 +127,36 @@ class BetMutationController {
         }
     }
 
-    /** Blackjack: {@code {modeId, rules, forFun}}; the proposer deals (domain rules, "Blackjack"). */
-    private ResponseEntity<?> proposeBlackjack(Jwt jwt, UUID tableId, String key, JsonNode input) {
-        BlackjackRules rules;
+    /**
+     * Jackblack: {@code {modeId, rules, wagerCents, durationSec, forFun}}; the wager is the ante (kept for a 4Fun game
+     * too, where nothing is paid) and the duration is the join window (domain rules, "Jackblack").
+     */
+    private ResponseEntity<?> proposeJackblack(Jwt jwt, UUID tableId, String key, JsonNode input) {
+        JackblackRules rules;
+        long ante;
+        int window;
         try {
-            if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "forFun"))
-                    || !input.path("forFun").isBoolean()) {
+            if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "wagerCents", "durationSec",
+                    "forFun")) || !input.path("forFun").isBoolean()
+                    || !input.path("wagerCents").isIntegralNumber() || !input.path("wagerCents").canConvertToLong()
+                    || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()) {
                 throw new IllegalArgumentException("Invalid proposal");
             }
-            rules = BlackjackRules.parse(input.get("rules"));
+            ante = input.path("wagerCents").longValue();
+            window = input.path("durationSec").intValue();
+            if (ante < 10 || ante > 1000) throw new IllegalArgumentException("the ante must be 0.10 to 10.00");
+            if (window < 30 || window > 600) throw new IllegalArgumentException("the join window must be 30s to 10m");
+            rules = JackblackRules.parse(input.get("rules"));
         } catch (IllegalArgumentException exception) {
-            return error(400, "bad_request", "Invalid Blackjack rules: " + exception.getMessage() + ".");
+            return error(400, "bad_request", "Invalid Jackblack proposal: " + exception.getMessage() + ".");
         }
         try {
-            var result = blackjack.propose(jwt, tableId, rules, input.path("forFun").booleanValue(), key);
+            var result = jackblack.propose(jwt, tableId, rules, ante, window, input.path("forFun").booleanValue(),
+                    key);
             return created(jwt, result.outcome().name(), result.betId());
         } catch (BetProposalWriter.DebtCapExceeded exception) {
             return error(409, "debt_cap_exceeded",
-                    "Your points limit can't cover a full table at this maximum bet. Lower it, or the seats.");
+                    "Your points limit can't cover this game's worst case. Lower the ante, or the rules' risk.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }

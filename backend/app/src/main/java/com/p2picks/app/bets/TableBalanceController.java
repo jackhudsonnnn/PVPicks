@@ -60,13 +60,12 @@ class TableBalanceController {
                                      JOIN picks p ON p.bet_id = b.id
                                      WHERE b.table_id = m.table_id AND p.user_id = m.user_id
                                        AND b.status = 'PENDING' AND NOT b.is_4fun), 0)
-                           -- Blackjack in play: a player's stake, the dealer's worst case (domain rules).
-                           + COALESCE((SELECT sum(CASE WHEN s.user_id = m.user_id THEN s.stake_cents
-                                          ELSE s.bet_cents * 2 * ((b.config->>'maxSplits')::int + 1) END)
-                                     FROM bets b JOIN blackjack_seats s ON s.bet_id = b.id
-                                     WHERE b.table_id = m.table_id AND b.mode = 'blackjack'
-                                       AND b.status = 'PENDING' AND NOT b.is_4fun
-                                       AND (s.user_id = m.user_id OR b.proposer_id = m.user_id)), 0) AS staked
+                           -- Jackblack in play: each player's worst case (domain rules, "Jackblack").
+                           + COALESCE((SELECT sum(j.risk_cents)
+                                     FROM bets b JOIN jackblack_players j ON j.bet_id = b.id
+                                       AND j.user_id = m.user_id
+                                     WHERE b.table_id = m.table_id AND b.mode = 'jackblack'
+                                       AND b.status = 'PENDING' AND NOT b.is_4fun), 0) AS staked
                     FROM table_members m
                     WHERE m.table_id = ? AND access.ok
                     ORDER BY m.user_id

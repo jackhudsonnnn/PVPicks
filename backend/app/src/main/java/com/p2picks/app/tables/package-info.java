@@ -1,5 +1,5 @@
 /**
- * Tables: creation, profile, settings, members, hosts, permissions, remainder rule, Quick Pick controls and archives.
+ * Tables: creation, profile, settings, members, hosts, permissions, Quick Pick controls and archives.
  *
  * <p>Public types in this package are the module API; everything else is package-private.
  */

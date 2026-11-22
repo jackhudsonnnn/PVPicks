@@ -72,7 +72,8 @@ account.
 - The app's container runs the client's Vite dev server with `client/`
   mounted, so edits hot-reload. It proxies `/api` (and the realtime
   WebSocket) to the backend and keeps the browser's Origin, which the backend
-  checks against `PVPICKS_DEV_ORIGIN` (default the app's address). See
+  checks against `PVPICKS_DEV_ORIGIN` (default the app's address; `127.0.0.1` and
+  `localhost` on that port both work). See
   [Frontend](/frontend) for running it outside Docker.
 - The lock worker locks bets at their deadline (and deals Blackjack hands),
   and the outbox relay publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or

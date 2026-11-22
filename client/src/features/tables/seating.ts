@@ -6,7 +6,7 @@ const SEAT_CAP = 8;
 
 /**
  * Who sits at the felt. While the focused bet is Active nobody's participation is public yet, so everyone sits;
- * once it locks, only the people in it (pickers and No guess; for Blackjack, the seated players and the dealer). You take the bottom seat when you're seated; the
+ * once it locks, only the people in it (pickers and No guess; for Jackblack, its players). You take the bottom seat when you're seated; the
  * rest keep table order.
  */
 export function arrangeSeats(
@@ -16,17 +16,12 @@ export function arrangeSeats(
   cap = SEAT_CAP,
 ) {
   const inBet =
-    // A finished Blackjack hand stays on the felt a little while; keep its players where its cards are.
+    // A finished Jackblack game stays on the felt a little while; keep its players seated.
     (focused?.status === "PENDING" ||
-      (focused?.modeId === "blackjack" && focused.status !== "ACTIVE")) &&
+      (focused?.modeId === "jackblack" && focused.status !== "ACTIVE")) &&
     focused.picks &&
     focused.noGuessUserIds
-      ? new Set([
-          ...focused.picks.map((pick) => pick.userId),
-          ...focused.noGuessUserIds,
-          // Blackjack's dealer is in every hand without a seat of their own.
-          ...(focused.modeId === "blackjack" ? [focused.proposerId] : []),
-        ])
+      ? new Set([...focused.picks.map((pick) => pick.userId), ...focused.noGuessUserIds])
       : null;
   const eligible = inBet ? memberIds.filter((id) => inBet.has(id)) : memberIds;
   const others = eligible.filter((id) => id !== me);
@@ -52,7 +47,7 @@ export function seatStatus(
   me: string,
 ): { label: string; tone: SeatTone } | null {
   if (!bet) return null;
-  if (bet.modeId === "blackjack") return blackjackSeat(bet, userId, me);
+  if (bet.modeId === "jackblack") return jackblackSeat(bet, userId, me);
   if (bet.status === "ACTIVE") {
     if (userId !== me) return null;
     if (bet.myParticipation === "picked") return { label: bet.myPick!, tone: "pick" };
@@ -74,41 +69,40 @@ export function seatStatus(
 }
 
 /**
- * Blackjack has no picks: players sit with a bet against the dealer (the proposer). Seated players are the bet's
- * participants, which the server lists as No guess; the dealer's chip says so.
+ * Jackblack has no picks: its players are the bet's participants, which the server lists as No guess. (The felt
+ * shows the live game's chips from the game itself; this is the fallback.)
  */
-function blackjackSeat(
+function jackblackSeat(
   bet: Bet,
   userId: string,
   me: string,
 ): { label: string; tone: SeatTone } | null {
-  const dealer = userId === bet.proposerId;
-  const seated =
+  const playing =
     bet.status === "ACTIVE"
       ? userId === me && bet.myParticipation !== "not_joined"
       : !!bet.noGuessUserIds?.includes(userId);
-  if (!dealer && !seated) return null;
-  if (bet.status === "ACTIVE") return { label: dealer ? "Dealer" : "Seated", tone: "pick" };
-  if (bet.status === "PENDING") return { label: dealer ? "Dealer" : "Playing", tone: "pick" };
+  if (!playing) return null;
+  if (bet.status === "ACTIVE") return { label: "In", tone: "pick" };
+  if (bet.status === "PENDING") return { label: "Playing", tone: "pick" };
   if (bet.status === "WASHED") return { label: STATUSES.WASHED.label, tone: "washed" };
   const delta = bet.deltasCents?.[userId] ?? 0;
-  if (bet.forFun || delta === 0) return { label: dealer ? "Dealer" : "Push", tone: "pass" };
+  if (bet.forFun || delta === 0) return { label: "Even", tone: "pass" };
   return delta > 0
-    ? { label: `Won ${formatCents(delta, true)}`, tone: "win" }
-    : { label: `Lost ${formatCents(-delta)}`, tone: "loss" };
+    ? { label: `Up ${formatCents(delta, true)}`, tone: "win" }
+    : { label: `Down ${formatCents(-delta)}`, tone: "loss" };
 }
 
-/** How long a finished Blackjack hand stays on the felt, so everyone sees how it ended. */
+/** How long a finished Jackblack game stays on the felt, so everyone sees how it ended. */
 export const FINISHED_HAND_MS = 20_000;
 
-/** Open bets for the deck, newest first, plus a Blackjack hand that just finished. */
+/** Open bets for the deck, newest first, plus a Jackblack game that just finished. */
 export function openBets(bets: Bet[], now = Date.now()) {
   return bets
     .filter(
       (bet) =>
         bet.status === "ACTIVE" ||
         bet.status === "PENDING" ||
-        (bet.modeId === "blackjack" &&
+        (bet.modeId === "jackblack" &&
           !!bet.closedAt &&
           now - Date.parse(bet.closedAt) < FINISHED_HAND_MS),
     )

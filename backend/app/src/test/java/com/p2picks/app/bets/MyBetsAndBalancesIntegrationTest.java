@@ -61,7 +61,7 @@ class MyBetsAndBalancesIntegrationTest extends IntegrationTestSupport {
                 """, id, table, table, question, forFun ? 0 : 100, forFun, minutesAgo);
         if (!status.equals("ACTIVE")) {
             jdbc.update("""
-                    UPDATE bets SET status = ?, locked_at = now(), remainder_rule = 'proposer',
+                    UPDATE bets SET status = ?, locked_at = now(),
                                     closed_at = CASE WHEN ? IN ('SETTLED', 'WASHED') THEN now() END
                     WHERE id = ?
                     """, status, status, id);

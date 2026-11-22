@@ -54,7 +54,7 @@ class BetReadModelIntegrationTest extends IntegrationTestSupport {
                 id, alice, id, bob);
         if (!status.equals("ACTIVE")) {
             jdbc.update("""
-                    UPDATE bets SET status = ?, locked_at = now(), remainder_rule = 'proposer',
+                    UPDATE bets SET status = ?, locked_at = now(),
                                     closed_at = CASE WHEN ? IN ('SETTLED', 'WASHED') THEN now() END,
                                     winning_choice = CASE WHEN ? = 'SETTLED' THEN 'Yes' END,
                                     points_settled_at = CASE WHEN ? THEN now() END
@@ -158,6 +158,6 @@ class BetReadModelIntegrationTest extends IntegrationTestSupport {
         assertThat(modes.size()).isEqualTo(9);
         // Every mode but Choose Their Fate, which needs GOAT play-by-play.
         assertThat(available).containsExactly("u2pick", "total_disaster", "give_and_take", "either_or", "prop_hunt",
-                "king_of_the_hill", "scorcerer", "blackjack");
+                "king_of_the_hill", "scorcerer", "jackblack");
     }
 }

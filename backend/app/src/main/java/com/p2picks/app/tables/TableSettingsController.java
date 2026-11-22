@@ -26,8 +26,8 @@ class TableSettingsController {
     }
 
     private static final java.util.List<String> SETTINGS = java.util.List.of("hostsOnlyBets", "u2pickEnabled",
-            "pollsEnabled", "blackjackAccess");
-    private static final java.util.Set<String> BLACKJACK_ACCESS = java.util.Set.of("hosts", "everyone", "off");
+            "pollsEnabled", "jackblackAccess");
+    private static final java.util.Set<String> JACKBLACK_ACCESS = java.util.Set.of("hosts", "everyone", "off");
 
     private static Boolean flag(JsonNode input, String name) {
         return input.has(name) ? input.get(name).booleanValue() : null;
@@ -39,14 +39,14 @@ class TableSettingsController {
         if (!IdempotencyGuard.validKey(key)) return error(400, "bad_request", "A valid Idempotency-Key is required.");
         if (!input.isObject() || input.isEmpty()
                 || input.size() != SETTINGS.stream().filter(input::has).count()
-                || SETTINGS.stream().anyMatch(name -> !name.equals("blackjackAccess") && input.has(name)
+                || SETTINGS.stream().anyMatch(name -> !name.equals("jackblackAccess") && input.has(name)
                         && !input.get(name).isBoolean())
-                || (input.has("blackjackAccess") && !BLACKJACK_ACCESS.contains(input.get("blackjackAccess").asText("")))) {
+                || (input.has("jackblackAccess") && !JACKBLACK_ACCESS.contains(input.get("jackblackAccess").asText("")))) {
             return error(400, "bad_request", "Invalid table settings.");
         }
         var changes = new TableSettingsService.Changes(flag(input, "hostsOnlyBets"), flag(input, "u2pickEnabled"),
                 flag(input, "pollsEnabled"),
-                input.has("blackjackAccess") ? input.get("blackjackAccess").textValue() : null);
+                input.has("jackblackAccess") ? input.get("jackblackAccess").textValue() : null);
         try {
             return switch (settings.update(jwt, tableId, changes, key)) {
                 case UPDATED, REPLAYED -> tableReads.get(jwt, tableId);

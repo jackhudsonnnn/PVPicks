@@ -62,8 +62,7 @@ public class U2PickResolutionService {
                 SELECT user_id FROM table_members WHERE table_id = ?
                 UNION SELECT user_id FROM bet_participants WHERE bet_id = ?
                 UNION SELECT proposer_id FROM bets WHERE id = ?
-                UNION SELECT remainder_host_id FROM bets WHERE id = ? AND remainder_host_id IS NOT NULL
-                """, (rs, row) -> rs.getObject(1, UUID.class), tableHints.getFirst(), betId, betId, betId);
+                """, (rs, row) -> rs.getObject(1, UUID.class), tableHints.getFirst(), betId, betId);
         Map<UUID, String> lockedUsers = authentication.lockActiveWithTargets(jwt, targets);
         if (lockedUsers == null) return Outcome.UNAUTHORIZED;
         authentication.requireUnexpired(jwt);
@@ -88,13 +87,12 @@ public class U2PickResolutionService {
         }
         List<Bet> bets = jdbc.query("""
                 SELECT proposer_id, mode, source_bet_id, status, choices::text, wager_cents, is_4fun,
-                       settler_rule, remainder_rule, remainder_host_id
+                       settler_rule
                 FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
                 """, (rs, row) -> new Bet(rs.getObject("proposer_id", UUID.class), rs.getString("mode"),
                         rs.getObject("source_bet_id", UUID.class), rs.getString("status"),
                         rs.getString("choices"), rs.getLong("wager_cents"), rs.getBoolean("is_4fun"),
-                        rs.getString("settler_rule"), rs.getString("remainder_rule"),
-                        rs.getObject("remainder_host_id", UUID.class)), betId, tableId);
+                        rs.getString("settler_rule")), betId, tableId);
         if (bets.isEmpty()) throw new IllegalStateException("Bet disappeared during resolution");
         Bet bet = bets.getFirst();
         if (!bet.mode().equals("u2pick") || bet.sourceBetId() != null) return Outcome.FORBIDDEN;
@@ -107,8 +105,7 @@ public class U2PickResolutionService {
                         rs.getString("choice")), betId);
         if (members.stream().anyMatch(member -> !lockedUsers.containsKey(member.id()))
                 || participants.stream().anyMatch(participant -> !lockedUsers.containsKey(participant.userId()))
-                || !lockedUsers.containsKey(bet.proposerId())
-                || (bet.remainderHostId() != null && !lockedUsers.containsKey(bet.remainderHostId()))) {
+                || !lockedUsers.containsKey(bet.proposerId())) {
             throw new MembersChanged();
         }
         Set<UUID> eligible = new HashSet<>();
@@ -142,16 +139,8 @@ public class U2PickResolutionService {
         }
         List<String> choices = choices(bet.choices());
         if (winningChoice != null && !choices.contains(winningChoice)) throw new InvalidChoice();
-        if (bet.remainderRule() == null) throw new IllegalStateException("Pending bet has no remainder rule");
-        PayoutCalculator.RemainderMode mode =
-                PayoutCalculator.RemainderMode.valueOf(bet.remainderRule().toUpperCase(Locale.ROOT));
-        UUID recipient = switch (mode) {
-            case HOST -> bet.remainderHostId();
-            case PROPOSER -> bet.proposerId();
-            case EARLIEST, RANDOM -> null;
-        };
         writer.resolve(new BetResolutionWriter.LockedBet(betId, tableId, bet.wagerCents(), bet.forFun(), choices,
-                new PayoutCalculator.Remainder(mode, recipient), participants), winningChoice, actor);
+                participants), winningChoice, actor);
         authentication.requireUnexpired(jwt);
         return Outcome.RESOLVED;
     }
@@ -173,6 +162,5 @@ public class U2PickResolutionService {
 
     private record Member(UUID id, String role, String accountRole, String status) {}
     private record Bet(UUID proposerId, String mode, UUID sourceBetId, String status, String choices,
-                       long wagerCents, boolean forFun, String settlerRule, String remainderRule,
-                       UUID remainderHostId) {}
+                       long wagerCents, boolean forFun, String settlerRule) {}
 }

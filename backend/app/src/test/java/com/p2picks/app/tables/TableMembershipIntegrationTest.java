@@ -279,7 +279,7 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isNotFound());
         mvc.perform(quickPickRequest(HttpMethod.DELETE, path, hostSession, csrf, "delete", null))
                 .andExpect(status().isConflict());
-        jdbc.update("UPDATE bets SET status = 'PENDING', locked_at = now(), remainder_rule = 'earliest' WHERE id = ?", bet);
+        jdbc.update("UPDATE bets SET status = 'PENDING', locked_at = now() WHERE id = ?", bet);
         mvc.perform(quickPickRequest(HttpMethod.DELETE, path, hostSession, csrf, "delete", null))
                 .andExpect(status().isConflict());
         jdbc.update("UPDATE bets SET status = 'SETTLED' WHERE id = ?", bet);
@@ -447,7 +447,7 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isConflict()).andReturn();
         assertThat(json.readTree(blocked.getResponse().getContentAsString()).path("code").asText())
                 .isEqualTo("member_removal_unsettled");
-        jdbc.update("UPDATE bets SET status = 'PENDING', locked_at = now(), remainder_rule = 'proposer' WHERE id = ?", bet);
+        jdbc.update("UPDATE bets SET status = 'PENDING', locked_at = now() WHERE id = ?", bet);
         mvc.perform(quickPickRequest(HttpMethod.DELETE, path, hostSession, csrf, "remove", null))
                 .andExpect(status().isConflict());
         jdbc.update("UPDATE bets SET status = 'SETTLED' WHERE id = ?", bet);
@@ -456,11 +456,11 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
         jdbc.update("UPDATE bets SET points_settled_at = now() WHERE id = ?", bet);
         jdbc.update("""
                 INSERT INTO bets (id, table_id, proposer_id, mode, config, question, choices, wager_cents, is_4fun,
-                                  locks_at, status, locked_at, remainder_rule)
+                                  locks_at, status, locked_at)
                 VALUES (?, ?, ?, 'u2pick', '{}'::jsonb, 'For fun?', '["Yes","No"]'::jsonb, 0, true,
-                        now(), 'SETTLED', now(), 'proposer'),
+                        now(), 'SETTLED', now()),
                        (?, ?, ?, 'u2pick', '{}'::jsonb, 'Washed?', '["Yes","No"]'::jsonb, 100, false,
-                        now(), 'WASHED', now(), 'proposer')
+                        now(), 'WASHED', now())
                 """, UUID.randomUUID(), table, host, UUID.randomUUID(), table, host);
         jdbc.update("INSERT INTO chat_read_positions (table_id, user_id, last_read_order) VALUES (?, ?, 1)", table, target);
         mvc.perform(quickPickRequest(HttpMethod.DELETE, path, hostSession, csrf, "remove", null))
@@ -561,16 +561,14 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
                 invite, table, target, recipient);
         jdbc.update("""
                 INSERT INTO bets (id, table_id, proposer_id, mode, config, question, choices, wager_cents,
-                                  is_4fun, locks_at, status, locked_at, remainder_rule, remainder_host_id)
+                                  is_4fun, locks_at, status, locked_at)
                 VALUES (?, ?, ?, 'u2pick', '{}'::jsonb, 'Question?', '["Yes","No"]'::jsonb,
-                        100, false, now(), 'PENDING', now(), 'host', ?)
-                """, bet, table, actor, target);
+                        100, false, now(), 'PENDING', now())
+                """, bet, table, actor);
         mvc.perform(hostRequest(HttpMethod.DELETE, table, target, actorSession, csrf, "demote"))
                 .andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT status FROM table_invites WHERE id = ?", String.class, invite))
                 .isEqualTo("CANCELLED");
-        assertThat(jdbc.queryForObject("SELECT remainder_host_id FROM bets WHERE id = ?", UUID.class, bet))
-                .isEqualTo(target);
         mvc.perform(hostRequest(HttpMethod.PUT, table, target, actorSession, csrf, "promote"))
                 .andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("""

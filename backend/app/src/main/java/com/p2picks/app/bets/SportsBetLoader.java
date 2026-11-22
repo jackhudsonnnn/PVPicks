@@ -50,7 +50,7 @@ class SportsBetLoader {
 
     record Peek(String gameId, String status, SportsOutcome.Terms terms) {}
 
-    /** Table members, participants, the proposer and the leftover-cents host; null when the bet doesn't exist. */
+    /** Table members, participants and the proposer; null when the bet doesn't exist. */
     List<UUID> affectedUsers(UUID betId) {
         List<UUID> tables = jdbc.query("SELECT table_id FROM bets WHERE id = ?",
                 (rs, row) -> rs.getObject("table_id", UUID.class), betId);
@@ -59,8 +59,7 @@ class SportsBetLoader {
                 SELECT user_id FROM table_members WHERE table_id = ?
                 UNION SELECT user_id FROM bet_participants WHERE bet_id = ?
                 UNION SELECT proposer_id FROM bets WHERE id = ?
-                UNION SELECT remainder_host_id FROM bets WHERE id = ? AND remainder_host_id IS NOT NULL
-                """, (rs, row) -> rs.getObject(1, UUID.class), tables.getFirst(), betId, betId, betId);
+                """, (rs, row) -> rs.getObject(1, UUID.class), tables.getFirst(), betId, betId);
     }
 
     /**
@@ -76,13 +75,12 @@ class SportsBetLoader {
         }
         Row row = jdbc.queryForObject("""
                 SELECT mode, game_id, status, points_settled_at IS NOT NULL AS settled, choices::text, config::text,
-                       wager_cents, is_4fun, includes_overtime, remainder_rule, remainder_host_id, proposer_id,
+                       wager_cents, is_4fun, includes_overtime, proposer_id,
                        locked_at
                 FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
                 """, (rs, n) -> new Row(rs.getString("mode"), rs.getString("game_id"), rs.getString("status"),
                 rs.getBoolean("settled"), rs.getString("choices"), rs.getString("config"), rs.getLong("wager_cents"),
                 rs.getBoolean("is_4fun"), (Boolean) rs.getObject("includes_overtime"),
-                rs.getString("remainder_rule"), rs.getObject("remainder_host_id", UUID.class),
                 rs.getObject("proposer_id", UUID.class), rs.getTimestamp("locked_at")), betId, tableId);
         List<PayoutCalculator.Participant> participants = jdbc.query("""
                 SELECT bp.user_id, p.choice FROM bet_participants bp
@@ -94,24 +92,12 @@ class SportsBetLoader {
                 (rs, n) -> rs.getObject("user_id", UUID.class), tableId);
         if (members.stream().anyMatch(id -> !lockedUsers.contains(id))
                 || participants.stream().anyMatch(p -> !lockedUsers.contains(p.userId()))
-                || !lockedUsers.contains(row.proposerId())
-                || (row.remainderHostId() != null && !lockedUsers.contains(row.remainderHostId()))) {
+                || !lockedUsers.contains(row.proposerId())) {
             throw new UsersChanged();
         }
         List<String> choices = strings(row.choices());
-        PayoutCalculator.Remainder remainder = null;
-        if (row.remainderRule() != null) {
-            PayoutCalculator.RemainderMode mode =
-                    PayoutCalculator.RemainderMode.valueOf(row.remainderRule().toUpperCase(Locale.ROOT));
-            UUID recipient = switch (mode) {
-                case HOST -> row.remainderHostId();
-                case PROPOSER -> row.proposerId();
-                case EARLIEST, RANDOM -> null;
-            };
-            remainder = new PayoutCalculator.Remainder(mode, recipient);
-        }
         return new Loaded(new BetResolutionWriter.LockedBet(betId, tableId, row.wagerCents(), row.forFun(), choices,
-                remainder, participants), row.mode(), row.gameId(), row.status(), row.settled(),
+                participants), row.mode(), row.gameId(), row.status(), row.settled(),
                 terms(row.mode(), row.config(), row.includesOvertime(), choices, row.lockedAt()), row.proposerId());
     }
 
@@ -142,6 +128,6 @@ class SportsBetLoader {
     }
 
     private record Row(String mode, String gameId, String status, boolean settled, String choices, String config,
-                       long wagerCents, boolean forFun, Boolean includesOvertime, String remainderRule,
-                       UUID remainderHostId, UUID proposerId, java.sql.Timestamp lockedAt) {}
+                       long wagerCents, boolean forFun, Boolean includesOvertime,
+                       UUID proposerId, java.sql.Timestamp lockedAt) {}
 }

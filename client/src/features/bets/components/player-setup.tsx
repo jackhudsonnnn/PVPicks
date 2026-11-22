@@ -95,6 +95,7 @@ export function PlayerSetup({
             min={mode === "prop_hunt" ? 0.5 : 1}
             max={999}
             label={mode === "prop_hunt" ? "Stat line" : "Target"}
+            jumps={[10, 100]}
             onChange={onLine}
           />
           {mode === "prop_hunt" && canPush(line) && (

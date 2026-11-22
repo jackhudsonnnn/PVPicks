@@ -13,8 +13,8 @@ import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { FunToggle, Section, Stepper, WagerBox, WagerSlider } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
-import { BlackjackSetup } from "./blackjack-setup";
-import { DEFAULT_RULES, rulesProblem, type BlackjackRules } from "@/features/bets/blackjack";
+import { JackblackSetup, JackblackWorstCase } from "./jackblack-setup";
+import { DEFAULT_RULES, rulesProblem, type JackblackRules } from "@/features/bets/jackblack";
 import { type ModeDef, useModeAvailability } from "@/features/bets/modes";
 import { ModeGrid } from "./mode-grid";
 import type { SettlerRule } from "@/features/bets/types";
@@ -34,7 +34,7 @@ import type { User } from "@/features/people";
 import { BetFacts } from "./bet-details";
 import type { BetActions } from "./bet-controls";
 import { BetTicket } from "./ticket";
-import { blackjackBlock, proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
+import { jackblackBlock, proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
 import {
   canPush,
   DEFAULT_LINE,
@@ -91,7 +91,7 @@ export function ProposeBetSheet({
   const [overtime, setOvertime] = useState(true);
   const [stat, setStat] = useState<string | null>(null);
   const [playerIds, setPlayerIds] = useState<string[]>([]);
-  const [rules, setRules] = useState<BlackjackRules>(DEFAULT_RULES);
+  const [rules, setRules] = useState<JackblackRules>(DEFAULT_RULES);
   const ticker = useTicker(user.id);
   const sportsMode: SportsMode | null = mode && isSportsMode(mode.id) ? mode.id : null;
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
@@ -111,7 +111,7 @@ export function ProposeBetSheet({
   const problem = !mode
     ? null
     : mode.dealer
-      ? (blackjackBlock(table, user.id) ?? rulesProblem(rules))
+      ? (jackblackBlock(table, user.id) ?? rulesProblem(rules))
       : mode.custom
         ? (u2pickBlock(table) ?? customBetProblem(question, options))
         : !game
@@ -267,7 +267,15 @@ export function ProposeBetSheet({
   function submit() {
     if (!mode || problem || block || busy) return;
     if (mode.dealer) {
-      actions.start({ kind: "propose-blackjack", tableId: table.id, rules, forFun });
+      // The ante counts in a 4fun game too (nothing is paid), so the slider's value is always sent.
+      actions.start({
+        kind: "propose-jackblack",
+        tableId: table.id,
+        rules,
+        wagerCents: wager,
+        durationSec: timer,
+        forFun,
+      });
       onOpenChange(false);
       reset();
       return;
@@ -375,16 +383,11 @@ export function ProposeBetSheet({
               block={block}
               onPick={pickMode}
             />
-          ) : mode.dealer ? (
-            <BlackjackSetup
-              rules={rules}
-              onChange={setRules}
-              forFun={forFun}
-              onForFun={setForFun}
-            />
           ) : (
             <div className="space-y-6">
-              {sportsMode ? (
+              {mode.dealer ? (
+                <JackblackSetup rules={rules} onChange={setRules} />
+              ) : sportsMode ? (
                 <>
                   <Section label="Game">
                     <SegmentedTabs<TickerGame["league"]>
@@ -489,6 +492,8 @@ export function ProposeBetSheet({
                           format={(v) =>
                             scoreMode === "give_and_take" && v > 0 ? `+${v}` : String(v)
                           }
+                          // Totals run into the hundreds; spreads stay under 100.
+                          jumps={scoreMode === "total_disaster" ? [10, 100] : [10]}
                           onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
                         />
                         {canPush(line) && (
@@ -530,32 +535,35 @@ export function ProposeBetSheet({
                 />
               )}
 
-              <Section label="Wager (points each)">
+              <Section label={mode.dealer ? "Ante (points a hand)" : "Wager (points each)"}>
                 <div className="space-y-3">
                   <FunToggle checked={forFun} onChange={setForFun} />
-                  <WagerBox off={forFun}>
+                  <WagerBox off={forFun && !mode.dealer}>
                     <WagerSlider
                       value={wager}
                       min={WAGER_MIN_CENTS}
                       max={WAGER_MAX_CENTS}
-                      disabled={forFun}
+                      disabled={forFun && !mode.dealer}
                       onChange={setWager}
                     />
                   </WagerBox>
+                  {mode.dealer && !forFun && <JackblackWorstCase rules={rules} anteCents={wager} />}
                 </div>
               </Section>
 
-              <Section label="Pick window">
+              <Section label={mode.dealer ? "Join window" : "Pick window"}>
                 <SegmentedTabs<string>
                   size="sm"
-                  ariaLabel="Pick window"
+                  ariaLabel={mode.dealer ? "Join window" : "Pick window"}
                   tabs={PICK_WINDOWS.map((t) => ({ id: String(t.sec), label: t.label }))}
                   value={String(timer)}
                   onChange={(v) => setTimer(Number(v))}
                 />
               </Section>
               <p className="text-xs text-muted-foreground">
-                Sending a bet doesn't place your pick; pick on the ticket like everyone else.
+                {mode.dealer
+                  ? "You're in your own game; others join from the ticket."
+                  : "Sending a bet doesn't place your pick; pick on the ticket like everyone else."}
               </p>
             </div>
           )}

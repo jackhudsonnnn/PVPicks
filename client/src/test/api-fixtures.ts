@@ -12,11 +12,10 @@ export const table = {
   emoji: "🏟️",
   memberIds: [user.id],
   hostIds: [user.id],
-  remainderRule: "host",
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
-  blackjackAccess: "everyone" as const,
+  jackblackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -78,7 +77,7 @@ export const modeAvailability = new Map<string, boolean>([
   ["prop_hunt", true],
   ["king_of_the_hill", true],
   ["scorcerer", true],
-  ["blackjack", true],
+  ["jackblack", true],
 ]);
 
 /** A whole table as `GET /tables` lists it for `viewerId`: a summary with a member preview, never every member. */

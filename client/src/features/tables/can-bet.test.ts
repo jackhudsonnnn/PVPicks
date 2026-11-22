@@ -4,7 +4,7 @@ import type { Table } from "./api";
 import { canBetAt } from "./api";
 
 describe("canBetAt", () => {
-  const whole = { ...table, remainderRule: "host" } as Table;
+  const whole = { ...table } as Table;
   it("reads your permission from the whole table or from your summary", () => {
     expect(canBetAt(whole, user.id)).toBe(true);
     const barred = { ...whole, disabledPermissions: { [user.id]: ["bets" as const] } };

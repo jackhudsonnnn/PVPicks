@@ -3,7 +3,6 @@ package com.p2picks.app.bets;
 import com.p2picks.app.common.Outbox;
 import com.p2picks.app.common.OutboxEvent;
 import com.p2picks.app.settlement.DebtQuery;
-import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +32,6 @@ public class BetLockService {
     private final ObjectProvider<BetLiveStats> liveStats;
     private final JdbcTemplate jdbc;
     private final DebtQuery debt;
-    private final SecureRandom random = new SecureRandom();
     private final Outbox outbox;
     private final BetResolutionWriter writer;
     private final ObjectProvider<LockWashRule> modeRules;
@@ -82,10 +80,10 @@ public class BetLockService {
                     """, (rs, row) -> rs.getObject("id", UUID.class), ids);
             if (locked.size() != initialPickers.size()) throw new IllegalStateException("Pick user missing");
         }
-        List<String> rules = jdbc.query("""
-                SELECT remainder_rule FROM tables WHERE id = ? AND archived_at IS NULL FOR UPDATE
-                """, (rs, row) -> rs.getString("remainder_rule"), tableId);
-        if (rules.isEmpty()) throw new IllegalStateException("Bet table is missing or archived");
+        if (jdbc.queryForList("SELECT id FROM tables WHERE id = ? AND archived_at IS NULL FOR UPDATE", UUID.class,
+                tableId).isEmpty()) {
+            throw new IllegalStateException("Bet table is missing or archived");
+        }
         List<Bet> bets = jdbc.query("""
                 SELECT status, mode, locks_at <= clock_timestamp() AS due, wager_cents, is_4fun
                 FROM bets WHERE id = ? AND table_id = ? FOR UPDATE
@@ -118,19 +116,10 @@ public class BetLockService {
                 throw new IllegalStateException("Locked pick disappeared");
             }
         }
-        String rule = rules.getFirst();
-        UUID host = null;
-        if (rule.equals("host")) {
-            List<UUID> hosts = jdbc.query("""
-                    SELECT user_id FROM table_members WHERE table_id = ? AND role = 'HOST' ORDER BY user_id
-                    """, (rs, row) -> rs.getObject("user_id", UUID.class), tableId);
-            if (hosts.isEmpty()) throw new IllegalStateException("Host remainder has no current host");
-            host = hosts.get(random.nextInt(hosts.size()));
-        }
         if (jdbc.update("""
-                UPDATE bets SET status = 'PENDING', locked_at = clock_timestamp(), remainder_rule = ?,
-                    remainder_host_id = ?, version = version + 1 WHERE id = ? AND status = 'ACTIVE'
-                """, rule, host, betId) != 1) {
+                UPDATE bets SET status = 'PENDING', locked_at = clock_timestamp(), version = version + 1
+                WHERE id = ? AND status = 'ACTIVE'
+                """, betId) != 1) {
             throw new IllegalStateException("Locked bet changed");
         }
         outbox.append(OutboxEvent.BET_LOCKED, betId, Map.of("tableId", tableId, "betId", betId));
@@ -144,7 +133,7 @@ public class BetLockService {
                     .flatMap(java.util.Optional::stream).findFirst().orElse(null);
         }
         if (wash != null) {
-            writer.apply(new BetResolutionWriter.LockedBet(betId, tableId, bet.wager(), bet.forFun(), List.of(), null,
+            writer.apply(new BetResolutionWriter.LockedBet(betId, tableId, bet.wager(), bet.forFun(), List.of(),
                     List.of()), null, wash, null, false);
         }
         return Outcome.LOCKED;

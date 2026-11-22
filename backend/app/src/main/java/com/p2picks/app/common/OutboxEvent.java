@@ -11,7 +11,6 @@ public enum OutboxEvent {
     TABLE_CREATED("table", "table.created.v1"),
     TABLE_PROFILE_CHANGED("table", "table.profile.changed.v1"),
     TABLE_SETTINGS_CHANGED("table", "table.settings.changed.v1"),
-    TABLE_REMAINDER_CHANGED("table", "table.remainder.changed.v1"),
     TABLE_QUICKPICKS_CHANGED("table", "table.quickpicks.changed.v1"),
     TABLE_HOST_CHANGED("table", "table.host.changed.v1"),
     TABLE_MEMBER_JOINED("table", "table.member.joined.v1"),
@@ -31,8 +30,8 @@ public enum OutboxEvent {
     BET_PICK_COUNT_CHANGED("bet", "bet.pick_count.changed.v1"),
     BET_LOCKED("bet", "bet.locked.v1"),
     BET_RESOLVED("bet", "bet.resolved.v1"),
-    /** A Blackjack hand moved on: someone sat, acted or timed out (domain rules, "Blackjack"). */
-    BET_BLACKJACK_CHANGED("bet", "bet.blackjack.changed.v1"),
+    /** A Jackblack game moved on: someone joined, chose, dealt or timed out (domain rules, "Jackblack"). */
+    BET_JACKBLACK_CHANGED("bet", "bet.jackblack.changed.v1"),
 
     SETTLEMENT_CREATED("settlement", "settlement.created.v1"),
     SETTLEMENT_LINE_CHANGED("settlement_line", "settlement.line.changed.v1"),

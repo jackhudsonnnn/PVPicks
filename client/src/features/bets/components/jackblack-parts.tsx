@@ -1,20 +1,11 @@
-import { useState } from "react";
 import { motion, useReducedMotionConfig } from "motion/react";
 import { Button } from "@/components/ui/button";
-import { Stepper } from "./form-parts";
 import type { BetActions } from "./bet-controls";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import {
-  allowedMoves,
-  cardFace,
-  type BlackjackHand,
-  type BlackjackMove,
-  type BlackjackRules,
-  type BlackjackSeat,
-} from "@/features/bets/blackjack";
+import { cardFace, type JackblackChoice, type JackblackSeat } from "@/features/bets/jackblack";
 
-/** Pieces the Blackjack ticket and the table felt share: cards, the hand query, and the player's controls. */
+/** Pieces of the Jackblack ticket: cards and the player's and dealer's controls. */
 
 /**
  * One playing card; "??" is face down. A new card slides in from {@code from} (pixels from where it lands, the
@@ -66,121 +57,91 @@ export function Card({
   );
 }
 
-/** Sitting down while the join window is open: a bet within the dealer's limits. */
-export function SeatControls({
-  rules,
-  mine,
+/** Joining (or leaving) while the join window is open. The proposer is in already. */
+export function JoinControls({
+  joined,
+  proposer,
   full,
   disabled,
-  onSit,
+  worstCaseCents,
+  forFun,
+  onJoin,
   onLeave,
 }: {
-  rules: BlackjackRules;
-  mine: BlackjackSeat | undefined;
+  joined: boolean;
+  proposer: boolean;
   full: boolean;
   disabled: boolean;
-  onSit: (betCents: number) => void;
+  worstCaseCents: number;
+  forFun: boolean;
+  onJoin: () => void;
   onLeave: () => void;
 }) {
-  const [bet, setBet] = useState(mine?.betCents ?? rules.minBetCents);
-  if (full && !mine) return <p className="text-xs text-ticket-muted">Every seat is taken.</p>;
+  if (proposer) return null;
+  if (full && !joined) return <p className="text-xs text-ticket-muted">The game is full.</p>;
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <Stepper
-            value={bet}
-            step={rules.minBetCents >= 100 ? 100 : 10}
-            min={rules.minBetCents}
-            max={rules.maxBetCents}
-            label="Your bet"
-            format={(v) => `${formatCents(v)} pts`}
-            onChange={setBet}
-          />
-        </div>
-        <Button
-          size="sm"
-          className="h-10"
-          disabled={disabled || bet === mine?.betCents}
-          onClick={() => onSit(bet)}
-        >
-          {mine ? "Change bet" : "Sit down"}
-        </Button>
-      </div>
-      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ticket-muted">
-        <span>
-          Min {formatCents(rules.minBetCents)} · Max {formatCents(rules.maxBetCents)}
-        </span>
-        {mine && (
-          <button
-            type="button"
-            className="font-bold underline-offset-2 hover:underline disabled:opacity-40"
-            disabled={disabled}
-            onClick={onLeave}
-          >
-            Leave seat
-          </button>
-        )}
-      </div>
+    <div className="space-y-1.5">
+      <Button
+        size="sm"
+        variant={joined ? "outline" : "default"}
+        className="w-full"
+        disabled={disabled}
+        onClick={joined ? onLeave : onJoin}
+      >
+        {joined ? "Leave the game" : "Join the game"}
+      </Button>
+      {!forFun && !joined && (
+        <p className="text-center font-mono text-[10px] uppercase tracking-wider text-ticket-muted">
+          Holds up to {formatCents(worstCaseCents)} pts of your limit
+        </p>
+      )}
     </div>
   );
 }
 
+const CHOICE_LABEL: Record<JackblackChoice, string> = {
+  hit: "Hit",
+  stand: "Stand",
+  double: "Double",
+  split: "Split",
+};
+
+/**
+ * Your choice for this step. Nothing is dealt until everyone has chosen (or the timer runs out), so once you've
+ * chosen the buttons wait with yours marked.
+ */
 export function PlayControls({
-  hand,
   seat,
-  rules,
   disabled,
   onMove,
 }: {
-  hand: BlackjackHand;
-  seat: BlackjackSeat;
-  rules: BlackjackRules;
+  seat: JackblackSeat;
   disabled: boolean;
-  onMove: (move: BlackjackMove) => void;
+  onMove: (move: JackblackChoice) => void;
 }) {
-  if (hand.phase === "insurance") {
-    return (
-      <div className="grid grid-cols-2 gap-2">
-        <Button size="sm" disabled={disabled} onClick={() => onMove("insurance")}>
-          Insure · {formatCents(Math.floor(seat.betCents / 2))}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => onMove("no_insurance")}
-        >
-          No insurance
-        </Button>
-      </div>
-    );
-  }
-  const can = allowedMoves(rules, seat);
+  const chosen = seat.choice;
+  const allowed = (move: JackblackChoice) =>
+    move === "double" ? !!seat.canDouble : move === "split" ? !!seat.canSplit : true;
   return (
-    <div className="grid grid-cols-4 gap-2">
-      <Button size="sm" disabled={disabled} onClick={() => onMove("hit")}>
-        Hit
-      </Button>
-      <Button size="sm" variant="outline" disabled={disabled} onClick={() => onMove("stand")}>
-        Stand
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled || !can.double}
-        onClick={() => onMove("double")}
-      >
-        Double
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled || !can.split}
-        onClick={() => onMove("split")}
-      >
-        Split
-      </Button>
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-4 gap-2">
+        {(Object.keys(CHOICE_LABEL) as JackblackChoice[]).map((move) => (
+          <Button
+            key={move}
+            size="sm"
+            variant={chosen === move || (!chosen && move === "hit") ? "default" : "outline"}
+            disabled={disabled || !!chosen || !allowed(move)}
+            onClick={() => onMove(move)}
+          >
+            {CHOICE_LABEL[move]}
+          </Button>
+        ))}
+      </div>
+      {chosen && (
+        <p className="text-center text-xs text-ticket-muted">
+          {CHOICE_LABEL[chosen]} it is. Waiting for the others…
+        </p>
+      )}
     </div>
   );
 }

@@ -114,7 +114,7 @@ class RealtimeConsumerTest {
 
     @Test
     void tableChangesInvalidateTheTableViewForMembers() {
-        for (OutboxEvent type : List.of(OutboxEvent.TABLE_SETTINGS_CHANGED, OutboxEvent.TABLE_REMAINDER_CHANGED,
+        for (OutboxEvent type : List.of(OutboxEvent.TABLE_SETTINGS_CHANGED,
                 OutboxEvent.TABLE_QUICKPICKS_CHANGED)) {
             assertThat(routes(type, Map.of("tableId", TABLE))).singleElement().satisfies(route -> {
                 assertThat(route.tableFeed()).isEqualTo(RealtimeGateway.TableFeed.VIEW);

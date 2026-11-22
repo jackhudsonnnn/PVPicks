@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
-import { formatClock, ticketStatus } from "@/features/bets/ticket-model";
-import { rulesFromConfig } from "@/features/bets/blackjack";
-import { RESULT, useBlackjackHand } from "@/features/bets/blackjack-hand";
+import { ticketStatus } from "@/features/bets/ticket-model";
+import { PLAYER_LIMITS, playersOf, rulesFromConfig, worstCase } from "@/features/bets/jackblack";
+import { RESULT, useJackblackGame } from "@/features/bets/jackblack-game";
 
-/** Blackjack's sections in the Details dialog, in place of the pick-mode facts and the picks list. */
+/** Jackblack's sections in the Details dialog, in place of the pick-mode facts and the picks list. */
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -39,8 +39,8 @@ interface Props {
   peopleKey: readonly string[];
 }
 
-/** The hand at a glance and the dealer's house rules. */
-export function BlackjackFacts({
+/** The game at a glance and its rules. */
+export function JackblackFacts({
   bet,
   table,
   user,
@@ -50,10 +50,11 @@ export function BlackjackFacts({
 }: Props & { onNavigate?: (() => void) | undefined }) {
   const rules = rulesFromConfig(bet.config);
   const status = ticketStatus(bet);
-  const hand = useBlackjackHand(bet, user, status === "active" || status === "pending").data;
+  const game = useJackblackGame(bet, user, status === "active" || status === "pending").data;
+  const players = game ? playersOf(game).length : null;
   return (
     <>
-      <Section title="Hand">
+      <Section title="Game">
         <Row label="Table">
           {onNavigate ? (
             <Link
@@ -70,98 +71,93 @@ export function BlackjackFacts({
             </>
           )}
         </Row>
-        <Row label="Dealer">
+        <Row label="Proposed by">
           <PersonName id={bet.proposerId} user={user} expire={expire} queryKey={peopleKey} />
         </Row>
-        <Row label="Bets">
-          {bet.forFun
-            ? "4fun, no points"
-            : `${formatCents(rules.minBetCents)}–${formatCents(rules.maxBetCents)} pts`}
+        <Row label="Ante">
+          {formatCents(bet.wagerCents)} pts a hand{bet.forFun && " (4fun, no points)"}
         </Row>
-        <Row label="Seats">
-          {hand ? `${hand.seats.length} of ${rules.seats} taken` : `${rules.seats}`}
+        <Row label="Players">
+          {players === null ? `Up to ${PLAYER_LIMITS.max}` : `${players} of ${PLAYER_LIMITS.max}`}
         </Row>
-        <Row label="Join window">{formatClock(rules.joinSec)}</Row>
+        {game?.rounds !== undefined && <Row label="Rounds">{game.rounds}</Row>}
+        {!bet.forFun && players !== null && players >= 2 && (
+          <Row label="Worst case each">
+            {formatCents(worstCase(rules, bet.wagerCents, players))} pts
+          </Row>
+        )}
       </Section>
 
-      <Section title="House rules">
-        <Row label="Decks">{rules.decks}</Row>
-        <Row label="Blackjack pays">{rules.blackjackPays}</Row>
-        <Row label="Dealer on soft 17">{rules.dealerHitsSoft17 ? "Hits" : "Stands"}</Row>
-        <Row label="Double down">
-          {rules.doubleOn === "any" ? "Any two cards" : "9, 10 or 11"}, after splits too
+      <Section title="Rules">
+        <Row label="Dealing">
+          Everyone deals {rules.rotations === 1 ? "once" : `${rules.rotations} times`}, random order
         </Row>
+        <Row label="Decks">{rules.decks}, fresh shoe every round</Row>
+        <Row label="Blackjack pays">{rules.blackjackPays}</Row>
+        <Row label="Dealer">Draws to 17, stands on soft 17</Row>
+        <Row label="Double down">{rules.doubling ? "Any two cards, after splits too" : "Off"}</Row>
         <Row label="Splits">
           {rules.maxSplits === 0 ? "None" : `Up to ${rules.maxSplits}; aces get one card each`}
         </Row>
-        <Row label="Insurance">{rules.insurance ? "Offered on an ace (pays 2:1)" : "Off"}</Row>
-        <Row label="Turns">{rules.turnOrder === "seats" ? "Seat by seat" : "Everyone at once"}</Row>
         <Row label="Decision timer">{rules.decisionSec}s, then you stand</Row>
       </Section>
     </>
   );
 }
 
-/** Who sat down, what they bet, how each hand ended, and the dealer's side of it. */
-export function BlackjackPlayers({ bet, user, expire, peopleKey }: Props) {
+/** Each round: who dealt, their hand, and every seat's result; then each player's total. */
+export function JackblackPlayers({ bet, user, expire, peopleKey }: Props) {
   const status = ticketStatus(bet);
-  const hand = useBlackjackHand(bet, user, status === "active" || status === "pending").data;
-  const seats = hand?.seats ?? [];
-  const dealerDelta = hand?.dealerDeltaCents ?? bet.deltasCents?.[bet.proposerId];
+  const game = useJackblackGame(bet, user, status === "active" || status === "pending").data;
+  const players = game ? playersOf(game) : [];
+  const totals = game?.totals ?? {};
+  const name = (id: string) => (
+    <PersonName id={id} user={user} expire={expire} queryKey={peopleKey} />
+  );
   return (
-    <Section title={`Players (${seats.length})`}>
-      {seats.length === 0 ? (
-        <p className="py-1.5 text-sm text-muted-foreground">
-          {status === "active" ? "Nobody has sat down yet." : "Nobody sat down."}
-        </p>
-      ) : (
-        seats.map((seat) => {
-          const results = (seat.hands ?? [])
-            .map((h) => (h.result ? RESULT[h.result] : h.total))
-            .join(" · ");
-          return (
+    <>
+      <Section title={`Players (${players.length})`}>
+        {players.length === 0 ? (
+          <p className="py-1.5 text-sm text-muted-foreground">Nobody has joined yet.</p>
+        ) : (
+          players.map((id) => (
+            <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
+              <PersonAvatar id={id} user={user} expire={expire} queryKey={peopleKey} size="xs" />
+              <span className="min-w-0 flex-1 break-words">{name(id)}</span>
+              {totals[id] !== undefined && <Delta cents={totals[id]} />}
+            </div>
+          ))
+        )}
+      </Section>
+      {(game?.history ?? []).map((round) => (
+        <Section key={round.number} title={`Round ${round.number}`}>
+          <div className="flex items-center gap-2 py-1.5 text-sm">
+            <span className="min-w-0 flex-1 break-words">
+              {name(round.dealerId)}
+              <span className="block text-xs text-muted-foreground">
+                Dealer · {round.dealerTotal > 21 ? "bust" : round.dealerTotal}
+              </span>
+            </span>
+            <Delta cents={round.dealerDeltaCents} />
+          </div>
+          {round.seats.map((seat) => (
             <div key={seat.userId} className="flex items-center gap-2 py-1.5 text-sm">
-              <PersonAvatar
-                id={seat.userId}
-                user={user}
-                expire={expire}
-                queryKey={peopleKey}
-                size="xs"
-              />
               <span className="min-w-0 flex-1 break-words">
-                <PersonName id={seat.userId} user={user} expire={expire} queryKey={peopleKey} />
+                {name(seat.userId)}
                 <span className="block text-xs text-muted-foreground">
-                  Bet {formatCents(seat.betCents)}
-                  {seat.insuranceCents ? ` · insured ${formatCents(seat.insuranceCents)}` : ""}
-                  {results && ` · ${results}`}
+                  {seat.hands
+                    .map(
+                      (h) => `${h.result ? RESULT[h.result] : h.total}${h.doubled ? " (2×)" : ""}`,
+                    )
+                    .join(" · ")}
                 </span>
               </span>
-              {seat.deltaCents !== undefined && <Delta cents={seat.deltaCents} />}
+              <Delta cents={seat.deltaCents ?? 0} />
             </div>
-          );
-        })
-      )}
-      {dealerDelta !== undefined && (
-        <div className="flex items-center gap-2 py-1.5 text-sm">
-          <PersonAvatar
-            id={bet.proposerId}
-            user={user}
-            expire={expire}
-            queryKey={peopleKey}
-            size="xs"
-          />
-          <span className="min-w-0 flex-1 break-words">
-            <PersonName id={bet.proposerId} user={user} expire={expire} queryKey={peopleKey} />
-            <span className="block text-xs text-muted-foreground">
-              Dealer
-              {hand?.dealerTotal !== undefined &&
-                ` · ${hand.dealerTotal > 21 ? "bust" : hand.dealerTotal}`}
-            </span>
-          </span>
-          <Delta cents={dealerDelta} />
-        </div>
-      )}
-    </Section>
+          ))}
+        </Section>
+      ))}
+    </>
   );
 }
 
@@ -173,7 +169,7 @@ function Delta({ cents }: { cents: number }) {
         cents > 0 ? "text-win" : cents < 0 ? "text-loss" : "text-muted-foreground",
       )}
     >
-      {cents === 0 ? "Push" : formatCents(cents, true)}
+      {cents === 0 ? "Even" : formatCents(cents, true)}
     </span>
   );
 }

@@ -32,7 +32,7 @@ class BetPickIntegrationTest extends IntegrationTestSupport {
                 (?, 'pickhost', 1, ?, 'PLAYER', 'ACTIVE'),
                 (?, 'pickplayer', 1, ?, 'PLAYER', 'ACTIVE')
                 """, host, hash, player, hash);
-        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code, remainder_rule) VALUES (?, 'Pick', 'T', 'T8R5QA', 'earliest')", table);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Pick', 'T', 'T8R5QA')", table);
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
         UUID bet = insertDebtBet(table, player, host, "ACTIVE", false, false, false, 100, 0);

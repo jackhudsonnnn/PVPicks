@@ -22,20 +22,13 @@ import { type Bet, getBetLiveStats } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
-import { BlackjackFacts, BlackjackPlayers } from "./blackjack-details";
+import { JackblackFacts, JackblackPlayers } from "./jackblack-details";
 
 const SETTLER = {
   anyone: "Anyone at the table",
   non_participants: "Members not in the bet",
   hosts: "Hosts",
   me: "The proposer",
-} as const;
-
-const REMAINDER = {
-  host: "A host",
-  proposer: "The proposer",
-  earliest: "Earliest pick",
-  random: "Random",
 } as const;
 
 function FactRow({ label, children }: { label: string; children: ReactNode }) {
@@ -76,9 +69,9 @@ export function BetFacts({
   peopleKey,
   onNavigate,
 }: Props & { onNavigate?: () => void }) {
-  if (bet.modeId === "blackjack") {
+  if (bet.modeId === "jackblack") {
     return (
-      <BlackjackFacts
+      <JackblackFacts
         bet={bet}
         table={table}
         user={user}
@@ -117,9 +110,6 @@ export function BetFacts({
       <FactRow label="Pick window">{formatClock(Math.max(0, windowSec))}</FactRow>
       {pot !== null && !bet.forFun && <FactRow label="Pot">{formatCents(pot)} pts</FactRow>}
       <FactRow label="Called by">{SETTLER[bet.settledBy ?? "hosts"]}</FactRow>
-      {bet.remainderRule && (
-        <FactRow label="Leftover cents">{REMAINDER[bet.remainderRule]}</FactRow>
-      )}
       <FactRow label="Choices">{bet.choices.join(", ")}</FactRow>
       {bet.winningChoice && <FactRow label="Outcome">{bet.winningChoice}</FactRow>}
       {bet.calledBy && (
@@ -140,7 +130,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
   const steps: { label: string; at?: string | undefined; reached: boolean }[] = [
     { label: "Proposed", at: dateTimeLabel(bet.createdAt), reached: true },
     {
-      label: bet.modeId === "blackjack" ? "Cards dealt" : "Picks locked",
+      label: bet.modeId === "jackblack" ? "Cards dealt" : "Picks locked",
       at: dateTimeLabel(bet.lockedAt ?? bet.locksAt),
       reached: status !== "active",
     },
@@ -222,8 +212,8 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 
           {bet.gameId && <LiveStats betId={bet.id} />}
 
-          {bet.modeId === "blackjack" ? (
-            <BlackjackPlayers {...props} />
+          {bet.modeId === "jackblack" ? (
+            <JackblackPlayers {...props} />
           ) : (
             <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
               {rows ? (

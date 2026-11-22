@@ -148,8 +148,8 @@ class TableReadController {
         UUID userId = UUID.fromString(jwt.getSubject());
         UUID sessionId = UUID.fromString(jwt.getId());
         return jdbc.query("""
-                SELECT t.id, t.name, t.emoji, t.remainder_rule, t.hosts_only_bets,
-                       t.u2pick_enabled, t.polls_enabled, t.blackjack_access, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
+                SELECT t.id, t.name, t.emoji, t.hosts_only_bets,
+                       t.u2pick_enabled, t.polls_enabled, t.jackblack_access, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
                        me.role AS viewer_role, member.user_id AS member_id, member.role AS member_role,
                        member.can_bet, member.can_text, member.can_react, member.can_send_gifs, member.can_poll,
                        ARRAY(SELECT q.source_table_id::text FROM quickpick_subscriptions q
@@ -195,8 +195,8 @@ class TableReadController {
 
     private record TableView(
             UUID id, String name, String emoji, List<UUID> memberIds, List<UUID> hostIds,
-            String remainderRule, boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
-            String blackjackAccess,
+            boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
+            String jackblackAccess,
             @JsonInclude(JsonInclude.Include.NON_NULL) String quickPickCode,
             boolean quickPicksEnabled, boolean quickPickSharing, List<UUID> subscribedTo,
             Map<String, List<String>> disabledPermissions) {}
@@ -205,11 +205,10 @@ class TableReadController {
         private final UUID id;
         private final String name;
         private final String emoji;
-        private final String remainderRule;
         private final boolean hostsOnlyBets;
         private final boolean u2pickEnabled;
         private final boolean pollsEnabled;
-        private final String blackjackAccess;
+        private final String jackblackAccess;
         private final String quickPickCode;
         private final boolean quickPicksEnabled;
         private final boolean quickPickSharing;
@@ -223,11 +222,10 @@ class TableReadController {
             id = rs.getObject("id", UUID.class);
             name = rs.getString("name");
             emoji = rs.getString("emoji");
-            remainderRule = rs.getString("remainder_rule");
             hostsOnlyBets = rs.getBoolean("hosts_only_bets");
             u2pickEnabled = rs.getBoolean("u2pick_enabled");
             pollsEnabled = rs.getBoolean("polls_enabled");
-            blackjackAccess = rs.getString("blackjack_access");
+            jackblackAccess = rs.getString("jackblack_access");
             viewerIsHost = rs.getString("viewer_role").equals("HOST");
             quickPickCode = viewerIsHost ? rs.getString("quickpick_code") : null;
             quickPicksEnabled = rs.getBoolean("quickpicks_enabled");
@@ -258,7 +256,7 @@ class TableReadController {
                 throw new IllegalStateException("Table has no host: " + id);
             }
             return new TableView(id, name, emoji, List.copyOf(memberIds), List.copyOf(hostIds),
-                    remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, blackjackAccess, quickPickCode,
+                    hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, quickPickCode,
                     quickPicksEnabled,
                     quickPickSharing, subscribedTo, Map.copyOf(disabledPermissions));
         }

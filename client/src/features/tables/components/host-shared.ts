@@ -10,7 +10,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { type Bet, type BetActions } from "@/features/bets";
-import type { Table, Permission, RemainderRule, TableBalance } from "@/features/tables/api";
+import type { Table, Permission, TableBalance } from "@/features/tables/api";
 import { type User } from "@/features/people";
 import type { useTableActions } from "@/features/tables/actions";
 
@@ -49,17 +49,6 @@ export const PERMISSIONS: {
   { id: "polls", label: "Polls", description: "Start polls in the chat.", icon: ChartBar },
 ];
 
-export const REMAINDER: { id: RemainderRule; label: string; description: string }[] = [
-  { id: "host", label: "Host", description: "Leftover cents go to a host who's in the pot." },
-  { id: "proposer", label: "Proposer", description: "Leftover cents go to whoever proposed it." },
-  {
-    id: "earliest",
-    label: "Earliest pick",
-    description: "Leftover cents go to the first winner to pick.",
-  },
-  { id: "random", label: "Random", description: "Leftover cents go to a random winner." },
-];
-
 export const SWITCHES = [
   {
     id: "hostsOnlyBets",
@@ -84,8 +73,8 @@ export const SWITCHES = [
   },
 ] as const;
 
-/** Who may deal Blackjack at the table (proposing it makes you the dealer). */
-export const BLACKJACK_ACCESS = [
+/** Who may propose Jackblack at the table. */
+export const JACKBLACK_ACCESS = [
   { id: "everyone", label: "Everyone" },
   { id: "hosts", label: "Hosts" },
   { id: "off", label: "Off" },

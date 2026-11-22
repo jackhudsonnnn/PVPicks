@@ -8,7 +8,7 @@ import { SettingRow, SettingsSection } from "@/components/settings";
 import { cn } from "@/lib/utils";
 import { PersonAvatar, usePerson } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
-import { PERMISSIONS, PanelProps, People, REMAINDER, SWITCHES } from "./host-shared";
+import { PERMISSIONS, PanelProps, People, SWITCHES } from "./host-shared";
 import { SettleSection, SettlementPreview } from "./host-settle";
 import { DeleteTableSection, QuickPicksSection, TableDetailsSection } from "./host-table-settings";
 import { AddPlayersSection, MemberButton, MemberSettingsDialog } from "./host-members";
@@ -77,7 +77,6 @@ function OnOff({ on }: { on: boolean }) {
 /** Read-only view of the table's host settings, your permissions and where settlement stands. */
 export function AboutPanel(props: PanelProps) {
   const { table, user, expire, peopleKey, className } = props;
-  const rule = REMAINDER.find((r) => r.id === table.remainderRule)!;
   const off = table.disabledPermissions[user.id] ?? [];
   return (
     <ScrollContainer isVisible={false} className={cn("space-y-4 p-4", className)}>
@@ -93,11 +92,6 @@ export function AboutPanel(props: PanelProps) {
             </div>
           ))}
         </div>
-        <SettingRow
-          label="Leftover cents go to"
-          description={rule.description}
-          control={<span className="text-sm font-bold">{rule.label}</span>}
-        />
         {SWITCHES.map((sw) => (
           <SettingRow
             key={sw.id}

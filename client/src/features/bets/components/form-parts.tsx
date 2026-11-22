@@ -17,7 +17,10 @@ export function Section({ label, children }: { label: string; children: ReactNod
   );
 }
 
-/** − value + control for lines and counts; `format` renders the value. */
+/**
+ * − value + control for lines and counts; `format` renders the value. `jumps` adds a row of bigger steps under it
+ * (e.g. [10, 100] gives −100 −10 +10 +100), so a 220-point total isn't hundreds of taps.
+ */
 export function Stepper({
   value,
   step,
@@ -25,6 +28,7 @@ export function Stepper({
   max,
   format = String,
   label,
+  jumps,
   onChange,
 }: {
   value: number;
@@ -34,35 +38,66 @@ export function Stepper({
   format?: (v: number) => string;
   /** Names the value for screen readers, e.g. "Total points line". */
   label?: string;
+  jumps?: readonly number[];
   onChange: (v: number) => void;
 }) {
   const clamp = (v: number) =>
     Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, v));
+  const steps = jumps
+    ? [...jumps]
+        .reverse()
+        .map((j) => -j)
+        .concat(jumps)
+    : [];
   return (
-    <div className="flex h-10 items-center rounded-md border bg-surface">
-      <button
-        type="button"
-        className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-        onClick={() => onChange(clamp(value - step))}
-        aria-label="Decrease"
-      >
-        <Minus className="size-4" />
-      </button>
-      <span
-        className="flex-1 text-center scoreboard text-lg text-foreground"
-        aria-label={label}
-        aria-live="polite"
-      >
-        {format(value)}
-      </span>
-      <button
-        type="button"
-        className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-        onClick={() => onChange(clamp(value + step))}
-        aria-label="Increase"
-      >
-        <Plus className="size-4" />
-      </button>
+    <div className="space-y-1.5">
+      <div className="flex h-10 items-center rounded-md border bg-surface">
+        <button
+          type="button"
+          className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+          onClick={() => onChange(clamp(value - step))}
+          aria-label="Decrease"
+        >
+          <Minus className="size-4" />
+        </button>
+        <span
+          className="flex-1 text-center scoreboard text-lg text-foreground"
+          aria-label={label}
+          aria-live="polite"
+        >
+          {format(value)}
+        </span>
+        <button
+          type="button"
+          className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+          onClick={() => onChange(clamp(value + step))}
+          aria-label="Increase"
+        >
+          <Plus className="size-4" />
+        </button>
+      </div>
+      {steps.length > 0 && (
+        <div
+          className="grid gap-1.5"
+          style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}
+        >
+          {steps.map((j) => {
+            const next = clamp(value + j);
+            return (
+              <button
+                key={j}
+                type="button"
+                disabled={next === value}
+                onClick={() => onChange(next)}
+                aria-label={`${j > 0 ? "Add" : "Subtract"} ${Math.abs(j)}`}
+                className="rounded-md border bg-background py-1.5 font-mono text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-40 disabled:hover:border-border"
+              >
+                {j > 0 ? `+${j}` : `−${Math.abs(j)}`}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

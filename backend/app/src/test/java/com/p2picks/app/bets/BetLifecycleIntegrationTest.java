@@ -115,9 +115,8 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
         assertThat(hostActive.path("pickCount").asInt()).isEqualTo(2);
 
         jdbc.update("""
-                UPDATE bets SET status = 'PENDING', locked_at = now(), remainder_rule = 'host',
-                                remainder_host_id = ? WHERE id IN (?, ?)
-                """, host, customBet, sportsBet);
+                UPDATE bets SET status = 'PENDING', locked_at = now() WHERE id IN (?, ?)
+                """, customBet, sportsBet);
         JsonNode locked = json.readTree(mvc.perform(get("/bets/" + customBet).cookie(hostSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("Bet").validate(locked)).isEmpty();
@@ -125,7 +124,7 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
         assertThat(locked.path("noGuessUserIds").size()).isEqualTo(1);
         assertThat(locked.path("noGuessUserIds").get(0).asText()).isEqualTo(host.toString());
         assertThat(locked.has("winningChoice")).isFalse();
-        assertThat(locked.path("remainderHostId").asText()).isEqualTo(host.toString());
+        assertThat(locked.has("remainderRule")).isFalse();
         JsonNode lockedSports = json.readTree(mvc.perform(get("/bets/" + sportsBet).cookie(hostSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("Bet").validate(lockedSports)).isEmpty();

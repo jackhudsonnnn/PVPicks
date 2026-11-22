@@ -12,7 +12,6 @@ import {
   setQuickPickSharing,
   setQuickPicksEnabled,
   setPermission,
-  setRemainderRule,
   updateTableProfile,
   updateTableSettings,
   type MemberOutcome,
@@ -40,12 +39,7 @@ const intentSchema = z.discriminatedUnion("kind", [
     hostsOnlyBets: z.boolean().optional(),
     u2pickEnabled: z.boolean().optional(),
     pollsEnabled: z.boolean().optional(),
-    blackjackAccess: z.enum(["hosts", "everyone", "off"]).optional(),
-  }),
-  z.object({
-    kind: z.literal("remainder"),
-    tableId: uuid,
-    rule: z.enum(["host", "proposer", "earliest", "random"]),
+    jackblackAccess: z.enum(["hosts", "everyone", "off"]).optional(),
   }),
   z.object({ kind: z.literal("delete"), tableId: uuid }),
   z.object({ kind: z.literal("add"), tableId: uuid, userIds: z.array(uuid).min(1).max(100) }),
@@ -138,16 +132,13 @@ export function useTableActions(
                 ? {}
                 : { u2pickEnabled: intent.u2pickEnabled }),
               ...(intent.pollsEnabled === undefined ? {} : { pollsEnabled: intent.pollsEnabled }),
-              ...(intent.blackjackAccess === undefined
+              ...(intent.jackblackAccess === undefined
                 ? {}
-                : { blackjackAccess: intent.blackjackAccess }),
+                : { jackblackAccess: intent.jackblackAccess }),
             },
             key,
           );
           return "Settings saved.";
-        case "remainder":
-          await setRemainderRule(intent.tableId, intent.rule, key);
-          return "Leftover-cents rule saved.";
         case "delete":
           await deleteTable(intent.tableId, key);
           return "Table deleted. Its chat stays readable for 90 days.";

@@ -79,8 +79,7 @@ class BetLockWorkerTest {
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, future)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM bets WHERE table_id = ? AND status = 'WASHED'
-                  AND remainder_rule = 'host' AND remainder_host_id = ?
-                """, Integer.class, table, host)).isEqualTo(101);
+                """, Integer.class, table)).isEqualTo(101);
         member(brokenTable, host, "HOST");
         worker.poll();
         // The frozen player's pick is dropped at lock, leaving nobody: it washes.
@@ -89,7 +88,6 @@ class BetLockWorkerTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, broken))
                 .isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT remainder_host_id FROM bets WHERE id = ?", UUID.class, broken)).isEqualTo(host);
         jdbc.update("UPDATE bets SET mode = 'u2pick', game_id = NULL WHERE id = ?", sports);
         worker.poll();
         UUID race = bet(table, host, "u2pick", "1 minute");
@@ -146,7 +144,7 @@ class BetLockWorkerTest {
             while (!waiting && System.nanoTime() < deadline) {
                 waiting = Boolean.TRUE.equals(jdbc.queryForObject("""
                         SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock'
-                            AND query LIKE 'SELECT remainder_rule FROM tables WHERE id = %')
+                            AND query LIKE 'SELECT id FROM tables WHERE id = % FOR UPDATE')
                         """, Boolean.class));
                 if (!waiting) Thread.sleep(20);
             }

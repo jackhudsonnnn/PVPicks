@@ -67,14 +67,13 @@ public class DebtQuery {
                             FROM bets b JOIN picks p ON p.bet_id = b.id AND p.user_id = viewer.id
                             WHERE b.table_id = m.table_id AND b.status = 'PENDING' AND NOT b.is_4fun
                         ), 0)::numeric
-                        -- Blackjack in play: a player's whole stake, and the dealer's worst case for every seat
-                        -- (domain rules, "Blackjack").
+                        -- Jackblack in play: each player's worst case over the whole game (domain rules,
+                        -- "Jackblack").
                         + COALESCE((
-                            SELECT SUM(CASE WHEN s.user_id = viewer.id THEN s.stake_cents
-                                            ELSE s.bet_cents * 2 * ((b.config->>'maxSplits')::int + 1) END)
-                            FROM bets b JOIN blackjack_seats s ON s.bet_id = b.id
+                            SELECT SUM(j.risk_cents)
+                            FROM bets b JOIN jackblack_players j ON j.bet_id = b.id AND j.user_id = viewer.id
                             WHERE b.table_id = m.table_id AND b.status = 'PENDING' AND NOT b.is_4fun
-                              AND b.mode = 'blackjack' AND (s.user_id = viewer.id OR b.proposer_id = viewer.id)
+                              AND b.mode = 'jackblack'
                         ), 0)::numeric AS pending,
                         NULL::bigint AS amount
                     FROM table_members m JOIN tables t ON t.id = m.table_id AND t.archived_at IS NULL

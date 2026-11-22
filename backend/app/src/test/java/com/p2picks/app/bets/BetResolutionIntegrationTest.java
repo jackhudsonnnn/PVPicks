@@ -84,8 +84,7 @@ class BetResolutionIntegrationTest extends IntegrationTestSupport {
                 (?, ?, 'HOST'), (?, ?, 'MEMBER'), (?, ?, 'MEMBER'), (?, ?, 'MEMBER')
                 """, table, host, table, winner1, table, winner2, table, loser);
         UUID bet = insertDebtBet(table, winner1, host, "PENDING", false, true, false, 101, 0);
-        jdbc.update("UPDATE bets SET settler_rule = 'non_participants', remainder_rule = 'host', remainder_host_id = ? WHERE id = ?",
-                host, bet);
+        jdbc.update("UPDATE bets SET settler_rule = 'non_participants' WHERE id = ?", bet);
         jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?)", bet, winner2, bet, loser);
         jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes'), (?, ?, 'No')",
                 bet, winner2, bet, loser);
@@ -108,13 +107,12 @@ class BetResolutionIntegrationTest extends IntegrationTestSupport {
         assertThatThrownBy(() -> u2PickResolution.resolve(hostJwt, bet, "Yes", "resolve-again"))
                 .isInstanceOf(U2PickResolutionService.Closed.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM ledger_entries WHERE bet_id = ?", Integer.class, bet))
-                .isEqualTo(4);
+                .isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT sum(delta_cents) FROM ledger_entries WHERE bet_id = ?", Long.class, bet))
                 .isZero();
-        assertThat(jdbc.queryForObject("SELECT delta_cents FROM ledger_entries WHERE bet_id = ? AND user_id = ?",
-                Long.class, bet, host)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT delta_cents FROM ledger_entries WHERE bet_id = ? AND user_id = ?",
-                Long.class, bet, winner1)).isEqualTo(50);
+        // The odd cent goes to one of the winners.
+        assertThat(jdbc.queryForList("SELECT delta_cents FROM ledger_entries WHERE bet_id = ? AND user_id IN (?, ?)",
+                Long.class, bet, winner1, winner2)).containsExactlyInAnyOrder(50L, 51L);
         assertThat(jdbc.queryForObject("SELECT delta_cents FROM ledger_entries WHERE bet_id = ? AND user_id = ?",
                 Long.class, bet, loser)).isEqualTo(-101);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'bet.resolved.v1'",

@@ -184,7 +184,7 @@ class BetProposalIntegrationTest extends IntegrationTestSupport {
             while (!waiting && System.nanoTime() < deadline) {
                 waiting = Boolean.TRUE.equals(jdbc.queryForObject("""
                         SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE wait_event_type = 'Lock'
-                            AND query LIKE 'SELECT hosts_only_bets, u2pick_enabled, blackjack_access FROM tables%')
+                            AND query LIKE 'SELECT hosts_only_bets, u2pick_enabled, jackblack_access FROM tables%')
                         """, Boolean.class));
                 if (!waiting) Thread.sleep(25);
             }

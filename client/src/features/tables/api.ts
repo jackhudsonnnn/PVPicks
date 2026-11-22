@@ -9,13 +9,12 @@ const tableSchema = z.object({
   emoji: z.string(),
   memberIds: z.array(z.guid()),
   hostIds: z.array(z.guid()).min(1),
-  remainderRule: z.enum(["host", "proposer", "earliest", "random"]),
   hostsOnlyBets: z.boolean(),
   u2pickEnabled: z.boolean(),
   /** Whether members can start new chat polls (existing polls stay open either way). */
   pollsEnabled: z.boolean(),
-  /** Who may deal Blackjack here; hosts set it. */
-  blackjackAccess: z.enum(["hosts", "everyone", "off"]),
+  /** Who may propose Jackblack here; hosts set it. */
+  jackblackAccess: z.enum(["hosts", "everyone", "off"]),
   quickPicksEnabled: z.boolean(),
   quickPickSharing: z.boolean(),
   quickPickCode: z.string().optional(),
@@ -27,7 +26,7 @@ const tableSchema = z.object({
 });
 
 export type Table = z.infer<typeof tableSchema>;
-export type BlackjackAccess = Table["blackjackAccess"];
+export type JackblackAccess = Table["jackblackAccess"];
 
 /** Most tables one account can be in, and most members one table can have (enforced by the server). */
 export const TABLES_PER_USER = 100;
@@ -99,7 +98,6 @@ export type MemberOutcome = z.infer<typeof outcomeSchema>;
 export type TableBalance = z.infer<typeof balanceSchema>;
 type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs" | "polls";
-export type RemainderRule = "host" | "proposer" | "earliest" | "random";
 
 function tablePath(tableId: string) {
   if (!uuid.safeParse(tableId).success) throw new BackendError("Table not found.", 404);
@@ -137,15 +135,11 @@ export async function updateTableSettings(
     hostsOnlyBets?: boolean;
     u2pickEnabled?: boolean;
     pollsEnabled?: boolean;
-    blackjackAccess?: BlackjackAccess;
+    jackblackAccess?: JackblackAccess;
   },
   key: string,
 ) {
   await mutationRequest(`${tablePath(tableId)}/settings`, "PATCH", key, change);
-}
-
-export async function setRemainderRule(tableId: string, rule: RemainderRule, key: string) {
-  await mutationRequest(`${tablePath(tableId)}/remainder`, "PATCH", key, { rule });
 }
 
 export async function deleteTable(tableId: string, key: string) {

@@ -242,7 +242,6 @@ class BetReadController {
                     )) ||
                     CASE WHEN b.status = 'ACTIVE' THEN '{}'::jsonb ELSE
                         jsonb_build_object(
-                            'remainderRule', b.remainder_rule,
                             'picks', (SELECT COALESCE(jsonb_agg(
                                 jsonb_build_object('userId', bp.user_id, 'choice', p.choice)
                                 ORDER BY bp.participation_order), '[]'::jsonb)
@@ -254,7 +253,7 @@ class BetReadController {
                                   ON p.bet_id = bp.bet_id AND p.user_id = bp.user_id
                                 WHERE bp.bet_id = b.id AND p.user_id IS NULL)
                         ) || jsonb_strip_nulls(jsonb_build_object(
-                            'lockedAt', b.locked_at, 'remainderHostId', b.remainder_host_id))
+                            'lockedAt', b.locked_at))
                     END ||
                     CASE WHEN b.status IN ('SETTLED', 'WASHED') THEN
                         jsonb_strip_nulls(jsonb_build_object(

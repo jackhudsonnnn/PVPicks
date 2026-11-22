@@ -35,20 +35,13 @@ const sportsProposalSchema = z.object({
   durationSec: z.number().int().min(30).max(600),
   forFun: z.boolean(),
 });
-const blackjackRulesSchema = z.object({
+const jackblackRulesSchema = z.object({
   decks: z.number().int().min(1).max(8),
-  minBetCents: z.number().int().min(10).max(1000),
-  maxBetCents: z.number().int().min(10).max(1000),
-  maxSplits: z.number().int().min(0).max(5),
-  dealerHitsSoft17: z.boolean(),
+  rotations: z.number().int().min(1).max(3),
+  doubling: z.boolean(),
+  maxSplits: z.number().int().min(0).max(3),
   blackjackPays: z.enum(["3:2", "6:5"]),
-  seats: z.number().int().min(1).max(7),
-  doubleOn: z.enum(["any", "9-11"]),
-  doubleAfterSplit: z.boolean(),
-  insurance: z.boolean(),
-  turnOrder: z.enum(["together", "seats"]),
-  joinSec: z.number().int().min(30).max(600),
-  decisionSec: z.number().int().min(10).max(120),
+  decisionSec: z.number().int().min(10).max(60),
 });
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("propose"), tableId: uuid, proposal: proposalSchema }),
@@ -69,23 +62,20 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("settle-points"), tableId: uuid }),
   z.object({
-    kind: z.literal("propose-blackjack"),
+    kind: z.literal("propose-jackblack"),
     tableId: uuid,
-    rules: blackjackRulesSchema,
+    rules: jackblackRulesSchema,
+    wagerCents: z.number().int().min(10).max(1000),
+    durationSec: z.number().int().min(30).max(600),
     forFun: z.boolean(),
   }),
+  z.object({ kind: z.literal("jackblack-join"), tableId: uuid, betId: uuid }),
+  z.object({ kind: z.literal("jackblack-leave"), tableId: uuid, betId: uuid }),
   z.object({
-    kind: z.literal("blackjack-sit"),
+    kind: z.literal("jackblack-act"),
     tableId: uuid,
     betId: uuid,
-    betCents: z.number().int().min(10).max(1000),
-  }),
-  z.object({ kind: z.literal("blackjack-leave"), tableId: uuid, betId: uuid }),
-  z.object({
-    kind: z.literal("blackjack-act"),
-    tableId: uuid,
-    betId: uuid,
-    action: z.enum(["hit", "stand", "double", "split", "insurance", "no_insurance", "dealer"]),
+    action: z.enum(["hit", "stand", "double", "split", "deal"]),
   }),
 ]);
 type BetIntent = z.infer<typeof intentSchema>;
@@ -115,29 +105,27 @@ export async function executeBetAction(userId: string, intent: BetIntent, key: s
       { ...rest, config },
     );
     await readProposedBet(response, intent.tableId, userId, intent.proposal.modeId);
-  } else if (intent.kind === "propose-blackjack") {
+  } else if (intent.kind === "propose-jackblack") {
+    const { tableId, kind: _kind, ...body } = intent;
     const response = await mutationRequest(
-      `/tables/${encodeURIComponent(intent.tableId)}/bets`,
+      `/tables/${encodeURIComponent(tableId)}/bets`,
       "POST",
       key,
-      { modeId: "blackjack", rules: intent.rules, forFun: intent.forFun },
+      { modeId: "jackblack", ...body },
     );
-    await readProposedBet(response, intent.tableId, userId, "blackjack");
-  } else if (intent.kind === "blackjack-sit" || intent.kind === "blackjack-leave") {
+    await readProposedBet(response, tableId, userId, "jackblack");
+  } else if (intent.kind === "jackblack-join" || intent.kind === "jackblack-leave") {
     await mutationRequest(
-      `/bets/${encodeURIComponent(intent.betId)}/blackjack/seat`,
-      intent.kind === "blackjack-sit" ? "PUT" : "DELETE",
+      `/bets/${encodeURIComponent(intent.betId)}/jackblack/seat`,
+      intent.kind === "jackblack-join" ? "PUT" : "DELETE",
       key,
-      intent.kind === "blackjack-sit" ? { betCents: intent.betCents } : undefined,
     );
-  } else if (intent.kind === "blackjack-act") {
+  } else if (intent.kind === "jackblack-act") {
     await mutationRequest(
-      `/bets/${encodeURIComponent(intent.betId)}/blackjack/actions`,
+      `/bets/${encodeURIComponent(intent.betId)}/jackblack/actions`,
       "POST",
       key,
-      {
-        action: intent.action,
-      },
+      { action: intent.action },
     );
   } else if (intent.kind === "override") {
     await mutationRequest(`/bets/${encodeURIComponent(intent.betId)}/override`, "POST", key, {

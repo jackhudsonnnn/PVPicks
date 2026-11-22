@@ -36,8 +36,8 @@ public class AccountBetWashes {
     }
 
     /**
-     * Washes the account's open bets and returns how many. Every affected user (members, participants, proposers,
-     * remainder hosts) is locked first in UUID order, then each bet's table and bet, by table, the same order every
+     * Washes the account's open bets and returns how many. Every affected user (members, participants and proposers)
+     * is locked first in UUID order, then each bet's table and bet, by table, the same order every
      * other bet write uses. Must run before the caller locks any table or bet.
      */
     @Transactional(propagation = Propagation.MANDATORY)

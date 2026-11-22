@@ -163,7 +163,8 @@ earlier prototype (git tag `prototype-ui`).
   (score modes); the stat, one or two players from that game (listed with
   their position and current number, sorted by position) and the line or target, which starts just above them
   (player modes, `bets/components/player-setup.tsx`); and whether overtime
-  counts. Then the wager (a slider, 0.10 to 10.00 in 0.10 steps, or 4fun) and
+  counts. Lines and targets step by a half point or one, with −100 / −10 /
+  +10 / +100 buttons under them (±10 only for spreads). Then the wager (a slider, 0.10 to 10.00 in 0.10 steps, or 4fun) and
   the pick window, preview the ticket, send. Blackjack's form uses the same
   layout: Game and Setup sections, then the wager with a Minimum and a
   Maximum slider (moving one past the other carries it along) and the join
@@ -182,9 +183,9 @@ earlier prototype (git tag `prototype-ui`).
   `GET /bets/{id}/blackjack`, refreshing with the table's bet feed and every
   4 seconds while the hand is live. The table felt stays light
   (`bets/components/blackjack-felt.tsx`): the usual ticket stack, its pill
-  showing "N in", whose move it is or your result (`BlackjackStatus`), a
-  pulsing "Your move · 12s" button under it that opens the ticket
-  (`BlackjackPrompt`), and seat chips with each player's total or result and
+  showing "N in", whose move it is (a pulsing "Your move · 12s" on your
+  turn; tap the ticket to play) or your result (`BlackjackStatus`), and seat
+  chips with each player's total or result and
   "Dealer" on the dealer's seat (`useBlackjackSeatChips`); no cards on the
   felt. Details shows Blackjack's own sections (`blackjack-details.tsx`):
   Hand, House rules and Players with each seat's bet, hand results and

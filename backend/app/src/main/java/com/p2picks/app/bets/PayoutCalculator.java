@@ -11,23 +11,11 @@ import java.util.Set;
 import java.util.UUID;
 
 final class PayoutCalculator {
-    public enum RemainderMode { HOST, PROPOSER, EARLIEST, RANDOM }
-
     public enum WashReason { INVALID_OUTCOME, INSUFFICIENT_PLAYERS, SAME_SIDE, NO_WINNER }
 
     public record Participant(UUID userId, String choice) {
         public Participant {
             Objects.requireNonNull(userId, "userId");
-        }
-    }
-
-    public record Remainder(RemainderMode mode, UUID recipientId) {
-        public Remainder {
-            Objects.requireNonNull(mode, "mode");
-            boolean needsRecipient = mode == RemainderMode.HOST || mode == RemainderMode.PROPOSER;
-            if (needsRecipient != (recipientId != null)) {
-                throw new IllegalArgumentException("Host and proposer modes require a recipient; other modes do not");
-            }
         }
     }
 
@@ -43,15 +31,18 @@ final class PayoutCalculator {
 
     private PayoutCalculator() {}
 
-    // Participants are in first-participation order; a null choice represents No guess.
+    /**
+     * Participants are in first-participation order; a null choice represents No guess. Winners split the losers'
+     * pot evenly; cents that don't divide go one each to winners in a random order seeded by the bet (domain rules,
+     * "Payouts"), so a replay pays the same.
+     */
     public static Result settle(
             UUID betId, List<Participant> participants, Money wager, boolean forFun,
-            List<String> choices, String winningChoice, Remainder remainder) {
+            List<String> choices, String winningChoice) {
         Objects.requireNonNull(betId, "betId");
         Objects.requireNonNull(participants, "participants");
         Objects.requireNonNull(wager, "wager");
         Objects.requireNonNull(choices, "choices");
-        Objects.requireNonNull(remainder, "remainder");
         if (wager.cents() < 0 || (!forFun && (wager.cents() < 10 || wager.cents() > 1000))) {
             throw new IllegalArgumentException("Invalid wager");
         }
@@ -105,14 +96,9 @@ final class PayoutCalculator {
             cents.put(player.userId(), player.choice().equals(winningChoice) ? share : -wager.cents());
         }
         if (leftover > 0) {
-            if (remainder.recipientId() != null) {
-                cents.merge(remainder.recipientId(), (long) leftover, Math::addExact);
-            } else {
-                List<Participant> order = remainder.mode() == RemainderMode.RANDOM
-                        ? shuffled(winners, betId.toString()) : winners;
-                for (int i = 0; i < leftover; i++) {
-                    cents.merge(order.get(i).userId(), 1L, Math::addExact);
-                }
+            List<Participant> order = shuffled(winners, betId.toString());
+            for (int i = 0; i < leftover; i++) {
+                cents.merge(order.get(i).userId(), 1L, Math::addExact);
             }
         }
         Map<UUID, Money> deltas = new LinkedHashMap<>();

@@ -26,7 +26,7 @@ export interface ModeDef {
   icon: LucideIcon;
   /** U2Pick: no game; the proposer writes the question and options and picks who settles it. */
   custom?: boolean;
-  /** Blackjack: no game; the proposer deals and banks a hand. */
+  /** Jackblack: no game; everyone who joins takes a turn as the dealer. */
   dealer?: boolean;
 }
 
@@ -97,11 +97,11 @@ export const MODES: ModeDef[] = [
     custom: true,
   },
   {
-    id: "blackjack",
-    name: "Blackjack",
-    tagline: "You deal, they play",
+    id: "jackblack",
+    name: "Jackblack",
+    tagline: "Everyone takes a turn dealing",
     description:
-      "Deal a hand of Blackjack and bank it: set the house rules, everyone sits down with a bet, then you flip, hit and stand on the dealer's turn. Players win or lose against you.",
+      "Blackjack where the deal goes round the table: everyone who joins banks a round against the rest, in a random order. Choices are made together, and new cards come out only once everyone has chosen.",
     icon: Spade,
     dealer: true,
   },

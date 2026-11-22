@@ -218,12 +218,11 @@ public abstract class IntegrationTestSupport {
         UUID bet = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO bets (id, table_id, proposer_id, mode, config, question, choices, wager_cents,
-                                  is_4fun, status, locks_at, locked_at, remainder_rule, points_settled_at)
+                                  is_4fun, status, locks_at, locked_at, points_settled_at)
                 VALUES (?, ?, ?, 'u2pick', '{}'::jsonb, 'Debt?', '["Yes","No"]'::jsonb, ?, ?, ?,
                         now(), CASE WHEN ? = 'ACTIVE' THEN NULL ELSE now() END,
-                        CASE WHEN ? = 'ACTIVE' THEN NULL ELSE 'earliest' END,
                         CASE WHEN ? THEN now() ELSE NULL END)
-                """, bet, table, other, wager, forFun, status, status, status, pointsSettled);
+                """, bet, table, other, wager, forFun, status, status, pointsSettled);
         if (picked) {
             jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", bet, user);
             jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes')", bet, user);

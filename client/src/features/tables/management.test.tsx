@@ -12,7 +12,6 @@ import {
   removeMember,
   setHost,
   setPermission,
-  setRemainderRule,
   updateTableSettings,
 } from "./api";
 import { FriendsPage } from "@/features/social/friends";
@@ -52,7 +51,6 @@ vi.mock("./api", async (importOriginal) => ({
   createTable: vi.fn(),
   updateTableProfile: vi.fn(),
   updateTableSettings: vi.fn(),
-  setRemainderRule: vi.fn(),
   deleteTable: vi.fn(),
   addMembers: vi.fn(),
   removeMember: vi.fn(),
@@ -86,11 +84,10 @@ const table: Table = {
   emoji: "🎲",
   memberIds: [me.id, friend],
   hostIds: [me.id],
-  remainderRule: "host",
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
-  blackjackAccess: "everyone" as const,
+  jackblackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -538,7 +535,6 @@ describe("table members", () => {
 
   it("changes settings and deletes the table, explaining blocked deletions", async () => {
     vi.mocked(updateTableSettings).mockResolvedValue();
-    vi.mocked(setRemainderRule).mockResolvedValue();
     const { BackendError } = await import("@/lib/api-client");
     vi.mocked(deleteTable).mockRejectedValue(new BackendError("x", 409, "table_archive_unsettled"));
     wrap(<Members value={table} />);
@@ -550,13 +546,7 @@ describe("table members", () => {
         expect.any(String),
       ),
     );
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "Leftover cents go to" }), {
-      key: "Enter",
-    });
-    fireEvent.click(await screen.findByRole("option", { name: "Random" }));
-    await waitFor(() =>
-      expect(setRemainderRule).toHaveBeenCalledWith(table.id, "random", expect.any(String)),
-    );
+    expect(screen.queryByText(/Leftover cents/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Delete table/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     expect(await screen.findByText(/can't be deleted while bets are active/)).toBeInTheDocument();

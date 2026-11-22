@@ -16,7 +16,7 @@ const betSchema = z
       "give_and_take",
       "prop_hunt",
       "u2pick",
-      "blackjack",
+      "jackblack",
     ]),
     config: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])),
     question: z.string(),
@@ -43,8 +43,6 @@ const betSchema = z
     overriddenAt: z.string().datetime({ offset: true }).optional(),
     picks: z.array(z.object({ userId: uuid, choice: z.string() })).optional(),
     noGuessUserIds: z.array(uuid).optional(),
-    remainderRule: z.enum(["host", "proposer", "earliest", "random"]).optional(),
-    remainderHostId: uuid.optional(),
     calledBy: uuid.optional(),
     winningChoice: z.string().optional(),
     washReason: z.string().optional(),
@@ -56,8 +54,6 @@ const betSchema = z
     const privateFieldsPresent =
       bet.picks !== undefined ||
       bet.noGuessUserIds !== undefined ||
-      bet.remainderRule !== undefined ||
-      bet.remainderHostId !== undefined ||
       bet.calledBy !== undefined ||
       bet.winningChoice !== undefined ||
       bet.washReason !== undefined ||
@@ -65,10 +61,7 @@ const betSchema = z
     if (
       invalidParticipation ||
       (bet.status === "ACTIVE" && privateFieldsPresent) ||
-      (bet.status !== "ACTIVE" &&
-        (bet.picks === undefined ||
-          bet.noGuessUserIds === undefined ||
-          bet.remainderRule === undefined))
+      (bet.status !== "ACTIVE" && (bet.picks === undefined || bet.noGuessUserIds === undefined))
     ) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid bet projection" });
     }

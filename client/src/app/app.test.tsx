@@ -125,11 +125,10 @@ const table = {
   emoji: "🏟️",
   memberIds: [user.id],
   hostIds: [user.id],
-  remainderRule: "host" as const,
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
-  blackjackAccess: "everyone" as const,
+  jackblackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -405,8 +404,6 @@ describe("backend app", () => {
         { userId: "123e4567-e89b-42d3-a456-426614174004", choice: "No" },
       ],
       noGuessUserIds: ["123e4567-e89b-42d3-a456-426614174003"],
-      remainderRule: "host",
-      remainderHostId: user.id,
       winningChoice: "Yes",
       deltasCents: { [user.id]: 125, "123e4567-e89b-42d3-a456-426614174004": -125 },
     };
@@ -449,8 +446,6 @@ describe("backend app", () => {
       proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
       noGuessUserIds: [],
-      remainderRule: "host",
-      remainderHostId: user.id,
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -484,8 +479,6 @@ describe("backend app", () => {
       proposerId: "123e4567-e89b-42d3-a456-426614174003",
       picks: [{ userId: "123e4567-e89b-42d3-a456-426614174003", choice: "No" }],
       noGuessUserIds: [],
-      remainderRule: "host",
-      remainderHostId: user.id,
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -507,8 +500,6 @@ describe("backend app", () => {
       proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
       noGuessUserIds: [],
-      remainderRule: "host",
-      remainderHostId: user.id,
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -569,8 +560,6 @@ describe("backend app", () => {
       status: "PENDING",
       picks: [{ userId: memberId, choice: "No" }],
       noGuessUserIds: [],
-      remainderRule: "host",
-      remainderHostId: user.id,
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);

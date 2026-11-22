@@ -71,11 +71,10 @@ const table = {
   emoji: "T",
   memberIds: [user.id],
   hostIds: [user.id],
-  remainderRule: "host" as const,
   hostsOnlyBets: false,
   u2pickEnabled: true,
   pollsEnabled: true,
-  blackjackAccess: "everyone" as const,
+  jackblackAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
   subscribedTo: [],
@@ -110,7 +109,6 @@ const locked: Bet = {
   pickCount: 1,
   picks: [{ userId: user.id, choice: "Yes" }],
   noGuessUserIds: [],
-  remainderRule: "host",
 };
 
 function renderApp() {

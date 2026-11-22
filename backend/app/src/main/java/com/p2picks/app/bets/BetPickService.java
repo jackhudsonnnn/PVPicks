@@ -84,8 +84,8 @@ public class BetPickService {
         if (claim == IdempotencyGuard.Claim.CONFLICT) return Outcome.CONFLICT;
         if (claim == IdempotencyGuard.Claim.REPLAY) return Outcome.REPLAYED;
         Bet bet = bets.getFirst();
-        // Blackjack is played at its seats (BlackjackService), never picked.
-        if (bet.mode().equals(BlackjackService.MODE)) throw new InvalidChoice();
+        // Jackblack is played at the table (JackblackService), never picked.
+        if (bet.mode().equals(JackblackService.MODE)) throw new InvalidChoice();
         if (!bet.status().equals("ACTIVE")) throw new Closed();
         requireBeforeDeadline(betId);
         if (choice != null) {

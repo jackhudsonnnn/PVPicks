@@ -103,27 +103,6 @@ class BetContractTest {
     }
 
     @Test
-    void lockedHostRemainderRequiresItsSnapshottedRecipient() {
-        for (String status : new String[] {"PENDING", "SETTLED", "WASHED"}) {
-            ObjectNode locked = bet(status);
-            assertThat(betSchema.validate(locked)).as(status).isEmpty();
-            locked.remove("remainderHostId");
-            assertThat(betSchema.validate(locked)).as(status).isNotEmpty();
-            locked.remove("remainderRule");
-            assertThat(betSchema.validate(locked)).as(status).isNotEmpty();
-            locked.put("remainderRule", "earliest");
-            assertThat(betSchema.validate(locked)).as(status).isEmpty();
-            locked.put("remainderHostId", "f95c6d6a-394a-4b2d-b072-a29ed48cfd99");
-            assertThat(betSchema.validate(locked)).as(status).isNotEmpty();
-        }
-
-        ObjectNode active = bet("ACTIVE");
-        active.put("remainderRule", "host");
-        active.put("remainderHostId", "f95c6d6a-394a-4b2d-b072-a29ed48cfd99");
-        assertThat(betSchema.validate(active)).isNotEmpty();
-    }
-
-    @Test
     void customBetAllowsSportsPassButRejectsNoGuessChoices() throws IOException {
         JsonSchema proposalSchema = OpenApiSchemas.load("BetProposal");
         ObjectNode proposal = JSON.createObjectNode();
@@ -185,8 +164,6 @@ class BetContractTest {
         if (!status.equals("ACTIVE")) {
             bet.putArray("picks");
             bet.putArray("noGuessUserIds");
-            bet.put("remainderRule", "host");
-            bet.put("remainderHostId", "f95c6d6a-394a-4b2d-b072-a29ed48cfd99");
         }
         bet.put("locksAt", "2026-11-11T12:00:00Z");
         bet.putNull("myPick");

@@ -1,106 +1,45 @@
 import { useNow } from "@/lib/use-now";
 import type { Bet } from "@/features/bets/api";
-import { type User, usePerson } from "@/features/people";
+import type { User } from "@/features/people";
 import { ticketStatus } from "@/features/bets/ticket-model";
-import { signed, useBlackjackHand } from "@/features/bets/blackjack-hand";
-import { myTurn, secondsUntil, type BlackjackHand } from "@/features/bets/blackjack";
+import { signed, useJackblackGame } from "@/features/bets/jackblack-game";
+import { deciding, playersOf, secondsUntil, undecided } from "@/features/bets/jackblack";
 
 /**
- * Blackjack on the table's felt stays light: the usual ticket stack, a status line in its pill
- * (`BlackjackStatus`), a "Your move" button under it on your turn (`BlackjackPrompt`), and each seat's chip from
- * `useBlackjackSeatChips`. The hand itself is played on the ticket.
+ * Jackblack on the table's felt stays light: the usual ticket stack, a status line in its pill
+ * (`JackblackStatus`, pulsing "Your move" when you have a choice or the dealer's button; tap the ticket to play),
+ * and each player's chip from `useJackblackSeatChips`. The game itself is played on the ticket.
  */
 
-function TurnName({
-  hand,
-  user,
-  expire,
-  peopleKey,
-}: {
-  hand: BlackjackHand;
-  user: User;
-  expire: () => void;
-  peopleKey: readonly string[];
-}) {
-  const seat = hand.seats.find((s) => s.seat === hand.turnSeat);
-  const person = usePerson(seat?.userId ?? "", user, expire, peopleKey);
-  if (!seat) return null;
-  return <>{seat.userId === user.id ? "Your" : `${person?.name ?? "…"}'s`} turn</>;
-}
-
-/** One line for the felt's bet pill: how many are in, whose move it is (with your timer), or how it ended. */
-export function BlackjackStatus({
-  bet,
-  user,
-  expire,
-  peopleKey,
-}: {
-  bet: Bet;
-  user: User;
-  expire: () => void;
-  peopleKey: readonly string[];
-}) {
-  const status = ticketStatus(bet);
-  const live = status === "active" || status === "pending";
-  const data = useBlackjackHand(bet, user, live).data;
-  const now = useNow(live);
-  const mine = data?.seats.find((s) => s.userId === user.id);
-  const dealing = bet.proposerId === user.id;
-  // Like every mode's pill while it's open: how many are in.
-  if (status === "active") return <>{data?.seats.length ?? 0} in</>;
-  if (status === "washed") return <>Washed</>;
-  if (!data) return <>Blackjack</>;
-  if (data.phase === "done") {
-    if (mine?.deltaCents !== undefined)
-      return <>{mine.deltaCents === 0 ? "Push" : `You ${signed(mine.deltaCents)}`}</>;
-    if (dealing && data.dealerDeltaCents !== undefined)
-      return <>Dealer {signed(data.dealerDeltaCents)}</>;
-    return <>Hand over</>;
-  }
-  if (data.phase === "dealer") {
-    const left = secondsUntil(data.dealerDeadline, now);
-    return dealing ? <>Your move{left !== null && ` · ${left}s`}</> : <>Dealer's turn</>;
-  }
-  if (data.phase === "insurance") return <>Insurance?</>;
-  if (mine && myTurn(data, mine)) {
-    const left = secondsUntil(mine.deadline, now);
-    return <>Your move{left !== null && ` · ${left}s`}</>;
-  }
-  if (data.turnSeat !== undefined)
-    return <TurnName hand={data} user={user} expire={expire} peopleKey={peopleKey} />;
-  return <>Players deciding</>;
-}
-
-/**
- * Under the felt's stack when it's your move (as a player or the dealer): one pulsing button with your timer that
- * opens the ticket, where the hand is played.
- */
-export function BlackjackPrompt({
-  bet,
-  user,
-  onOpen,
-}: {
-  bet: Bet;
-  user: User;
-  onOpen: () => void;
-}) {
-  const status = ticketStatus(bet);
-  const live = status === "active" || status === "pending";
-  const data = useBlackjackHand(bet, user, live).data;
-  const now = useNow(live);
-  if (!data) return null;
-  const mine = data.seats.find((s) => s.userId === user.id);
-  const dealerTurn = !!data.dealerMove && bet.proposerId === user.id;
-  const playerTurn = !!mine && myTurn(data, mine);
-  if (!dealerTurn && !playerTurn) return null;
-  const left = secondsUntil(dealerTurn ? data.dealerDeadline : mine?.deadline, now);
+/** "Your move · 12s" in the pill, in the brand color and pulsing, so it's hard to miss. */
+function YourMove({ left }: { left: number | null }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="animate-pulse rounded-full bg-primary px-4 py-2 font-display text-sm font-extrabold uppercase text-primary-foreground shadow-lg hover:animate-none"
-    >
-      Your move{left !== null && ` · ${left}s`}
-    </button>
+    <span className="animate-pulse text-primary">Your move{left !== null && ` · ${left}s`}</span>
+  );
+}
+
+/** One line for the felt's bet pill: how many are in, whether it's your move, or how it ended. */
+export function JackblackStatus({ bet, user }: { bet: Bet; user: User }) {
+  const status = ticketStatus(bet);
+  const live = status === "active" || status === "pending";
+  const data = useJackblackGame(bet, user, live).data;
+  const now = useNow(live);
+  // Like every mode's pill while it's open: how many are in.
+  if (status === "active") return <>{data ? playersOf(data).length : 1} in</>;
+  if (status === "washed") return <>Washed</>;
+  if (!data) return <>Jackblack</>;
+  if (data.phase === "done") {
+    const mine = data.totals?.[user.id];
+    return mine === undefined ? <>Game over</> : <>You {mine === 0 ? "even" : signed(mine)}</>;
+  }
+  const left = secondsUntil(data.deadline, now);
+  const round = `Round ${data.round}/${data.rounds}`;
+  if (data.phase === "dealer")
+    return data.dealerId === user.id ? <YourMove left={left} /> : <>{round} · dealer</>;
+  if (deciding(data, user.id)) return <YourMove left={left} />;
+  return (
+    <>
+      {round} · {undecided(data)} deciding
+    </>
   );
 }

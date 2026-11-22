@@ -304,18 +304,9 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 SELECT participation_order FROM bet_participants WHERE bet_id = ? AND user_id = ?
                 """, Long.class, betId, userId)).isEqualTo(order);
 
-        assertThatThrownBy(() -> jdbc.update("""
-                UPDATE bets SET status = 'PENDING', locked_at = now(), remainder_rule = 'host' WHERE id = ?
-                """, betId)).isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update("""
-                UPDATE bets SET remainder_rule = 'host', remainder_host_id = ? WHERE id = ?
-                """, userId, betId)).isInstanceOf(DataIntegrityViolationException.class);
-        jdbc.update("""
-                UPDATE bets SET status = 'PENDING', locked_at = now(),
-                                remainder_rule = 'host', remainder_host_id = ? WHERE id = ?
-                """, userId, betId);
-        assertThat(jdbc.queryForObject("SELECT remainder_host_id FROM bets WHERE id = ?", UUID.class, betId))
-                .isEqualTo(userId);
+        assertThatThrownBy(() -> jdbc.update("UPDATE bets SET status = 'PENDING' WHERE id = ?", betId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        jdbc.update("UPDATE bets SET status = 'PENDING', locked_at = now() WHERE id = ?", betId);
     }
 
     @Test

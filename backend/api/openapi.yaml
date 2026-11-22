@@ -445,7 +445,7 @@ paths:
             schema:
               oneOf:
                 - $ref: '#/components/schemas/BetProposal'
-                - $ref: '#/components/schemas/BlackjackProposal'
+                - $ref: '#/components/schemas/JackblackProposal'
       responses:
         '201':
           description: Bet created.
@@ -699,54 +699,44 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-  /bets/{betId}/blackjack:
+  /bets/{betId}/jackblack:
     parameters:
       - $ref: '#/components/parameters/BetId'
     get:
-      operationId: getBlackjackHand
-      summary: A Blackjack hand as table members see it
+      operationId: getJackblackGame
+      summary: A Jackblack game as table members see it
       description: >-
-        Seats and bets while the join window is open, then the cards. The
-        dealer's second card is "??" until it's turned over; the shoe is never
-        sent.
+        Who's in while the join window is open, then the cards. The dealer's
+        second card is "??" until it's turned over; the shoe is never sent.
+        During a step, everyone sees who is still deciding, never what anyone
+        chose (only your own choice comes back to you).
       responses:
         '200':
-          description: The hand.
+          description: The game.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BlackjackHand'
+                $ref: '#/components/schemas/JackblackGame'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-  /bets/{betId}/blackjack/seat:
+  /bets/{betId}/jackblack/seat:
     parameters:
       - $ref: '#/components/parameters/BetId'
     put:
-      operationId: sitAtBlackjack
-      summary: Sit down at a Blackjack hand, or change your bet
+      operationId: joinJackblack
+      summary: Join a Jackblack game
       description: >-
-        While the join window is open. The dealer can't sit; the bet must be
-        within the dealer's minimum and maximum and fit your points limit.
+        While the join window is open, up to 7 players. Your worst case over
+        the whole game (every hand split and doubled and lost, every round)
+        must fit your points limit; it's checked again at the deal, where
+        anyone who can't cover it is dropped, latest joiner first.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [betCents]
-              properties:
-                betCents:
-                  type: integer
-                  minimum: 10
-                  maximum: 1000
       responses:
         '204':
-          description: Seated.
+          description: Joined (or already in).
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -758,13 +748,14 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
     delete:
-      operationId: leaveBlackjack
-      summary: Leave a Blackjack hand before the deal
+      operationId: leaveJackblack
+      summary: Leave a Jackblack game before the deal
+      description: The proposer can't leave their own game.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '204':
-          description: Left (or wasn't seated).
+          description: Left (or wasn't in).
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -775,19 +766,20 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-  /bets/{betId}/blackjack/actions:
+  /bets/{betId}/jackblack/actions:
     parameters:
       - $ref: '#/components/parameters/BetId'
     post:
-      operationId: playBlackjack
-      summary: Make a decision on your Blackjack hand
+      operationId: playJackblack
+      summary: Make a decision in a Jackblack game
       description: >-
-        hit, stand, double or split act on your first unfinished hand (on your
-        turn, when seats take turns); insurance or no_insurance answer the
-        insurance offer; dealer is the dealer's one button on their turn (the
-        hand's dealerMove: flip, hit or stand). A double, split or insurance must fit your points
-        limit (409 debt_cap_exceeded). Not allowed right now: 409
-        blackjack_refused with the reason.
+        hit, stand, double or split is your choice for your current hand this
+        step; the cards come out only once everyone still playing has chosen
+        or the decision timer runs out (no choice stands). deal is the round's
+        dealer's one button on their turn (the game's dealerMove: flip, hit
+        or stand). A tap after the timer ran out is ignored (the timeout
+        applies instead). Not allowed right now: 409 jackblack_refused with
+        the reason.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -801,7 +793,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [hit, stand, double, split, insurance, no_insurance, dealer]
+                  enum: [hit, stand, double, split, deal]
       responses:
         '204':
           description: Done.
@@ -1138,8 +1130,8 @@ paths:
                   description: >-
                     Whether members can start new chat polls. Turning it off
                     doesn't close existing polls; they keep taking votes.
-                blackjackAccess:
-                  $ref: '#/components/schemas/BlackjackAccess'
+                jackblackAccess:
+                  $ref: '#/components/schemas/JackblackAccess'
       responses:
         '200':
           description: Updated table.
@@ -1157,46 +1149,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-  /tables/{tableId}/remainder:
-    parameters:
-      - $ref: '#/components/parameters/TableId'
-    patch:
-      operationId: updateRemainderRule
-      summary: Change the remainder rule when no bet is Active
-      description: |
-        Only a current host may change the rule. A fresh request that would
-        change it returns 409 while any bet is Active; Pending bets retain
-        their lock-time snapshots. An unchanged rule is a successful no-op,
-        including while a bet is Active. A matching retry rechecks current host
-        access and never reapplies the old value. An actual change adds a
-        system chat message. Bet proposal and locking are not yet implemented.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [rule]
-              properties:
-                rule:
-                  $ref: '#/components/schemas/RemainderRule'
-      responses:
-        '204':
-          description: Rule updated.
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-          description: An Active bet prevents a change, or the idempotency key conflicts.
   /tables/{tableId}/members:
     parameters:
       - $ref: '#/components/parameters/TableId'
@@ -4924,9 +4876,6 @@ components:
                 type: integer
                 format: int64
                 minimum: 1
-    RemainderRule:
-      type: string
-      enum: [host, proposer, earliest, random]
     TableArchive:
       type: object
       additionalProperties: false
@@ -5069,7 +5018,7 @@ components:
     Table:
       type: object
       additionalProperties: false
-      required: [id, name, emoji, memberIds, hostIds, remainderRule, hostsOnlyBets, u2pickEnabled, pollsEnabled, blackjackAccess, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
+      required: [id, name, emoji, memberIds, hostIds, hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
       properties:
         id:
           type: string
@@ -5091,8 +5040,6 @@ components:
           items:
             type: string
             format: uuid
-        remainderRule:
-          $ref: '#/components/schemas/RemainderRule'
         hostsOnlyBets:
           type: boolean
         u2pickEnabled:
@@ -5100,8 +5047,8 @@ components:
         pollsEnabled:
           type: boolean
           description: Whether members can start new chat polls.
-        blackjackAccess:
-          $ref: '#/components/schemas/BlackjackAccess'
+        jackblackAccess:
+          $ref: '#/components/schemas/JackblackAccess'
         quickPickCode:
           description: Present only for current table hosts.
           $ref: '#/components/schemas/QuickPickCode'
@@ -5225,23 +5172,33 @@ components:
               includesOvertime: false
     BetMode:
       type: string
-      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick, blackjack]
-    BlackjackAccess:
+      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick, jackblack]
+    JackblackAccess:
       type: string
       enum: [hosts, everyone, off]
-      description: Who may deal Blackjack at the table; hosts set it.
-    BlackjackProposal:
+      description: Who may propose Jackblack at the table; hosts set it.
+    JackblackProposal:
       type: object
       additionalProperties: false
-      required: [modeId, forFun]
+      required: [modeId, wagerCents, durationSec, forFun]
       description: >-
-        The proposer deals and banks. Rules left out take their defaults
-        (shown). The dealer's worst case (every seat at the maximum bet, every
-        split taken and every hand doubled and won) must fit their points
-        limit.
+        Everyone who joins deals once per rotation, in a random order, and
+        banks that round against the rest. wagerCents is the ante per hand
+        (kept for a 4Fun game, where nothing is paid); durationSec is the
+        join window. Rules left out take their defaults (shown). The
+        proposer joins their own game, so their worst case against one other
+        player must fit their points limit.
       properties:
         modeId:
-          const: blackjack
+          const: jackblack
+        wagerCents:
+          type: integer
+          minimum: 10
+          maximum: 1000
+        durationSec:
+          type: integer
+          minimum: 30
+          maximum: 600
         forFun:
           type: boolean
         rules:
@@ -5249,93 +5206,136 @@ components:
           additionalProperties: false
           properties:
             decks: {type: integer, minimum: 1, maximum: 8, default: 6}
-            minBetCents: {type: integer, minimum: 10, maximum: 1000, default: 100}
-            maxBetCents: {type: integer, minimum: 10, maximum: 1000, default: 1000, description: At least minBetCents.}
-            maxSplits: {type: integer, minimum: 0, maximum: 5, default: 3}
-            dealerHitsSoft17: {type: boolean, default: false}
+            rotations: {type: integer, minimum: 1, maximum: 3, default: 1}
+            doubling: {type: boolean, default: true}
+            maxSplits: {type: integer, minimum: 0, maximum: 3, default: 1}
             blackjackPays: {type: string, enum: ['3:2', '6:5'], default: '3:2'}
-            seats: {type: integer, minimum: 1, maximum: 7, default: 7}
-            doubleOn: {type: string, enum: [any, 9-11], default: any}
-            doubleAfterSplit: {type: boolean, default: true}
-            insurance: {type: boolean, default: false}
-            turnOrder: {type: string, enum: [together, seats], default: together}
-            joinSec: {type: integer, minimum: 30, maximum: 600, default: 120}
-            decisionSec: {type: integer, minimum: 10, maximum: 120, default: 30}
-    BlackjackHand:
+            decisionSec: {type: integer, minimum: 10, maximum: 60, default: 30}
+    JackblackHand:
       type: object
-      required: [phase, dealer, seats]
+      required: [cards, total, soft, stakeCents, doubled, done, current]
+      properties:
+        cards:
+          type: array
+          items:
+            type: string
+            description: Rank (A23456789TJQK) then suit (SHDC).
+        total:
+          type: integer
+        soft:
+          type: boolean
+        stakeCents:
+          type: integer
+        doubled:
+          type: boolean
+        done:
+          type: boolean
+        current:
+          type: boolean
+          description: The hand this step's choice is for.
+        result:
+          type: string
+          enum: [win, blackjack, push, lose, bust]
+        deltaCents:
+          type: integer
+    JackblackSeat:
+      type: object
+      required: [userId, hands]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        hands:
+          type: array
+          items:
+            $ref: '#/components/schemas/JackblackHand'
+        deciding:
+          type: boolean
+          description: During a step, whether this player still has to choose.
+        choice:
+          type: string
+          enum: [hit, stand, double, split]
+          description: Your own choice this step, before the cards come out.
+        canDouble:
+          type: boolean
+        canSplit:
+          type: boolean
+        deltaCents:
+          type: integer
+          description: In a finished round, the seat's result.
+    JackblackGame:
+      type: object
+      required: [phase]
       properties:
         phase:
           type: string
-          enum: [waiting, insurance, play, dealer, done]
+          enum: [waiting, play, dealer, done]
+        players:
+          type: array
+          description: While waiting, who has joined, in joining order.
+          items:
+            type: string
+            format: uuid
+        round:
+          type: integer
+        rounds:
+          type: integer
+        order:
+          type: array
+          description: The dealing order.
+          items:
+            type: string
+            format: uuid
+        dealerId:
+          type: string
+          format: uuid
         dealer:
           type: array
           items:
             type: string
-            description: Rank (A23456789TJQK) then suit (SHDC), or "??" face down.
+            description: A card, or "??" face down.
         dealerTotal:
           type: integer
         dealerMove:
           type: string
           enum: [flip, hit, stand]
           description: On the dealer's turn, what their one button does next.
-        dealerDeadline:
+        deadline:
           type: string
           format: date-time
-          description: When the dealer's turn plays itself out if they don't act.
-        dealerDeltaCents:
-          type: integer
-        turnSeat:
-          type: integer
-          description: When seats take turns, whose turn it is.
+          description: When this step (or the dealer's turn) times out.
         seats:
           type: array
           items:
+            $ref: '#/components/schemas/JackblackSeat'
+        totals:
+          type: object
+          description: Each player's running result in cents, by user id.
+          additionalProperties:
+            type: integer
+        history:
+          type: array
+          items:
             type: object
-            required: [userId, seat, betCents]
+            required: [number, dealerId, dealer, dealerTotal, dealerDeltaCents, seats]
             properties:
-              userId:
+              number:
+                type: integer
+              dealerId:
                 type: string
                 format: uuid
-              seat:
-                type: integer
-              betCents:
-                type: integer
-              insuranceCents:
-                type: integer
-              insuranceOpen:
-                type: boolean
-              deadline:
-                type: string
-                format: date-time
-                description: When this seat's decision timer runs out.
-              deltaCents:
-                type: integer
-              hands:
+              dealer:
                 type: array
                 items:
-                  type: object
-                  required: [cards, total, soft, stakeCents, doubled, done]
-                  properties:
-                    cards:
-                      type: array
-                      items:
-                        type: string
-                    total:
-                      type: integer
-                    soft:
-                      type: boolean
-                    stakeCents:
-                      type: integer
-                    doubled:
-                      type: boolean
-                    done:
-                      type: boolean
-                    result:
-                      type: string
-                      enum: [win, blackjack, push, lose, bust]
-                    deltaCents:
-                      type: integer
+                  type: string
+              dealerTotal:
+                type: integer
+              dealerDeltaCents:
+                type: integer
+              seats:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JackblackSeat'
     BetConfig:
       type: object
       additionalProperties:
@@ -5450,15 +5450,6 @@ components:
           type: string
         washReason:
           type: string
-        remainderRule:
-          $ref: '#/components/schemas/RemainderRule'
-        remainderHostId:
-          type: string
-          format: uuid
-          description: >-
-            For a locked bet with the host remainder rule, the host chosen
-            uniformly at random from the table's current hosts at lock.
-            The recipient remains fixed even if host membership later changes.
         sourceBetId:
           type: string
           format: uuid
@@ -5528,27 +5519,11 @@ components:
             properties:
               picks: false
               noGuessUserIds: false
-              remainderRule: false
-              remainderHostId: false
           else:
-            required: [picks, noGuessUserIds, remainderRule]
+            required: [picks, noGuessUserIds]
             properties:
               picks: true
               noGuessUserIds: true
-              remainderRule: true
-            allOf:
-              - if:
-                  properties:
-                    remainderRule:
-                      const: host
-                  required: [remainderRule]
-                then:
-                  required: [remainderHostId]
-                  properties:
-                    remainderHostId: true
-                else:
-                  properties:
-                    remainderHostId: false
         - if:
             properties:
               status:
