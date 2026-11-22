@@ -1,4 +1,4 @@
-package com.p2picks.app;
+package com.p2picks.app.security;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,15 +13,15 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-class MutationAuthentication {
+public class MutationAuthentication {
     private final JdbcTemplate jdbc;
 
     MutationAuthentication(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    static class ExpiredSession extends RuntimeException {}
-    enum PairStatus { AVAILABLE, TARGET_UNAVAILABLE, UNAUTHORIZED }
+    public static class ExpiredSession extends RuntimeException {}
+    public enum PairStatus { AVAILABLE, TARGET_UNAVAILABLE, UNAUTHORIZED }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean lockActive(Jwt jwt) {

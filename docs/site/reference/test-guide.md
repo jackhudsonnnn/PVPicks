@@ -1,0 +1,114 @@
+# Test guide
+
+Run frontend tests with `npm --prefix client test`. They cover backend session,
+tables, betting, receipts, chat, the ticker, realtime handling, the demo
+picker and Dev page, storage isolation, betting calculations, chat unread
+state, settlement warnings and toasts.
+
+Run backend tests from `backend/` with `./gradlew test` (all projects) or
+`./gradlew :app:test`. Integration tests use disposable PostgreSQL, Redis and
+Kafka containers, started once per run; they do not target the shared
+development database. Test classes live in the same package as the code they
+cover.
+
+- Feature integration tests extend `IntegrationTestSupport`, which owns the
+  containers, the single shared Spring context and common HTTP helpers
+  (`loginAs`, `csrf` and request builders). Do not change the context
+  configuration in a subclass; that would start a second context.
+  - `security.AuthIntegrationTest`: login, CSRF/origin, session expiry,
+    role-based route access and the failed sign-in throttle.
+    `security.LanSecurityTest`: the lan profile's HTTPS origin and Secure
+    cookies.
+  - `admin.AdminDashboardIntegrationTest`: player audits (Active bets left
+    out of counts, logging, keyword search), player search, the feedback
+    inbox, server and browser timings, and the sports explorer.
+    `admin.PerfBucketsTest`: latency buckets and percentile estimates.
+  - `accounts.SignInCodeIntegrationTest`: admin-created players and their
+    sign-in codes (typed with the username in any case, or by player id as
+    the QR link does; shown again to the admin; a rename keeps the QR
+    working; rotation signs out everywhere, and a stale cookie doesn't block
+    the new code; frozen accounts; the per-player lockout and the admin's
+    unlock), and that only admins have passwords. `loginAs` signs players in
+    with their id and code, and admins with the test password.
+  - `common.RateLimitsIntegrationTest`: the Redis limiter, the per-route
+    interceptor and the write backstop. `EndpointCoverageTest` checks every
+    served endpoint against `openapi.yaml` and every write endpoint against
+    the rate rules or `RateLimits.EXEMPT`. The shared context turns rate limits off
+    (`pvpicks.rate-limits.enabled=false`), so feature tests aren't limited.
+  - `users`, `social`, `chat`, `feedback`: profile, search/lookup,
+    relationships, invitations, chat windows, sending, reactions and read state.
+    `social.MembershipLimitsIntegrationTest` covers the membership limits on
+    every path that adds someone (create, add, accept) and request expiry.
+  - `tables.TableMembershipIntegrationTest` and
+    `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
+    reads, profile, settings, permissions, remainder and Quick Pick controls.
+  - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
+    HTTP adapters), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
+    `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
+    Blackjack: `BlackjackGameTest` (the pure hand, including 500 random hands
+    checked zero-sum) and `BlackjackIntegrationTest` (propose, seats, deal,
+    turns, timeouts, the dealer's turn, the points limit, the host setting);
+    `demo.BlackjackBotTest` covers the bots' strategy.
+  - `common.AbusiveLanguageTest` and `AbusiveLanguageIntegrationTest`: the
+    slur filter and every endpoint it guards.
+  - `settlement`: `PointsSettlementIntegrationTest`, `SettleIntegrationTest`
+    (settles, rejection windows, the daily send limit, history and
+    balance-change reviews), `SettleRulesTest` (who may settle what) and
+    `DebtIntegrationTest`.
+  - `MigrationIntegrationTest`: schema constraints and populated V2–V25
+    upgrades. `PlatformIntegrationTest`: health, developer docs and
+    infrastructure connectivity.
+  - `bets.BettingFrontendIntegrationTest` and
+    `settlement.SettlementFrontendIntegrationTest`: opt-in runs of the React
+    app over HTTP against the containers. The betting run creates and picks,
+    lets the backend lock the bet, then calls the result and settles points.
+    Their invocation and prerequisites are in the
+    [Frontend](/frontend). These use jsdom, not a browser.
+- `demo`: `DemoProfileTest` and `BotMindTest` (roster, archetypes, bot
+  choices), `DemoWorldTest` (the seeded world, including Mosh Pit) and
+  `DemoBotsIntegrationTest` (bots against a freshly seeded database of their
+  own). The last checks the seeded history first (`@Order`), because its other
+  test lets the bots act on the shared database at a clock-dependent moment.
+- `bets.BetLockWorkerTest` and `bets.BetLockSchedulingTest` cover the lock
+  worker and its recovery; integration tests turn the worker off and lock
+  bets explicitly. `settlement.SettlementGroupControllerTest` checks the
+  pending-review list's identity rules and contract.
+- Plain unit tests cover the pure payout and U2Pick settler (`bets`) and debt
+  and table-settlement (`settlement`) calculators; `shared/kernel` tests cover
+  `Money`.
+- `ModuleArchitectureTest` verifies the Modulith modules, their declared
+  dependencies and acyclicity, that shared modules and the kernel do not
+  depend on features, and that calculators stay pure Java. Negative fixtures
+  under `com.p2picks.archfixture` prove violations are detected.
+- `sports`: `BallDontLieFeedTest` (provider samples mapped to the canonical
+  schema; API key, date and rate-limit handling against a local HTTP server)
+  and `SportsIntegrationTest` (scripted-feed polling, one event per changing
+  poll, failure recording, ticker scope across a daylight-saving date, 503 when
+  stale, `GET /ticker` against the OpenAPI schema, the Redis ticker cache and
+  its invalidation).
+- `delivery`: `OutboxCleanupIntegrationTest` (only old published rows are
+  deleted), `OutboxRelayIntegrationTest` (publish after broker
+  acknowledgement, retry after a broker failure), `RealtimeConsumerTest` (which
+  events reach which feeds, amount-free envelopes, stable event IDs) and
+  `RealtimeIntegrationTest` (a real STOMP client: CSRF on CONNECT, origin,
+  member-only and own-feed subscriptions, rejected SEND, delivery rechecks after
+  removal, session revocation, private settlement delivery). Integration tests
+  turn off the scheduled relay and call it directly, and read the topic from the
+  earliest offset so the consumer cannot miss an event while joining.
+- Contract tests validate draft OpenAPI and realtime shapes; they do not imply
+  that every drafted operation is implemented.
+- Storage tests and `ProcessedEventStorageTest` cover database invariants and
+  transactional event deduplication.
+
+Keep UI and browser-only behavior in frontend tests. Add backend tests for
+server authorization, concurrency, persistence, retry safety and financial
+invariants when integrating each workflow. In particular:
+
+- Exercise sports-feed validation, freshness, chronology, overtime and result
+  handling independently from shared payout and settlement rules.
+- Test Quick Pick subscription authorization, non-chaining, source result
+  propagation and host wash when those flows are implemented.
+- Cover account deletion, host handoff, tombstoned identities and cleanup when
+  account deletion is implemented.
+- Extend the realtime tests whenever a new event gains a destination, including
+  its audience, privacy and revocation.

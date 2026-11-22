@@ -3,8 +3,8 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import type { SettlerRule } from "../types";
-import { MAX_OPTIONS, SETTLER_RULES } from "../u2pick";
+import type { SettlerRule } from "@/features/bets/types";
+import { MAX_OPTIONS, SETTLER_RULES } from "@/features/bets/u2pick";
 import { Section } from "./form-parts";
 
 /** U2Pick (custom) bet: the question, 2–6 options and who calls the result. */

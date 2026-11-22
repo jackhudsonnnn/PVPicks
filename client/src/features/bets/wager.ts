@@ -1,23 +1,14 @@
-import { toCents } from "@/lib/money";
+/** Wager limits the server enforces for non-4fun bets, in cents (0.10 to 10.00 points). */
+export const WAGER_MIN_CENTS = 10;
+export const WAGER_MAX_CENTS = 1000;
+export const WAGER_DEFAULT_CENTS = 100;
 
-/** Bet amounts are dollars-style points, kept to the nearest cent. */
-export const WAGER_MIN = 0.1;
-export const WAGER_MAX = 10;
-export const WAGER_DEFAULT = 1;
-/** Step buttons on the proposal sheet. */
-export const WAGER_STEPS = [0.01, 0.1, 1] as const;
-
-function clampWager(n: number) {
-  return toCents(Math.min(WAGER_MAX, Math.max(WAGER_MIN, n)));
-}
-
-/** Add a step to the current wager, never going past the max. */
-export function stepWager(current: number, step: number) {
-  return clampWager(current + step);
-}
-
-export const canStep = (current: number, step: number) => toCents(current + step) <= WAGER_MAX;
-
-export function isValidWager(n: number) {
-  return Number.isFinite(n) && toCents(n) === n && n >= WAGER_MIN && n <= WAGER_MAX;
-}
+/** Pick windows offered on the proposal sheet; the server accepts 30 to 600 seconds. */
+export const PICK_WINDOWS = [
+  { label: "30s", sec: 30 },
+  { label: "1m", sec: 60 },
+  { label: "2m", sec: 120 },
+  { label: "5m", sec: 300 },
+  { label: "10m", sec: 600 },
+] as const;
+export const PICK_WINDOW_DEFAULT = 30;

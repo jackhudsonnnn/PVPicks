@@ -1,25 +1,21 @@
 # References
 
-The links below download the underlying files served with the local docs. They
-are separate from the curated guides and can contain drafts.
-Repository-relative links inside downloaded Markdown resolve in
-the repository, not necessarily in a browser.
+Detailed references behind the guides. The OpenAPI file is a draft contract:
+it includes planned operations, so it isn't proof an endpoint exists.
 
-## Current working references
+## Working references
 
-- <a href="/docs/source/reference/domain-rules.md" download>Domain rules and test inventory</a>
-- <a href="/docs/source/reference/backend-contract-inventory.md" download>Backend contract inventory</a>
-- <a href="/docs/source/reference/backend-test-map.md" download>Test guide</a>
-- <a href="/docs/source/reference/realtime-contract.md" download>Realtime contract draft</a>
-- <a href="/docs/source/openapi.yaml" download>OpenAPI draft</a> — reference only; interactive API documentation is planned.
-- <a href="/docs/source/backend-readme.md" download>Backend setup and implementation notes</a>
+- [Domain rules and test inventory](/reference/domain-rules): the business rules, invariants and lock order.
+- [API behavior notes](/reference/api-notes): per-endpoint behavior, retries and known limits.
+- [Realtime contract](/reference/realtime-contract): WebSocket destinations, authorization and recovery.
+- [Test guide](/reference/test-guide): what each test suite covers and how to run it.
+- <a href="/docs/source/openapi.yaml" download>OpenAPI draft</a> (download): the HTTP contract, implemented and planned.
 
 ## Architecture decision records
 
-- <a href="/docs/source/adr/0001-modular-monolith.md" download>Modular monolith</a>
-- <a href="/docs/source/adr/0002-transactional-outbox.md" download>Transactional outbox</a>
-- <a href="/docs/source/adr/0003-redis-cache-only.md" download>Redis as cache only</a>
-- <a href="/docs/source/adr/0004-sports-feed.md" download>Sports feed</a>
-- <a href="/docs/source/adr/0000-template.md" download>ADR template</a>
-
-- <a href="/docs/source/frontend-roadmap.md" download>Frontend roadmap</a>
+- [0001 Modular monolith](/adr/0001-modular-monolith)
+- [0002 Transactional outbox](/adr/0002-transactional-outbox)
+- [0003 Redis as cache only](/adr/0003-redis-cache-only)
+- [0004 Sports feed](/adr/0004-sports-feed)
+- [0005 Sports data model, ingestion and replay](/adr/0005-sports-data-model)
+- [ADR template](/adr/0000-template)

@@ -14,17 +14,8 @@ const build = spawnSync(process.execPath, [vitepress, "build", "site"], {
 if (build.error) throw build.error;
 if (build.status !== 0) process.exit(build.status ?? 1);
 
-const sources = [
-  ["backend/api/openapi.yaml", "source/openapi.yaml"],
-  ["backend/README.md", "source/backend-readme.md"],
-  ["docs/reference/domain-rules.md", "source/reference/domain-rules.md"],
-  ["docs/reference/backend-contract-inventory.md", "source/reference/backend-contract-inventory.md"],
-  ["docs/reference/backend-test-map.md", "source/reference/backend-test-map.md"],
-  ["docs/reference/realtime-contract.md", "source/reference/realtime-contract.md"],
-  ["client/roadmap.md", "source/frontend-roadmap.md"],
-  ...["0000-template.md", "0001-modular-monolith.md", "0002-transactional-outbox.md",
-    "0003-redis-cache-only.md", "0004-sports-feed.md"].map(name => [`docs/adr/${name}`, `source/adr/${name}`])
-];
+// Files offered as downloads next to the site; everything else is a page under site/.
+const sources = [["backend/api/openapi.yaml", "source/openapi.yaml"]];
 
 for (const [source, destination] of sources) {
   const target = resolve(output, destination);

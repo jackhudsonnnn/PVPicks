@@ -1,6 +1,6 @@
 import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import type { BetStatus } from "../types";
+import { STATUSES, type BetStatus } from "@/features/bets/statuses";
 
 const badge = cva(
   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-widest",
@@ -16,20 +16,13 @@ const badge = cva(
   },
 );
 
-const LABEL: Record<BetStatus, string> = {
-  active: "Active",
-  pending: "Pending",
-  washed: "Washed",
-  resolved: "Resolved",
-};
-
 export function StatusBadge({ status, className }: { status: BetStatus; className?: string }) {
   return (
     <span className={cn(badge({ status }), className)}>
       {(status === "active" || status === "pending") && (
         <span className="size-1.5 animate-pulse-dot rounded-full bg-primary-foreground" />
       )}
-      {LABEL[status]}
+      {Object.values(STATUSES).find((info) => info.id === status)!.label}
     </span>
   );
 }

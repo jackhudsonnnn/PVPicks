@@ -1,0 +1,125 @@
+package com.p2picks.app.security;
+
+import com.p2picks.app.common.PostgresText;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+class Sessions {
+    /** The password was right but the account is frozen; reported only after a correct password. */
+    static class Frozen extends RuntimeException {}
+
+    private final JdbcTemplate jdbc;
+    private final PasswordEncoder passwords;
+    private final JwtEncoder encoder;
+    private final JwtDecoder decoder;
+    private final String dummyHash;
+
+    Sessions(JdbcTemplate jdbc, PasswordEncoder passwords, JwtEncoder encoder, JwtDecoder decoder) {
+        this.jdbc = jdbc;
+        this.passwords = passwords;
+        this.encoder = encoder;
+        this.decoder = decoder;
+        this.dummyHash = passwords.encode("nonexistent-account");
+    }
+
+    /** Password sign-in, for admins only: players have no password and sign in with a code. */
+    @Transactional
+    public String login(String username, String password, String previousToken) {
+        String normalized = PostgresText.trim(username).toLowerCase(Locale.ROOT);
+        if (!normalized.matches("[a-z0-9_]{3,15}")
+                || password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            return null;
+        }
+        List<Account> accounts = jdbc.query("""
+                SELECT id, password_hash, status FROM users
+                WHERE username = ?::citext AND role = 'ADMIN' AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                """, (rs, row) -> new Account(rs.getObject("id", UUID.class), rs.getString("password_hash"),
+                        rs.getString("status")), normalized);
+        Account account = accounts.isEmpty() ? null : accounts.getFirst();
+        // An account without a usable hash (or no account) is checked against the dummy, so timing doesn't tell.
+        boolean usable = account != null && account.passwordHash().startsWith("$2");
+        boolean matches = passwords.matches(password, usable ? account.passwordHash() : dummyHash);
+        if (!matches || !usable) {
+            return null;
+        }
+        if (account.status().equals("FROZEN")) throw new Frozen();
+        return issue(account.id(), previousToken);
+    }
+
+    /**
+     * Signs in as an active account without a password: a player's sign-in code ({@link SignInCodes}) or the dev
+     * demo picker ({@link PasswordlessSignIn}). Null when there's no such account; {@link Frozen} when it's frozen.
+     */
+    @Transactional
+    String signInWithoutPassword(UUID userId, String previousToken) {
+        List<String> status = jdbc.queryForList("""
+                SELECT status FROM users WHERE id = ? AND status IN ('ACTIVE', 'FROZEN') FOR UPDATE
+                """, String.class, userId);
+        if (status.isEmpty()) return null;
+        if (status.getFirst().equals("FROZEN")) throw new Frozen();
+        return issue(userId, previousToken);
+    }
+
+    /** Whether the password matches the account's (false for an account that has none yet). */
+    boolean matches(UUID accountId, String password) {
+        if (password == null || password.getBytes(StandardCharsets.UTF_8).length > 72) return false;
+        List<String> hashes = jdbc.queryForList("SELECT password_hash FROM users WHERE id = ?", String.class,
+                accountId);
+        String hash = hashes.isEmpty() ? null : hashes.getFirst();
+        return passwords.matches(password, hash == null || !hash.startsWith("$2") ? dummyHash : hash)
+                && hash != null && hash.startsWith("$2");
+    }
+
+    /** Sets a new password and ends the account's other sessions, keeping {@code currentSession}. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    void changePassword(UUID accountId, UUID currentSession, String password) {
+        jdbc.update("UPDATE users SET password_hash = ? WHERE id = ?", passwords.encode(password), accountId);
+        jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = ? AND id <> ? AND revoked_at IS NULL",
+                accountId, currentSession);
+    }
+
+    private String issue(UUID accountId, String previousToken) {
+        if (previousToken != null) {
+            try {
+                Jwt previous = decoder.decode(previousToken);
+                revoke(UUID.fromString(previous.getId()));
+            } catch (JwtException exception) {
+                // An invalid or expired old cookie cannot authenticate or be revoked.
+            }
+        }
+
+        UUID sessionId = UUID.randomUUID();
+        Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAt = issuedAt.plus(8, ChronoUnit.HOURS);
+        jdbc.update("INSERT INTO auth_sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+                sessionId, accountId, java.sql.Timestamp.from(issuedAt), java.sql.Timestamp.from(expiresAt));
+        JwtClaimsSet claims = JwtClaimsSet.builder().issuer(SessionSecurity.ISSUER)
+                .subject(accountId.toString()).id(sessionId.toString())
+                .issuedAt(issuedAt).expiresAt(expiresAt).build();
+        return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
+    }
+
+    public void revoke(UUID sessionId) {
+        jdbc.update("UPDATE auth_sessions SET revoked_at = now() WHERE id = ? AND revoked_at IS NULL", sessionId);
+    }
+
+    record Account(UUID id, String passwordHash, String status) {}
+}

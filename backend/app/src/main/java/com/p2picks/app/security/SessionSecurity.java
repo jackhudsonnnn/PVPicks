@@ -1,6 +1,7 @@
-package com.p2picks.app;
+package com.p2picks.app.security;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.p2picks.app.common.AppMode;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Objects;
@@ -10,7 +11,6 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,6 +35,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 
@@ -93,39 +94,63 @@ class SessionSecurity {
     }
 
     @Bean
-    CsrfTokenRepository csrfTokenRepository() {
+    CsrfTokenRepository csrfTokenRepository(SessionCookies cookies) {
         CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
         repository.setHeaderName("X-CSRF-TOKEN");
-        repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict").secure(false));
+        repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).sameSite("Strict")
+                .secure(cookies.secure()));
         return repository;
     }
 
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http, JwtDecoder decoder, CsrfTokenRepository csrfRepository, JdbcTemplate jdbc,
-            Environment environment,
-            @Value("${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}") String allowedOrigin) throws Exception {
+            AppMode mode,
+            @Value("${PVPICKS_ORIGIN:${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}}") String allowedOrigin)
+            throws Exception {
         AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
             response.setStatus(401);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"code\":\"unauthorized\",\"message\":\"Authentication required or credentials invalid.\"}");
         };
+        // A browser opening the handbook without an admin session goes to the admin sign-in.
+        AuthenticationEntryPoint entry = (request, response, exception) -> {
+            if (isDocs(request)) response.sendRedirect("/admin");
+            else unauthorized.commence(request, response, exception);
+        };
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.disable())
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+                // The session cookie authenticates every request, so Spring would treat each one as a new
+                // login and rotate the CSRF token. Login and logout rotate it explicitly instead.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfRepository)
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
                 .authorizeHttpRequests(authorize -> {
-                    String[] profiles = environment.getActiveProfiles();
-                    if (profiles.length == 1 && profiles[0].equals("dev")) {
+                    if (mode == AppMode.DEV) {
                         authorize.requestMatchers(HttpMethod.GET, "/docs", "/docs/**").permitAll()
-                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").permitAll();
+                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").permitAll()
+                                // The Dev page works signed out (dev only): the demo's picker already lets anyone be
+                                // anyone, and these controllers exist only with dev data or the demo on. CSRF and
+                                // same-origin checks still apply to its POSTs.
+                                .requestMatchers("/dev/**").permitAll();
                     } else {
-                        authorize.requestMatchers("/docs", "/docs/**").denyAll();
+                        // The handbook is for the admin on LAN and in production (owner decision, 2026-11-21): it
+                        // describes security and operations. The admin portal links to it.
+                        authorize.requestMatchers(HttpMethod.GET, "/docs", "/docs/**").access((authentication,
+                                        context) -> new AuthorizationDecision(
+                                        isActiveRole(authentication.get(), jdbc, "ADMIN")))
+                                .requestMatchers(HttpMethod.HEAD, "/docs", "/docs/**").access((authentication,
+                                        context) -> new AuthorizationDecision(
+                                        isActiveRole(authentication.get(), jdbc, "ADMIN")))
+                                .requestMatchers("/docs", "/docs/**", "/dev/**").denyAll();
                     }
-                    authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health").permitAll()
-                            .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                    authorize.requestMatchers(HttpMethod.GET, "/auth/csrf", "/actuator/health", "/config").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/code").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/auth/password").authenticated()
                             .requestMatchers(HttpMethod.GET, "/me").authenticated()
                             .requestMatchers(HttpMethod.HEAD, "/me").authenticated()
                             .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
+                            // Browser timings: players and admins both report them (admin.PerfController).
+                            .requestMatchers(HttpMethod.POST, "/perf").authenticated()
                             .requestMatchers("/admin", "/admin/**").access((authentication, context) ->
                                     new AuthorizationDecision(isActiveRole(authentication.get(), jdbc, "ADMIN")))
                             .anyRequest().access((authentication, context) ->
@@ -134,16 +159,25 @@ class SessionSecurity {
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
-                .addFilterBefore(new DevOriginFilter(allowedOrigin), org.springframework.security.web.csrf.CsrfFilter.class)
-                .addFilterAfter(new JwtCookieFilter(decoder, unauthorized), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterBefore(new OriginFilter(allowedOrigin, mode == AppMode.LAN), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterAfter(new JwtCookieFilter(decoder, entry), org.springframework.security.web.csrf.CsrfFilter.class)
                 .exceptionHandling(errors -> errors
-                        .authenticationEntryPoint(unauthorized)
+                        .authenticationEntryPoint(entry)
                         .accessDeniedHandler((request, response, exception) -> {
+                            if (isDocs(request)) {
+                                response.sendRedirect("/admin");
+                                return;
+                            }
                             response.setStatus(403);
                             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                             response.getWriter().write("{\"code\":\"forbidden\",\"message\":\"Request forbidden.\"}");
                         }));
         return http.build();
+    }
+
+    private static boolean isDocs(jakarta.servlet.http.HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.equals("/docs") || path.startsWith("/docs/");
     }
 
     private static boolean isActiveRole(Authentication authentication, JdbcTemplate jdbc, String role) {

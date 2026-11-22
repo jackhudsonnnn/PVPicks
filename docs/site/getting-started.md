@@ -1,6 +1,6 @@
 # Getting started
 
-Get oriented without changing shared data or exposing local credentials.
+Get oriented, run the stack locally and keep credentials out of source control.
 
 ## Prerequisites
 
@@ -9,8 +9,9 @@ Get oriented without changing shared data or exposing local credentials.
 - Docker and Docker Compose for infrastructure integration tests.
 
 The codebase contains a Spring Boot backend in `backend/`, a TanStack
-frontend in `client/`, and documentation in `docs/`. Java classes in the
-backend app's organizational folders still share the `com.p2picks.app` package.
+frontend in `client/`, and documentation in `docs/`. The backend app has
+one Spring Modulith module per Java package; the
+[Backend](/backend) page maps them.
 
 ## Build the documentation
 
@@ -21,56 +22,70 @@ npm ci --prefix docs
 npm --prefix docs run build
 ```
 
-The backend Gradle resource build also builds the site; it requires those npm
-dependencies to be installed first. The dev backend serves the bundled site at
-`http://127.0.0.1:8080/docs/` when running with the default port. Its contents
-are rebuilt into the application artifact; edits are not live in a running jar.
-Documentation sources and downloadable references are explicitly allowlisted
-in `docs/scripts/build.mjs`; add new reference files there when needed.
+All documentation lives in this site (`docs/site/`): guides, the backend and
+frontend pages, references and ADRs. The only other Markdown files are the root
+`README.md` (quick start) and the `AGENTS.md` instructions for coding agents.
+
+The backend image builds the site and serves it at `/docs/`
+(`http://127.0.0.1:8080/docs/` with the default port), so `docker compose up
+--build` refreshes it. To see edits live, run `npm --prefix docs run dev`
+(`http://127.0.0.1:5180/docs/`; it has its own port so it never collides with
+the app on 5173). Downloadable files (the OpenAPI draft) are listed in
+`docs/scripts/build.mjs`.
+
+VitePress 1.x and Mermaid 11 use scoped overrides for patched Vite 6 and KaTeX
+releases outside their declared ranges. Recheck them when upgrading, and
+validate the build, the dev server and the Mermaid diagrams before removing
+them.
 
 ## Run focused backend tests
 
 From `backend/`, using an installed Java 21:
 
 ```sh
-./gradlew :app:test
+./gradlew test
 ```
 
 Integration tests use disposable Testcontainers and require Docker. The
-<a href="/docs/source/backend-readme.md" download>backend setup notes</a> cover local JDK selection,
-provisioning, configuration, and the existing dev stack. They include
-operations that affect local services: inspect and obtain approval before
-running them against a shared environment.
+[Backend](/backend) page cover local JDK selection,
+configuration, and the dev stack.
 
-::: danger Shared environment
-Development data is disposable, but the environment may be shared. Confirm the
-target and obtain explicit approval before resetting or migrating a shared
-database, rebuilding shared infrastructure, or regenerating credentials.
-Pending Flyway migrations run automatically when the backend starts.
+::: tip Disposable dev environment
+The dev environment is local, and its data is disposable: you may reset or
+migrate the database, rebuild infrastructure or regenerate credentials. Pending
+Flyway migrations run automatically when the backend starts. Never commit
+credentials or expose the dev stack to a network. A LAN stack is different
+while a party is on: its data belongs to real players (see
+[Documentation decisions](/decisions#operational-safety)).
 :::
 
-## Frontend backend preview
+## Run the stack
 
-The current frontend provides backend sign-in and read-only table and bet
-list/detail views. Other prototype features are not exposed; betting and
-receipt mutation APIs remain gated. Accounts must already be provisioned in
-the dev backend.
+The root `README.md` is the quick start: `./scripts/provision-dev.sh --init`
+once (it creates `infra/compose/.env` from `.env.example` and the local keys),
+then `docker compose up -d --build` from the repository root. That runs
+PostgreSQL, Redis, Kafka, the backend (serving these docs at `/docs/`) and the
+app at `http://127.0.0.1:5173`. Startup applies pending migrations and seeds
+an empty database with the [demo world](/demo-data); sign in by picking an
+account.
 
-For an approved isolated dev backend listening on `127.0.0.1:8080`, configure
-its `PVPICKS_DEV_ORIGIN` as `http://127.0.0.1:5173` before starting it. From
-`client/`, run `npm run dev` and open `http://127.0.0.1:5173`. Vite proxies
-same-origin `/api` requests to the backend and preserves the browser's Origin;
-the browser obtains a CSRF token before login and logout. Use the exact host and
-port shown, and do not expose this development proxy to a network. This proxy
-is for Vite development only, not a production deployment configuration.
-For an isolated backend on another port, set `PVPICKS_DEV_BACKEND_URL` to its
-HTTP loopback origin when starting Vite.
-
-Never start or reconfigure a backend against shared infrastructure without
-approval: startup automatically applies pending migrations.
+- The app's container runs the client's Vite dev server with `client/`
+  mounted, so edits hot-reload. It proxies `/api` (and the realtime
+  WebSocket) to the backend and keeps the browser's Origin, which the backend
+  checks against `PVPICKS_DEV_ORIGIN` (default the app's address; `127.0.0.1` and
+  `localhost` on that port both work). See
+  [Frontend](/frontend) for running it outside Docker.
+- The lock worker locks bets at their deadline (and deals Blackjack hands),
+  and the outbox relay publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or
+  `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns either off.
+- Live scores need `PVPICKS_BALLDONTLIE_API_KEY`; without it the ticker says
+  they're unavailable, and the demo's DEV games still run.
+- Everything is published on 127.0.0.1 only. Don't expose the stack or the
+  dev proxy to a network.
 
 ## Authentication for API development
 
-The dev backend uses an HttpOnly session cookie, same-origin checks, and a CSRF
-token. Read the backend setup notes for the exact flow. LAN and production
-profiles remain intentionally gated.
+Every mode uses an HttpOnly session cookie, same-origin checks, and a CSRF
+token; [Backend](/backend) has the exact flow. Dev adds a passwordless picker
+over the demo accounts. The `lan` profile is the watch-party setup behind
+Caddy ([LAN watch party](/lan)). Production isn't configured yet.

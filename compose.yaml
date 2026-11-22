@@ -1,0 +1,4 @@
+# Run everything from the repository root: `docker compose up -d --build`. See README.md.
+name: pvpicks
+include:
+  - infra/compose/docker-compose.dev.yml

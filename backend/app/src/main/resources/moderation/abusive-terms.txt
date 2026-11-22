@@ -1,0 +1,42 @@
+# Slurs and hate speech the abusive-language filter refuses (docs: domain rules, "Abusive language filter").
+# Owner decision, 2026-11-20: slurs and hate speech only; swearing and trash talk stay allowed.
+#
+# One term per line, lowercase letters and spaces only. Each matches as a whole word, with stretched letters
+# ("niggggers"; never fewer, so "niger" isn't "nigger"), a plural s or z, symbol and look-alike swaps (n1gg@), and
+# spaced or dotted spelling (f a g, n.i.g.g.e.r). Other endings must be listed ("retarded"), which keeps "spiced" and
+# "spices" clear of "spic". A leading * also matches inside a longer word; keep that for long terms no ordinary word
+# contains. Multi-word terms match the words in order.
+
+# Racial and ethnic
+*nigger
+nigga
+*niggah
+*sandnigger
+chink
+gook
+spic
+spick
+wetback
+kike
+beaner
+raghead
+towelhead
+coon
+jigaboo
+porch monkey
+paki
+gypsy scum
+camel jockey
+zipperhead
+
+# Sexuality and gender
+*faggot
+fag
+fagg
+dyke
+tranny
+shemale
+
+# Disability
+retard
+retarded

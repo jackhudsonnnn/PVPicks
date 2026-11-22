@@ -1,0 +1,128 @@
+# ADR 0005: Sports data model, ingestion and replay
+
+- Status: accepted; partly implemented: raw recordings, saved provider specs
+  with contract tests, game history, players and player stats (2026-11-14);
+  dev replay (scenario files and recorded chunks); the player modes and
+  Scorcerer reading the stored stats and score history (2026-11-15). Not yet:
+  the per-league plan setting.
+- Date: 2026-11-13
+
+## Context
+
+Sports bets resolve from feed data, and many edge cases depend on exactly what
+the feed reported and when: cancellations, delays, suspensions, ties, late
+corrections and players who did not play. The current `sports` module (ADR 0004)
+stores only the latest snapshot of each game. It needs history for resolution
+and audit, roster and player-stat data for player modes, and a way to develop
+and test against real game data without the live API.
+
+BallDontLie plans as of 2026-11-13, per league unless noted (account-tier tables at
+https://nba.balldontlie.io and https://nfl.balldontlie.io; check before buying):
+
+| Plan | Price | Rate limit | Adds |
+|---|---|---|---|
+| Free | $0 | 5 requests/min | Teams, players, games and scores |
+| All-Star | $9.99/month or $95.90/year | 60 requests/min | Player game stats (real time during games), active players, injuries; NFL also team and season stats, standings and snap counts |
+| GOAT | $39.99/month or $383.90/year | 600 requests/min | Box scores, advanced stats, play-by-play, betting odds, sportsbook player props, lineups; NFL team rosters |
+| All-Access | $2,879.90/year, all leagues | 600 requests/min | Everything, plus webhooks |
+
+The GOAT 7-day trial is limited to 5 requests a minute.
+
+**Update (2026-11):** All-Star for both leagues is bought; the trial is over.
+
+Decided 2026-11-13: All-Star for both NBA and NFL, upgrading as the app grows.
+Until it is bought, development runs on a GOAT trial (all endpoints, 5
+requests a minute, 7 days); nothing may depend on GOAT-only endpoints. All-Star
+covers game results and player props, including live prop progress during a
+game, and injuries for proposal warnings. GOAT is the upgrade for sportsbook
+lines and odds, play-by-play bet types and higher request rates. On All-Star,
+NFL rosters must be derived from players' team fields, because the NFL Team
+Roster endpoint is GOAT-only; this needs checking against real responses.
+
+## Decision
+
+PostgreSQL is the source of truth for sports data. Files are only for
+recordings, replay and test fixtures.
+
+Treat the provider plan as a per-league setting (for example
+`PVPICKS_BALLDONTLIE_PLAN_NBA=ALL_STAR`). The plan decides the request budget
+and poll interval, which endpoints are called, and which bet modes are offered,
+so upgrading a league is a configuration change.
+
+Keep three datasets apart, because they change at different rates and come
+from different endpoints:
+
+- **Teams and rosters:** players and team membership, refreshed about daily.
+- **Games:** schedule, status and score, polled while relevant (implemented).
+- **Player game stats:** per-player box scores, fetched only for modes that
+  need them and only on a plan that includes them.
+
+Store an append-only history of game snapshots, one row per observed change,
+next to the current snapshot. Each row keeps the provider's own lifecycle state
+(`status_state`: scheduled, delayed, in_progress, final, postponed, canceled,
+suspended, abandoned or unknown, per the provider's published OpenAPI specs at
+https://www.balldontlie.io/openapi/nba.yml and .../nfl.yml) and, for NFL, its
+`updated_at`. The canonical status used by the ticker merges postponed,
+canceled, suspended and abandoned, but resolution must tell them apart: a
+suspended game may still finish and settle, while a canceled one washes. Resolution reads the history, so it can tell
+when a game went final, whether a correction followed and what the feed
+showed when a bet locked. The history also serves disputes and replay.
+
+Keep a dated copy of the provider's OpenAPI specs and contract-test recordings
+and fixtures against their game schemas, so provider changes fail a test
+instead of silently skipping games. (Implemented: `backend/api/providers/
+balldontlie/<league>-<date>.yml` and `ProviderContractTest` over trimmed
+fixtures in `app/src/test/resources/fixtures/balldontlie/`. Known deviations
+found on 2026-11-14: NFL responses send null for fields the spec types as plain
+values, such as `passing_yards` for a player with no attempts, and per-attempt
+averages typed as integers are decimals. The NBA spec now lists `/nba/v1/...`
+paths; the `/v1/...` paths the app uses still work.)
+
+Implemented storage: `games` keeps the provider state, points per period and
+`final_at` (the first Final report, cleared if the feed leaves Final), and
+`game_snapshots` gets one row per change. `players` holds each league's active
+list, refreshed at most daily, plus anyone seen in a game. `player_game_stats`
+holds each player's whole-game line in canonical stats and
+`player_stat_snapshots` one row per change; King Of The Hill reads the history to
+find who crossed a target first. Canonical stats: NBA points, rebounds,
+assists, threes made, steals plus blocks; NFL passing, rushing and receiving
+yards, receptions, and touchdowns (the player's own rushing and receiving
+touchdowns). An NBA player played with any minutes; an NFL player played when
+the provider lists a row for them.
+
+Keep raw recordings exactly as received, one timestamped file per response,
+grouped by league and New York day (implemented: `PVPICKS_SPORTS_RECORDING_DIR`,
+`recordings/sports/<league>/<date>/<UTC timestamp>_<endpoint>.json`; player box
+scores are recorded during and shortly after games since 2026-11-14, before
+they are stored or parsed). Names sort
+in receive order, so replay reads them in name order. A small tool slices them
+into one timeline per game for fixtures, for example `fixtures/nba/NBA-18447.jsonl`. Commit only short, trimmed fixtures; keep full
+recordings out of git for size and because the provider's terms on storing
+its data have not been checked.
+
+Add dev replay for the dev profile. It feeds games into the real game and
+stats sync, so everything after the feed (snapshots, history, outbox,
+realtime, ticker and bet resolution) runs the real code. This amends ADR 0004,
+which allows a scripted feed only in automated tests.
+
+As built (the `devdata` module, docs: Dev sports data), replay runs alongside
+the live feed as `DEV-` games rather than replacing it, from two kinds of
+source:
+
+- **Recorded chunks:** about 20 minutes cut from recordings by
+  `scripts/cut-sports-chunk.py`, parsed with the live mapping, at 0.5×–8×.
+- **Scenario files:** hand-written canonical games and player lines,
+  re-read on every tick so edits apply live, with optional timed steps.
+
+Chunks are provider data and stay out of git; scenario files are committed.
+Replay replaces the prototype's dev-only Simulate menu, which was removed with
+the prototype client (git tag `prototype-ui`).
+
+## Consequences
+
+Edge-case rules (domain rules, "Sports outcomes and host overrides") can be
+tested against real recorded games instead of guesses. Replay only reproduces
+what was polled: at one poll a minute it misses changes in between, which is
+fine for status and score lifecycles but not for order-dependent play-by-play
+modes. Those need a richer source before they can settle automatically.
+Player modes add a paid-plan dependency per league, starting with All-Star.

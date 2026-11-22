@@ -1,0 +1,308 @@
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Heart, Palette, ShieldAlert, UserCheck, UserRound } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { SegmentedTabs } from "@/components/segmented-tabs";
+import { SettingRow, SettingsSection } from "@/components/settings";
+import { DeleteAccountSection } from "./delete-account";
+import { HUE_BG, type User } from "@/features/people";
+import { DisplaySettings } from "./display-settings";
+import { INVITE_MODES } from "@/features/social";
+import { HUES, normalizeUsername, usernameError, type Hue } from "./profile-rules";
+import { cn } from "@/lib/utils";
+import { backendErrorMessage } from "@/lib/api-client";
+import { ActionStatus } from "@/components/action-status";
+import { usePreferencesActions } from "./actions";
+import {
+  getDebt,
+  getDebtCap,
+  getInvitePreferences,
+  type InviteMode,
+  type InvitePreferences,
+} from "./api";
+import { userKey, sessionKey } from "@/lib/query-keys";
+import { formatPoints } from "@/features/settlements";
+import { parseCap } from "./rules";
+import { LoadingList } from "@/components/loading";
+
+const INVITE_ROWS = [
+  {
+    key: "friends",
+    icon: Heart,
+    label: "Friends",
+    description: "Hosts you follow who follow you back.",
+  },
+  {
+    key: "following",
+    icon: UserCheck,
+    label: "People you follow",
+    description: "Hosts you follow who don't follow you back.",
+  },
+] as const;
+
+/** Preferences: who can add you to tables, and your account (username, color, points limit). */
+export function PreferencesPage({
+  user,
+  expire,
+  onAccountDeleted,
+}: {
+  user: User;
+  expire: () => void;
+  /** Signs out with a "deleted" notice once the account is gone. */
+  onAccountDeleted: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<"tables" | "account" | "display">("tables");
+  const actions = usePreferencesActions(
+    user.id,
+    async () => {
+      await queryClient.invalidateQueries({ queryKey: userKey(user.id) });
+      await queryClient.invalidateQueries({ queryKey: sessionKey });
+    },
+    expire,
+  );
+  const disabled = actions.busy || !!actions.pending || !!actions.storageError;
+  return (
+    <div className="space-y-6">
+      <h1 className="font-display text-3xl font-bold uppercase">Preferences</h1>
+      <SegmentedTabs
+        ariaLabel="Preference sections"
+        tabs={[
+          { id: "tables", label: "Tables" },
+          { id: "account", label: "Account" },
+          { id: "display", label: "Display" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      <ActionStatus
+        actions={actions}
+        pendingText="A preference change may not have been saved."
+        checkText="Check your preferences first."
+      />
+      {tab === "tables" ? (
+        <InviteSettings user={user} disabled={disabled} actions={actions} />
+      ) : tab === "display" ? (
+        <DisplaySettings />
+      ) : (
+        // Keyed by username so the form resets to the saved name after a rename.
+        <div className="space-y-6">
+          <AccountSettings key={user.username} user={user} disabled={disabled} actions={actions} />
+          <DeleteAccountSection username={user.username} onDeleted={onAccountDeleted} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InviteSettings({
+  user,
+  disabled,
+  actions,
+}: {
+  user: User;
+  disabled: boolean;
+  actions: ReturnType<typeof usePreferencesActions>;
+}) {
+  const query = useQuery({
+    queryKey: userKey(user.id, "invite-preferences"),
+    queryFn: ({ signal }) => getInvitePreferences(signal),
+    retry: false,
+  });
+  if (query.isPending)
+    return <LoadingList label="Loading invite settings" rows={2} rowClassName="h-12" />;
+  if (query.isError) return <p role="alert">{backendErrorMessage(query.error)}</p>;
+  const preferences: InvitePreferences = query.data;
+  return (
+    <SettingsSection
+      title="Adding you to tables"
+      description="Only friends and people you follow can add you. Requests appear as invitations on Home."
+    >
+      {INVITE_ROWS.map((row) => {
+        const mode = preferences[row.key];
+        return (
+          <SettingRow key={row.key} icon={row.icon} label={row.label} description={row.description}>
+            <SegmentedTabs<InviteMode>
+              size="sm"
+              ariaLabel={`${row.label}: who can add you`}
+              tabs={INVITE_MODES.map((m) => ({ id: m.id, label: m.label, disabled }))}
+              value={mode}
+              onChange={(value) =>
+                actions.start({ kind: "invites", ...preferences, [row.key]: value })
+              }
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {INVITE_MODES.find((m) => m.id === mode)?.description}
+            </p>
+          </SettingRow>
+        );
+      })}
+    </SettingsSection>
+  );
+}
+
+function AccountSettings({
+  user,
+  disabled,
+  actions,
+}: {
+  user: User;
+  disabled: boolean;
+  actions: ReturnType<typeof usePreferencesActions>;
+}) {
+  const [username, setUsername] = useState(user.username);
+  const [problem, setProblem] = useState<string | null>(null);
+  const changed = normalizeUsername(username) !== user.username;
+
+  function saveUsername(event: React.FormEvent) {
+    event.preventDefault();
+    const invalid = usernameError(username, []);
+    setProblem(invalid ?? null);
+    if (invalid || !changed) return;
+    actions.start({ kind: "profile", username: normalizeUsername(username) });
+  }
+
+  return (
+    <div className="space-y-6">
+      <SettingsSection title="Profile">
+        <SettingRow
+          icon={UserRound}
+          label="Username"
+          description="3–15 lowercase letters, numbers or underscores. It is also how you sign in."
+        >
+          <form className="flex flex-wrap gap-2" onSubmit={saveUsername}>
+            <Input
+              aria-label="Username"
+              value={username}
+              disabled={disabled}
+              onChange={(event) => setUsername(event.target.value)}
+              className="max-w-56"
+            />
+            <Button type="submit" size="sm" disabled={disabled || !changed}>
+              Save username
+            </Button>
+          </form>
+          {problem && <p role="alert">{problem}</p>}
+        </SettingRow>
+        <SettingRow icon={Palette} label="Color" description="Your avatar color.">
+          <div role="radiogroup" aria-label="Avatar color" className="flex gap-2">
+            {HUES.map((hue: Hue) => (
+              <button
+                key={hue}
+                type="button"
+                role="radio"
+                aria-checked={user.hue === hue}
+                aria-label={`Color ${hue}`}
+                disabled={disabled}
+                onClick={() => user.hue !== hue && actions.start({ kind: "profile", hue })}
+                className={cn(
+                  "size-8 rounded-full border-2",
+                  HUE_BG[hue],
+                  user.hue === hue ? "border-foreground" : "border-transparent",
+                )}
+              />
+            ))}
+          </div>
+        </SettingRow>
+      </SettingsSection>
+      <DebtCapSettings user={user} disabled={disabled} actions={actions} />
+    </div>
+  );
+}
+
+function DebtCapSettings({
+  user,
+  disabled,
+  actions,
+}: {
+  user: User;
+  disabled: boolean;
+  actions: ReturnType<typeof usePreferencesActions>;
+}) {
+  const cap = useQuery({
+    queryKey: userKey(user.id, "debt-cap"),
+    queryFn: ({ signal }) => getDebtCap(signal),
+    retry: false,
+  });
+  const debt = useQuery({
+    queryKey: userKey(user.id, "debt"),
+    queryFn: ({ signal }) => getDebt(signal),
+    retry: false,
+  });
+  const [text, setText] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  if (cap.isPending || debt.isPending)
+    return <LoadingList label="Loading points limit" rows={1} rowClassName="h-24" />;
+  if (cap.isError || debt.isError)
+    return <p role="alert">{backendErrorMessage(cap.error ?? debt.error)}</p>;
+  const locked = debt.data > 0;
+  const on = cap.data !== null;
+
+  function save(event: React.FormEvent) {
+    event.preventDefault();
+    const parsed = parseCap(text);
+    if ("problem" in parsed) {
+      setProblem(parsed.problem);
+      return;
+    }
+    setProblem(null);
+    actions.start({ kind: "debt-cap", capCents: parsed.cents });
+  }
+
+  return (
+    <SettingsSection
+      title="Points limit"
+      description="Stops you joining or proposing bets that could put you further down than the limit. You can only change it while you're not down."
+    >
+      <SettingRow
+        icon={ShieldAlert}
+        label="Points down"
+        description="How far down you are across tables and open settle-ups."
+      >
+        <p className="font-semibold">{formatPoints(BigInt(debt.data))} points</p>
+      </SettingRow>
+      <SettingRow
+        icon={ShieldAlert}
+        label="Limit"
+        description={on ? `${formatPoints(BigInt(cap.data!))} points` : "Off"}
+      >
+        <div className="space-y-2">
+          <span className="flex items-center gap-2">
+            <Switch
+              id="debt-cap-on"
+              checked={on}
+              disabled={disabled || locked || !on}
+              onCheckedChange={(checked) =>
+                !checked && actions.start({ kind: "debt-cap", capCents: null })
+              }
+            />
+            <Label htmlFor="debt-cap-on">{on ? "Limit on" : "No limit"}</Label>
+          </span>
+          <form className="flex flex-wrap items-center gap-2" onSubmit={save}>
+            <Input
+              aria-label="Points limit"
+              inputMode="numeric"
+              placeholder="Points"
+              value={text}
+              disabled={disabled || locked}
+              onChange={(event) => setText(event.target.value)}
+              className="max-w-32"
+            />
+            <Button type="submit" size="sm" disabled={disabled || locked}>
+              {on ? "Change limit" : "Set limit"}
+            </Button>
+          </form>
+          {locked && (
+            <p className="text-xs text-muted-foreground">
+              Settle what you're down before changing your limit.
+            </p>
+          )}
+          {problem && <p role="alert">{problem}</p>}
+        </div>
+      </SettingRow>
+    </SettingsSection>
+  );
+}

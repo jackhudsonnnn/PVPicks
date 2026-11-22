@@ -1,8 +1,6 @@
 # Project guidance
 
-- The project is pre-MVP. Existing development data is disposable, but the
-  environment may be shared: do not reset or migrate a shared database, rebuild
-  shared infrastructure, or regenerate credentials without explicit approval.
-- Documentation describes the current design and implementation status.
-  Update existing guidance rather than accumulating historical plans, diaries,
-  or superseded versions. Clearly identify planned work as not yet implemented.
+- The project is pre-MVP. Existing development data is disposable, and the environment is not yet shared: feel free to reset/migrate the database, rebuild infrastructure, and/or regenerate credentials.
+- Documentation describes the current design and implementation status. Update existing guidance rather than accumulating historical plans, diaries, or superseded versions. Clearly identify planned work as not yet implemented.
+- Ask before acting when a request is unclear, and ask refinement questions whenever there is a real ambiguity or gap (scope, product behavior, or a trade-off the owner should decide). Don't ask about things the code, docs or a sensible default already answer. When choosing between design options yourself, prefer the production-grade one, or the simpler one when they are comparable, and say which you chose.
+- Size abuse limits so a heavy honest user never reaches them, and an abuser is stopped long before the server or other users feel it. Start from the most a person could really do by hand and leave roughly 3–5x headroom. Make limits tighter for actions that are expensive, reach other people (messages, invites, reports, follows) or can't be undone. Make them looser for cheap, idempotent changes to the user's own data. The client must not send requests in proportion to other people's activity, such as one call per incoming message. Throttle or batch background calls (read markers, polling), so the user's own actions never compete with them for the shared write budget. Every list that can grow pages on the server. Every limit gets a clear message with a retry time, never a silent failure. See `docs/site/kafka-redis.md` for the current numbers.

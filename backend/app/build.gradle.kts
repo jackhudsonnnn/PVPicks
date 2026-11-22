@@ -24,8 +24,6 @@ val buildDeveloperDocs = tasks.register<Exec>("buildDeveloperDocs") {
         exclude("node_modules/**", "site/.vitepress/dist/**", "site/.vitepress/cache/**")
     })
     inputs.file(rootProject.file("api/openapi.yaml"))
-    inputs.file(rootProject.file("README.md"))
-    inputs.file(rootProject.projectDir.parentFile.resolve("client/roadmap.md"))
     outputs.dir(docsOutput)
     onlyIf { !prebuiltDocs }
 }
@@ -48,16 +46,6 @@ val modulithVersion: String by project
 
 dependencies {
     implementation(project(":shared:kernel"))
-    implementation(project(":modules:identity"))
-    implementation(project(":modules:social"))
-    implementation(project(":modules:tables"))
-    implementation(project(":modules:chat"))
-    implementation(project(":modules:bets"))
-    implementation(project(":modules:settlement"))
-    implementation(project(":modules:quickpicks"))
-    implementation(project(":modules:admin"))
-    implementation(project(":modules:sportsdata"))
-    implementation(project(":modules:audit"))
     implementation("org.springframework.modulith:spring-modulith-api:$modulithVersion")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -66,6 +54,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.kafka:spring-kafka")
+    implementation("org.springframework.boot:spring-boot-starter-websocket")
+    implementation("org.springframework.security:spring-security-messaging")
     implementation("com.ibm.icu:icu4j:76.1")
     implementation("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
@@ -88,5 +78,6 @@ tasks.withType<Test> {
 tasks.processTestResources {
     from("../api/openapi.yaml")
     from("../api/realtime.schema.json")
-    from("../dev/dev-seed.sql")
+    // Dated copies of the sports provider's OpenAPI specs, for contract tests against recorded responses.
+    from("../api/providers") { into("providers") }
 }

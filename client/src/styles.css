@@ -5,10 +5,17 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * P2Picks design system — DraftKings-inspired.
+ * P2Picks design system.
  * Charcoal surfaces, white type, signature green actions, orange accents,
  * bet-slip tickets with perforated notches. All colors in oklch.
  */
+
+@theme {
+  /* The sidebar navigation from here (1100px); narrower, the phone header and tab bar. */
+  --breakpoint-nav: 68.75rem;
+  /* The table page shows the felt and the side panel together from here (1455px); narrower, they're tabs. */
+  --breakpoint-split: 90.9375rem;
+}
 
 @theme inline {
   --font-display: "Big Shoulders Display", ui-sans-serif, system-ui, sans-serif;
@@ -83,12 +90,14 @@
 
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   --animate-rise: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Admin sports: a value that just changed on a live game. */
+  --animate-changed: changed 1.6s ease-out both;
 }
 
 :root {
   --radius: 0.75rem;
 
-  /* DraftKings-inspired: near-black charcoal, signature green, orange accent */
+  /* near-black charcoal, signature green, orange accent */
   --background: oklch(0.17 0 0);
   --foreground: oklch(0.98 0 0);
   --surface: oklch(0.215 0 0);
@@ -132,6 +141,16 @@
   --chart-3: oklch(0.72 0.16 340);
   --chart-4: oklch(0.82 0.15 85);
   --chart-5: oklch(0.68 0.15 280);
+
+  /* Admin charts: three validated categorical slots (dataviz palette, dark steps) and fixed status colors. */
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-good: #0ca30c;
+  --viz-warning: #fab219;
+  --viz-serious: #ec835a;
+  --viz-critical: #d03b3b;
+  --viz-grid: oklch(1 0 0 / 8%);
 
   /* Card-room felt */
   --felt: oklch(0.36 0.08 152);
@@ -199,6 +218,10 @@
   --sidebar-border: oklch(0.86 0 0);
   --sidebar-ring: oklch(0.62 0.19 142);
   --shadow-ticket-value: 0 0 0 1px oklch(0.88 0 0), 0 14px 30px -18px oklch(0 0 0 / 35%);
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-grid: oklch(0 0 0 / 8%);
 }
 :root.light {
   color-scheme: light;
@@ -323,6 +346,15 @@
   }
 }
 
+@keyframes changed {
+  from {
+    background-color: color-mix(in oklch, var(--viz-warning) 45%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -374,4 +406,14 @@
 .reduce-motion .ticker-dup,
 .reduce-motion [data-ticker-repeat="true"] {
   display: none;
+}
+
+/* Toasts sit just above the phone tab bar (h-16) wherever it shows (below the nav breakpoint, 1100px), and near the bottom beside the sidebar. */
+:root {
+  --toast-bottom: calc(4rem + 12px);
+}
+@media (min-width: 68.75rem) {
+  :root {
+    --toast-bottom: 24px;
+  }
 }

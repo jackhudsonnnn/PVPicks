@@ -21,6 +21,7 @@ class TickerContractTest {
         game.put("status", "LIVE");
         game.put("startsAt", "2026-11-11T23:00:00Z");
         game.put("observedAt", "2026-11-12T00:05:00Z");
+        game.put("dev", false);
         game.put("clock", "03:20");
         game.putObject("home").put("abbreviation", "BOS").put("score", 82);
         game.putObject("away").put("abbreviation", "NYK").put("score", 78);
@@ -50,6 +51,7 @@ class TickerContractTest {
         game.put("status", "SCHEDULED");
         game.put("startsAt", "2026-11-12T00:00:00Z");
         game.put("observedAt", "2026-11-11T19:00:00Z");
+        game.put("dev", false);
         game.putObject("home").put("abbreviation", "NE").putNull("score");
         game.putObject("away").put("abbreviation", "BUF").putNull("score");
         assertThat(schema.validate(snapshot)).isEmpty();

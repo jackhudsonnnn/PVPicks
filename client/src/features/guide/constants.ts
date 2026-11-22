@@ -1,47 +1,18 @@
 import {
-  BadgeDollarSign,
+  Trophy,
   Scale,
   ShieldCheck,
   Users,
   Handshake,
-  Heart,
-  HeartHandshake,
   Radio,
   Zap,
-  Megaphone,
   Ban,
   Flag,
   Trash2,
   MessagesSquare,
+  CheckCheck,
+  Hourglass,
 } from "lucide-react";
-
-export type ModeFilter = "all" | "u2pick" | "nba" | "nfl";
-
-export const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "u2pick", label: "U2Pick" },
-  { id: "nba", label: "NBA" },
-  { id: "nfl", label: "NFL" },
-] as const;
-
-export const LIFECYCLE = [
-  {
-    status: "active" as const,
-    text: "The ticket is open with a countdown. Tap a choice to join, and change or clear your pick until time runs out. Picks stay hidden.",
-  },
-  {
-    status: "pending" as const,
-    text: "Picks lock and are revealed. Everyone with a guess puts the wager into the pot. Now we wait for the play.",
-  },
-  {
-    status: "resolved" as const,
-    text: "A winning choice emerges. Losers' pot is split evenly among the winners.",
-  },
-  {
-    status: "washed" as const,
-    text: "Everyone picked the same side, nobody picked the winner, or the outcome wasn't one of the choices. Points go back.",
-  },
-];
 
 export const SECTIONS = [
   { id: "lifecycle", label: "Bet lifecycle" },
@@ -57,19 +28,19 @@ export const SECTIONS = [
 
 export const MONEY_POINTS = [
   {
-    icon: BadgeDollarSign,
+    icon: Trophy,
     title: "Free to play",
-    text: "No sign-up fee, no subscription, no vig and no cut of any pot. Every point that the table wagers stays within the group. Points are a scorecard, not a bill: nobody is ever required to pay up in real life.",
+    text: "No sign-up fee and no subscription. Points are a scorecard for bragging rights: they can't be bought, sold, cashed out or traded for anything.",
   },
   {
-    icon: Scale,
-    title: "Less legal weight",
-    text: "Apps that hold deposits, move money or take a share of wagers are usually run as sportsbooks or payment services, with licenses, state-by-state approval and identity checks. P2Picks only keeps score, so it stays out of that business.",
+    icon: Ban,
+    title: "No cash value",
+    text: "Points aren't money and don't stand for money. Don't use P2Picks to track real-money bets. Settle-ups only clear points.",
   },
   {
     icon: ShieldCheck,
-    title: "Better for you",
-    text: "Nothing to deposit, nothing stuck in a balance and no house edge working against you. You settle up with friends however your group already does.",
+    title: "Set your limit",
+    text: "A points limit in Preferences caps how far down you can go. Take a break when it stops being fun.",
   },
 ];
 
@@ -77,17 +48,17 @@ export const SOCIAL_POINTS = [
   {
     icon: Users,
     title: "Friends only",
-    text: "Tables are invite-only groups of people who already know each other: friends, coworkers, roommates. It's a home game, not a public sportsbook.",
+    text: "Tables are invite-only groups of people who already know each other: friends, coworkers, roommates. It's game night with friends, not a public contest.",
   },
   {
     icon: Scale,
     title: "Nobody has an edge",
-    text: "Every player gets the same odds and the same rules. Hosts run the table but never get a better payout, and neither do we.",
+    text: "Every player gets the same rules. Hosts run the table but never get a better payout, and neither do we.",
   },
   {
     icon: Handshake,
-    title: "Honor system",
-    text: "Settling up is between you and your friends. Points don't create a real debt, and nobody can force you to pay. Pay what you agreed to because you're a good friend.",
+    title: "Good sports",
+    text: "Settling up only clears points between you and a friend. Nobody owes anything outside the game.",
   },
 ];
 
@@ -95,17 +66,27 @@ export const SETTLE_POINTS = [
   {
     icon: Handshake,
     title: "Between you",
-    text: "Disputes about paying up are handled privately by the people involved. P2Picks doesn't hold money, so we can't move it, refund it or make anyone pay.",
+    text: "Disagreements about a result are sorted out by the people involved and the table's host.",
   },
   {
     icon: MessagesSquare,
     title: "Ask the host",
-    text: "The table's host can see every ticket and the settlement card in chat. Most mix-ups are a misread result or a payment nobody confirmed.",
+    text: "The table's host can see every ticket and the settlement card in chat. Most mix-ups are a misread result.",
   },
   {
     icon: ShieldCheck,
     title: "Settle often",
-    text: "Use Settle points, then mark payments sent and received under Friends, Settle-ups. Or forgive it: the person owed can wipe a settle-up, and the person who owes can ask them to. Your points number is the net of what's still open.",
+    text: "After a host settles points, open someone's Ledger under Friends, Settle-ups and pick the receipts to settle. They net out, so a few receipts settle at once. Your points number is the net of what's still open.",
+  },
+  {
+    icon: CheckCheck,
+    title: "Settle or mark settled",
+    text: "If you're down on what you picked, tap Settle. It counts right away, and they have 48 hours to reject it if they don't agree. If you're up, tap Mark as settled to close it. Up to 3 settles a day between two people.",
+  },
+  {
+    icon: Hourglass,
+    title: "Built-in brakes",
+    text: "A settle keeps counting toward your points limit until its 48 hours pass, so settling can't free up room to keep playing right away. If you're playing more than you meant to, set a points limit in Preferences and talk to someone you trust.",
   },
 ];
 
@@ -141,6 +122,6 @@ export const SAFETY_POINTS = [
   {
     icon: Trash2,
     title: "Delete anytime",
-    text: "You can delete your account in Preferences, Account. So can your friends. Past tickets stay as “Deleted user” so totals add up, but the app can't collect what they owe.",
+    text: "You can delete your account in Preferences, Account. So can your friends. Past tickets stay as “Deleted user” so totals add up.",
   },
 ];

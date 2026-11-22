@@ -1,0 +1,65 @@
+package com.p2picks.app.sports;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class StatsPollerTest {
+    private static final Instant NOW = Instant.parse("2026-11-14T02:00:00Z");
+    private static final StatsPoller.Candidate LIVE_A = new StatsPoller.Candidate("NBA-1", League.NBA, "1", true);
+    private static final StatsPoller.Candidate LIVE_B = new StatsPoller.Candidate("NBA-2", League.NBA, "2", true);
+    private static final StatsPoller.Candidate DONE = new StatsPoller.Candidate("NBA-3", League.NBA, "3", false);
+
+    @Test
+    void neverFetchedGamesGoFirstLiveBeforeFinished() {
+        assertThat(StatsPoller.next(List.of(DONE, LIVE_B, LIVE_A), Map.of(), NOW)).contains(LIVE_A);
+    }
+
+    @Test
+    void liveGamesTakeTurnsByWhoWaitedLongest() {
+        Map<String, Instant> fetched = new HashMap<>(Map.of("NBA-1", NOW.minusSeconds(20), "NBA-2", NOW.minusSeconds(40),
+                "NBA-3", NOW.minusSeconds(60)));
+        assertThat(StatsPoller.next(List.of(LIVE_A, LIVE_B, DONE), fetched, NOW)).contains(LIVE_B);
+    }
+
+    @Test
+    void finishedGamesRefreshOnlyEveryFifteenMinutes() {
+        Map<String, Instant> recent = Map.of("NBA-3", NOW.minus(StatsPoller.FINAL_REFRESH).plusSeconds(1));
+        assertThat(StatsPoller.next(List.of(DONE), recent, NOW)).isEmpty();
+        Map<String, Instant> stale = Map.of("NBA-3", NOW.minus(StatsPoller.FINAL_REFRESH).minusSeconds(1));
+        assertThat(StatsPoller.next(List.of(DONE), stale, NOW)).contains(DONE);
+    }
+
+    @Test
+    void oneRequestCoversTwoDueGamesFromTheSameLeague() {
+        StatsPoller.Candidate nfl = new StatsPoller.Candidate("NFL-9", League.NFL, "9", true);
+        StatsPoller.Candidate live = new StatsPoller.Candidate("NBA-4", League.NBA, "4", true);
+        Map<String, Instant> fetched = new HashMap<>(Map.of("NBA-3", NOW.minusSeconds(60)));
+        assertThat(StatsPoller.batch(List.of(LIVE_A, nfl, live, DONE), fetched, NOW))
+                .as("never-fetched NBA games first; not the other league; not a recently fetched final")
+                .containsExactly(LIVE_A, live);
+        assertThat(StatsPoller.batch(List.of(DONE), fetched, NOW)).isEmpty();
+        assertThat(StatsPoller.batch(List.of(nfl, DONE), fetched, NOW)).containsExactly(nfl);
+    }
+
+    @Test
+    void nflGamesAreRequestedOneAtATimeSoEachFitsOnePage() {
+        // NFL games reach about 70 rows, so two would spill onto a second page (a second request).
+        StatsPoller.Candidate first = new StatsPoller.Candidate("NFL-1", League.NFL, "1", true);
+        StatsPoller.Candidate second = new StatsPoller.Candidate("NFL-2", League.NFL, "2", true);
+        assertThat(StatsPoller.batch(List.of(first, second), new HashMap<>(), NOW)).hasSize(1);
+    }
+
+    @Test
+    void activePlayersRefreshEveryInterval() {
+        Instant now = Instant.parse("2026-11-15T03:00:00Z");
+        java.time.Duration tenMinutes = java.time.Duration.ofMinutes(10);
+        assertThat(StatsPoller.refreshDue(null, now, tenMinutes)).isTrue();
+        assertThat(StatsPoller.refreshDue(now.minusSeconds(599), now, tenMinutes)).isFalse();
+        assertThat(StatsPoller.refreshDue(now.minusSeconds(600), now, tenMinutes)).isTrue();
+    }
+}

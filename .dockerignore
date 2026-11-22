@@ -5,13 +5,10 @@
 !backend/settings.gradle.kts
 !backend/build.gradle.kts
 !backend/gradle.properties
-!backend/README.md
 !backend/gradle/
 !backend/gradle/**
 !backend/app/
 !backend/app/**
-!backend/modules/
-!backend/modules/**
 !backend/shared/
 !backend/shared/**
 !backend/api/
@@ -23,12 +20,6 @@
 !docs/scripts/**
 !docs/site/
 !docs/site/**
-!docs/reference/
-!docs/reference/**
-!docs/adr/
-!docs/adr/**
-!client/
-!client/roadmap.md
 **/.env*
 **/.npmrc
 **/*.pem

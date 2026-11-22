@@ -1,0 +1,95 @@
+import { z } from "zod";
+import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/api-client";
+import { userSchema, type User } from "@/features/people";
+
+const uuid = idSchema;
+/** Each list newest first: following and followers by follow time, friends by when the second follow happened. */
+const relationshipsSchema = z.object({
+  followingIds: z.array(uuid),
+  followerIds: z.array(uuid),
+  friendIds: z.array(uuid),
+  blockedIds: z.array(uuid),
+});
+const inviteSchema = z.object({
+  id: uuid,
+  tableId: uuid,
+  tableName: z.string(),
+  tableEmoji: z.string(),
+  fromId: uuid,
+  userId: uuid,
+  createdAt: z.string().datetime({ offset: true }),
+  /** Up to four members whose profiles you can read, in join order, for the request's avatars. */
+  memberPreview: z.array(uuid).max(4),
+  /** Everyone at the table, including members the preview leaves out. */
+  memberCount: z.number().int().min(1),
+});
+
+export type Relationships = z.infer<typeof relationshipsSchema>;
+export type TableInvite = z.infer<typeof inviteSchema>;
+
+function userPath(userId: string) {
+  if (!uuid.safeParse(userId).success) throw new BackendError("Person not found.", 404);
+  return encodeURIComponent(userId);
+}
+
+export async function getRelationships(signal?: AbortSignal): Promise<Relationships> {
+  return read(
+    await request("/me/relationships", signal ? { signal } : undefined),
+    relationshipsSchema,
+  );
+}
+
+/** Username search, excluding you, deleted users and blocks in either direction; 50 per page. */
+export async function searchUsers(
+  query: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<{ items: User[]; nextCursor: string | null }> {
+  const params = new URLSearchParams({ query });
+  if (cursor) params.set("cursor", cursor);
+  return read(
+    await request(`/users?${params}`, signal ? { signal } : undefined),
+    z.object({ items: z.array(userSchema), nextCursor: z.string().nullable() }),
+  );
+}
+
+export async function setFollow(userId: string, follow: boolean, key: string) {
+  await mutationRequest(`/follows/${userPath(userId)}`, follow ? "POST" : "DELETE", key);
+}
+
+export async function setBlock(userId: string, block: boolean, key: string) {
+  await mutationRequest(`/blocks/${userPath(userId)}`, block ? "POST" : "DELETE", key);
+}
+
+export async function listInvites(signal?: AbortSignal): Promise<TableInvite[]> {
+  return read(
+    await request("/me/invites", signal ? { signal } : undefined),
+    z.array(inviteSchema).max(100),
+  );
+}
+
+export async function respondToInvite(inviteId: string, accept: boolean, key: string) {
+  if (!uuid.safeParse(inviteId).success) throw new BackendError("Invitation not found.", 404);
+  await mutationRequest(`/invites/${encodeURIComponent(inviteId)}/respond`, "POST", key, {
+    accept,
+  });
+}
+
+export type ReportReason = "harassment" | "settlement" | "spam" | "offensive" | "other";
+
+export interface Report {
+  targetId: string;
+  reason: ReportReason;
+  note: string;
+  tableId?: string | undefined;
+  messageId?: string | undefined;
+}
+
+/** Files a private report for moderators; a message's content is kept with it. */
+export async function submitReport(report: Report, key: string) {
+  // Optional context is left out rather than sent as null.
+  const body = Object.fromEntries(
+    Object.entries(report).filter(([, value]) => value !== undefined),
+  );
+  await mutationRequest("/reports", "POST", key, body);
+}

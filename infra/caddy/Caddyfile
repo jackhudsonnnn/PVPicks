@@ -1,0 +1,41 @@
+# The LAN watch party's front door (docs: LAN watch party). The only service on the network: HTTPS on 443, and port
+# 80 redirects to it. /api/* goes to the backend (WebSockets included), everything else to the client's server.
+#
+# PVPICKS_LAN_HOST is the name phones open (lan.p2picks.com). PVPICKS_LAN_TLS is either the certificate files
+# obtained before the party ("/certs/fullchain.pem /certs/privkey.pem") or "internal" (Caddy's own CA, for testing
+# on the Mac with a name like localhost; phones won't trust it).
+{
+	# No admin API: config changes mean a restart.
+	admin off
+	# Browsers send no server name when opening an IP address (the quick test without a domain), and Docker's port
+	# forwarding hides which address was dialled, so fall back to this site's certificate.
+	default_sni {$PVPICKS_LAN_HOST}
+}
+
+{$PVPICKS_LAN_HOST} {
+	tls {$PVPICKS_LAN_TLS}
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		# QR sign-in links carry the code in the fragment, which browsers never send; this keeps the path private too.
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# The handbook, for the signed-in admin (the backend checks; anyone else is sent to /admin).
+	handle /docs* {
+		reverse_proxy backend:8080
+	}
+
+	handle_path /api/* {
+		# Caddy replaces any X-Forwarded-For a phone sends, so the backend's throttle sees real addresses.
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy client:3000
+	}
+}

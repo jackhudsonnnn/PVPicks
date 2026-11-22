@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HowToPlay } from "@/features/guide/components/guide-page";
 
 export const Route = createFileRoute("/how-to-play")({
   head: () => ({
@@ -7,18 +6,17 @@ export const Route = createFileRoute("/how-to-play")({
       { title: "How to Play | P2Picks" },
       {
         name: "description",
-        content:
-          "Game modes, the bet lifecycle and pooled payouts: how P2Picks works without a house.",
+        content: "Game modes, the bet lifecycle and pooled points: how P2Picks works.",
       },
       { property: "og:title", content: "How to Play | P2Picks" },
       {
         property: "og:description",
-        content:
-          "Game modes, the bet lifecycle and pooled payouts: how P2Picks works without a house.",
+        content: "Game modes, the bet lifecycle and pooled points: how P2Picks works.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: HowToPlay,
+  // The root renders App for every path; this route only provides the path and page metadata.
+  component: () => null,
 });

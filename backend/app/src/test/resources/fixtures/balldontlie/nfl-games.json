@@ -1,0 +1,88 @@
+{
+  "data": [
+    {
+      "id": 1392352,
+      "updated_at": "2026-11-13T23:00:47.829Z",
+      "visitor_team": {
+        "id": 21,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "Washington",
+        "name": "Commanders",
+        "full_name": "Washington Commanders",
+        "abbreviation": "WSH"
+      },
+      "home_team": {
+        "id": 20,
+        "conference": "NFC",
+        "division": "EAST",
+        "location": "New York",
+        "name": "Giants",
+        "full_name": "New York Giants",
+        "abbreviation": "NYG"
+      },
+      "summary": null,
+      "venue": "MetLife Stadium",
+      "week": 10,
+      "date": "2026-11-13T01:15:00.000Z",
+      "season": 2026,
+      "postseason": false,
+      "status": "Final",
+      "status_state": "final",
+      "home_team_score": 21,
+      "home_team_q1": 0,
+      "home_team_q2": 7,
+      "home_team_q3": 7,
+      "home_team_q4": 7,
+      "home_team_ot": null,
+      "visitor_team_score": 24,
+      "visitor_team_q1": 0,
+      "visitor_team_q2": 10,
+      "visitor_team_q3": 7,
+      "visitor_team_q4": 7,
+      "visitor_team_ot": null
+    },
+    {
+      "id": 1392353,
+      "updated_at": "2026-11-14T03:00:46.699Z",
+      "visitor_team": {
+        "id": 1,
+        "conference": "AFC",
+        "division": "EAST",
+        "location": "New England",
+        "name": "Patriots",
+        "full_name": "New England Patriots",
+        "abbreviation": "NE"
+      },
+      "home_team": {
+        "id": 25,
+        "conference": "NFC",
+        "division": "NORTH",
+        "location": "Detroit",
+        "name": "Lions",
+        "full_name": "Detroit Lions",
+        "abbreviation": "DET"
+      },
+      "summary": null,
+      "venue": "FC Bayern Munich Stadium",
+      "week": 10,
+      "date": "2026-11-15T14:30:00.000Z",
+      "season": 2026,
+      "postseason": false,
+      "status": "11/15 - 9:30 AM EST",
+      "status_state": "scheduled",
+      "home_team_score": null,
+      "home_team_q1": null,
+      "home_team_q2": null,
+      "home_team_q3": null,
+      "home_team_q4": null,
+      "home_team_ot": null,
+      "visitor_team_score": null,
+      "visitor_team_q1": null,
+      "visitor_team_q2": null,
+      "visitor_team_q3": null,
+      "visitor_team_q4": null,
+      "visitor_team_ot": null
+    }
+  ]
+}

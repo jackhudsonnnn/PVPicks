@@ -1,0 +1,75 @@
+# The LAN watch party (docs: LAN watch party). The backend is reachable only on the Compose network; Caddy is the way
+# in, terminates HTTPS and forwards the client's address. Dev-only features stay off: no demo world, passwordless
+# sign-in, /dev/** or handbook (denied in SessionSecurity), dev sports data or feed recordings.
+server:
+  address: 0.0.0.0
+  # Trust X-Forwarded-For/-Proto from Caddy (Tomcat's RemoteIpValve trusts private-network proxies only), so the
+  # sign-in throttle and rate limits see each phone's address.
+  forward-headers-strategy: native
+
+pvpicks:
+  # Cookies are Secure: players reach the app only over HTTPS.
+  secure-cookies: true
+  bet-lock-worker:
+    enabled: true
+  outbox-relay:
+    enabled: true
+  outbox-cleanup:
+    enabled: true
+    retention: ${PVPICKS_OUTBOX_RETENTION:P7D}
+  login-throttle:
+    per-account: ${PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT:10}
+    per-address: ${PVPICKS_LOGIN_THROTTLE_PER_ADDRESS:50}
+    # Wrong codes per player (or unknown username) per window; the admin can unlock a player from their card.
+    codes-per-player: ${PVPICKS_LOGIN_THROTTLE_CODES_PER_PLAYER:10}
+    # A backstop against spraying many usernames. Docker Desktop shows every phone as one address, so this is shared
+    # by the whole party: generous, so honest typos never reach it.
+    codes-per-address: ${PVPICKS_LOGIN_THROTTLE_CODES_PER_ADDRESS:100}
+    window: ${PVPICKS_LOGIN_THROTTLE_WINDOW:PT15M}
+  # The LAN admin, created on start with this password (the admin portal's password; players use sign-in codes).
+  bootstrap-admin:
+    username: ${PVPICKS_BOOTSTRAP_ADMIN:}
+    password: ${PVPICKS_BOOTSTRAP_ADMIN_PASSWORD:}
+  public-url: ${PVPICKS_ORIGIN}
+  demo:
+    enabled: false
+  # The party table: the first player created hosts "New Table", every later one is seated there (docs: LAN watch
+  # party). Only this profile turns it on.
+  lan:
+    party:
+      enabled: true
+  sports:
+    balldontlie:
+      api-key: ${PVPICKS_BALLDONTLIE_API_KEY:}
+    # All-Star defaults (60 requests a minute): about 8 for scores and 20 for player stats.
+    poll-interval: ${PVPICKS_SPORTS_POLL_INTERVAL:PT15S}
+    stats:
+      interval: ${PVPICKS_SPORTS_STATS_INTERVAL:PT3S}
+    players:
+      interval: ${PVPICKS_SPORTS_PLAYERS_INTERVAL:PT10M}
+    freshness: ${PVPICKS_SPORTS_FRESHNESS:PT3M}
+    ticker-cache-ttl: ${PVPICKS_TICKER_CACHE_TTL:PT5S}
+    recording-dir: ""
+  dev-sports:
+    dir: ""
+
+spring:
+  flyway:
+    enabled: true
+  datasource:
+    url: ${PVPICKS_DATASOURCE_URL}
+    username: ${PVPICKS_DB_USER}
+    password: ${PVPICKS_DB_PASSWORD}
+    hikari:
+      connection-timeout: 3000
+      validation-timeout: 2000
+      data-source-properties:
+        connectTimeout: 3
+        socketTimeout: 5
+  data:
+    redis:
+      host: ${PVPICKS_REDIS_HOST}
+      connect-timeout: 2s
+      timeout: 2s
+  kafka:
+    bootstrap-servers: ${PVPICKS_KAFKA_BOOTSTRAP_SERVERS}

@@ -2,8 +2,39 @@ server:
   address: 127.0.0.1
 
 pvpicks:
+  # Failed password sign-ins per account name and per client address before 429 (Redis; fails open).
+  login-throttle:
+    per-account: ${PVPICKS_LOGIN_THROTTLE_PER_ACCOUNT:10}
+    per-address: ${PVPICKS_LOGIN_THROTTLE_PER_ADDRESS:50}
+    window: ${PVPICKS_LOGIN_THROTTLE_WINDOW:PT15M}
   bet-lock-worker:
-    enabled: ${PVPICKS_BET_LOCK_WORKER_ENABLED:false}
+    enabled: ${PVPICKS_BET_LOCK_WORKER_ENABLED:true}
+  outbox-relay:
+    enabled: ${PVPICKS_OUTBOX_RELAY_ENABLED:true}
+  outbox-cleanup:
+    enabled: ${PVPICKS_OUTBOX_CLEANUP_ENABLED:true}
+    retention: ${PVPICKS_OUTBOX_RETENTION:P7D}
+  sports:
+    # Without a key the feed is not polled and the ticker reports itself unavailable.
+    balldontlie:
+      api-key: ${PVPICKS_BALLDONTLIE_API_KEY:}
+    # One request per league per poll: 2 a minute at the default, within the free tier's 5.
+    poll-interval: ${PVPICKS_SPORTS_POLL_INTERVAL:PT60S}
+    # Raw provider responses are appended here as JSON lines when set (for replay and debugging).
+    recording-dir: ${PVPICKS_SPORTS_RECORDING_DIR:}
+    freshness: ${PVPICKS_SPORTS_FRESHNESS:PT3M}
+    # The ticker is cached in Redis per feed change; this bounds staleness from time alone (freshness, date).
+    ticker-cache-ttl: ${PVPICKS_TICKER_CACHE_TTL:PT5S}
+    # Each league's active-player list is re-fetched (and recorded) this often; every page is one request.
+    players:
+      interval: ${PVPICKS_SPORTS_PLAYERS_INTERVAL:PT10M}
+  # The demo world: generated demo users, passwordless sign-in picker and reset (docs: Demo world).
+  demo:
+    enabled: true
+  # Dev scenario files and recorded chunks (docs: Dev sports data). Empty turns the dev data controls off.
+  dev-sports:
+    dir: ${PVPICKS_DEV_SPORTS_DIR:}
+    tick: ${PVPICKS_DEV_SPORTS_TICK:PT2S}
 
 spring:
   flyway:

@@ -21,7 +21,18 @@ class InviteContractTest {
         invite.put("createdAt", "2026-11-11T12:00:00Z");
         invite.put("tableName", "Friends");
         invite.put("tableEmoji", "\uD83C\uDFB2");
+        invite.putArray("memberPreview").add("52a73783-b3cf-438a-8174-ac235c54eb6e");
+        invite.put("memberCount", 1);
         assertThat(schema.validate(invite)).isEmpty();
+        invite.remove("memberPreview");
+        assertThat(schema.validate(invite)).as("a member preview is required for the request card").isNotEmpty();
+        var preview = invite.putArray("memberPreview");
+        for (int i = 0; i < 5; i++) preview.add("52a73783-b3cf-438a-8174-ac235c54eb6e");
+        assertThat(schema.validate(invite)).as("never the whole member list").isNotEmpty();
+        invite.putArray("memberPreview").add("52a73783-b3cf-438a-8174-ac235c54eb6e");
+        invite.put("memberCount", 501);
+        assertThat(schema.validate(invite)).as("tables hold at most 500").isNotEmpty();
+        invite.put("memberCount", 1);
         invite.remove("tableName");
         assertThat(schema.validate(invite)).isNotEmpty();
         invite.put("tableName", "Friends");

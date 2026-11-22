@@ -1,22 +1,29 @@
-subprojects {
-    if (parent?.path == ":modules") {
-        apply(plugin = "java-library")
+val junitVersion: String by project
+val assertjVersion: String by project
 
-        group = "com.p2picks"
-        version = "0.1.0-SNAPSHOT"
+// The shared kernel is a plain Java library with no Spring dependencies.
+project(":shared:kernel") {
+    apply(plugin = "java-library")
 
-        extensions.configure<JavaPluginExtension> {
-            toolchain.languageVersion = JavaLanguageVersion.of(21)
-        }
+    group = "com.p2picks"
+    version = "0.1.0-SNAPSHOT"
 
-        repositories {
-            mavenCentral()
-        }
+    extensions.configure<JavaPluginExtension> {
+        toolchain.languageVersion = JavaLanguageVersion.of(21)
+    }
 
-        val modulithVersion: String by project
-        dependencies {
-            add("api", project(":shared:kernel"))
-            add("implementation", "org.springframework.modulith:spring-modulith-api:$modulithVersion")
-        }
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        add("testImplementation", platform("org.junit:junit-bom:$junitVersion"))
+        add("testImplementation", "org.junit.jupiter:junit-jupiter")
+        add("testImplementation", "org.assertj:assertj-core:$assertjVersion")
+        add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.withType<Test> {
+        useJUnitPlatform()
     }
 }

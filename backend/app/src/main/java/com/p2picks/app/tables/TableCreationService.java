@@ -1,0 +1,201 @@
+package com.p2picks.app.tables;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2picks.app.chat.ChatMessageWriter;
+import com.p2picks.app.common.IdempotencyGuard;
+import com.p2picks.app.common.MembershipLimits;
+import com.p2picks.app.common.Outbox;
+import com.p2picks.app.common.OutboxEvent;
+import com.p2picks.app.security.MutationAuthentication;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+class TableCreationService {
+    private static final String CREATE = "table.create.v1";
+    private static final String ADD = "table.members.add.v1";
+
+    enum Outcome { SUCCESS, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, TABLE_LIMIT }
+    record MemberOutcome(UUID userId, String outcome) {}
+    record Result(Outcome outcome, UUID tableId, List<MemberOutcome> members) {}
+
+    private final JdbcTemplate jdbc;
+    private final MutationAuthentication authentication;
+    private final IdempotencyGuard idempotency;
+    private final ObjectMapper json;
+    private final ChatMessageWriter chatMessages;
+    private final Outbox outbox;
+
+    TableCreationService(JdbcTemplate jdbc, MutationAuthentication authentication,
+            IdempotencyGuard idempotency, ObjectMapper json, ChatMessageWriter chatMessages, Outbox outbox) {
+        this.jdbc = jdbc;
+        this.authentication = authentication;
+        this.idempotency = idempotency;
+        this.json = json;
+        this.chatMessages = chatMessages;
+        this.outbox = outbox;
+    }
+
+    @Transactional
+    public Result create(Jwt jwt, String key, String name, String emoji, List<UUID> requested) {
+        UUID actor = UUID.fromString(jwt.getSubject());
+        Map<UUID, String> statuses = authentication.lockActiveWithTargets(jwt, requested);
+        if (statuses == null) return failure(Outcome.UNAUTHORIZED);
+        authentication.requireUnexpired(jwt);
+        String canonical = name.length() + ":" + name + emoji.length() + ":" + emoji + requested;
+        IdempotencyGuard.Claim claim = idempotency.claim(actor, key, CREATE, canonical,
+                IdempotencyGuard.SuccessStatus.CREATED);
+        authentication.requireUnexpired(jwt);
+        if (claim == IdempotencyGuard.Claim.CONFLICT) return failure(Outcome.CONFLICT);
+        if (claim == IdempotencyGuard.Claim.REPLAY) {
+            UUID tableId = idempotency.responseReference(actor, key, CREATE);
+            String role = lockTableAndRole(tableId, actor);
+            authentication.requireUnexpired(jwt);
+            if (role == null) return failure(Outcome.NOT_FOUND);
+            List<MemberOutcome> outcomes = readOutcomes(actor, key, CREATE);
+            authentication.requireUnexpired(jwt);
+            return new Result(Outcome.SUCCESS, tableId, outcomes);
+        }
+
+        // A new table counts toward the creator's limit; a replay above didn't create one.
+        if (MembershipLimits.tables(jdbc, actor) >= MembershipLimits.TABLES_PER_USER) {
+            idempotency.discardNewClaim(actor, key);
+            authentication.requireUnexpired(jwt);
+            return failure(Outcome.TABLE_LIMIT);
+        }
+        UUID tableId = UUID.randomUUID();
+        TableProvisioning.insertTable(jdbc, tableId, name, emoji);
+        jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST')", tableId, actor);
+        outbox.append(OutboxEvent.TABLE_CREATED, tableId, Map.of("tableId", tableId));
+        chatMessages.system(tableId, "Table created");
+        List<MemberOutcome> outcomes = addRequested(tableId, actor, requested, statuses);
+        idempotency.saveResponseReference(actor, key, CREATE, tableId);
+        idempotency.saveResponseData(actor, key, CREATE, writeOutcomes(outcomes));
+        authentication.requireUnexpired(jwt);
+        return new Result(Outcome.SUCCESS, tableId, outcomes);
+    }
+
+    @Transactional
+    public Result add(Jwt jwt, UUID tableId, String key, List<UUID> requested) {
+        UUID actor = UUID.fromString(jwt.getSubject());
+        Map<UUID, String> statuses = authentication.lockActiveWithTargets(jwt, requested);
+        if (statuses == null) return failure(Outcome.UNAUTHORIZED);
+        authentication.requireUnexpired(jwt);
+        String role = lockTableAndRole(tableId, actor);
+        authentication.requireUnexpired(jwt);
+        if (role == null) return failure(Outcome.NOT_FOUND);
+        if (!role.equals("HOST")) return failure(Outcome.FORBIDDEN);
+        IdempotencyGuard.Claim claim = idempotency.claim(actor, key, ADD, tableId + "|" + requested,
+                IdempotencyGuard.SuccessStatus.OK);
+        authentication.requireUnexpired(jwt);
+        if (claim == IdempotencyGuard.Claim.CONFLICT) return failure(Outcome.CONFLICT);
+        if (claim == IdempotencyGuard.Claim.REPLAY) {
+            List<MemberOutcome> outcomes = readOutcomes(actor, key, ADD);
+            authentication.requireUnexpired(jwt);
+            return new Result(Outcome.SUCCESS, tableId, outcomes);
+        }
+        List<MemberOutcome> outcomes = addRequested(tableId, actor, requested, statuses);
+        idempotency.saveResponseData(actor, key, ADD, writeOutcomes(outcomes));
+        authentication.requireUnexpired(jwt);
+        return new Result(Outcome.SUCCESS, tableId, outcomes);
+    }
+
+    private String lockTableAndRole(UUID tableId, UUID actor) {
+        List<UUID> tables = jdbc.query("""
+                SELECT id FROM tables WHERE id = ? AND archived_at IS NULL FOR UPDATE
+                """, (rs, row) -> rs.getObject("id", UUID.class), tableId);
+        if (tables.isEmpty()) return null;
+        List<String> roles = jdbc.query("""
+                SELECT role FROM table_members WHERE table_id = ? AND user_id = ? FOR UPDATE
+                """, (rs, row) -> rs.getString("role"), tableId, actor);
+        return roles.isEmpty() ? null : roles.getFirst();
+    }
+
+    private List<MemberOutcome> addRequested(UUID tableId, UUID actor, List<UUID> requested,
+            Map<UUID, String> statuses) {
+        List<MemberOutcome> outcomes = new ArrayList<>();
+        boolean added = false;
+        for (UUID target : requested) {
+            String outcome = "not_added";
+            if (!actor.equals(target) && "ACTIVE".equals(statuses.get(target))) {
+                // A request past its lifetime no longer stands in the way of a new one.
+                MembershipLimits.expireLapsed(jdbc, tableId, target);
+                List<String> modes = jdbc.query("""
+                        SELECT CASE
+                            WHEN EXISTS (SELECT 1 FROM table_members WHERE table_id = ? AND user_id = ?)
+                              OR EXISTS (SELECT 1 FROM table_invites
+                                  WHERE table_id = ? AND user_id = ? AND status = 'PENDING')
+                              OR EXISTS (SELECT 1 FROM blocks WHERE
+                                  (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?))
+                              OR NOT EXISTS (SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = ?)
+                            THEN 'closed'
+                            WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = ?)
+                            THEN COALESCE((SELECT friends FROM invite_preferences WHERE user_id = ?), 'open')
+                            ELSE COALESCE((SELECT following FROM invite_preferences WHERE user_id = ?), 'request')
+                        END AS mode
+                        """, (rs, row) -> rs.getString("mode"),
+                        tableId, target, tableId, target, actor, target, target, actor,
+                        target, actor, actor, target, target, target);
+                String mode = modes.getFirst();
+                // Membership limits: a full table, someone already at their table limit, or (for a request) someone
+                // with a full request list isn't added and gets no request. Counted under the table and user locks.
+                if (!mode.equals("closed")
+                        && (MembershipLimits.members(jdbc, tableId) >= MembershipLimits.MEMBERS_PER_TABLE
+                        || MembershipLimits.tables(jdbc, target) >= MembershipLimits.TABLES_PER_USER
+                        || mode.equals("request")
+                                && MembershipLimits.waitingRequests(jdbc, target) >= MembershipLimits.WAITING_REQUESTS)) {
+                    mode = "closed";
+                }
+                if (mode.equals("open")) {
+                    jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'MEMBER')",
+                            tableId, target);
+                    outbox.append(OutboxEvent.TABLE_MEMBER_JOINED, tableId,
+                            Map.of("tableId", tableId, "userId", target));
+                    outcome = "added";
+                    added = true;
+                } else if (mode.equals("request")) {
+                    UUID inviteId = UUID.randomUUID();
+                    jdbc.update("""
+                            INSERT INTO table_invites (id, table_id, from_id, user_id, status)
+                            VALUES (?, ?, ?, ?, 'PENDING')
+                            """, inviteId, tableId, actor, target);
+                    outbox.append(OutboxEvent.TABLE_INVITATION_CREATED, target,
+                            Map.of("invitationId", inviteId));
+                    outcome = "invited";
+                }
+            }
+            outcomes.add(new MemberOutcome(target, outcome));
+        }
+        if (added) chatMessages.system(tableId, "Members were added to the table");
+        return List.copyOf(outcomes);
+    }
+
+    private String writeOutcomes(List<MemberOutcome> outcomes) {
+        try {
+            return json.writeValueAsString(outcomes);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot serialize membership outcomes", exception);
+        }
+    }
+
+    private List<MemberOutcome> readOutcomes(UUID actor, String key, String operation) {
+        try {
+            return List.copyOf(Arrays.asList(json.readValue(idempotency.responseData(actor, key, operation),
+                    MemberOutcome[].class)));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot deserialize membership outcomes", exception);
+        }
+    }
+
+    private static Result failure(Outcome outcome) {
+        return new Result(outcome, null, List.of());
+    }
+}

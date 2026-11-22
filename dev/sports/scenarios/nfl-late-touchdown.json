@@ -1,0 +1,89 @@
+{
+  "title": "NFL: late touchdown, then Final",
+  "description": "Q4, DET down 3. After 1 minute the Dev Receiver catches a touchdown (DET leads 24-20); after 2 minutes the game is Final. Use it for \"did he score a TD\", the spread (DET -2.5 covers) and the total (44 combined).",
+  "league": "NFL",
+  "games": [
+    {
+      "id": "g1",
+      "startsInMinutes": -150,
+      "status": "LIVE",
+      "period": 4,
+      "clock": "2:10",
+      "home": { "abbreviation": "DET", "name": "Lions", "city": "Detroit", "score": 17, "periods": [7, 3, 7, 0] },
+      "away": { "abbreviation": "GB", "name": "Packers", "city": "Green Bay", "score": 20, "periods": [0, 14, 3, 3] }
+    }
+  ],
+  "players": [
+    {
+      "id": "wr1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Receiver",
+      "position": "WR",
+      "stats": { "receiving_yards": 71, "receptions": 6, "touchdowns": 0 }
+    },
+    {
+      "id": "qb1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Passer",
+      "position": "QB",
+      "stats": { "passing_yards": 241 }
+    },
+    {
+      "id": "rb1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Back",
+      "position": "RB",
+      "stats": { "rushing_yards": 62, "touchdowns": 2 }
+    },
+    {
+      "id": "k1",
+      "game": "g1",
+      "team": "DET",
+      "firstName": "Dev",
+      "lastName": "Kicker",
+      "position": "K",
+      "stats": { "field_goals": 1, "extra_points": 2 }
+    },
+    {
+      "id": "rb2",
+      "game": "g1",
+      "team": "GB",
+      "firstName": "Dev",
+      "lastName": "Runner",
+      "position": "RB",
+      "stats": { "rushing_yards": 80, "touchdowns": 2 }
+    },
+    {
+      "id": "k2",
+      "game": "g1",
+      "team": "GB",
+      "firstName": "Dev",
+      "lastName": "Boot",
+      "position": "K",
+      "stats": { "field_goals": 2, "extra_points": 2 }
+    }
+  ],
+  "steps": [
+    {
+      "afterSeconds": 60,
+      "games": [
+        { "id": "g1", "clock": "0:38", "home": { "score": 24, "periods": [7, 3, 7, 7] } }
+      ],
+      "players": [
+        { "id": "wr1", "stats": { "receiving_yards": 89, "receptions": 7, "touchdowns": 1 } },
+        { "id": "qb1", "stats": { "passing_yards": 259 } },
+        { "id": "k1", "stats": { "field_goals": 1, "extra_points": 3 } }
+      ]
+    },
+    {
+      "afterSeconds": 120,
+      "games": [{ "id": "g1", "status": "FINAL", "clock": null }]
+    }
+  ]
+}

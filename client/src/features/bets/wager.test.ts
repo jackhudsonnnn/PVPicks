@@ -1,42 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { canStep, isValidWager, stepWager, WAGER_DEFAULT } from "./wager";
-import { formatPts } from "./ledger";
+import { formatCents } from "@/lib/money";
+import { PICK_WINDOWS, WAGER_DEFAULT_CENTS, WAGER_MAX_CENTS, WAGER_MIN_CENTS } from "./wager";
 
 describe("wager amounts", () => {
   it("defaults to 1.00", () => {
-    expect(WAGER_DEFAULT).toBe(1);
+    expect(WAGER_DEFAULT_CENTS).toBe(100);
   });
 
-  it("steps by +0.01, +0.10 and +1.00 without float drift", () => {
-    expect(stepWager(1, 0.01)).toBe(1.01);
-    expect(stepWager(1.01, 0.1)).toBe(1.11);
-    expect(stepWager(0.1, 0.1)).toBe(0.2);
-    expect(stepWager(1.11, 1)).toBe(2.11);
+  it("slides from 0.10 to 10.00, the range the server accepts", () => {
+    expect(WAGER_MIN_CENTS).toBe(10);
+    expect(WAGER_MAX_CENTS).toBe(1000);
   });
 
-  it("never goes above 10.00", () => {
-    expect(stepWager(9.5, 1)).toBe(10);
-    expect(canStep(9.5, 1)).toBe(false);
-    expect(canStep(9.99, 0.01)).toBe(true);
-    expect(canStep(10, 0.01)).toBe(false);
-  });
-
-  it("allows 0.10 to 10.00 in whole cents only", () => {
-    expect(isValidWager(0.1)).toBe(true);
-    expect(isValidWager(10)).toBe(true);
-    expect(isValidWager(0.09)).toBe(false);
-    expect(isValidWager(10.01)).toBe(false);
-    expect(isValidWager(1.005)).toBe(false);
+  it("offers only pick windows the server accepts", () => {
+    for (const window of PICK_WINDOWS) {
+      expect(window.sec).toBeGreaterThanOrEqual(30);
+      expect(window.sec).toBeLessThanOrEqual(600);
+    }
   });
 });
 
 describe("points display", () => {
-  it("shows dollars-style points to the nearest hundredth", () => {
-    expect(formatPts(1)).toBe("1.00");
-    expect(formatPts(2.5)).toBe("2.50");
-    expect(formatPts(3.333)).toBe("3.33");
-    expect(formatPts(1.5, true)).toBe("+1.50");
-    expect(formatPts(-4)).toBe("-4.00");
-    expect(formatPts(-0.001)).toBe("0.00");
+  it("shows cents as dollars-style points", () => {
+    expect(formatCents(100)).toBe("1.00");
+    expect(formatCents(250)).toBe("2.50");
+    expect(formatCents(150, true)).toBe("+1.50");
+    expect(formatCents(-400)).toBe("-4.00");
+    expect(formatCents(0, true)).toBe("0.00");
+    expect(formatCents(9_223_372_036_854_775_807n)).toMatch(/\.07$/);
   });
 });

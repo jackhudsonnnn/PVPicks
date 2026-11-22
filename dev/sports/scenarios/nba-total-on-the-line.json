@@ -1,0 +1,56 @@
+{
+  "title": "NBA: total lands on 224",
+  "description": "BOS @ NYK late in Q4 with 216 combined. After 45 s it's 220, after 90 s it ends Final 224 (NYK 113, BOS 111). An over/under 224 line pushes (washes); 224.5 goes Under; NYK -1.5 covers. Starts 30 minutes ago, so bets you make now are live bets.",
+  "league": "NBA",
+  "games": [
+    {
+      "id": "g1",
+      "startsInMinutes": -30,
+      "status": "LIVE",
+      "period": 4,
+      "clock": "1:12",
+      "home": { "abbreviation": "NYK", "name": "Knicks", "city": "New York", "score": 109, "periods": [28, 27, 26, 28] },
+      "away": { "abbreviation": "BOS", "name": "Celtics", "city": "Boston", "score": 107, "periods": [30, 25, 27, 25] }
+    }
+  ],
+  "players": [
+    {
+      "id": "pg1",
+      "game": "g1",
+      "team": "NYK",
+      "firstName": "Dev",
+      "lastName": "Guard",
+      "position": "G",
+      "stats": { "points": 29, "rebounds": 4, "assists": 8, "threes": 3, "stocks": 2 }
+    },
+    {
+      "id": "c1",
+      "game": "g1",
+      "team": "BOS",
+      "firstName": "Dev",
+      "lastName": "Center",
+      "position": "C",
+      "played": false
+    }
+  ],
+  "steps": [
+    {
+      "afterSeconds": 45,
+      "games": [{ "id": "g1", "clock": "0:31", "home": { "score": 111 }, "away": { "score": 109 } }],
+      "players": [{ "id": "pg1", "stats": { "points": 31 } }]
+    },
+    {
+      "afterSeconds": 90,
+      "games": [
+        {
+          "id": "g1",
+          "status": "FINAL",
+          "clock": null,
+          "home": { "score": 113, "periods": [28, 27, 26, 32] },
+          "away": { "score": 111, "periods": [30, 25, 27, 29] }
+        }
+      ],
+      "players": [{ "id": "pg1", "stats": { "points": 33, "assists": 9 } }]
+    }
+  ]
+}

@@ -51,8 +51,21 @@ class RealtimeContractTest {
     }
 
     @Test
-    void tickerInvalidationsCarryNoPrivateResourceIds() {
-        for (String type : new String[] {"ticker.changed"}) {
+    void tableBetListInvalidationNamesOnlyTheTable() {
+        ObjectNode event = event("bets.changed");
+        assertThat(schema.validate(event)).isNotEmpty();
+        event.put("tableId", "1f006a5f-fd02-41ff-aee8-52b87d11d53e");
+        assertThat(schema.validate(event)).isEmpty();
+        event.put("resourceId", "95586d98-8dae-455a-b642-51bd5c8cb8f8");
+        assertThat(schema.validate(event)).isNotEmpty();
+    }
+
+    @Test
+    void tickerAndPrivateSettlementInvalidationsCarryNoResourceIdsOrAmounts() {
+        for (String type : new String[] {"ticker.changed", "settlements.changed"}) {
+            ObjectNode amount = event(type);
+            amount.put("afterCents", 125);
+            assertThat(schema.validate(amount)).as(type).isNotEmpty();
             ObjectNode event = event(type);
             assertThat(schema.validate(event)).as(type).isEmpty();
             event.put("tableId", "1f006a5f-fd02-41ff-aee8-52b87d11d53e");
