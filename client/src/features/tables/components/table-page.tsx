@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { backendErrorMessage } from "@/lib/api-client";
 import { getTable, type Table, listTableBalances } from "@/features/tables/api";
 import { BalanceDialog } from "./balance-dialog";
+import { OthersDialog } from "./others-dialog";
 import {
   listTableBets,
   ProposeBetSheet,
@@ -185,8 +186,10 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
   const opened = useBet(user.id, table.id, openId, bets.data, expire);
-  const { seated, fromBet } = arrangeSeats(table.memberIds, user.id, focused);
+  // "+N others" on the felt: the focused ticket's Details when the felt shows its players, else who didn't fit.
+  const { rail, fromBet } = arrangeSeats(table.memberIds, user.id, focused);
   const [othersOpen, setOthersOpen] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
   const tabs = TABS.filter((t) => (t.id === "host" ? hosting : t.id === "about" ? !hosting : true));
   const sideTabs = tabs.filter((t) => t.id !== "table");
   // Falls back to chat if your host role changes while its tab is open.
@@ -282,7 +285,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
             onFocus={setFocusId}
             onOpenBet={openBet}
             // With a ticket's players around the felt, "+n" opens that ticket's Details (everyone in it).
-            onOpenOthers={() => (fromBet && focused ? setOthersOpen(true) : chooseTab("peers"))}
+            onOpenOthers={() => (fromBet && focused ? setOthersOpen(true) : setRailOpen(true))}
             onSelectUser={setProfileId}
             onPropose={block ? undefined : () => setProposing(true)}
             user={user}
@@ -309,7 +312,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
             <PeersPanel
               table={table}
               balances={balances}
-              seatedIds={seated}
               onSelectUser={setProfileId}
               onSelectBalance={setBalanceId}
               className="flex-1"
@@ -377,6 +379,18 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
           setProfileId(null);
           clearSearch();
         }}
+      />
+      <OthersDialog
+        ids={rail}
+        open={railOpen}
+        onOpenChange={setRailOpen}
+        onSelectUser={(id) => {
+          setRailOpen(false);
+          setProfileId(id);
+        }}
+        user={user}
+        expire={expire}
+        peopleKey={peopleKey}
       />
       {focused && (
         <BetDetailsDialog

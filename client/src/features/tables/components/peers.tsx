@@ -25,7 +25,6 @@ interface People {
 export function PeersPanel({
   table,
   balances,
-  seatedIds,
   onSelectUser,
   onSelectBalance,
   className,
@@ -35,7 +34,6 @@ export function PeersPanel({
   onSelectBalance: (userId: string) => void;
   table: Table;
   balances: { data?: TableBalance[] | undefined; error: unknown };
-  seatedIds: string[];
   className?: string;
 }) {
   const [query, setQuery] = useState("");
@@ -90,7 +88,6 @@ export function PeersPanel({
                 key={id}
                 id={id}
                 balance={byId.get(id)}
-                seated={seatedIds.includes(id)}
                 onSelect={() => onSelectUser(id)}
                 onSelectBalance={() => onSelectBalance(id)}
                 {...people}
@@ -133,7 +130,6 @@ function Points({ cents }: { cents: bigint | undefined }) {
 function PeerRow({
   id,
   balance,
-  seated,
   onSelect,
   onSelectBalance,
   ...people
@@ -142,7 +138,6 @@ function PeerRow({
   onSelectBalance: () => void;
   id: string;
   balance: TableBalance | undefined;
-  seated: boolean;
 }) {
   const person = usePerson(id, people.user, people.expire, people.peopleKey);
   const name = person?.name ?? "…";
@@ -162,11 +157,8 @@ function PeerRow({
           expire={people.expire}
           queryKey={people.peopleKey}
         />
-        <span className="min-w-0 flex-1">
-          <span className="block break-words text-sm font-semibold leading-tight">{name}</span>
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            {seated ? "Seated" : "Not seated"}
-          </span>
+        <span className="min-w-0 flex-1 break-words text-sm font-semibold leading-tight">
+          {name}
         </span>
       </button>
       <button

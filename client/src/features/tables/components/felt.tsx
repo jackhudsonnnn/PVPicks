@@ -89,7 +89,7 @@ export function Felt({
   focused: Bet | undefined;
   onFocus: (id: string) => void;
   onOpenBet: (id: string) => void;
-  /** The "+n" seat: the focused ticket's Details when they're its players, else the Peers tab. */
+  /** The "+n" seat: the focused ticket's Details when they're its players, else a list of who didn't fit. */
   onOpenOthers: () => void;
   onSelectUser: (userId: string) => void;
   /** Omitted when you can't start bets here. */

@@ -301,7 +301,6 @@ describe("quick picks", () => {
       <PeersPanel
         table={{ ...table, memberIds: [me.id, friend, ...crowd] }}
         balances={{ data: [], error: null }}
-        seatedIds={[]}
         onSelectUser={() => {}}
         onSelectBalance={() => {}}
         user={me}
@@ -337,7 +336,6 @@ describe("quick picks", () => {
           ],
           error: null,
         }}
-        seatedIds={[]}
         onSelectUser={onSelectUser}
         onSelectBalance={onSelectBalance}
         user={me}

@@ -115,9 +115,11 @@ earlier prototype (git tag `prototype-ui`).
   invite preferences decide whether they join right away or get an
   invitation.
 - **Table page:** a card-room felt with members seated around it (each
-  showing their points at the table and, for the focused bet, their pick) and
-  the open bets fanned as cards in the middle; tap the front card to open its
-  ticket. A side panel beside the felt from 1455px wide (the `split`
+  showing their pick in the focused bet) and the open bets fanned as cards in
+  the middle; tap the front card to open its ticket. With more people than
+  seats, the last seat is "+N others": it opens the focused ticket's Details
+  when the felt shows that ticket's players, otherwise a list of who didn't
+  fit (`others-dialog.tsx`). The felt and the Peers tab are independent. A side panel beside the felt from 1455px wide (the `split`
   breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's balance at
   the table; a name opens the profile, a balance opens a what-if dialog that
   lists that member's tickets in play with a "Win?" checkbox each, plus All win
