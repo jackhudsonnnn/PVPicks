@@ -1,5 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { renderWithQuery } from "@/test/render";
+import { QueryClient } from "@tanstack/react-query";
+import { fireEvent, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { bet as baseBet, summaryOf, table, user } from "@/test/api-fixtures";
@@ -63,8 +64,9 @@ const play: HoldemGame = {
 let client: QueryClient;
 
 function wrap(children: ReactNode) {
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{children}</QueryClientProvider>);
+  const rendered = renderWithQuery(children);
+  client = rendered.client;
+  return rendered;
 }
 
 function ticket(start = vi.fn()) {

@@ -1,5 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderWithQuery } from "@/test/render";
+import type { ReactNode } from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearSignInLockout, getSignInLockouts, type SignInLockouts } from "./dashboard-api";
 import { LockoutBanner, LockoutRow } from "./lockout";
@@ -20,14 +21,8 @@ const quiet: SignInLockouts = {
   players: [],
 };
 
-function wrap(ui: React.ReactNode) {
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      {ui}
-    </QueryClientProvider>,
-  );
+function wrap(ui: ReactNode) {
+  return renderWithQuery(ui);
 }
 
 beforeEach(() => vi.resetAllMocks());

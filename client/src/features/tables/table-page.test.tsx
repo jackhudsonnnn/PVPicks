@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { renderWithQuery } from "@/test/render";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile } from "@/features/people/api";
@@ -90,13 +90,7 @@ const expire = vi.fn();
 const peopleKey = ["backend-tables", me.id, "people"];
 
 function wrap(children: ReactNode) {
-  return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      {children}
-    </QueryClientProvider>,
-  );
+  return renderWithQuery(children);
 }
 
 function Chat() {

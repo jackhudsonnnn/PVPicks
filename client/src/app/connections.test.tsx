@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderWithQuery } from "@/test/render";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -67,13 +67,7 @@ const archive = {
 };
 
 function wrap(children: ReactNode) {
-  return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <SettingsProvider>{children}</SettingsProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithQuery(children, { settings: true });
 }
 
 beforeEach(() => {

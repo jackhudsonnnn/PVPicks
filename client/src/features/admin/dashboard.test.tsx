@@ -1,3 +1,5 @@
+import { renderWithQuery } from "@/test/render";
+import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,14 +52,8 @@ const otherId = "123e4567-e89b-42d3-a456-426614174002";
 const tableId = "123e4567-e89b-42d3-a456-426614174003";
 const at = "2026-11-17T12:00:00Z";
 
-function wrap(node: React.ReactNode) {
-  return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      {node}
-    </QueryClientProvider>,
-  );
+function wrap(node: ReactNode) {
+  return renderWithQuery(node);
 }
 
 const audit: UserAudit = {
