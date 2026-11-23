@@ -56,8 +56,7 @@ cover.
     (settles, rejection windows, the daily send limit, history and
     balance-change reviews), `SettleRulesTest` (who may settle what) and
     `DebtIntegrationTest`.
-  - `MigrationIntegrationTest`: schema constraints and populated V2–V25
-    upgrades. `PlatformIntegrationTest`: health, developer docs and
+  - `SchemaIntegrationTest`: the schema's constraints and triggers. `PlatformIntegrationTest`: health, developer docs and
     infrastructure connectivity.
   - `bets.BettingFrontendIntegrationTest` and
     `settlement.SettlementFrontendIntegrationTest`: opt-in runs of the React
@@ -98,8 +97,7 @@ cover.
   earliest offset so the consumer cannot miss an event while joining.
 - Contract tests validate draft OpenAPI and realtime shapes; they do not imply
   that every drafted operation is implemented.
-- Storage tests and `ProcessedEventStorageTest` cover database invariants and
-  transactional event deduplication.
+- Storage tests cover database invariants.
 
 Keep UI and browser-only behavior in frontend tests. Add backend tests for
 server authorization, concurrency, persistence, retry safety and financial

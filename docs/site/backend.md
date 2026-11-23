@@ -31,7 +31,9 @@ backend/
       chat/               message windows, sending, reactions, read state
       bets/               U2Pick proposal/pick/lock/resolution, payout and settler
                           rules, bet reads (per table and GET /me/bets), table
-                          balances, lock worker
+                          balances, lock worker; sports modes; the card games
+                          (CardGames: seats, storage, locking, the move frame
+                          and payout, shared by Jackblack and Hold'em)
       settlement/         points settlement, receipts, reviews, debt and debt cap,
                           settlement and debt calculators
       sports/             sports feed (BallDontLie), game history, players and
@@ -194,8 +196,10 @@ keys. To try it on this Mac before the domain exists, set
   disposable (see the root `AGENTS.md`), so resetting it is fine; any future shared or
   production database needs backups and approval first. Flyway does not
   baseline an existing nonempty schema.
-- The database role needs permission to install the `citext` and `pgcrypto`
-  extensions.
+- The schema is one baseline, `V1__baseline.sql` (V1–V47 squashed before the
+  MVP, 2026-11-23, when every database was wiped). Changes from here are new
+  migrations, `V2__…` onward; never edit a migration a database has applied.
+- The database role needs permission to install the `citext` extension.
 - The U2Pick lock worker is on by default in the dev profile: it scans at
   startup and then five seconds after each scan, locking overdue U2Pick bets
   in the connected database. Sports bets are not auto-locked.
@@ -237,8 +241,8 @@ keys. To try it on this Mac before the domain exists, set
 - Dated copies of the provider's OpenAPI specs live in `api/providers/`;
   `ProviderContractTest` checks trimmed real responses against them. When it
   fails, re-download the spec and re-check the mapping in `BallDontLieFeed`.
-- Privileged database operators bypass application rules (including the V24
-  role guard) and can read plaintext picks.
+- Privileged database operators bypass application rules (including the role
+  guard trigger) and can read plaintext picks.
 
 ## Database notes for new writers
 

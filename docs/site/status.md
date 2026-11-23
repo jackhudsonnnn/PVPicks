@@ -69,9 +69,13 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
   player's worst case is held against their points limit. Hosts choose who
   can propose it. It's played on the ticket; the felt shows each player's
   total and result (see the domain rules, "Jackblack").
+- Hold'em: no-limit Texas hold'em over 1–3 rotations (a hand per player each
+  time round), 100 big blinds to buy in, one rebuy per game, a turn timer,
+  server-side pre-moves, and a shuffle audit revealed once the game is over.
+  The proposer sets the players range; hosts choose who can propose it (see
+  the domain rules, "Hold'em").
 - Payouts: winners split the losers' pot and leftover cents go to winners at
-  random; the leftover-cents table setting is gone. Every mode follows the
-  fairness rule (domain rules, "Fairness").
+  random. Every mode follows the fairness rule (domain rules, "Fairness").
 - Wash triggers at lock (nobody picked, everyone on one option, a line or
   target already reached) and at resolution (nobody picked the winner, ties,
   pushes, a player who didn't play), listed in the domain rules.
@@ -98,7 +102,7 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
 **Demo world (dev)**
 
 - 250 demo users (including the 50-person Mosh Pit crowd) with play-style
-  profiles, played by bots through the real services, Jackblack included. newbie, intermediate and pro are seeded with friends, tables,
+  profiles, played by bots through the real services, Jackblack and Hold'em included. newbie, intermediate and pro are seeded with friends, tables,
   blocks and history, the admin with open reports and feedback. Demo games are always
   live, and the Dev page has a Reset (see [Demo world](/demo-data)).
 

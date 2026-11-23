@@ -134,7 +134,7 @@ destinations.
   `already_handled`. `POST /feedback` is limited to 5 an hour per account;
   admins read it in an inbox (`GET /admin/feedback`, New or Done with a
   private note through the idempotent `PUT /admin/feedback/{id}`). A deleted
-  account's feedback is removed; links stored before V18 aren't revalidated.
+  account's feedback is removed.
   `GET /admin/health` reports PostgreSQL and Redis without connection details
   (Kafka is `NOT_CHECKED`); `GET /admin/perf/live` adds runtime gauges.
 - Admin audits: `GET /admin/users/{id}/audit` and
@@ -210,7 +210,7 @@ destinations.
   refetch-on-reconnect remain open.
 
 - `GET /tables` orders by the later of `lastBetAt` and `joinedAt` (index
-  `bets_table_created_idx`, V36), and the client sorts the same way. The list
+  `bets_table_created_idx`), and the client sorts the same way. The list
   is refetched when you open a page or your memberships change, not on every
   bet, so the order doesn't shift while you look at it.
 
@@ -218,8 +218,10 @@ destinations.
   sports bet's mode follows, when proposed, at lock and now, with the game's
   score and clock. The proposal and lock transactions snapshot those numbers
   into `bets.baseline` (`{"proposed": {...}, "locked": {...}}`, keyed
-  `combined`, `margin`, `player:<id>`, `home_td`, `home_fg`, `away_td`,
-  `away_fg`); `BetLiveStats` reads them back with the current values.
+  `combined`, `margin`, `player:<id>`, `home_big`, `home_small`, `away_big`,
+  `away_small`), and resolving or washing the bet adds `result` and
+  `resultGame` (the score and clock then); `BetLiveStats` reads them back,
+  with the current values until the bet is `closed`.
 
 - Jackblack (domain rules, "Jackblack"): `POST /tables/{id}/bets` with
   `{modeId: "jackblack", wagerCents, durationSec, rules, forFun}` proposes
@@ -235,9 +237,6 @@ destinations.
   card is `"??"` until it's turned, and during a step only who is still
   deciding (your own choice comes back to you). `PUT /bets/{id}/pick` on a
   Jackblack bet is 400.
-- There is no leftover-cents setting: `PATCH /tables/{id}/remainder` and the
-  `remainderRule` / `remainderHostId` fields are gone (domain rules,
-  "Payouts").
 
 - `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one
   person, `{open, closed, nextCursor}`. Every open receipt comes in full (you

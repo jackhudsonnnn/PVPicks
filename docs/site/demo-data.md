@@ -14,8 +14,8 @@ buttons for **newbie**, **intermediate**, **pro** and **admin**, plus a search
 over every demo user, and signs you in as whoever you pick
 (`GET /dev/demo/accounts`, `POST /dev/demo/sign-in`). Demo players also have
 real sign-in codes, like LAN players (the admin's Users cards show them, and
-their QR links work on the same machine). `provision-dev.sh --init` now makes only the signing and
-retry keys; the old `infra/compose/.env.dev-accounts` file is no longer used.
+their QR links work on the same machine). `provision-dev.sh --init` makes only the signing and
+retry keys.
 
 The demo is on exactly when `pvpicks.demo.enabled` is true, which only
 `application-dev.yml` sets (tests turn it off). Players have no password; the

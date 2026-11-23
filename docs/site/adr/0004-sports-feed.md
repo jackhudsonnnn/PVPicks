@@ -35,7 +35,7 @@ under its Eastern date, NFL under its UTC date (a Thursday 8:15 pm ET kickoff is
 listed under Friday). That is two requests a minute, within the
 free tier's five. A failing league backs off exponentially, at least a minute
 when rate limited and at most ten minutes. Snapshots and per-league feed health
-are stored in `games` and `sports_feed_status` (V27).
+are stored in `games` and `sports_feed_status`.
 
 The lifecycle comes from the provider's `status_state`; `delayed` counts as
 scheduled, `canceled`, `suspended` and `abandoned` as postponed, and `unknown`

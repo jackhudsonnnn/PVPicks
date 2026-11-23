@@ -196,7 +196,10 @@ earlier prototype (git tag `prototype-ui`).
   them (wash or set the result) until the table's points are settled.
   Jackblack and Hold'em are played on their tickets
   (`bets/components/jackblack-ticket.tsx`, `holdem-ticket.tsx`), on a shared
-  frame (`card-ticket-shell.tsx`, owner decisions 2026-11-23) that keeps the
+  frame (`card-ticket-shell.tsx`, owner decisions 2026-11-23: the felt, cards,
+  tiles, join button and timer ring both games use; card faces, timers and
+  result chips are in `bets/cards.ts`, and Details' sections, rows and shuffle
+  audit in `details-parts.tsx`) that keeps the
   card the same height from the join window to the final standings. Under the
   title is the game's progress ("Round 2 / 7", "Hand 3 / 9"; 0 and a total from
   who's in while the join window is open), with Details beside it. The felt has

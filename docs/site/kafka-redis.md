@@ -246,7 +246,7 @@ wait up to 30 seconds.
    time-driven case, the 20-minute grace after Final, and for missed events.
 
 **Reliability.** Resolution already locks the bet and checks its status, so
-a redelivered event is a no-op. Record `processed_events` markers only if a
+a redelivered event is a no-op. Add processed-event markers only if a
 consumer gains non-idempotent effects (ADR 0002). Keying by game keeps one
 game's events in order on one partition, and partitions let instances
 resolve different games in parallel.

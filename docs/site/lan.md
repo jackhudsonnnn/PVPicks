@@ -157,7 +157,7 @@ the code. Only the admin has a password.
   chip on their card, each with **Unlock**; Perf shows the counts and
   **Clear all** (`GET`/`DELETE /admin/sign-in-lockout`, `DELETE
   /admin/sign-in-lockout/players/{playerId}`).
-- **Storage.** `sign_in_codes` (V41) keeps an HMAC of each code for lookup
+- **Storage.** `sign_in_codes` keeps an HMAC of each code for lookup
   and an AES-GCM encrypted copy for the admin's view; both keys derive from
   the session signing key (`.env.lan.auth`), so a database copy alone
   reveals no codes. Changing that key makes every code unreadable, and the
@@ -194,7 +194,7 @@ each other as friends, so the server does it (`lan.PartyTable`, LAN only):
 - The admin's Users tab shows the table above the player cards (its name
   and size, or that it doesn't exist yet or was deleted) and **Host** / **At
   the table** chips on the cards (`GET /admin/lan/party`).
-- `lan_party` (V43) records the table: one row, written by the first
+- `lan_party` records the table: one row, written by the first
   player and pointed at the new table if it is replaced.
 
 How it's wired: `accounts.PlayerProvisioning` publishes `PlayerCreated`

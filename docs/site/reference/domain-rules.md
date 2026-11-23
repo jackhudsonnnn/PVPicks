@@ -1,22 +1,21 @@
 # Domain rules and test inventory — working reference
 
 Current guides, the roadmap, and accepted decisions describe the design.
-The paths below are the current client tests that cover each area (most rules
-are server-only, so the backend tests are authoritative); proposed JUnit names
-are examples rather than a list of implemented tests.
+The table lists the client and backend tests that cover each area (most rules
+are server-only, so the backend tests are authoritative).
 
-| Area | Invariants to preserve | Client tests | Example JUnit targets |
+| Area | Invariants to preserve | Client tests | Backend tests |
 |---|---|---|---|
-| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Leftover cents go one each to winners at random ([Payouts](#payouts)). | None (server only) | `splitsLoserPotInCents`, `washWhenNoWinner`, `leftoverCentsGoToRandomWinners`, `settlementIsZeroSum` |
-| Lifecycle | ACTIVE accepts picks, but no first pick (or Jackblack join or leave) in the last 10 seconds before lock; anyone already in may still change or clear theirs (owner decision, 2026-11-22; `late_entry`); only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `rejectManualGameResult` |
-| Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
-| Balances and cap | One balance per table: unsettled results minus points in play ([Balances](#balances)). Host settle moves only unsettled results. Debt sums negative table balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `tables/api.test.ts` (balances), `tables/table-page.test.tsx` (what-if), `preferences/preferences.test.tsx` (debt cap) | `MyBetsAndBalancesIntegrationTest`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
-| Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the person down settles (`sent`: settled at once, rejectable by the other for 48 hours, still counted toward the points limit until then); the person up, or either side when even, marks as settled (`received`, final); no forgive; at most 3 sent settles per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `MigrationIntegrationTest` (V38, V42) |
-| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
-| Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
-| Social and safety | Mutual follows are friends (account-wide; table members are peers, see [Terms](/domain#terms)); enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `mutualFollowCreatesFriendship`, `blockPreventsInvites`, `thirdStrikeFreezesAccount` |
-| Membership limits | 100 open tables per account (deleted tables don't count), 500 members per table, 100 waiting requests per account; requests expire after 30 days. Enforced on create, on every add (open or request) and on accept. List reads carry summaries and member previews, never whole member lists. | `tables/api.test.ts`, `tables/management.test.tsx`, `tables/table-order.test.ts`, `tables/can-bet.test.ts` | `MembershipLimitsIntegrationTest`, `TableMembershipIntegrationTest` (summaries), `InviteContractTest` |
-| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message; one changeable vote per user/poll, polls gated by the table switch and the polls permission. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx`, `PollIntegrationTest` | `reactionReplacesPriorReaction`, `cursorPagingRemainsStable` |
+| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Leftover cents go one each to winners at random ([Payouts](#payouts)). | None (server only) | `PayoutCalculatorTest`, `BetResolutionIntegrationTest`, `LedgerStorageTest` |
+| Lifecycle | ACTIVE accepts picks, but no first pick (or Jackblack join or leave) in the last 10 seconds before lock; anyone already in may still change or clear theirs (owner decision, 2026-11-22; `late_entry`); only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `BetLifecycleIntegrationTest`, `BetPickIntegrationTest`, `BetLockIntegrationTest`, `BetReadModelIntegrationTest` |
+| Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `BetProposalIntegrationTest`, `SportsBetIntegrationTest`, `SportsOutcomeTest`, `PlayerOutcomeTest`, `ScorcererOutcomeTest`, `U2PickDefinitionTest` |
+| Balances and cap | One balance per table: unsettled results minus points in play ([Balances](#balances)). Host settle moves only unsettled results. Debt sums negative table balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `tables/api.test.ts` (balances), `tables/table-page.test.tsx` (what-if), `preferences/preferences.test.tsx` (debt cap) | `MyBetsAndBalancesIntegrationTest`, `DebtCalculatorTest`, `DebtIntegrationTest` |
+| Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the person down settles (`sent`: settled at once, rejectable by the other for 48 hours, still counted toward the points limit until then); the person up, or either side when even, marks as settled (`received`, final); no forgive; at most 3 sent settles per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `TableSettlementCalculatorTest`, `SchemaIntegrationTest` |
+| Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `BetResolutionIntegrationTest`, `TableSettingsIntegrationTest`, `SchemaIntegrationTest` |
+| Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `UserIntegrationTest`, `AccountLifecycleIntegrationTest`, `AdminDeletionIntegrationTest` |
+| Social and safety | Mutual follows are friends (account-wide; table members are peers, see [Terms](/domain#terms)); enforce invite preferences and blocks; reports reach admin; three strikes freeze the account. | `tables/management.test.tsx`, `tables/table-page.test.tsx` (reports) | `SocialIntegrationTest`, `ReportsAndTomatoesIntegrationTest`, `AccountLifecycleIntegrationTest` |
+| Membership limits | 100 open tables per account (deleted tables don't count), 500 members per table, 100 waiting requests per account; requests expire after 30 days. Enforced on create, on every add (open or request) and on accept. List reads carry summaries and member previews, never whole member lists. | `tables/api.test.ts`, `tables/management.test.tsx`, `tables/table-order.test.ts`, `tables/can-bet.test.ts` | `MembershipLimitsIntegrationTest`, `TableMembershipIntegrationTest` |
+| Chat | Authorize table access, filter blocked users, preserve message ordering and cursor paging; one reaction per user/message; one changeable vote per user/poll, polls gated by the table switch and the polls permission. | `chat/model.test.ts`, `chat/reactions.test.ts`, `chat/chat.test.tsx` | `ChatIntegrationTest`, `ChatStorageTest`, `PollIntegrationTest`, `GifFavoritesIntegrationTest` |
 
 Paths in the table are relative to `client/src/features/`. Review the
 backend test guidance before declaring the contract complete.
@@ -134,8 +133,7 @@ bets don't count). Chat bet messages embed the bet's question, mode and status.
 A receipt group whose net exceeds the 64-bit range still fails with
 `group_net_out_of_range`; there is no separate fallback.
 
-"No guess" is the only reserved choice text. The prototype's `__no_guess__`
-marker was dropped (V33).
+"No guess" is the only reserved choice text.
 
 ## Wash triggers
 
@@ -290,8 +288,7 @@ visibility but no operational dashboard or alerting.
 For table reads, the user chose to expose the Quick Pick code only to current
 hosts. The same goes for `subscribedTo` (the source tables' ids), and bet reads
 never send a Quick Pick copy's source bet or table id (owner decision,
-2026-11-22: no other table's ids, and no raw ids on screen; Details no longer
-shows the ticket id). Hosts can see all disabled member permissions; other members can see
+2026-11-22: no other table's ids, and no raw ids on screen, Details included). Hosts can see all disabled member permissions; other members can see
 only their own. Current, non-archived table membership is required even for an
 administrator or invitee. The dev read endpoints use one PostgreSQL statement
 to check the session, account, membership and role while retrieving the view;
@@ -300,8 +297,7 @@ tables. They do not expose bet participation or picks.
 
 Table names are 1–14 Unicode code points after trimming, so they fit a table
 card. The API rejects longer names on creation and profile changes, and the
-database enforces the same limit (`tables_name_length`); the V32 migration
-shortened existing longer names.
+database enforces the same limit (`tables_name_length`).
 
 Pending invitation reads include the table's name, emoji, up to four member
 ids (in join order) and the member count, for the request card. The preview
@@ -348,9 +344,7 @@ unchanged. A matching retry rechecks current host access and target membership
 without reapplying, so a successful self-demotion retry returns 403 until the
 caller is a host again. Host-change system messages store a constrained event
 and subject ID, not a username; chat reads render the current username or
-`Deleted user` from the tombstone. V22 does not repair legacy free-text system
-messages, including invitation-acceptance messages, whose deletion cleanup
-remains unfinished. Host and chat invalidations are internal outbox rows only.
+`Deleted user` from the tombstone. Host and chat invalidations are internal outbox rows only.
 
 Bet creation and status writers must acquire their required user locks,
 then the same table lock before inspecting or writing bet state, using a fresh
@@ -401,7 +395,7 @@ protocol so the gate cannot race those changes.
 Ledger deltas for a bet must be inserted in one database transaction whose
 entries balance to zero. Corrections, including a resolved Quick Pick wash,
 append compensating entries instead of changing or deleting old entries.
-V8 serializes ledger writers by bet and checks the sum at commit; transactions
+The schema serializes ledger writers by bet (`ledger_entries_lock_bet`) and checks the sum at commit; transactions
 touching multiple bets must lock them in a consistent order and retry deadlocks.
 This storage check does not implement settlement authorization, idempotency
 or the required transactional outbox producer. The internal shared resolution
@@ -426,12 +420,12 @@ retained separately for each settlement; receipt status and revision remain
 mutable. The service must atomically keep settlement-bet links consistent
 with the bet's points-settled timestamp and enforce receipt authorization,
 revision checks, cooldowns and group net reconciliation.
-The dev debt-cap read returns the saved value or NULL for either off state.
-The retry-safe dev update accepts NULL or a nonnegative whole-point amount in
+The debt-cap read returns the saved value or NULL for either off state.
+The retry-safe update accepts NULL or a nonnegative whole-point amount in
 cents up to 2147483600. It rejects every fresh update while debt is nonzero,
 including an unchanged value; a matching retry replays the prior success
-without reapplying it. Previously stored non-whole-point caps remain readable.
-This does not enforce the cap on bets.
+without reapplying it. The cap is enforced when proposing, picking and at lock
+(4fun is exempt).
 
 The settlement module's pure debt calculator sums negative table balances per
 table and negative open-receipt nets per counterparty, without offsetting
@@ -540,8 +534,8 @@ code points after trimming. GIFs come only from the catalog in
 removed, since sent messages look their GIF up by ID. The picker's search
 needs every word to appear in a GIF's caption, tags or category. Categories are
 Hype, Pain, React and Roast (Money merged into Hype, owner decision,
-2026-11-23). Each player can star up to 100 library GIFs (`gif_favorites`,
-V47; `GET /me/gif-favorites`, `PUT`/`DELETE /me/gif-favorites/{gifId}`, which
+2026-11-23). Each player can star up to 100 library GIFs (`gif_favorites`;
+`GET /me/gif-favorites`, `PUT`/`DELETE /me/gif-favorites/{gifId}`, which
 set the star so repeating either changes nothing); the picker shows them first
 in a Starred tab. Stars are personal data, deleted with the account.
 A send atomically stores a message, internal outbox event and retry claim.
@@ -602,20 +596,19 @@ the original per-person outcomes.
 
 Feedback accepts the five prototype categories, text of 10–1000 UTF-16 code
 units after trimming and an optional HTTP(S) link without whitespace, matching
-the prototype's JavaScript length check. A blank trimmed link is absent. V12
+the prototype's JavaScript length check. A blank trimmed link is absent. The database
 checks 5–1000 database characters to avoid rejecting valid supplementary
 characters. The dev submission endpoint normalizes JavaScript whitespace,
 rejects NUL and unpaired surrogates that PostgreSQL cannot safely store, and
-atomically commits feedback with its 201 retry outcome. V18 aligns the link
-constraint for new writes with JavaScript whitespace; legacy rows are retained
-without validation and require review. Feedback may contain personal
+atomically commits feedback with its 201 retry outcome. The link
+constraint matches JavaScript whitespace. Feedback may contain personal
 information, so account deletion removes it (`FeedbackAccountCleanup`) rather
 than tombstoning the author. Sending is limited to 5 an hour per account.
 Admins read it in the feedback inbox; a retention period for kept feedback is
 not decided yet.
 
 Admin flag and strike rows default to unflagged and zero strikes; an absent row
-means the same. Strikes are 0–3 (V13). The moderation rules are above;
+means the same. Strikes are 0–3. The moderation rules are above;
 reports, strikes, feedback notes and the admin audit log are personal
 moderation data, readable only by admins, and their retention period is not
 decided yet.
@@ -695,8 +688,7 @@ Defaults are friends `open` and following `request`.
 
 Losing eligibility permanently cancels a pending invitation; it is no longer
 available to decline or restored when eligibility returns. Dev follow and
-preference mutations cancel affected requests atomically; V19 cancels
-pre-existing ineligible requests. Acceptance revalidates the policy and
+preference mutations cancel affected requests atomically. Acceptance revalidates the policy and
 atomically creates a membership, system chat line and internal outbox records;
 decline only updates the invitation. Retries recheck visibility, and acceptance
 replay requires current membership. The system chat line reaches members
@@ -717,7 +709,7 @@ Transactions lock all existing requested users and the actor in PostgreSQL UUID
 order before the session and table. Matching add-member retries recheck host
 access and return original outcomes without repeating actions. Creation retries
 return the original outcomes and current authorized table view; lost table
-access returns 404. V23 stores the submitted IDs and outcomes in retry records;
+access returns 404. Retry records store the submitted IDs and outcomes;
 retention and account-deletion cleanup remain unresolved, as with other retry
 records. The outbox relay delivers the events as realtime invalidations
 (`invitations.changed` to the invitee); clients refetch, so an invitation
@@ -744,8 +736,7 @@ open receipts in one action (`settlement/SettleService`, rules in
   stays in History for audit. After 48 hours it's final.
 - **Mark as settled** (`received`): the person up, or either side when the
   selection is even. Final at once, since it only gives up points owed to
-  them. This replaced Forgive, which V42 converted (forgives became
-  `received` settles, their receipts `paid`).
+  them. There is no forgive.
 - **Points limit** (debt cap in code). A sent settle still counts toward
   the settler's debt until its window closes, so settling can't free room
   to keep betting. Account
@@ -761,13 +752,10 @@ open receipts in one action (`settlement/SettleService`, rules in
 - **Stale picks.** A selection must be all open receipts between the two
   (409 `stale_selection` otherwise). Matching retries return the same
   settle.
-- **Storage** (V38): `settles` (sender, kind, the net and its direction,
+- **Storage**: `settles` (sender, kind, the net and its direction,
   `reject_by` for sends, `rejected_at`) and `settle_lines`; a receipt is
   `unpaid` or `paid` and points at the settle that closed it.
-  Only a settle's rejection can change after it's written. V38 turned
-  receipts marked sent into sends with a fresh 48-hour window, and
-  forgive-asked and disputed receipts back into open ones. V42 removed
-  `forgiven`.
+  Only a settle's rejection can change after it's written.
 
 Cards on Friends, Settle-ups (one per person with open receipts or a send
 still in its window): **yellow** when something needs you (a balance change
@@ -799,8 +787,7 @@ Owner rule, 2026-11-21: every mode is fair to everyone in it.
 
 ## Balances
 
-Owner decisions, 2026-11-22. There is one balance; the old Settle and True
-views are gone.
+Owner decisions, 2026-11-22. There is one balance.
 
 - **A table balance** is your results from resolved bets whose points aren't
   settled yet, minus everything you have in play: your wager in every Pending
@@ -828,8 +815,7 @@ In code: `bets/TableBalanceController` (`GET /tables/{id}/balances`,
 Owner decision, 2026-11-21: winners split the losers' pot evenly, in whole
 cents; the cents that don't divide go one each to winners in a random order
 (seeded by the bet, so a replay pays the same). There is no table setting for
-it; the old leftover-cents rule (host, proposer, earliest pick, random) is
-gone. Ledger entries are zero-sum, No guess is outside the pot, and a winner
+it. Ledger entries are zero-sum, No guess is outside the pot, and a winner
 whose share rounds to nothing has no ledger entry. In code:
 `bets/PayoutCalculator`; test `PayoutCalculatorTest`.
 
@@ -934,7 +920,8 @@ both sides).
 In code: `bets/JackblackRules` (limits and worst case), `bets/JackblackGame`
 (the pure game), `bets/JackblackService` (propose, join, deal, steps, the
 dealer, timeouts, payouts), `bets/CardGameWorker` (deals and timeouts every
-second, for both card games); V44, V46 (shared `card_games` and `card_players`). Tests: `JackblackGameTest` (including 400 random games checked
+second, for both card games), on the shared plumbing in `bets/CardGames` (seats, storage, locking, the
+move frame and the payout; tables `card_games` and `card_players`). Tests: `JackblackGameTest` (including 400 random games checked
 zero-sum and inside the worst case), `JackblackIntegrationTest`; client
 `features/bets/jackblack.ts` and its test.
 
@@ -996,7 +983,7 @@ like Jackblack:
 
 In code: `bets/HoldemRules`, `bets/HoldemGame` (the pure game),
 `bets/HandEvaluator`, `bets/HoldemService`, `bets/HoldemController`,
-`bets/CardGameWorker`; V46. Demo bots play it with `demo/HoldemBot`. Tests:
+`bets/CardGameWorker`, `bets/CardGames`. Demo bots play it with `demo/HoldemBot`. Tests:
 `HoldemGameTest` (including 500 random games checked zero-sum, no negative
 stacks and nobody down more than two buy-ins), `HandEvaluatorTest`,
 `HoldemIntegrationTest`, `HoldemBotTest`; client `features/bets/holdem.test.tsx`
@@ -1015,7 +1002,7 @@ counts, the table row for a table's).
 | Open tables per account | 100, hosting or not; deleted (archived) tables don't count | Creating a table returns 409 `table_limit` ("You're at 100 tables. Leave one first."). Accepting a request returns the same and the request stays waiting. A host's add (open or request) is `not_added`, and no request is sent. |
 | Members per table | 500, hosts included | Adds are `not_added`. Accepting a request returns 409 `table_full`, and the request stays waiting. |
 | Waiting requests per account | 100 | A new request is `not_added` (none is created). |
-| Request lifetime | 30 days from sending | The request no longer appears, can't be answered (409, like a cancelled one), doesn't count toward the 100, and doesn't block a new request to the same table. Reads check the age directly; an hourly job (`social/InvitationExpiry`) and new requests mark old rows `EXPIRED` (V37). |
+| Request lifetime | 30 days from sending | The request no longer appears, can't be answered (409, like a cancelled one), doesn't count toward the 100, and doesn't block a new request to the same table. Reads check the age directly; an hourly job (`social/InvitationExpiry`) and new requests mark old rows `EXPIRED`. |
 
 Matching retries of a successful create or accept still replay after a limit
 is reached. The caps also bound reads: `GET /tables` returns at most 100

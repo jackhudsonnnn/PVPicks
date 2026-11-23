@@ -57,13 +57,13 @@ flowchart LR
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
 | `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions`; the GIF library (`chat/gifs.json`, served at `GET /gifs`). Chat windows read each bet card's question, mode and status from `bets` in the same query. |
-| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries`, `jackblack_games`, `jackblack_players` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
+| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries`, `card_games`, `card_players` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback` | `feedback` (submissions and the admin inbox) |
 | `admin` | `admin_audit_log`, `perf_minutes`: player audits (read-only across modules), request timings, health and runtime gauges |
 | `moderation` | `reports`, `admin_user_flags` (strikes): the admin queue, strikes and unfreezing |
 | `accounts` | `users.status` (freezing, unfreezing and the deletion tombstone), and admin-created player accounts and the bootstrapped first admin. Coordinates the other modules' account cleanup through their APIs, so each module still writes only its own tables. |
-| `common` | `http_idempotency`, `http_idempotency_key_guard`, `processed_events`, `outbox` (modules call `Outbox.append`) |
+| `common` | `http_idempotency`, `http_idempotency_key_guard`, `outbox` (modules call `Outbox.append`) |
 | `sports` | `games`, `game_snapshots`, `players`, `player_game_stats`, `player_stat_snapshots`, `sports_feed_status`; the admin sports explorer |
 | `lan` | `lan_party`: LAN only (`pvpicks.lan.party.enabled`). Seats each new player at the party table on `accounts.PlayerCreated`, through `tables.TableProvisioning` and `social.Friendships` ([LAN watch party](/lan#the-party-table)) |
 | `config` | Nothing: `GET /config` (the app mode), the mode check before Flyway, and the dev docs endpoint |
@@ -86,7 +86,7 @@ The shared kernel is a plain Java library containing exact integer-cent money.
 The dev HTTP filter checks the current account role: admin accounts cannot call
 player APIs, and players cannot call admin APIs. Both can use session endpoints;
 public dev docs and health remain available. No account-role change API exists.
-Migration V24 rejects ordinary role updates; privileged database operators can
+A schema trigger (`users_role_immutable`) rejects ordinary role updates; privileged database operators can
 bypass the guard. The request-level boundary alone does not stop an in-flight
 request after an out-of-band role change.
 
