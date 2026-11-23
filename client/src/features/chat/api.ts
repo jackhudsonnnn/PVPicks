@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/api-client";
+import {
+  BackendError,
+  mutationRequest,
+  read,
+  request,
+  idSchema,
+  idSegment,
+} from "@/lib/api-client";
 import { exactCents, readExact } from "@/features/settlements";
 
 const uuid = idSchema;
@@ -68,6 +75,9 @@ const previewSchema = z.object({
     .nullable(),
 });
 
+/** An id as a URL path segment (a malformed id is a 404 before any request). */
+const tableSegment = (id: string) => idSegment(id, "Table not found.");
+
 export type ChatPreview = z.infer<typeof previewSchema>;
 
 /** One preview per current table, for the table cards on Home. */
@@ -95,11 +105,6 @@ type ChatUnread = z.infer<typeof unreadSchema>;
 /** Which window to read: the latest, older/newer than a cursor, or around a visible message. */
 type WindowRequest = { latest: true } | { before: string } | { after: string } | { around: string };
 
-function tablePath(tableId: string) {
-  if (!uuid.safeParse(tableId).success) throw new BackendError("Table not found.", 404);
-  return encodeURIComponent(tableId);
-}
-
 export async function getChatWindow(
   tableId: string,
   window: WindowRequest,
@@ -114,7 +119,10 @@ export async function getChatWindow(
           ? `?around=${encodeURIComponent(window.around)}`
           : "";
   const result = await readExact(
-    await request(`/chat/${tablePath(tableId)}/messages${query}`, signal ? { signal } : undefined),
+    await request(
+      `/chat/${tableSegment(tableId)}/messages${query}`,
+      signal ? { signal } : undefined,
+    ),
     windowSchema,
   );
   if (result.items.some((message) => message.tableId !== tableId))
@@ -124,7 +132,7 @@ export async function getChatWindow(
 
 export async function getChatUnread(tableId: string, signal?: AbortSignal): Promise<ChatUnread> {
   return readExact(
-    await request(`/tables/${tablePath(tableId)}/last-read`, signal ? { signal } : undefined),
+    await request(`/tables/${tableSegment(tableId)}/last-read`, signal ? { signal } : undefined),
     unreadSchema,
   );
 }
@@ -134,7 +142,7 @@ export async function sendChatMessage(
   message: { kind: "text"; text: string } | { kind: "gif"; gifId: string },
   key: string,
 ): Promise<void> {
-  await mutationRequest(`/tables/${tablePath(tableId)}/messages`, "POST", key, message);
+  await mutationRequest(`/tables/${tableSegment(tableId)}/messages`, "POST", key, message);
 }
 
 export async function createPoll(
@@ -142,7 +150,7 @@ export async function createPoll(
   poll: { question: string; options: string[] },
   key: string,
 ): Promise<void> {
-  await mutationRequest(`/tables/${tablePath(tableId)}/polls`, "POST", key, poll);
+  await mutationRequest(`/tables/${tableSegment(tableId)}/polls`, "POST", key, poll);
 }
 
 /** Votes for one option (0-based), or removes your vote with null. */
@@ -161,7 +169,7 @@ export async function setReaction(messageId: string, emoji: string | null, key: 
 }
 
 export async function markRead(tableId: string, messageId: string, key: string) {
-  await mutationRequest(`/tables/${tablePath(tableId)}/last-read`, "PUT", key, { messageId });
+  await mutationRequest(`/tables/${tableSegment(tableId)}/last-read`, "PUT", key, { messageId });
 }
 
 /** The chat GIF library the server accepts (`GET /gifs`). */

@@ -1,5 +1,5 @@
 import { STATUSES } from "@/features/bets/statuses";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
@@ -15,6 +15,7 @@ import {
 import { ScrollContainer } from "@/components/scroll-container";
 import { MODES } from "@/features/bets/modes";
 import { StatusBadge } from "./status-badge";
+import { FactRow, FactSection } from "./details-parts";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -31,26 +32,6 @@ const SETTLER = {
   hosts: "Hosts",
   me: "The proposer",
 } as const;
-
-function FactRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="break-words text-right font-medium">{children}</span>
-    </div>
-  );
-}
-
-function FactSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-1">
-      <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
-        {title}
-      </h4>
-      <div className="divide-y rounded-lg border bg-surface px-3">{children}</div>
-    </section>
-  );
-}
 
 interface Props {
   bet: Bet;

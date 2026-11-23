@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatCents } from "@/lib/money";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
 import { tableBetsFeed } from "@/lib/realtime-connection";
 import type { Bet } from "./api";
 import type { User } from "@/features/people";
 import { getJackblackGame, type JackblackHand, type JackblackSeat } from "./jackblack";
+import { type SeatChip, resultChip } from "@/features/bets/cards";
 
 /**
  * The game as the viewer sees it, shared by the ticket, the felt and Details (one cache entry). Refreshes with the
@@ -34,10 +34,6 @@ export const RESULT: Record<NonNullable<JackblackHand["result"]>, string> = {
   bust: "Bust",
 };
 
-export function signed(cents: number) {
-  return `${cents > 0 ? "+" : ""}${formatCents(cents)}`;
-}
-
 /** A hand's value as a label: "Bust", "Blackjack", "soft 17" or "17". */
 export function handLabel(hand: JackblackHand, split: boolean) {
   if (hand.result) return RESULT[hand.result];
@@ -50,15 +46,6 @@ export function handLabel(hand: JackblackHand, split: boolean) {
 function seatTotals(seat: JackblackSeat) {
   const hands = seat.hands ?? [];
   return hands.map((h) => handLabel(h, hands.length > 1)).join(" / ");
-}
-
-export type SeatChip = { label: string; tone: "pick" | "pass" | "win" | "loss" | "washed" };
-
-function result(cents: number): SeatChip {
-  if (cents === 0) return { label: "Even", tone: "pass" };
-  return cents > 0
-    ? { label: `Up ${formatCents(cents, true)}`, tone: "win" }
-    : { label: `Down ${formatCents(-cents)}`, tone: "loss" };
 }
 
 /**
@@ -80,14 +67,14 @@ export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
     if (data.phase === "waiting")
       return data.players?.includes(userId) ? { label: "In", tone: "pick" } : null;
     if (!data.order?.includes(userId)) return null;
-    if (data.phase === "done") return result(data.totals?.[userId] ?? 0);
+    if (data.phase === "done") return resultChip(data.totals?.[userId] ?? 0);
     if (data.phase === "results") {
       // The pause after a round: how each player did in it.
       const last = data.history?.at(-1);
       if (!last) return null;
-      if (userId === last.dealerId) return result(last.dealerDeltaCents);
+      if (userId === last.dealerId) return resultChip(last.dealerDeltaCents);
       const sat = last.seats.find((s) => s.userId === userId);
-      return sat ? result(sat.deltaCents ?? 0) : null;
+      return sat ? resultChip(sat.deltaCents ?? 0) : null;
     }
     if (userId === data.dealerId)
       return {

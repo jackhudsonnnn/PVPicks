@@ -1,10 +1,10 @@
 import type { Bet } from "@/features/bets/api";
 import type { User } from "@/features/people";
 import { ticketStatus } from "@/features/bets/ticket-model";
-import { cardFace } from "@/features/bets/jackblack";
 import { cn } from "@/lib/utils";
 import { holdemPlayers } from "@/features/bets/holdem";
 import { useHoldemGame } from "@/features/bets/holdem-game";
+import { cardFace } from "@/features/bets/cards";
 
 /**
  * Hold'em on the table's felt stays light like Jackblack: the usual ticket stack (its front card shows the board),

@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BackendError, idSchema, mutationRequest, read, request } from "@/lib/api-client";
+import {
+  BackendError,
+  idSchema,
+  idSegment,
+  mutationRequest,
+  read,
+  request,
+} from "@/lib/api-client";
 
 const uuid = idSchema;
 
@@ -25,6 +32,10 @@ const tableSchema = z.object({
     z.array(z.enum(["bets", "text", "react", "gifs", "polls"])),
   ),
 });
+
+/** `/tables/<id>`, and a person's id as a path segment (a malformed id is a 404 before any request). */
+const tablePath = (tableId: string) => `/tables/${idSegment(tableId, "Table not found.")}`;
+const personSegment = (userId: string) => idSegment(userId, "Person not found.");
 
 export type Table = z.infer<typeof tableSchema>;
 export type JackblackAccess = Table["jackblackAccess"];
@@ -118,16 +129,6 @@ export type BalanceTicket = MemberBalance["tickets"][number];
 type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs" | "polls";
 
-function tablePath(tableId: string) {
-  if (!uuid.safeParse(tableId).success) throw new BackendError("Table not found.", 404);
-  return `/tables/${encodeURIComponent(tableId)}`;
-}
-
-function userPath(userId: string) {
-  if (!uuid.safeParse(userId).success) throw new BackendError("Person not found.", 404);
-  return encodeURIComponent(userId);
-}
-
 /** Creates a table; requested members are added, invited or not added according to their preferences. */
 export async function createTable(
   input: { name: string; emoji: string; memberIds: string[] },
@@ -178,12 +179,12 @@ export async function addMembers(
 }
 
 export async function removeMember(tableId: string, userId: string, key: string) {
-  await mutationRequest(`${tablePath(tableId)}/members/${userPath(userId)}`, "DELETE", key);
+  await mutationRequest(`${tablePath(tableId)}/members/${personSegment(userId)}`, "DELETE", key);
 }
 
 export async function setHost(tableId: string, userId: string, host: boolean, key: string) {
   await mutationRequest(
-    `${tablePath(tableId)}/hosts/${userPath(userId)}`,
+    `${tablePath(tableId)}/hosts/${personSegment(userId)}`,
     host ? "PUT" : "DELETE",
     key,
   );
@@ -197,7 +198,7 @@ export async function setPermission(
   key: string,
 ) {
   await mutationRequest(
-    `${tablePath(tableId)}/members/${userPath(userId)}/permissions`,
+    `${tablePath(tableId)}/members/${personSegment(userId)}/permissions`,
     "PUT",
     key,
     {

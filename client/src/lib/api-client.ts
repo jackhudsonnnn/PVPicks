@@ -19,6 +19,12 @@ export class BackendError extends Error {
   }
 }
 
+/** An id as a URL path segment; one that isn't an id is a 404 before any request (`missing` is its message). */
+export function idSegment(id: string, missing: string) {
+  if (!idSchema.safeParse(id).success) throw new BackendError(missing, 404);
+  return encodeURIComponent(id);
+}
+
 /** A 401 means the server no longer recognizes the session. */
 export function isUnauthorized(error: unknown): error is BackendError {
   return error instanceof BackendError && error.status === 401;

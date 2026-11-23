@@ -163,11 +163,6 @@ export type JackblackSeat = z.infer<typeof seatSchema>;
 export type JackblackHand = z.infer<typeof handSchema>;
 export type JackblackChoice = z.infer<typeof choice>;
 
-/** Seconds until an ISO deadline, never below zero. */
-export function secondsUntil(deadline: string | undefined, now: number) {
-  return deadline ? Math.max(0, Math.ceil((Date.parse(deadline) - now) / 1000)) : null;
-}
-
 export async function getJackblackGame(betId: string, signal?: AbortSignal) {
   return read(
     await request(`/bets/${encodeURIComponent(betId)}/jackblack`, signal ? { signal } : undefined),
@@ -193,16 +188,4 @@ export function deciding(game: JackblackGame, userId: string) {
 /** How many seats still have to choose this step. */
 export function undecided(game: JackblackGame) {
   return game.seats?.filter((s) => s.deciding).length ?? 0;
-}
-
-// ----- Cards -----
-
-const SUITS: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
-
-/** "TH" → { rank: "10", suit: "♥", red: true }; "??" is the face-down card. */
-export function cardFace(code: string) {
-  if (code === "??") return null;
-  const rank = code[0] === "T" ? "10" : code[0]!;
-  const suit = code[1]!;
-  return { rank, suit: SUITS[suit] ?? suit, red: suit === "H" || suit === "D" };
 }

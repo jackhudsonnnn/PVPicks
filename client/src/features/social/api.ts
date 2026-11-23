@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { BackendError, mutationRequest, read, request, idSchema } from "@/lib/api-client";
+import {
+  BackendError,
+  mutationRequest,
+  read,
+  request,
+  idSchema,
+  idSegment,
+} from "@/lib/api-client";
 import { userSchema, type User } from "@/features/people";
 
 const uuid = idSchema;
@@ -24,13 +31,11 @@ const inviteSchema = z.object({
   memberCount: z.number().int().min(1),
 });
 
+/** An id as a URL path segment (a malformed id is a 404 before any request). */
+const personSegment = (id: string) => idSegment(id, "Person not found.");
+
 export type Relationships = z.infer<typeof relationshipsSchema>;
 export type TableInvite = z.infer<typeof inviteSchema>;
-
-function userPath(userId: string) {
-  if (!uuid.safeParse(userId).success) throw new BackendError("Person not found.", 404);
-  return encodeURIComponent(userId);
-}
 
 export async function getRelationships(signal?: AbortSignal): Promise<Relationships> {
   return read(
@@ -54,11 +59,11 @@ export async function searchUsers(
 }
 
 export async function setFollow(userId: string, follow: boolean, key: string) {
-  await mutationRequest(`/follows/${userPath(userId)}`, follow ? "POST" : "DELETE", key);
+  await mutationRequest(`/follows/${personSegment(userId)}`, follow ? "POST" : "DELETE", key);
 }
 
 export async function setBlock(userId: string, block: boolean, key: string) {
-  await mutationRequest(`/blocks/${userPath(userId)}`, block ? "POST" : "DELETE", key);
+  await mutationRequest(`/blocks/${personSegment(userId)}`, block ? "POST" : "DELETE", key);
 }
 
 export async function listInvites(signal?: AbortSignal): Promise<TableInvite[]> {

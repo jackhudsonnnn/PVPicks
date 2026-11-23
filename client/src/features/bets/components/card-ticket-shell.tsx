@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
+import { motion, useReducedMotionConfig } from "motion/react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
+import { cardFace } from "@/features/bets/cards";
 import { formatClock, type ticketStatus } from "@/features/bets/ticket-model";
 import { StatusBadge } from "./status-badge";
 
@@ -201,5 +205,157 @@ export function TimerRing({ fraction, children }: { fraction: number; children: 
       </svg>
       {children}
     </span>
+  );
+}
+
+/** Outline buttons on the green felt: see-through instead of the page background. */
+export const FELT_OUTLINE =
+  "border-white/25 bg-black/20 text-white hover:bg-black/35 hover:text-white";
+
+/** What naming and drawing players needs: the viewer and the people cache. */
+export interface People {
+  user: User;
+  expire: () => void;
+  peopleKey: readonly string[];
+}
+
+/** A player's name, or "You". */
+export function PlayerName({ id, user, expire, peopleKey }: People & { id: string }) {
+  const person = usePerson(id, user, expire, peopleKey);
+  return <>{id === user.id ? "You" : (person?.name ?? "…")}</>;
+}
+
+/** A tile in the people row: someone's avatar and name, and a line under it. */
+export function Tile({
+  id,
+  line,
+  tone,
+  highlight,
+  ...people
+}: People & {
+  id: string;
+  line: ReactNode;
+  tone?: "win" | "loss" | "muted" | "live";
+  highlight?: boolean;
+}) {
+  return (
+    <li
+      className={cn(
+        "flex w-20 shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-black/20 p-1.5 text-center",
+        highlight && "border-primary/70 bg-primary/10",
+      )}
+    >
+      <PersonAvatar
+        id={id}
+        size="sm"
+        user={people.user}
+        expire={people.expire}
+        queryKey={people.peopleKey}
+      />
+      <span className="w-full truncate text-[11px] font-semibold text-white">
+        <PlayerName id={id} {...people} />
+      </span>
+      <span
+        className={cn(
+          "w-full truncate font-mono text-[10px] font-bold uppercase",
+          tone === "win"
+            ? "text-win"
+            : tone === "loss"
+              ? "text-loss"
+              : tone === "live"
+                ? "animate-pulse text-primary"
+                : "text-white/70",
+        )}
+      >
+        {line}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * One playing card; "??" is face down. A new card slides in from {@code from} (pixels from where it lands, the
+ * shoe on the felt); a hole card turning over flips.
+ */
+export function Card({
+  code,
+  small,
+  tiny,
+  from,
+  delay = 0,
+}: {
+  code: string;
+  small?: boolean;
+  tiny?: boolean;
+  from?: { x: number; y: number } | undefined;
+  delay?: number;
+}) {
+  const reduced = !!useReducedMotionConfig();
+  const face = cardFace(code);
+  return (
+    <motion.span
+      initial={
+        reduced
+          ? false
+          : from
+            ? { x: from.x, y: from.y, rotate: -25, opacity: 0, scale: 0.7 }
+            : { rotateY: 90, opacity: 0 }
+      }
+      animate={{ x: 0, y: 0, rotate: 0, rotateY: 0, opacity: 1, scale: 1 }}
+      transition={{ type: "spring", stiffness: 260, damping: 26, delay }}
+      className={cn(
+        "inline-flex shrink-0 flex-col items-center justify-center rounded-md border font-bold leading-none shadow-md",
+        tiny ? "h-8 w-6 text-[10px]" : small ? "h-10 w-7 text-xs" : "h-14 w-10 text-sm",
+        face
+          ? "border-black/15 bg-white"
+          : "border-white/40 bg-[repeating-linear-gradient(45deg,#b91c1c_0_3px,#7f1d1d_3px_6px)]",
+        face && (face.red ? "text-red-600" : "text-zinc-900"),
+      )}
+      aria-label={face ? `${face.rank}${face.suit}` : "Face-down card"}
+    >
+      {face && (
+        <>
+          <span>{face.rank}</span>
+          <span className={tiny ? "text-xs" : small ? "text-sm" : "text-base"}>{face.suit}</span>
+        </>
+      )}
+    </motion.span>
+  );
+}
+
+/**
+ * Joining (or leaving) while the join window is open: one button, so the controls bar keeps its height (why you
+ * can't, and what joining holds against your limit, are in the status line and Details). Nothing for the proposer,
+ * who's in already.
+ */
+export function JoinControls({
+  joined,
+  proposer,
+  full,
+  late,
+  disabled,
+  onJoin,
+  onLeave,
+}: {
+  joined: boolean;
+  proposer: boolean;
+  full: boolean;
+  /** The last seconds before the deal: nobody joins or leaves. */
+  late: boolean;
+  disabled: boolean;
+  onJoin: () => void;
+  onLeave: () => void;
+}) {
+  if (proposer || late || (full && !joined)) return null;
+  return (
+    <Button
+      size="sm"
+      variant={joined ? "outline" : "default"}
+      className={cn("h-9 w-full", joined && FELT_OUTLINE)}
+      disabled={disabled}
+      onClick={joined ? onLeave : onJoin}
+    >
+      {joined ? "Leave the game" : "Join the game"}
+    </Button>
   );
 }

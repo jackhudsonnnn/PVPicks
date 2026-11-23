@@ -1,7 +1,7 @@
+import { cardFace } from "@/features/bets/cards";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RULES,
-  cardFace,
   deciding,
   playersOf,
   rulesFromConfig,

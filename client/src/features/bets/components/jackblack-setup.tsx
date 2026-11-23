@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { formatCents } from "@/lib/money";
@@ -8,19 +7,7 @@ import {
   worstCase,
   type JackblackRules,
 } from "@/features/bets/jackblack";
-import { RangeSlider, Section, Stepper } from "./form-parts";
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
-      <span>
-        {label}
-        {hint && <span className="font-normal"> · {hint}</span>}
-      </span>
-      {children}
-    </div>
-  );
-}
+import { Field, RangeSlider, Section, Stepper } from "./form-parts";
 
 /**
  * Jackblack's own rules, laid out like every proposal's Game and Setup sections; how the mode works is in its
@@ -40,7 +27,7 @@ export function JackblackSetup({
   return (
     <>
       <Section label="Game">
-        <Row label="Blackjack pays">
+        <Field label="Blackjack pays">
           <SegmentedTabs<JackblackRules["blackjackPays"]>
             size="sm"
             ariaLabel="Blackjack pays"
@@ -51,7 +38,7 @@ export function JackblackSetup({
             value={rules.blackjackPays}
             onChange={(v) => set("blackjackPays", v)}
           />
-        </Row>
+        </Field>
         <div className="flex items-center justify-between gap-4 rounded-xl border bg-surface p-3">
           <span className="min-w-0">
             <span className="block text-sm font-semibold">Doubling</span>
@@ -70,7 +57,7 @@ export function JackblackSetup({
       </Section>
 
       <Section label="Setup">
-        <Row
+        <Field
           label="Players"
           hint={`${PLAYER_LIMITS.min}–${PLAYER_LIMITS.max}, the dealer included`}
         >
@@ -83,8 +70,8 @@ export function JackblackSetup({
             unit="players"
             onChange={(minPlayers, maxPlayers) => onChange({ ...rules, minPlayers, maxPlayers })}
           />
-        </Row>
-        <Row label="Rotations" hint={`${RULE_LIMITS.rotations.min}–${RULE_LIMITS.rotations.max}`}>
+        </Field>
+        <Field label="Rotations" hint={`${RULE_LIMITS.rotations.min}–${RULE_LIMITS.rotations.max}`}>
           <Stepper
             value={rules.rotations}
             step={1}
@@ -93,8 +80,8 @@ export function JackblackSetup({
             label="Rotations"
             onChange={(v) => set("rotations", v)}
           />
-        </Row>
-        <Row
+        </Field>
+        <Field
           label="Decision timer"
           hint={`${RULE_LIMITS.decisionSec.min}–${RULE_LIMITS.decisionSec.max}s`}
         >
@@ -107,8 +94,11 @@ export function JackblackSetup({
             format={(v) => `${v}s`}
             onChange={(v) => set("decisionSec", v)}
           />
-        </Row>
-        <Row label="Max splits" hint={`${RULE_LIMITS.maxSplits.min}–${RULE_LIMITS.maxSplits.max}`}>
+        </Field>
+        <Field
+          label="Max splits"
+          hint={`${RULE_LIMITS.maxSplits.min}–${RULE_LIMITS.maxSplits.max}`}
+        >
           <Stepper
             value={rules.maxSplits}
             step={1}
@@ -117,7 +107,7 @@ export function JackblackSetup({
             label="Max splits"
             onChange={(v) => set("maxSplits", v)}
           />
-        </Row>
+        </Field>
       </Section>
     </>
   );

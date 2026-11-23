@@ -1,96 +1,9 @@
-import { motion, useReducedMotionConfig } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { cardFace, type JackblackChoice, type JackblackSeat } from "@/features/bets/jackblack";
+import { type JackblackChoice, type JackblackSeat } from "@/features/bets/jackblack";
+import { FELT_OUTLINE } from "./card-ticket-shell";
 
-/** Pieces of the Jackblack ticket: cards and the player's and dealer's controls. */
-
-/**
- * One playing card; "??" is face down. A new card slides in from {@code from} (pixels from where it lands, the
- * shoe on the felt); a hole card turning over flips.
- */
-export function Card({
-  code,
-  small,
-  tiny,
-  from,
-  delay = 0,
-}: {
-  code: string;
-  small?: boolean;
-  tiny?: boolean;
-  from?: { x: number; y: number } | undefined;
-  delay?: number;
-}) {
-  const reduced = !!useReducedMotionConfig();
-  const face = cardFace(code);
-  return (
-    <motion.span
-      initial={
-        reduced
-          ? false
-          : from
-            ? { x: from.x, y: from.y, rotate: -25, opacity: 0, scale: 0.7 }
-            : { rotateY: 90, opacity: 0 }
-      }
-      animate={{ x: 0, y: 0, rotate: 0, rotateY: 0, opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 260, damping: 26, delay }}
-      className={cn(
-        "inline-flex shrink-0 flex-col items-center justify-center rounded-md border font-bold leading-none shadow-md",
-        tiny ? "h-8 w-6 text-[10px]" : small ? "h-10 w-7 text-xs" : "h-14 w-10 text-sm",
-        face
-          ? "border-black/15 bg-white"
-          : "border-white/40 bg-[repeating-linear-gradient(45deg,#b91c1c_0_3px,#7f1d1d_3px_6px)]",
-        face && (face.red ? "text-red-600" : "text-zinc-900"),
-      )}
-      aria-label={face ? `${face.rank}${face.suit}` : "Face-down card"}
-    >
-      {face && (
-        <>
-          <span>{face.rank}</span>
-          <span className={tiny ? "text-xs" : small ? "text-sm" : "text-base"}>{face.suit}</span>
-        </>
-      )}
-    </motion.span>
-  );
-}
-
-/**
- * Joining (or leaving) while the join window is open: one button, so the controls bar keeps its height (why you
- * can't, and what joining holds against your limit, are in the status line and Details). Nothing for the proposer,
- * who's in already.
- */
-export function JoinControls({
-  joined,
-  proposer,
-  full,
-  late,
-  disabled,
-  onJoin,
-  onLeave,
-}: {
-  joined: boolean;
-  proposer: boolean;
-  full: boolean;
-  /** The last seconds before the deal: nobody joins or leaves. */
-  late: boolean;
-  disabled: boolean;
-  onJoin: () => void;
-  onLeave: () => void;
-}) {
-  if (proposer || late || (full && !joined)) return null;
-  return (
-    <Button
-      size="sm"
-      variant={joined ? "outline" : "default"}
-      className={cn("h-9 w-full", joined && FELT_OUTLINE)}
-      disabled={disabled}
-      onClick={joined ? onLeave : onJoin}
-    >
-      {joined ? "Leave the game" : "Join the game"}
-    </Button>
-  );
-}
+/** Pieces of the Jackblack ticket: the player's and the dealer's controls. */
 
 const CHOICE_LABEL: Record<JackblackChoice, string> = {
   hit: "Hit",
@@ -153,6 +66,3 @@ export function DealerButton({
     </Button>
   );
 }
-
-/** Outline buttons on the green felt: see-through instead of the page background. */
-const FELT_OUTLINE = "border-white/25 bg-black/20 text-white hover:bg-black/35 hover:text-white";

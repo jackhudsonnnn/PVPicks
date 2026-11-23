@@ -5,20 +5,7 @@ import {
   holdemWorstCase,
   type HoldemRules,
 } from "@/features/bets/holdem";
-import type { ReactNode } from "react";
-import { RangeSlider, Section, Stepper } from "./form-parts";
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
-      <span>
-        {label}
-        {hint && <span className="font-normal"> · {hint}</span>}
-      </span>
-      {children}
-    </div>
-  );
-}
+import { Field, RangeSlider, Section, Stepper } from "./form-parts";
 
 /**
  * Hold'em's setup, laid out like every proposal's Game and Setup sections. The big blind and the join window are
@@ -35,7 +22,7 @@ export function HoldemSetup({
   return (
     <>
       <Section label="Setup">
-        <Row label="Players" hint={`${HOLDEM_LIMITS.players.min}–${HOLDEM_LIMITS.players.max}`}>
+        <Field label="Players" hint={`${HOLDEM_LIMITS.players.min}–${HOLDEM_LIMITS.players.max}`}>
           <RangeSlider
             low={rules.minPlayers}
             high={rules.maxPlayers}
@@ -45,8 +32,8 @@ export function HoldemSetup({
             unit="players"
             onChange={(minPlayers, maxPlayers) => onChange({ ...rules, minPlayers, maxPlayers })}
           />
-        </Row>
-        <Row
+        </Field>
+        <Field
           label="Rotations"
           hint={`${HOLDEM_LIMITS.rotations.min}–${HOLDEM_LIMITS.rotations.max}`}
         >
@@ -58,8 +45,8 @@ export function HoldemSetup({
             label="Rotations"
             onChange={(v) => onChange({ ...rules, rotations: v })}
           />
-        </Row>
-        <Row
+        </Field>
+        <Field
           label="Decision timer"
           hint={`${HOLDEM_LIMITS.decisionSec.min}–${HOLDEM_LIMITS.decisionSec.max}s`}
         >
@@ -72,7 +59,7 @@ export function HoldemSetup({
             format={(v) => `${v}s`}
             onChange={(v) => onChange({ ...rules, decisionSec: v })}
           />
-        </Row>
+        </Field>
       </Section>
     </>
   );

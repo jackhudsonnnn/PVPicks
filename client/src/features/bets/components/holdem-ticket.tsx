@@ -1,3 +1,4 @@
+import { secondsUntil, signed } from "@/features/bets/cards";
 import { useEffect, useRef, useState } from "react";
 import { Club, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,6 @@ import type { Bet } from "@/features/bets/api";
 import { canBetAt, type Table, type TableSummary } from "@/features/tables";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { formatClock, secondsLeft, ticketStatus } from "@/features/bets/ticket-model";
-import { secondsUntil } from "@/features/bets/jackblack";
 import { LATE_ENTRY_SEC } from "@/features/bets/wager";
 import {
   STREET_LABEL,
@@ -20,35 +20,25 @@ import {
   type HoldemPreMove,
 } from "@/features/bets/holdem";
 import { useHoldemGame } from "@/features/bets/holdem-game";
-import { signed } from "@/features/bets/jackblack-game";
 import { BetDetailsDialog } from "./bet-details";
 import type { BetActions } from "./bet-controls";
-import { Card, JoinControls } from "./jackblack-parts";
 import { TicketFooter } from "./ticket-footer";
 import { ValueSlider } from "./form-parts";
 import {
+  Card,
   CardTicketHeader,
   Deck,
   FaceDown,
   Felt,
+  FELT_OUTLINE,
   FeltNote,
   FeltRow,
+  JoinControls,
+  type People,
+  PlayerName,
+  Tile,
   TimerRing,
 } from "./card-ticket-shell";
-import { Tile } from "./jackblack-ticket";
-
-interface People {
-  user: User;
-  expire: () => void;
-  peopleKey: readonly string[];
-}
-
-function Name({ id, user, expire, peopleKey }: People & { id: string }) {
-  const person = usePerson(id, user, expire, peopleKey);
-  return <>{id === user.id ? "You" : (person?.name ?? "…")}</>;
-}
-
-const FELT_OUTLINE = "border-white/25 bg-black/20 text-white hover:bg-black/35 hover:text-white";
 
 /** The deck and the five board cards: face down before the flop, then three, four and five turned over. */
 export function Board({ board }: { board: string[] }) {
@@ -122,7 +112,7 @@ function SeatTile({
         )}
       </span>
       <span className="mt-1 w-full truncate text-[11px] font-semibold text-white">
-        <Name id={seat.userId} {...people} />
+        <PlayerName id={seat.userId} {...people} />
       </span>
       <span className="font-mono text-[10px] font-bold text-white/80">
         {formatCents(game.stacks?.[seat.userId] ?? 0)}
@@ -222,7 +212,7 @@ function PeopleRow({
             )}
           >
             <span className="w-full truncate text-[11px] font-semibold text-white">
-              <Name id={id} {...people} />
+              <PlayerName id={id} {...people} />
             </span>
             {hand.shown[id] ? (
               <span className="flex -space-x-2">

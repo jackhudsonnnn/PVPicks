@@ -15,6 +15,27 @@ export function Section({ label, children }: { label: string; children: ReactNod
   );
 }
 
+/** A labelled control in a setup form, with its range as a hint ("Rotations · 1–3"). */
+export function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+      <span>
+        {label}
+        {hint && <span className="font-normal"> · {hint}</span>}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 /**
  * − value + control for small counts (Jackblack's rules); `format` renders the value, and each button shows its step
  * under it. Lines, targets and wagers use `ValueSlider` instead.

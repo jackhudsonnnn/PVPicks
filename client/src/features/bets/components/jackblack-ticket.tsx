@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { secondsUntil, signed } from "@/features/bets/cards";
 import { Spade } from "lucide-react";
 import { TicketFooter } from "./ticket-footer";
 import { LATE_ENTRY_SEC } from "@/features/bets/wager";
@@ -16,20 +16,24 @@ import {
   mySeat,
   playersOf,
   rulesFromConfig,
-  secondsUntil,
   undecided,
   type JackblackGame,
   type JackblackSeat,
 } from "@/features/bets/jackblack";
-import { CHOICE_NAMES, Card, DealerButton, JoinControls, PlayControls } from "./jackblack-parts";
-import { RESULT, handLabel, signed, useJackblackGame } from "@/features/bets/jackblack-game";
+import { CHOICE_NAMES, DealerButton, PlayControls } from "./jackblack-parts";
+import { RESULT, handLabel, useJackblackGame } from "@/features/bets/jackblack-game";
 import {
+  Card,
   CardTicketHeader,
   Deck,
   FaceDown,
   Felt,
   FeltNote,
   FeltRow,
+  JoinControls,
+  type People,
+  PlayerName,
+  Tile,
   TimerRing,
 } from "./card-ticket-shell";
 
@@ -38,65 +42,6 @@ const SHOE_FROM_DEALER = { x: -64, y: 0 };
 const SHOE_FROM_SEAT = { x: -48, y: -110 };
 /** Seconds between cards in the opening deal. */
 const DEAL_GAP = 0.14;
-
-interface People {
-  user: User;
-  expire: () => void;
-  peopleKey: readonly string[];
-}
-
-function Name({ id, user, expire, peopleKey }: People & { id: string }) {
-  const person = usePerson(id, user, expire, peopleKey);
-  return <>{id === user.id ? "You" : (person?.name ?? "…")}</>;
-}
-
-/** A tile in the people row: someone's avatar and name, and a line under it. */
-export function Tile({
-  id,
-  line,
-  tone,
-  highlight,
-  ...people
-}: People & {
-  id: string;
-  line: ReactNode;
-  tone?: "win" | "loss" | "muted" | "live";
-  highlight?: boolean;
-}) {
-  return (
-    <li
-      className={cn(
-        "flex w-20 shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-lg border border-white/10 bg-black/20 p-1.5 text-center",
-        highlight && "border-primary/70 bg-primary/10",
-      )}
-    >
-      <PersonAvatar
-        id={id}
-        size="sm"
-        user={people.user}
-        expire={people.expire}
-        queryKey={people.peopleKey}
-      />
-      <span className="w-full truncate text-[11px] font-semibold text-white">
-        <Name id={id} {...people} />
-      </span>
-      <span
-        className={cn(
-          "w-full truncate font-mono text-[10px] font-bold uppercase",
-          tone === "win"
-            ? "text-win"
-            : tone === "loss"
-              ? "text-loss"
-              : tone === "live"
-                ? "animate-pulse text-primary"
-                : "text-white/70",
-        )}
-      >
-        {line}
-      </span>
-    </li>
-  );
-}
 
 /** One seat in a live round: name, whether they've chosen yet (never what), and their hands. */
 function Spot({
@@ -142,7 +87,7 @@ function Spot({
           />
         )}
         <span className="min-w-0 flex-1 truncate font-semibold text-white">
-          <Name id={seat.userId} {...people} />
+          <PlayerName id={seat.userId} {...people} />
         </span>
         {seat.deciding !== undefined && (
           <span
