@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,11 @@ import { Logo } from "@/components/logo";
 import { BackendError, backendErrorMessage } from "@/lib/api-client";
 import { demoAccounts, type DemoAccount } from "./api";
 import { codeProblem } from "./code-rules";
-import { DemoPicker } from "./demo-picker";
 import { LoadingScreen, Spinner } from "@/components/loading";
 import { useAppMode } from "@/lib/app-mode";
+
+// Dev only: the demo's account picker loads only when the backend has a demo, never on the LAN or in production.
+const DemoPicker = lazy(() => import("./demo-picker").then((m) => ({ default: m.DemoPicker })));
 
 const frozenMessage = "This account is frozen. Contact an admin if you think that's a mistake.";
 
@@ -93,7 +95,9 @@ export function SignIn({
         )}
         {demo.data ? (
           <>
-            <DemoPicker initial={demo.data} busy={busy} pick={(account) => void pick(account)} />
+            <Suspense fallback={<Spinner />}>
+              <DemoPicker initial={demo.data} busy={busy} pick={(account) => void pick(account)} />
+            </Suspense>
             {error && (
               <p role="alert" className="text-sm text-loss">
                 {error}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { startPerfReporting } from "@/lib/perf";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -12,16 +12,11 @@ import {
   signInWithCode,
   signOut,
   SignIn,
-  AdminSignIn,
 } from "@/features/auth";
-import { ArchivedTable, HomePage, TablePage, myBalanceKey } from "@/features/tables";
+import { HomePage, TablePage, myBalanceKey } from "@/features/tables";
 import type { User } from "@/features/people";
-import { AdminWorkspace } from "@/features/admin";
-import { FriendsPage } from "@/features/social";
-import { GuidePage } from "@/features/guide";
-import { PreferencesPage } from "@/features/preferences";
 import { AppShell } from "./shell";
-import { DevPage, resetDemo, useDevAvailable } from "@/features/devdata";
+import { resetDemo, useDevAvailable } from "@/features/devdata";
 import { DevLinks } from "./dev-links";
 import { Logo } from "@/components/logo";
 import { TicketsPage } from "@/features/bets";
@@ -31,6 +26,30 @@ import { sessionKey, tablesKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { LoadingScreen } from "@/components/loading";
 import { toast } from "sonner";
+
+/*
+ * Pages most players rarely open, and the admin and dev tools a player never does, load on first use, so the first
+ * load is only the session, Home, tables and tickets.
+ */
+const AdminWorkspace = lazy(() =>
+  import("@/features/admin").then((m) => ({ default: m.AdminWorkspace })),
+);
+const AdminSignIn = lazy(() => import("@/features/auth").then((m) => ({ default: m.AdminSignIn })));
+const DevPage = lazy(() => import("@/features/devdata").then((m) => ({ default: m.DevPage })));
+const GuidePage = lazy(() => import("@/features/guide").then((m) => ({ default: m.GuidePage })));
+const FriendsPage = lazy(() =>
+  import("@/features/social").then((m) => ({ default: m.FriendsPage })),
+);
+const PreferencesPage = lazy(() =>
+  import("@/features/preferences").then((m) => ({ default: m.PreferencesPage })),
+);
+const ArchivedTable = lazy(() =>
+  import("@/features/tables").then((m) => ({ default: m.ArchivedTable })),
+);
+
+function Page({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingScreen label="Loading" />}>{children}</Suspense>;
+}
 
 export function App() {
   const queryClient = useQueryClient();
@@ -132,7 +151,12 @@ export function App() {
   if (!session.data) {
     if (pathname === "/dev" && devAvailable)
       return <SignedOutDev onReset={() => void resetWorld()} />;
-    if (pathname === "/admin") return <AdminSignIn login={login} notice={notice} />;
+    if (pathname === "/admin")
+      return (
+        <Page>
+          <AdminSignIn login={login} notice={notice} />
+        </Page>
+      );
     return (
       <SignIn
         loginAs={loginAs}
@@ -143,7 +167,11 @@ export function App() {
     );
   }
   if (session.data.role === "ADMIN")
-    return <AdminWorkspace key={session.data.id} user={session.data} logout={logout} />;
+    return (
+      <Page>
+        <AdminWorkspace key={session.data.id} user={session.data} logout={logout} />
+      </Page>
+    );
   return (
     <TableWorkspace
       key={session.data.id}
@@ -167,7 +195,9 @@ function SignedOutDev({ onReset }: { onReset: () => void }) {
             <Link to="/">Sign in</Link>
           </Button>
         </div>
-        <DevPage scope="guest" onReset={onReset} />
+        <Page>
+          <DevPage scope="guest" onReset={onReset} />
+        </Page>
       </div>
     </main>
   );
@@ -246,32 +276,34 @@ function TableWorkspace({
               pathname === "/" || pathname === "/how-to-play" ? "max-w-6xl" : "max-w-4xl",
             )}
           >
-            {pathname === "/" ? (
-              <HomePage user={user} expire={expire} />
-            ) : pathname === "/friends" ? (
-              <FriendsPage user={user} expire={expire} />
-            ) : pathname === "/how-to-play" ? (
-              <GuidePage user={user} expire={expire} />
-            ) : pathname === "/preferences" ? (
-              <PreferencesPage
-                user={user}
-                expire={expire}
-                onAccountDeleted={() => endSession("Your account was deleted.")}
-              />
-            ) : archiveId ? (
-              <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
-            ) : pathname === "/dev" ? (
-              <DevPage scope={user.id} onReset={resetWorld} />
-            ) : pathname === "/tickets" ? (
-              <TicketsPage user={user} expire={expire} />
-            ) : (
-              <div className="space-y-3">
-                <h1 className="text-xl font-semibold">This page is not connected yet</h1>
-                <Link to="/" className="text-primary underline">
-                  Your tables
-                </Link>
-              </div>
-            )}
+            <Page>
+              {pathname === "/" ? (
+                <HomePage user={user} expire={expire} />
+              ) : pathname === "/friends" ? (
+                <FriendsPage user={user} expire={expire} />
+              ) : pathname === "/how-to-play" ? (
+                <GuidePage user={user} expire={expire} />
+              ) : pathname === "/preferences" ? (
+                <PreferencesPage
+                  user={user}
+                  expire={expire}
+                  onAccountDeleted={() => endSession("Your account was deleted.")}
+                />
+              ) : archiveId ? (
+                <ArchivedTable key={archiveId} user={user} tableId={archiveId} expire={expire} />
+              ) : pathname === "/dev" ? (
+                <DevPage scope={user.id} onReset={resetWorld} />
+              ) : pathname === "/tickets" ? (
+                <TicketsPage user={user} expire={expire} />
+              ) : (
+                <div className="space-y-3">
+                  <h1 className="text-xl font-semibold">This page is not connected yet</h1>
+                  <Link to="/" className="text-primary underline">
+                    Your tables
+                  </Link>
+                </div>
+              )}
+            </Page>
           </div>
         )}
       </AppShell>
