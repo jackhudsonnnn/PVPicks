@@ -1,6 +1,5 @@
 import { motion, useReducedMotionConfig } from "motion/react";
 import { Button } from "@/components/ui/button";
-import type { BetActions } from "./bet-controls";
 import { cn } from "@/lib/utils";
 import { cardFace, type JackblackChoice, type JackblackSeat } from "@/features/bets/jackblack";
 
@@ -157,5 +156,3 @@ export function DealerButton({
 
 /** Outline buttons on the green felt: see-through instead of the page background. */
 const FELT_OUTLINE = "border-white/25 bg-black/20 text-white hover:bg-black/35 hover:text-white";
-
-export type StartBetAction = BetActions["start"];

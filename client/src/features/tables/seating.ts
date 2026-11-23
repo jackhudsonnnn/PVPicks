@@ -71,7 +71,7 @@ export function seatStatus(
 }
 
 /** The card games (Jackblack, Hold'em) are played on their tickets, never picked. */
-export const isCardGame = (modeId: Bet["modeId"]) => modeId === "jackblack" || modeId === "holdem";
+const isCardGame = (modeId: Bet["modeId"]) => modeId === "jackblack" || modeId === "holdem";
 
 /**
  * The card games have no picks: their players are the bet's participants, which the server lists as No guess. (The
@@ -98,7 +98,7 @@ function cardGameSeat(
 }
 
 /** How long a finished card game stays on the felt, so everyone sees how it ended. */
-export const FINISHED_HAND_MS = 20_000;
+const FINISHED_HAND_MS = 20_000;
 
 /** Open bets for the deck, newest first, plus a card game that just finished. */
 export function openBets(bets: Bet[], now = Date.now()) {

@@ -25,12 +25,12 @@ public record JackblackRules(int rotations, boolean doubling, int maxSplits, Str
             "decisionSec", "minPlayers", "maxPlayers");
 
     public JackblackRules {
-        range("rotations", rotations, MIN_ROTATIONS, MAX_ROTATIONS);
-        range("maxSplits", maxSplits, MIN_SPLITS, MAX_SPLITS);
-        range("decisionSec", decisionSec, MIN_DECISION_SEC, MAX_DECISION_SEC);
+        RuleInput.range("rotations", rotations, MIN_ROTATIONS, MAX_ROTATIONS);
+        RuleInput.range("maxSplits", maxSplits, MIN_SPLITS, MAX_SPLITS);
+        RuleInput.range("decisionSec", decisionSec, MIN_DECISION_SEC, MAX_DECISION_SEC);
         if (!PAYS.contains(blackjackPays)) throw new IllegalArgumentException("blackjackPays must be 3:2 or 6:5");
-        range("minPlayers", minPlayers, MIN_PLAYERS, MAX_PLAYERS);
-        range("maxPlayers", maxPlayers, minPlayers, MAX_PLAYERS);
+        RuleInput.range("minPlayers", minPlayers, MIN_PLAYERS, MAX_PLAYERS);
+        RuleInput.range("maxPlayers", maxPlayers, minPlayers, MAX_PLAYERS);
     }
 
     public static JackblackRules defaults() {
@@ -40,16 +40,12 @@ public record JackblackRules(int rotations, boolean doubling, int maxSplits, Str
 
     /** Reads a proposal's settings; missing fields take their defaults, unknown or invalid ones are refused. */
     static JackblackRules parse(JsonNode input) {
-        if (input == null || input.isNull() || input.isMissingNode()) return defaults();
-        if (!input.isObject()) throw new IllegalArgumentException("rules must be an object");
-        input.fieldNames().forEachRemaining(name -> {
-            if (!FIELDS.contains(name)) throw new IllegalArgumentException("Unknown rule " + name);
-        });
+        RuleInput rules = RuleInput.of(input, FIELDS);
         JackblackRules d = defaults();
-        return new JackblackRules(integer(input, "rotations", d.rotations()),
-                flag(input, "doubling", d.doubling()), integer(input, "maxSplits", d.maxSplits()),
-                text(input, "blackjackPays", d.blackjackPays()), integer(input, "decisionSec", d.decisionSec()),
-                integer(input, "minPlayers", d.minPlayers()), integer(input, "maxPlayers", d.maxPlayers()));
+        return new JackblackRules(rules.integer("rotations", d.rotations()), rules.flag("doubling", d.doubling()),
+                rules.integer("maxSplits", d.maxSplits()), rules.text("blackjackPays", d.blackjackPays()),
+                rules.integer("decisionSec", d.decisionSec()), rules.integer("minPlayers", d.minPlayers()),
+                rules.integer("maxPlayers", d.maxPlayers()));
     }
 
     /** Stored on the bet as its config (booleans as yes/no, like other bet configs). */
@@ -90,34 +86,5 @@ public record JackblackRules(int rotations, boolean doubling, int maxSplits, Str
     long worstCase(long anteCents, int players) {
         long perRotation = Math.addExact(handWorstCase(anteCents), dealerWorstCase(anteCents));
         return Math.multiplyExact(Math.multiplyExact(perRotation, players - 1), rotations);
-    }
-
-    private static void range(String name, long value, long min, long max) {
-        if (value < min || value > max) {
-            throw new IllegalArgumentException(name + " must be between " + min + " and " + max);
-        }
-    }
-
-    private static int integer(JsonNode input, String name, int fallback) {
-        JsonNode value = input.get(name);
-        if (value == null) return fallback;
-        if (!value.isIntegralNumber() || !value.canConvertToInt()) {
-            throw new IllegalArgumentException(name + " must be a whole number");
-        }
-        return value.intValue();
-    }
-
-    private static boolean flag(JsonNode input, String name, boolean fallback) {
-        JsonNode value = input.get(name);
-        if (value == null) return fallback;
-        if (!value.isBoolean()) throw new IllegalArgumentException(name + " must be true or false");
-        return value.booleanValue();
-    }
-
-    private static String text(JsonNode input, String name, String fallback) {
-        JsonNode value = input.get(name);
-        if (value == null) return fallback;
-        if (!value.isTextual()) throw new IllegalArgumentException(name + " must be text");
-        return value.textValue();
     }
 }

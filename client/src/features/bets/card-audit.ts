@@ -55,7 +55,7 @@ export async function shoeOf(decks: number, seed: string, pass = 0): Promise<str
   return shoe;
 }
 
-export type RoundAudit = {
+type RoundAudit = {
   round: number;
   decks: number;
   /** The revealed secret hashes to the commitment shown from the deal. */
@@ -78,7 +78,7 @@ export type Shuffle = {
  * Audits every round of a finished game against `dealt`, each round's cards in any order (null if it never dealt);
  * null while the secrets aren't revealed.
  */
-export async function auditRounds(
+async function auditRounds(
   shuffles: Shuffle[],
   done: boolean,
   dealt: (round: number) => string[] | null,

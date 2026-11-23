@@ -31,7 +31,7 @@ export const DEFAULT_HOLDEM_RULES: HoldemRules = {
 
 export const BUY_IN_BIG_BLINDS = 100;
 /** The first buy-in and one rebuy: what's held against your points limit. */
-export const MAX_BUY_INS = 2;
+const MAX_BUY_INS = 2;
 
 export function holdemRulesProblem(rules: HoldemRules): string | null {
   const within = (v: number, { min, max }: { min: number; max: number }) => v >= min && v <= max;
@@ -146,8 +146,6 @@ const gameSchema = z.object({
 });
 
 export type HoldemGame = z.infer<typeof gameSchema>;
-export type HoldemHand = z.infer<typeof handSchema>;
-export type HoldemSeat = NonNullable<HoldemGame["seats"]>[number];
 export type HoldemMove =
   | "fold"
   | "check"

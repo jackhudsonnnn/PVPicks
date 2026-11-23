@@ -16,7 +16,7 @@ import java.util.UUID;
  * game is zero-sum. Public fields so the state is stored as JSON; chips are cents of the wager (or play chips in a
  * 4fun game).
  */
-final class HoldemGame {
+final class HoldemGame implements CardGames.State {
     static final String PLAY = "play";
     /** Between hands: who won, shown hands, and the busted player's rebuy choice. */
     static final String RESULTS = "results";
@@ -31,13 +31,6 @@ final class HoldemGame {
      * to call and folds otherwise; CALL_ANY checks or calls whatever the bet is. It lasts one decision, this hand.
      */
     enum PreMove { CHECK_FOLD, CALL_ANY }
-
-    /** A move the rules don't allow right now; its message is for the player. Anything else is a bug. */
-    static final class NotAllowed extends IllegalStateException {
-        NotAllowed(String message) {
-            super(message);
-        }
-    }
 
     static final class Seat {
         public UUID userId;
@@ -512,7 +505,18 @@ final class HoldemGame {
         return true;
     }
 
-    Long nextDeadline() {
+    @Override
+    public boolean over() {
+        return DONE.equals(phase);
+    }
+
+    @Override
+    public Map<UUID, Long> results() {
+        return totals;
+    }
+
+    @Override
+    public Long nextDeadline() {
         return DONE.equals(phase) || deadline == 0 ? null : deadline;
     }
 

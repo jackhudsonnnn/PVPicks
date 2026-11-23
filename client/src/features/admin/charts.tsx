@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * validated `--viz-*` tokens, so the dark and light themes each use their own steps.
  */
 
-export interface Series {
+interface Series {
   id: string;
   label: string;
   /** A CSS color, normally `var(--viz-1)` and on. */

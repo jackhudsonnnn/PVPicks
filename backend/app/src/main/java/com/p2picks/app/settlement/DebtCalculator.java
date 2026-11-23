@@ -76,21 +76,6 @@ final class DebtCalculator {
         return debt;
     }
 
-    public static boolean canChangeCap(Money debt) {
-        requireNonnegative(debt, "debt");
-        return debt.cents() == 0;
-    }
-
-    public static boolean canRiskWager(Money debt, Money cap, Money wager, boolean forFun) {
-        requireNonnegative(debt, "debt");
-        requireNonnegative(wager, "wager");
-        if (cap != null) {
-            requireNonnegative(cap, "cap");
-        }
-        return forFun || cap == null || BigInteger.valueOf(debt.cents()).add(BigInteger.valueOf(wager.cents()))
-                .compareTo(BigInteger.valueOf(cap.cents())) <= 0;
-    }
-
     private static void requireNonnegative(Money amount, String name) {
         Objects.requireNonNull(amount, name);
         if (amount.cents() < 0) {

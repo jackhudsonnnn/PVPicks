@@ -5,7 +5,7 @@ import { useRealtimeFeed } from "@/lib/realtime";
 import { tableBetsFeed } from "@/lib/realtime-connection";
 import type { Bet } from "./api";
 import type { User } from "@/features/people";
-import { getHoldemGame, type HoldemGame } from "./holdem";
+import { getHoldemGame } from "./holdem";
 import type { SeatChip } from "./jackblack-game";
 
 /**
@@ -25,17 +25,6 @@ export function useHoldemGame(bet: Bet, user: User, live: boolean, enabled = tru
     refetchInterval: live ? 4000 : false,
     retry: false,
   });
-}
-
-/** A player's running result: their stack minus what they bought in for. */
-export function runningTotal(game: HoldemGame, userId: string): number | null {
-  if (game.totals?.[userId] !== undefined) return game.totals[userId];
-  const stack = game.stacks?.[userId];
-  const buyIns = game.buyIns?.[userId];
-  if (stack === undefined || buyIns === undefined || game.buyInCents === undefined) return null;
-  // Chips still in the pot this hand count as spent until it's paid.
-  const inPot = game.seats?.find((s) => s.userId === userId)?.contributed ?? 0;
-  return stack + inPot - buyIns * game.buyInCents;
 }
 
 function result(cents: number): SeatChip {

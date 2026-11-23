@@ -211,7 +211,7 @@ const liveStatsSchema = z.object({
 });
 
 /** What a sports bet follows (a score, a margin, a player's stat), when proposed, at lock and now. */
-export type BetLiveStats = z.infer<typeof liveStatsSchema>;
+type BetLiveStats = z.infer<typeof liveStatsSchema>;
 
 export async function getBetLiveStats(betId: string, signal?: AbortSignal): Promise<BetLiveStats> {
   if (!uuid.safeParse(betId).success) throw new BackendError("Bet not found.", 404);

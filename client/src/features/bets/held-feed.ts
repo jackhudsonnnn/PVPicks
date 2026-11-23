@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 const TOP = 8;
 
 /** Whether the page is scrolled to (or within a few pixels of) the top. */
-export function useAtTop() {
+function useAtTop() {
   const [atTop, setAtTop] = useState(() => typeof window === "undefined" || window.scrollY <= TOP);
   useEffect(() => {
     const check = () => setAtTop(window.scrollY <= TOP);

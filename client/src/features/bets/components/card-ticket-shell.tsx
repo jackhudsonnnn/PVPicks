@@ -133,7 +133,7 @@ export function FeltNote({ children }: { children: ReactNode }) {
   );
 }
 
-export const CARD_BACK =
+const CARD_BACK =
   "border-white/40 bg-[repeating-linear-gradient(45deg,#b91c1c_0_3px,#7f1d1d_3px_6px)]";
 
 /** The undealt deck on the felt. */

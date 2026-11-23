@@ -884,7 +884,6 @@ CREATE TABLE card_games (
     bet_id uuid NOT NULL,
     state jsonb NOT NULL,
     next_deadline timestamp with time zone,
-    dealt_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT card_games_state_check CHECK ((jsonb_typeof(state) = 'object'::text)),
     CONSTRAINT card_games_pkey PRIMARY KEY (bet_id),
     CONSTRAINT card_games_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id)

@@ -22,7 +22,7 @@ import java.util.UUID;
  * timer plays it out). Each hand is paid against the dealer: win 1:1, a natural 3:2 or 6:5 (rounded down), push 0,
  * lose or bust the stake.
  */
-final class JackblackGame {
+final class JackblackGame implements CardGames.State {
     enum Action { HIT, STAND, DOUBLE, SPLIT }
 
     static final String PLAY = "play";
@@ -79,13 +79,6 @@ final class JackblackGame {
     /** How many times this round's shoe has run out (it continues from the same secret). */
     public int pass;
     public List<Round> history = new ArrayList<>();
-
-    /** A move the rules don't allow right now; its message is for the player. Anything else is a bug. */
-    static final class NotAllowed extends IllegalStateException {
-        NotAllowed(String message) {
-            super(message);
-        }
-    }
 
     UUID dealerId() {
         return order.get(round % order.size());
@@ -182,7 +175,18 @@ final class JackblackGame {
     }
 
     /** The next moment something lapses, or null when it's over. */
-    Long nextDeadline() {
+    @Override
+    public boolean over() {
+        return DONE.equals(phase);
+    }
+
+    @Override
+    public Map<UUID, Long> results() {
+        return totals;
+    }
+
+    @Override
+    public Long nextDeadline() {
         return DONE.equals(phase) || deadline == 0 ? null : deadline;
     }
 

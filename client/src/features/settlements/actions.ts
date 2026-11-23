@@ -15,8 +15,6 @@ const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reject"), other: uuid, settleId: uuid }),
 ]);
 
-export type SettlementIntent = z.infer<typeof intentSchema>;
-
 /** Reviewing a balance change, settling chosen receipts, and rejecting a settle, with retry-key safety. */
 export function useSettlementActions(
   userId: string,

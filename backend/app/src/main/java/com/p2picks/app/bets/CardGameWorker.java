@@ -37,7 +37,7 @@ class CardGameWorker {
             try {
                 if (bet.mode().equals(HoldemService.MODE)) holdem.deal(bet.betId());
                 else jackblack.deal(bet.betId());
-            } catch (JackblackService.PlayersChanged | HoldemService.PlayersChanged exception) {
+            } catch (CardGames.PlayersChanged exception) {
                 log.debug("{} {} players changed while dealing; will retry", bet.mode(), bet.betId());
             } catch (RuntimeException exception) {
                 log.error("Failed to deal {} {}; will retry", bet.mode(), bet.betId(), exception);

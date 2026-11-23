@@ -47,7 +47,7 @@ export function handLabel(hand: JackblackHand, split: boolean) {
 }
 
 /** Every hand of a seat, " / " between splits; empty for a seat whose cards you can't see. */
-export function seatTotals(seat: JackblackSeat) {
+function seatTotals(seat: JackblackSeat) {
   const hands = seat.hands ?? [];
   return hands.map((h) => handLabel(h, hands.length > 1)).join(" / ");
 }

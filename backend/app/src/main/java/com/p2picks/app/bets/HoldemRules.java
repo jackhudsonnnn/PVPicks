@@ -27,19 +27,10 @@ public record HoldemRules(int rotations, int decisionSec, int minPlayers, int ma
     private static final Set<String> FIELDS = Set.of("rotations", "decisionSec", "minPlayers", "maxPlayers");
 
     public HoldemRules {
-        if (rotations < MIN_ROTATIONS || rotations > MAX_ROTATIONS) {
-            throw new IllegalArgumentException("rotations must be between " + MIN_ROTATIONS + " and " + MAX_ROTATIONS);
-        }
-        if (decisionSec < MIN_DECISION_SEC || decisionSec > MAX_DECISION_SEC) {
-            throw new IllegalArgumentException("decisionSec must be between " + MIN_DECISION_SEC + " and "
-                    + MAX_DECISION_SEC);
-        }
-        if (minPlayers < MIN_PLAYERS || minPlayers > MAX_PLAYERS) {
-            throw new IllegalArgumentException("minPlayers must be between " + MIN_PLAYERS + " and " + MAX_PLAYERS);
-        }
-        if (maxPlayers < minPlayers || maxPlayers > MAX_PLAYERS) {
-            throw new IllegalArgumentException("maxPlayers must be between " + minPlayers + " and " + MAX_PLAYERS);
-        }
+        RuleInput.range("rotations", rotations, MIN_ROTATIONS, MAX_ROTATIONS);
+        RuleInput.range("decisionSec", decisionSec, MIN_DECISION_SEC, MAX_DECISION_SEC);
+        RuleInput.range("minPlayers", minPlayers, MIN_PLAYERS, MAX_PLAYERS);
+        RuleInput.range("maxPlayers", maxPlayers, minPlayers, MAX_PLAYERS);
     }
 
     public static HoldemRules defaults() {
@@ -48,23 +39,10 @@ public record HoldemRules(int rotations, int decisionSec, int minPlayers, int ma
 
     /** Reads a proposal's settings; missing fields take their defaults, unknown or invalid ones are refused. */
     static HoldemRules parse(JsonNode input) {
-        if (input == null || input.isNull() || input.isMissingNode()) return defaults();
-        if (!input.isObject()) throw new IllegalArgumentException("rules must be an object");
-        input.fieldNames().forEachRemaining(name -> {
-            if (!FIELDS.contains(name)) throw new IllegalArgumentException("Unknown rule " + name);
-        });
-        return new HoldemRules(integer(input, "rotations", DEFAULT_ROTATIONS),
-                integer(input, "decisionSec", DEFAULT_DECISION_SEC), integer(input, "minPlayers", MIN_PLAYERS),
-                integer(input, "maxPlayers", MAX_PLAYERS));
-    }
-
-    private static int integer(JsonNode input, String name, int fallback) {
-        JsonNode value = input.get(name);
-        if (value == null) return fallback;
-        if (!value.isIntegralNumber() || !value.canConvertToInt()) {
-            throw new IllegalArgumentException(name + " must be a whole number");
-        }
-        return value.intValue();
+        RuleInput rules = RuleInput.of(input, FIELDS);
+        return new HoldemRules(rules.integer("rotations", DEFAULT_ROTATIONS),
+                rules.integer("decisionSec", DEFAULT_DECISION_SEC), rules.integer("minPlayers", MIN_PLAYERS),
+                rules.integer("maxPlayers", MAX_PLAYERS));
     }
 
     Map<String, Object> toMap() {

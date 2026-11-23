@@ -56,7 +56,7 @@ export function rulesProblem(rules: JackblackRules): string | null {
 }
 
 /** The most one hand can put at risk: every split taken and every hand doubled. */
-export function handWorstCase(rules: JackblackRules, anteCents: number) {
+function handWorstCase(rules: JackblackRules, anteCents: number) {
   return anteCents * (rules.doubling ? 2 : 1) * (rules.maxSplits + 1);
 }
 
@@ -161,10 +161,7 @@ const gameSchema = z.object({
 export type JackblackGame = z.infer<typeof gameSchema>;
 export type JackblackSeat = z.infer<typeof seatSchema>;
 export type JackblackHand = z.infer<typeof handSchema>;
-export type JackblackRound = z.infer<typeof roundSchema>;
-export type JackblackShuffle = NonNullable<JackblackGame["shuffles"]>[number];
 export type JackblackChoice = z.infer<typeof choice>;
-export type JackblackMove = JackblackChoice | "deal";
 
 /** Seconds until an ISO deadline, never below zero. */
 export function secondsUntil(deadline: string | undefined, now: number) {

@@ -6,7 +6,7 @@ import type { SettleKind, SettlementGroup, SettlementLine } from "./api";
  * - `owe` (red, you're down) / `owed` (green, you're up): what's open, when nothing needs you right now.
  * - `even` (neutral): nothing open nets either way.
  */
-export type CardTone = "attention" | "owe" | "owed" | "even";
+type CardTone = "attention" | "owe" | "owed" | "even";
 
 const TONE_ORDER: Record<CardTone, number> = { attention: 0, owe: 1, owed: 2, even: 3 };
 

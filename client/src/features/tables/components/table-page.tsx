@@ -279,7 +279,6 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
             table={table}
             bets={deck}
             focused={focused}
-            balances={balances.data}
             onFocus={setFocusId}
             onOpenBet={openBet}
             // With a ticket's players around the felt, "+n" opens that ticket's Details (everyone in it).

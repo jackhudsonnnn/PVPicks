@@ -17,7 +17,7 @@ import {
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-export interface SegmentedTab<T extends string> {
+interface SegmentedTab<T extends string> {
   id: T;
   label: string;
   icon?: ComponentType<{ className?: string }>;

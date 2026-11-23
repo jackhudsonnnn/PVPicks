@@ -1,6 +1,6 @@
 /** The server's password rules (PasswordPolicy), checked early so the form can say what's missing. */
-export const PASSWORD_MIN = 12;
-export const PASSWORD_MAX = 64;
+const PASSWORD_MIN = 12;
+const PASSWORD_MAX = 64;
 
 /** Why the password can't be used yet, or null. The server also rejects common passwords. */
 export function passwordProblem(password: string, username?: string): string | null {

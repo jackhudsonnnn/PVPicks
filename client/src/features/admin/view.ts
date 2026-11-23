@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
-export const ADMIN_TABS = ["users", "reports", "perf", "sports"] as const;
+const ADMIN_TABS = ["users", "reports", "perf", "sports"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /**
  * Where the admin is, kept in the URL's query string so a link or a screenshot's address bar points at the exact
  * view (a player's audit, a perf route, a game's inspector). Everything but `tab` belongs to one tab.
  */
-export interface AdminView {
+interface AdminView {
   tab: AdminTab;
   /** Users: the audited player. */
   user?: string;

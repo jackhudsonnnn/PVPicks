@@ -8,7 +8,7 @@ import type { ModeId } from "./types";
  * Pick-mode payouts follow the domain rules: everyone who picks stakes the wager, and the winners split the losers'
  * stakes evenly.
  */
-export interface ModeExample {
+interface ModeExample {
   title: string;
   /** The example's settings, shown as chips ("Wager 2.00", "Line 47.5"). */
   setup: string[];

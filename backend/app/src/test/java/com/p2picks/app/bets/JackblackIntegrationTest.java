@@ -277,7 +277,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         UUID bet = proposed(propose(pat, table, Map.of()));
         deal(bet, stacked());
         assertThat(jdbc.queryForMap("SELECT status, wash_reason FROM bets WHERE id = ?", bet))
-                .containsEntry("status", "WASHED").containsEntry("wash_reason", JackblackService.NOT_ENOUGH);
+                .containsEntry("status", "WASHED").containsEntry("wash_reason", CardGames.NOT_ENOUGH);
     }
 
     @Test
@@ -295,7 +295,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(join(ann, needsThree)).isEqualTo(204);
         deal(needsThree, stacked());
         assertThat(jdbc.queryForMap("SELECT status, wash_reason FROM bets WHERE id = ?", needsThree))
-                .containsEntry("status", "WASHED").containsEntry("wash_reason", JackblackService.NOT_ENOUGH);
+                .containsEntry("status", "WASHED").containsEntry("wash_reason", CardGames.NOT_ENOUGH);
     }
 
     @Test

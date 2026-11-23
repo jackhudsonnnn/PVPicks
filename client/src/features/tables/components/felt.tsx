@@ -24,7 +24,7 @@ import {
   ticketStatus,
 } from "@/features/bets";
 import { cn } from "@/lib/utils";
-import type { Table, TableBalance } from "@/features/tables/api";
+import type { Table } from "@/features/tables/api";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { arrangeSeats, seatPosition, seatStatus, type SeatTone } from "@/features/tables/seating";
 import { useNow } from "@/lib/use-now";
@@ -77,7 +77,6 @@ export function Felt({
   table,
   bets,
   focused,
-  balances,
   onFocus,
   onOpenBet,
   onOpenOthers,
@@ -88,7 +87,6 @@ export function Felt({
   table: Table;
   bets: Bet[];
   focused: Bet | undefined;
-  balances: TableBalance[] | undefined;
   onFocus: (id: string) => void;
   onOpenBet: (id: string) => void;
   /** The "+n" seat: the focused ticket's Details when they're its players, else the Peers tab. */
@@ -151,7 +149,6 @@ export function Felt({
                 id={id}
                 focused={focused}
                 chipOverride={jackblack ? jackblackChip(id) : holdem ? holdemChip(id) : undefined}
-                balance={balances?.find((b) => b.userId === id)}
                 onClick={() => onSelectUser(id)}
                 {...people}
               />
@@ -192,7 +189,6 @@ function Seat({
   id,
   focused,
   chipOverride,
-  balance,
   onClick,
   ...people
 }: People & {
@@ -200,14 +196,12 @@ function Seat({
   focused: Bet | undefined;
   /** A Jackblack game's chip for this seat (its total or result), in place of the pick chip. */
   chipOverride?: { label: string; tone: SeatTone } | null | undefined;
-  balance: TableBalance | undefined;
   onClick: () => void;
 }) {
   const { user, expire, peopleKey } = people;
   const person = usePerson(id, user, expire, peopleKey);
   const chip = chipOverride !== undefined ? chipOverride : seatStatus(focused, id, user.id);
   const name = person?.name ?? "…";
-  const settle = balance?.balanceCents;
   return (
     <button
       type="button"
@@ -241,19 +235,6 @@ function Seat({
         <span className="block truncate text-[10px] font-semibold leading-tight sm:text-[11px]">
           {name}
         </span>
-        {/* <span
-          className={cn(
-            "block font-mono text-[9px] leading-tight sm:text-[10px]",
-            settle === undefined || settle === 0n
-              ? "text-muted-foreground"
-              : settle > 0n
-                ? "text-win"
-                : "text-loss",
-          )}
-          title="Balance at this table"
-        >
-          {settle === undefined ? "–" : formatCents(settle, true)}
-        </span> */}
       </span>
       {chip && (
         <span

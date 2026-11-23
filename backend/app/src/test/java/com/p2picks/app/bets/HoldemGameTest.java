@@ -46,9 +46,9 @@ class HoldemGameTest {
         rig(game, "2C 7D 9H JS 3D", "KS KH", "AS AH");
         assertThat(turn(game)).isEqualTo(button);
         assertThatThrownBy(() -> game.act(RULES, button, Action.CHECK, 0, DECKS, 1))
-                .isInstanceOf(HoldemGame.NotAllowed.class);
+                .isInstanceOf(NotAllowed.class);
         assertThatThrownBy(() -> game.act(RULES, other, Action.CALL, 0, DECKS, 1))
-                .isInstanceOf(HoldemGame.NotAllowed.class).hasMessage("It isn't your turn");
+                .isInstanceOf(NotAllowed.class).hasMessage("It isn't your turn");
         game.act(RULES, button, Action.CALL, 0, DECKS, 1);
         // The big blind still has its option.
         assertThat(turn(game)).isEqualTo(other);
@@ -123,7 +123,7 @@ class HoldemGameTest {
         assertThat(game.currentBet).isEqualTo(150);
         game.act(RULES, sb, Action.RAISE, 400, DECKS, 2);
         assertThatThrownBy(() -> game.act(RULES, bb, Action.RAISE, 600, DECKS, 3))
-                .isInstanceOf(HoldemGame.NotAllowed.class).hasMessageContaining("smallest raise is to 650");
+                .isInstanceOf(NotAllowed.class).hasMessageContaining("smallest raise is to 650");
         game.act(RULES, bb, Action.CALL, 0, DECKS, 3);
         // Both still in check it down.
         for (int street = 0; street < 3; street++) {
@@ -160,7 +160,7 @@ class HoldemGameTest {
         UUID button = game.buttonId, other = button.equals(A) ? B : A;
         // Only while it isn't your turn.
         assertThatThrownBy(() -> game.preMove(button, HoldemGame.PreMove.CALL_ANY))
-                .isInstanceOf(HoldemGame.NotAllowed.class);
+                .isInstanceOf(NotAllowed.class);
         // Call any calls a raise, whatever its size.
         game.preMove(other, HoldemGame.PreMove.CALL_ANY);
         game.act(RULES, button, Action.RAISE, 1_000, DECKS, 1);
@@ -185,7 +185,7 @@ class HoldemGameTest {
         assertThat(game.history.getFirst().deltas).containsEntry(other, 1_000L);
         // Nobody out of the hand can arm one.
         assertThatThrownBy(() -> game.preMove(button, HoldemGame.PreMove.CHECK_FOLD))
-                .isInstanceOf(HoldemGame.NotAllowed.class);
+                .isInstanceOf(NotAllowed.class);
     }
 
     @Test
@@ -211,13 +211,13 @@ class HoldemGameTest {
         assertThat(game.stacks.get(bb)).isZero();
         assertThat(game.rebuyOffered).containsExactly(bb);
         assertThat(game.deadline - game.pausedAt).isEqualTo(HoldemRules.REBUY_MS);
-        assertThatThrownBy(() -> game.rebuy(btn, true, 4)).isInstanceOf(HoldemGame.NotAllowed.class);
+        assertThatThrownBy(() -> game.rebuy(btn, true, 4)).isInstanceOf(NotAllowed.class);
         game.rebuy(bb, true, 4);
         assertThat(game.stacks.get(bb)).isEqualTo(game.buyIn);
         assertThat(game.buyIns.get(bb)).isEqualTo(2);
         // Nobody else deciding: the usual pause.
         assertThat(game.deadline).isEqualTo(game.pausedAt + HoldemRules.HAND_PAUSE_MS);
-        assertThatThrownBy(() -> game.rebuy(bb, true, 5)).isInstanceOf(HoldemGame.NotAllowed.class);
+        assertThatThrownBy(() -> game.rebuy(bb, true, 5)).isInstanceOf(NotAllowed.class);
         long before = sum(game);
         game.timeout(RULES, DECKS, game.deadline);
         assertThat(sum(game)).isEqualTo(before);
@@ -272,7 +272,7 @@ class HoldemGameTest {
                 long amount = game.minRaiseTo(seat) + random.nextInt(3) * bigBlind;
                 try {
                     game.act(RULES, actor, action, amount, DECKS, now);
-                } catch (HoldemGame.NotAllowed refused) {
+                } catch (NotAllowed refused) {
                     game.act(RULES, actor, game.toCall(seat) == 0 ? Action.CHECK : Action.CALL, 0, DECKS, now);
                 }
                 assertThat(sum(game)).isEqualTo(chips);

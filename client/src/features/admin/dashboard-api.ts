@@ -168,7 +168,7 @@ const logEntry = z.object({
   query: z.string().nullable(),
   at,
 });
-export type AdminLogEntry = z.infer<typeof logEntry>;
+type AdminLogEntry = z.infer<typeof logEntry>;
 
 /** The admin audit log, newest first; with `subject`, only entries about that player. */
 export async function listAuditLog(
@@ -207,7 +207,7 @@ const feedbackPage = z.object({
   nextCursor: z.string().min(1).nullable(),
   counts: z.object({ open: z.number(), done: z.number() }),
 });
-export type FeedbackPage = z.infer<typeof feedbackPage>;
+type FeedbackPage = z.infer<typeof feedbackPage>;
 
 export async function listFeedback(
   filter: { status: "new" | "done" | "all"; kind: FeedbackKind | null },
@@ -309,7 +309,7 @@ const perfLive = z.object({
     }),
   ),
 });
-export type PerfLive = z.infer<typeof perfLive>;
+type PerfLive = z.infer<typeof perfLive>;
 
 export async function getPerfLive(signal?: AbortSignal): Promise<PerfLive> {
   return read(await request("/admin/perf/live", options(signal)), perfLive);
@@ -322,7 +322,7 @@ const health = z.object({
   redis: dependency,
   kafka: z.literal("NOT_CHECKED"),
 });
-export type AdminHealth = z.infer<typeof health>;
+type AdminHealth = z.infer<typeof health>;
 
 export async function getAdminHealth(signal?: AbortSignal): Promise<AdminHealth> {
   return read(await request("/admin/health", options(signal)), health);
@@ -344,14 +344,12 @@ const sportsLeague = z.object({
   lastFailureAt: at.nullable(),
   lastFailure: z.string().nullable(),
 });
-export type SportsLeague = z.infer<typeof sportsLeague>;
 const sportsDay = z.object({
   date,
   games: z.number(),
   live: z.number(),
   finals: z.number(),
 });
-export type SportsDay = z.infer<typeof sportsDay>;
 const team = z.object({
   abbreviation: z.string(),
   name: z.string(),
@@ -406,7 +404,6 @@ const gameSnapshot = z.object({
 });
 export type GameSnapshot = z.infer<typeof gameSnapshot>;
 const statSnapshot = z.object({ observedAt: at, played: z.boolean(), stats: json });
-export type StatSnapshot = z.infer<typeof statSnapshot>;
 
 export async function listSportsLeagues(signal?: AbortSignal) {
   return read(await request("/admin/sports/leagues", options(signal)), z.array(sportsLeague));

@@ -30,9 +30,8 @@ export type Table = z.infer<typeof tableSchema>;
 export type JackblackAccess = Table["jackblackAccess"];
 export type HoldemAccess = Table["holdemAccess"];
 
-/** Most tables one account can be in, and most members one table can have (enforced by the server). */
-export const TABLES_PER_USER = 100;
-export const MEMBERS_PER_TABLE = 500;
+/** Most tables one account can be in (enforced by the server). */
+const TABLES_PER_USER = 100;
 
 const tableSummarySchema = z.object({
   id: z.guid(),
@@ -114,7 +113,7 @@ export type MemberOutcome = z.infer<typeof outcomeSchema>;
  */
 export type TableBalance = z.infer<typeof balanceSchema>;
 /** One member's balance with each ticket in play: what it adds if it loses (already in the balance) or wins. */
-export type MemberBalance = z.infer<typeof memberBalanceSchema>;
+type MemberBalance = z.infer<typeof memberBalanceSchema>;
 export type BalanceTicket = MemberBalance["tickets"][number];
 type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs" | "polls";

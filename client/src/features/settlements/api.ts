@@ -74,7 +74,7 @@ export type SettlementLine = z.infer<typeof lineSchema>;
 export type SettlementGroup = z.infer<typeof groupSchema>;
 export type Settle = z.infer<typeof settleSchema>;
 export type SettleKind = Settle["kind"];
-export type SettlePage = z.infer<typeof settlePageSchema>;
+type SettlePage = z.infer<typeof settlePageSchema>;
 
 /** Parses a JSON response without losing precision in 64-bit integers, then validates it. */
 export async function readExact<T>(response: Response, schema: z.ZodType<T, unknown>): Promise<T> {
@@ -140,7 +140,7 @@ export async function listSettlementGroups(
 }
 
 /** Receipts with one person: every open one, then closed ones a page (20) at a time. */
-export interface ReceiptPage {
+interface ReceiptPage {
   open: SettlementLine[];
   closed: SettlementLine[];
   nextCursor: string | null;

@@ -21,26 +21,13 @@ class DebtCalculatorTest {
                 List.of(receipt(20, 2, -500), receipt(21, 2, 175),
                         receipt(22, 3, 10000), receipt(23, 4, -10)));
         assertThat(debt).isEqualTo(m(586));
-        assertThat(DebtCalculator.canChangeCap(debt)).isFalse();
     }
 
     @Test
-    void netsOpenReceiptsAcrossTablesForEachPersonAndAllowsZeroDebtCapChanges() {
+    void netsOpenReceiptsAcrossTablesForEachPerson() {
         Money debt = DebtCalculator.calculate(ME, List.of(table(10, 200, 200)),
                 List.of(receipt(20, 2, -100), receipt(21, 2, 100), receipt(22, 3, 200)));
         assertThat(debt).isEqualTo(m(0));
-        assertThat(DebtCalculator.canChangeCap(debt)).isTrue();
-    }
-
-    @Test
-    void comparesExactCapAndExemptsFourFunOrDisabledCap() {
-        assertThat(DebtCalculator.canRiskWager(m(100), m(200), m(100), false)).isTrue();
-        assertThat(DebtCalculator.canRiskWager(m(100), m(200), m(101), false)).isFalse();
-        assertThat(DebtCalculator.canRiskWager(m(100), m(0), m(100), true)).isTrue();
-        assertThat(DebtCalculator.canRiskWager(m(Long.MAX_VALUE), null, m(1), false)).isTrue();
-        assertThat(DebtCalculator.canRiskWager(m(Long.MAX_VALUE), m(Long.MAX_VALUE), m(1), false)).isFalse();
-        assertThatThrownBy(() -> DebtCalculator.canRiskWager(m(0), m(-1), m(1), true))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -55,7 +42,6 @@ class DebtCalculatorTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> table(10, 0, -1)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> receipt(20, 2, 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> DebtCalculator.canChangeCap(m(-1))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

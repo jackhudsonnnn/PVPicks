@@ -76,7 +76,7 @@ export const isPlayerMode = (mode: string): mode is PlayerMode =>
  * 2-point plays don't count). NBA: a 3 or a 2 (free throws don't count). Read from team totals of player stats; the
  * server builds the same choices.
  */
-export function scorcererChoices(league: "NBA" | "NFL", away: string, home: string) {
+function scorcererChoices(league: "NBA" | "NFL", away: string, home: string) {
   const [big, small] = league === "NFL" ? ["touchdown", "field goal"] : ["3", "2"];
   return [
     `${away} ${big}`,

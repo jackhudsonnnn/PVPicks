@@ -42,7 +42,7 @@ const scrollContainerVariants = cva("relative min-h-0 min-w-0", {
   defaultVariants: { isHorizontal: false, isVisible: true, hasScrollbar: false },
 });
 
-export interface ScrollContainerProps extends React.HTMLAttributes<HTMLDivElement> {
+interface ScrollContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   isVisible?: boolean;
   isHorizontal?: boolean | "mobile";
   /** Show a thin scrollbar. Defaults to false (hidden, still scrollable). */
