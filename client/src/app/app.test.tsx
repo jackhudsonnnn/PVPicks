@@ -7,7 +7,7 @@ import { App } from "./app";
 import { BackendError } from "@/lib/api-client";
 import { currentUser, signInWithCode, signOut } from "@/features/auth/api";
 import { getProfile } from "@/features/people/api";
-import { getTable, listTables, listTableBalances } from "@/features/tables/api";
+import { getTable, listTables, listTableBalances, getMyBalance } from "@/features/tables/api";
 import { listMyBets, listTableBets, type Bet } from "@/features/bets/api";
 import { listSettlementGroups } from "@/features/settlements/api";
 import { getRelationships, listInvites } from "@/features/social/api";
@@ -73,6 +73,7 @@ vi.mock("@/features/tables/api", async (importOriginal) => ({
   listTables: vi.fn(),
   getTable: vi.fn(),
   listTableBalances: vi.fn(),
+  getMyBalance: vi.fn(),
 }));
 vi.mock("@/features/bets/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/bets/api")>()),
@@ -129,9 +130,9 @@ const table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
-  subscribedTo: [],
   disabledPermissions: {},
 };
 const bet: Bet = {
@@ -183,6 +184,7 @@ beforeEach(() => {
   vi.mocked(listSettlementGroups).mockResolvedValue([]);
   vi.mocked(listTables).mockResolvedValue([]);
   vi.mocked(listTableBalances).mockResolvedValue([]);
+  vi.mocked(getMyBalance).mockResolvedValue(0n);
   vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
   vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
 });
@@ -583,6 +585,19 @@ describe("backend app", () => {
       await screen.findByRole("heading", { name: /Renamed table/, hidden: true }),
     ).toBeInTheDocument();
     expect(listTableBets).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows your balance in the points pill and refetches it when it changes", async () => {
+    vi.mocked(currentUser).mockResolvedValue(user);
+    vi.mocked(getMyBalance).mockResolvedValueOnce(-250n).mockResolvedValue(300n);
+    renderApp();
+    expect(
+      (await screen.findAllByLabelText("Your balance, -2.50 points. View settle-ups")).length,
+    ).toBeGreaterThan(0);
+    deliver("/user/queue/me", { type: "balance.changed" });
+    expect(
+      (await screen.findAllByLabelText("Your balance, +3.00 points. View settle-ups")).length,
+    ).toBeGreaterThan(0);
   });
 
   it("reloads the table list when the personal feed says it changed", async () => {

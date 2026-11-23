@@ -678,7 +678,7 @@ class MigrationIntegrationTest extends IntegrationTestSupport {
                 .target(MigrationVersion.fromVersion("22")).load();
         assertThat(hostAttribution.migrate().migrationsExecuted).isEqualTo(1);
         Flyway updated = Flyway.configure().dataSource(url, postgres.getUsername(), postgres.getPassword()).load();
-        assertThat(updated.migrate().migrationsExecuted).isEqualTo(22); // V23 through V44
+        assertThat(updated.migrate().migrationsExecuted).isEqualTo(25); // V23 through V47
         // V38: sent became a settle the payee can still reject; asked-to-forgive is open again; paid has a settle.
         assertThat(upgradedJdbc.queryForMap("""
                 SELECT l.status, s.kind, s.sender_id, s.reject_by > now() + interval '47 hours' AS window_open

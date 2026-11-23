@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile } from "@/features/people/api";
 import type { Table } from "@/features/tables/api";
@@ -23,6 +23,8 @@ vi.mock("@/features/people/api", async (importOriginal) => ({
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   listGifs: vi.fn(async () => (await import("@/test/api-fixtures")).gifCatalog),
+  listGifFavorites: vi.fn(async () => []),
+  setGifFavorite: vi.fn(async () => {}),
   getChatWindow: vi.fn(),
   getChatUnread: vi.fn(),
   markRead: vi.fn(),
@@ -51,9 +53,9 @@ const table: Table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
-  subscribedTo: [],
   disabledPermissions: {},
 };
 
@@ -193,6 +195,28 @@ describe("table chat", () => {
         expect.any(String),
       ),
     );
+  });
+
+  it("picks GIFs in a modal and stars them into a Starred tab", async () => {
+    const { setGifFavorite } = await import("./api");
+    vi.mocked(getChatWindow).mockResolvedValue({
+      items: [],
+      previousCursor: null,
+      nextCursor: null,
+    });
+    renderChat();
+    fireEvent.click(await screen.findByRole("button", { name: "Choose a GIF" }));
+    const dialog = await screen.findByRole("dialog", { name: "Send a GIF" });
+    // Nothing starred yet: the first category shows.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Star Touchdown celebration" }));
+    await waitFor(() =>
+      expect(setGifFavorite).toHaveBeenCalledWith("g1", true, expect.any(String)),
+    );
+    fireEvent.click(within(dialog).getByRole("tab", { name: "★ Starred" }));
+    expect(within(dialog).getAllByRole("button", { name: /Send GIF/ })).toHaveLength(1);
+    expect(
+      within(dialog).getByRole("button", { name: "Unstar Touchdown celebration" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("keeps a refused message in the box to edit, and clears a sent one", async () => {

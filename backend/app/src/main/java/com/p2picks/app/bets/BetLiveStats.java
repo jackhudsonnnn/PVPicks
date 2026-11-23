@@ -20,7 +20,9 @@ import org.springframework.stereotype.Component;
  * stat, each team's touchdowns and field goals) when the bet was proposed, when picks locked, and now.
  *
  * <p>The first two are snapshots in {@code bets.baseline} ({"proposed": {...}, "locked": {...}}), written by the
- * proposal and lock transactions; bets made before snapshots existed show only "now".
+ * proposal and lock transactions. Once the bet is resolved or washed, "now" stops: it's the {@code result} snapshot
+ * (with the score and clock in {@code resultGame}), written when the outcome is applied, and the read is
+ * {@code closed}.
  */
 @Component
 public class BetLiveStats {
@@ -30,10 +32,16 @@ public class BetLiveStats {
 
     public record Team(String abbreviation, Integer score) {}
 
+    /** {@code closed}: the bet is resolved or washed, so the numbers (and the score and clock) are as of then. */
     public record Live(String gameId, String league, String status, Integer period, String clock, Team away,
-            Team home, List<Row> rows) {}
+            Team home, List<Row> rows, boolean closed) {}
 
-    private record Bet(String mode, String gameId, JsonNode config, boolean includesOvertime, JsonNode baseline) {}
+    private record Bet(String mode, String gameId, JsonNode config, boolean includesOvertime, JsonNode baseline,
+            String status) {
+        boolean closed() {
+            return status.equals("SETTLED") || status.equals("WASHED");
+        }
+    }
 
     private final JdbcTemplate jdbc;
     private final GameLookup games;
@@ -63,6 +71,34 @@ public class BetLiveStats {
         }
     }
 
+    /**
+     * Freezes the tracked numbers, the score and the clock as the bet is called (resolved or washed; a correction
+     * records them again). No-op for a bet without a game.
+     */
+    public void captureResult(UUID betId) {
+        Optional<Bet> bet = bet(betId);
+        if (bet.isEmpty() || bet.get().gameId() == null) return;
+        Optional<GameLookup.Game> found = games.find(bet.get().gameId());
+        if (found.isEmpty()) return;
+        GameLookup.Game g = found.get();
+        Map<String, Object> clock = jdbc.queryForMap("SELECT period, clock FROM games WHERE id = ?", g.id());
+        Map<String, Object> game = new LinkedHashMap<>();
+        game.put("status", g.status().name());
+        game.put("period", clock.get("period"));
+        game.put("clock", clock.get("clock"));
+        game.put("awayScore", g.away().score());
+        game.put("homeScore", g.home().score());
+        try {
+            jdbc.update("""
+                    UPDATE bets SET baseline = COALESCE(baseline, '{}'::jsonb)
+                        || jsonb_build_object('result', ?::jsonb, 'resultGame', ?::jsonb)
+                    WHERE id = ?
+                    """, json.writeValueAsString(values(bet.get())), json.writeValueAsString(game), betId);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Cannot write live stats", exception);
+        }
+    }
+
     /** The bet's live stats, or empty for a bet without a game (U2Pick) or whose game is gone. */
     public Optional<Live> read(UUID betId) {
         Optional<Bet> found = bet(betId);
@@ -71,18 +107,28 @@ public class BetLiveStats {
         Optional<GameLookup.Game> game = games.find(bet.gameId());
         if (game.isEmpty()) return Optional.empty();
         GameLookup.Game g = game.get();
-        Map<String, Integer> now = values(bet);
         JsonNode proposed = bet.baseline() == null ? null : bet.baseline().get("proposed");
         JsonNode locked = bet.baseline() == null ? null : bet.baseline().get("locked");
+        JsonNode result = bet.closed() && bet.baseline() != null ? bet.baseline().get("result") : null;
+        JsonNode at = bet.closed() && bet.baseline() != null ? bet.baseline().get("resultGame") : null;
+        Map<String, Integer> live = result == null ? values(bet) : Map.of();
         List<Row> rows = new ArrayList<>();
         for (Tracked tracked : tracked(bet, g)) {
+            Integer now = result == null ? live.get(tracked.key()) : number(result, tracked.key());
             rows.add(new Row(tracked.label(), tracked.detail(), number(proposed, tracked.key()),
-                    number(locked, tracked.key()), now.get(tracked.key()), tracked.target(), tracked.targetLabel()));
+                    number(locked, tracked.key()), now, tracked.target(), tracked.targetLabel()));
+        }
+        Team away = new Team(g.away().abbreviation(), g.away().score());
+        Team home = new Team(g.home().abbreviation(), g.home().score());
+        if (at != null) {
+            return Optional.of(new Live(g.id(), g.league().name(), at.path("status").asText(),
+                    number(at, "period"), at.hasNonNull("clock") ? at.get("clock").asText() : null,
+                    new Team(away.abbreviation(), number(at, "awayScore")),
+                    new Team(home.abbreviation(), number(at, "homeScore")), List.copyOf(rows), true));
         }
         Map<String, Object> clock = jdbc.queryForMap("SELECT period, clock FROM games WHERE id = ?", bet.gameId());
         return Optional.of(new Live(g.id(), g.league().name(), g.status().name(), (Integer) clock.get("period"),
-                (String) clock.get("clock"), new Team(g.away().abbreviation(), g.away().score()),
-                new Team(g.home().abbreviation(), g.home().score()), List.copyOf(rows)));
+                (String) clock.get("clock"), away, home, List.copyOf(rows), bet.closed()));
     }
 
     private record Tracked(String key, String label, String detail, BigDecimal target, String targetLabel) {}
@@ -160,11 +206,12 @@ public class BetLiveStats {
 
     private Optional<Bet> bet(UUID betId) {
         return jdbc.query("""
-                SELECT mode, game_id, config::text AS config, includes_overtime, baseline::text AS baseline
+                SELECT mode, game_id, config::text AS config, includes_overtime, baseline::text AS baseline, status
                 FROM bets WHERE id = ?
                 """, (rs, row) -> new Bet(rs.getString("mode"), rs.getString("game_id"), tree(rs.getString("config")),
                         !Boolean.FALSE.equals(rs.getObject("includes_overtime")),
-                        rs.getString("baseline") == null ? null : tree(rs.getString("baseline"))), betId)
+                        rs.getString("baseline") == null ? null : tree(rs.getString("baseline")),
+                        rs.getString("status")), betId)
                 .stream().findFirst();
     }
 

@@ -363,6 +363,9 @@ class BetReadController {
             withFlags.put("viewerCanOverride", host
                     && SportsProposalService.MODES.contains(bet.path("modeId").asText())
                     && !bet.path("pointsSettled").asBoolean());
+            // A Quick Pick copy's source bet and table belong to another table: used above, never sent.
+            withFlags.remove("sourceBetId");
+            withFlags.remove("sourceTableId");
             result.add(withFlags);
         }
         return List.copyOf(result);

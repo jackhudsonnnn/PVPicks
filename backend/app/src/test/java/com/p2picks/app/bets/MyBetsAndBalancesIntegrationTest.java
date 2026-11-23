@@ -162,13 +162,88 @@ class MyBetsAndBalancesIntegrationTest extends IntegrationTestSupport {
             assertThat(OpenApiSchemas.load("TableBalance").validate(balance)).isEmpty();
             if (balance.path("userId").asText().equals(host.toString())) {
                 // The Active pick is never counted.
-                assertThat(balance.path("settleCents").asLong()).isEqualTo(150);
-                assertThat(balance.path("trueCents").asLong()).isEqualTo(150);
+                assertThat(balance.path("unsettledCents").asLong()).isEqualTo(150);
+                assertThat(balance.path("balanceCents").asLong()).isEqualTo(150);
             } else {
                 // Only the non-4fun locked wager comes off.
-                assertThat(balance.path("settleCents").asLong()).isEqualTo(-150);
-                assertThat(balance.path("trueCents").asLong()).isEqualTo(-250);
+                assertThat(balance.path("unsettledCents").asLong()).isEqualTo(-150);
+                assertThat(balance.path("balanceCents").asLong()).isEqualTo(-250);
             }
         }
+    }
+
+    /** A resolved bet (member +150), a locked pot (member Yes, host No) and a Jackblack game the member plays. */
+    private UUID[] whatIfBets() {
+        UUID resolved = bet(tableA, "Resolved?", "SETTLED", 40, false);
+        UUID pot = bet(tableA, "Pot?", "PENDING", 30, false);
+        UUID game = bet(tableA, "Jackblack", "PENDING", 20, false);
+        jdbc.update("UPDATE bets SET mode = 'jackblack', locked_at = now() + interval '1 minute' WHERE id = ?", game);
+        new TransactionTemplate(transactions).executeWithoutResult(ignored -> jdbc.update("""
+                INSERT INTO ledger_entries (id, table_id, bet_id, user_id, delta_cents) VALUES
+                (?, ?, ?, ?, 150), (?, ?, ?, ?, -150)
+                """, UUID.randomUUID(), tableA, resolved, member, UUID.randomUUID(), tableA, resolved, host));
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?), (?, ?)",
+                pot, member, pot, host, game, member);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes'), (?, ?, 'No')",
+                pot, member, pot, host);
+        jdbc.update("INSERT INTO card_players (bet_id, user_id, risk_cents) VALUES (?, ?, 800)", game, member);
+        return new UUID[] {pot, game};
+    }
+
+    @Test
+    void memberBalanceListsEachTicketInPlayWithItsWinAndLoss() throws Exception {
+        seed("whatif");
+        UUID[] bets = whatIfBets();
+        Cookie hostSession = loginAs("whatifhost");
+        String path = "/tables/" + tableA + "/members/" + member + "/balance";
+
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).cookie(loginAs("whatifout"))).andExpect(status().isNotFound());
+        mvc.perform(get("/tables/" + tableA + "/members/" + outsider + "/balance").cookie(hostSession))
+                .andExpect(status().isNotFound());
+
+        JsonNode balance = read(path, hostSession);
+        assertThat(OpenApiSchemas.load("MemberBalance").validate(balance)).isEmpty();
+        assertThat(balance.path("unsettledCents").asLong()).isEqualTo(150);
+        // Unsettled results plus every ticket lost: the same number the table's balances show.
+        assertThat(balance.path("balanceCents").asLong()).isEqualTo(150 - 100 - 800);
+        JsonNode tickets = balance.path("tickets");
+        assertThat(tickets).hasSize(2);
+        assertThat(tickets.get(0).path("betId").asText()).isEqualTo(bets[0].toString());
+        assertThat(tickets.get(0).path("choice").asText()).isEqualTo("Yes");
+        assertThat(tickets.get(0).path("loseCents").asLong()).isEqualTo(-100);
+        // The host's 100 on No, if Yes wins.
+        assertThat(tickets.get(0).path("winCents").asLong()).isEqualTo(100);
+        assertThat(tickets.get(1).path("betId").asText()).isEqualTo(bets[1].toString());
+        assertThat(tickets.get(1).path("mode").asText()).isEqualTo("jackblack");
+        assertThat(tickets.get(1).has("choice")).isFalse();
+        assertThat(tickets.get(1).path("loseCents").asLong()).isEqualTo(-800);
+        assertThat(tickets.get(1).path("winCents").asLong()).isEqualTo(800);
+
+        JsonNode listed = read("/tables/" + tableA + "/balances", hostSession);
+        for (JsonNode row : listed) {
+            if (row.path("userId").asText().equals(member.toString())) {
+                assertThat(row.path("balanceCents").asLong()).isEqualTo(balance.path("balanceCents").asLong());
+            }
+        }
+    }
+
+    @Test
+    void myBalanceSumsEveryTableAndOpenReceipts() throws Exception {
+        seed("mine");
+        whatIfBets();
+        insertDebtReceipt(tableA, host, host, member, 300, "unpaid");
+        insertDebtReceipt(tableA, host, host, member, 500, "paid");
+        // An archived table no longer counts.
+        UUID gone = bet(archived, "Gone?", "PENDING", 5, false);
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", gone, member);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes')", gone, member);
+
+        mvc.perform(get("/me/balance")).andExpect(status().isUnauthorized());
+        assertThat(read("/me/balance", loginAs("minemember")).path("balanceCents").asLong())
+                .isEqualTo(150 - 100 - 800 + 300);
+        assertThat(read("/me/balance", loginAs("minehost")).path("balanceCents").asLong())
+                .isEqualTo(-150 - 100 - 300);
+        assertThat(read("/me/balance", loginAs("mineout")).path("balanceCents").asLong()).isZero();
     }
 }

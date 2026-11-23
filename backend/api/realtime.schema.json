@@ -26,7 +26,8 @@
         "profile.changed",
         "settlements.changed",
         "ticker.changed",
-        "tomatoes.changed"
+        "tomatoes.changed",
+        "balance.changed"
       ]
     },
     "schemaVersion": {
@@ -116,7 +117,8 @@
               "ticker.changed",
               "settlements.changed",
               "tables.changed",
-              "invitations.changed"
+              "invitations.changed",
+              "balance.changed"
             ]
           }
         },

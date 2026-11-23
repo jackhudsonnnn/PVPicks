@@ -116,9 +116,9 @@ describe("who can propose", () => {
     u2pickEnabled: true,
     pollsEnabled: true,
     jackblackAccess: "everyone" as const,
+    holdemAccess: "everyone" as const,
     quickPicksEnabled: false,
     quickPickSharing: false,
-    subscribedTo: [],
     disabledPermissions: {},
   };
 

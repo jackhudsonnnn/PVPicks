@@ -72,7 +72,9 @@ class PayoutCalculatorTest {
         for (int i = 1; i <= 11; i++) players.add(p(i, "pass"));
         players.add(p(12, "run"));
         Map<UUID, Money> amounts = deltas(settle(players, 10, false, "pass"));
-        assertThat(amounts).hasSize(11).doesNotContainKey(id(11)).containsEntry(id(12), new Money(-10));
+        // A 0.10 pot over 11 winners: ten get a cent, the one left with nothing isn't in the ledger.
+        assertThat(amounts).hasSize(11).containsEntry(id(12), new Money(-10));
+        assertThat(amounts.values()).noneMatch(amount -> amount.cents() == 0);
     }
 
     @Test

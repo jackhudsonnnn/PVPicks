@@ -61,15 +61,15 @@ describe("table balances", () => {
     respond([
       {
         userId: user.id,
-        settleCents: 150,
-        trueCents: -9_007_199_254_740_991,
+        balanceCents: -9_007_199_254_740_991,
+        unsettledCents: 150,
       },
     ]);
     const [balance] = await listTableBalances(table.id);
     expect(balance).toEqual({
       userId: user.id,
-      settleCents: 150n,
-      trueCents: -9_007_199_254_740_991n,
+      balanceCents: -9_007_199_254_740_991n,
+      unsettledCents: 150n,
     });
   });
 

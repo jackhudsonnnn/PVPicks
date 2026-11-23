@@ -67,13 +67,12 @@ public class DebtQuery {
                             FROM bets b JOIN picks p ON p.bet_id = b.id AND p.user_id = viewer.id
                             WHERE b.table_id = m.table_id AND b.status = 'PENDING' AND NOT b.is_4fun
                         ), 0)::numeric
-                        -- Jackblack in play: each player's worst case over the whole game (domain rules,
-                        -- "Jackblack").
+                        -- Card games in play (Jackblack, Hold'em): each player's worst case over the whole
+                        -- game (domain rules).
                         + COALESCE((
                             SELECT SUM(j.risk_cents)
-                            FROM bets b JOIN jackblack_players j ON j.bet_id = b.id AND j.user_id = viewer.id
+                            FROM bets b JOIN card_players j ON j.bet_id = b.id AND j.user_id = viewer.id
                             WHERE b.table_id = m.table_id AND b.status = 'PENDING' AND NOT b.is_4fun
-                              AND b.mode = 'jackblack'
                         ), 0)::numeric AS pending,
                         NULL::bigint AS amount
                     FROM table_members m JOIN tables t ON t.id = m.table_id AND t.archived_at IS NULL

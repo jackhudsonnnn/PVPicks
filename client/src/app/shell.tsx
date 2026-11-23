@@ -1,18 +1,17 @@
 import type { ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BookOpen, LogOut, SlidersHorizontal, Ticket, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { SidebarTables } from "@/features/tables";
+import { SidebarTables, myBalanceKey, useMyBalance } from "@/features/tables";
 import { useHasTickets } from "@/features/bets";
 import type { User } from "@/features/people";
 import { ScoreTicker } from "@/features/sports";
 import { useRealtimeFeed, useRealtimeStatus } from "@/lib/realtime";
 import { settlementsFeed } from "@/lib/realtime-connection";
-import { listSettlementGroups } from "@/features/settlements";
 import { userKey } from "@/lib/query-keys";
 import { useDevAvailable } from "@/features/devdata";
 import { DevLinks } from "./dev-links";
@@ -81,25 +80,23 @@ const isActive = (pathname: string, to: string) =>
   to === "/" ? pathname === "/" : pathname.startsWith(to);
 
 /**
-- Net of your open settle-ups: positive means you're up. Same query and key as the Friends page's settle-ups,
-- so both stay in step; the settlements feed refreshes it.
+ * Your balance: every table's balance plus the net of your open settle-ups, positive when you're up. A host settle
+ * moves points from a table into settle-ups, so it doesn't change this. The personal feed's `balance.changed`
+ * refreshes it when a bet you're in locks or resolves; the settlements feed when a settle-up changes.
  */
 function PointsPill({ user }: { user: User }) {
   const queryClient = useQueryClient();
-  const key = userKey(user.id, "settlements");
-  useRealtimeFeed(settlementsFeed, () => void queryClient.invalidateQueries({ queryKey: key }));
-  const groups = useQuery({
-    queryKey: [...key, "groups"],
-    queryFn: ({ signal }) => listSettlementGroups(user.id, signal),
-    retry: false,
+  useRealtimeFeed(settlementsFeed, () => {
+    void queryClient.invalidateQueries({ queryKey: userKey(user.id, "settlements") });
+    void queryClient.invalidateQueries({ queryKey: myBalanceKey(user.id) });
   });
-  const net = groups.data?.reduce((sum, group) => sum + group.netCents, 0n);
+  const net = useMyBalance(user.id).data;
   const label = net === undefined ? "–" : formatCents(net, true);
   return (
     <Link
       to="/friends"
-      aria-label={`${label} points net in open settle-ups. View settle-ups`}
-      title="Net of your open settle-ups. Tap to see them"
+      aria-label={`Your balance, ${label} points. View settle-ups`}
+      title="Your balance across every table and open settle-ups. Tap to see settle-ups"
       className="flex items-center gap-2 rounded-full border bg-surface px-3 py-1 transition-colors hover:border-primary/60 hover:bg-surface-raised"
     >
       <span
@@ -234,7 +231,7 @@ export function AppShell({
             <LiveStatus />
           </div>
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            Net of your open settle-ups. Points have no cash value.
+            Your balance across every table and open settle-ups. Points have no cash value.
           </p>
           <p className="mt-2 truncate text-xs text-muted-foreground">
             Signed in as {user.username}

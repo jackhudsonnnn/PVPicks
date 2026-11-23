@@ -15,7 +15,7 @@ class DebtCalculatorTest {
     private static final UUID ME = id(1);
 
     @Test
-    void sumsNegativeTableTrueBalancesAndPersonNetsWithoutCrossOffsets() {
+    void sumsNegativeTableBalancesAndPersonNetsWithoutCrossOffsets() {
         Money debt = DebtCalculator.calculate(ME,
                 List.of(table(10, 100, 350), table(11, 10000, 0), table(12, -1, 0)),
                 List.of(receipt(20, 2, -500), receipt(21, 2, 175),

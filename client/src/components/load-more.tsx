@@ -21,7 +21,14 @@ export function LoadMore({ loading, onLoad }: { loading: boolean; onLoad: () => 
     return () => observer.disconnect();
   }, []);
   return (
-    <Button ref={ref} variant="outline" className="w-full" disabled={loading} onClick={onLoad}>
+    <Button
+      ref={ref}
+      data-page-edge
+      variant="outline"
+      className="w-full"
+      disabled={loading}
+      onClick={onLoad}
+    >
       {loading && <Spinner />} Load more
     </Button>
   );

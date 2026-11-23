@@ -30,7 +30,7 @@ flowchart LR
 - Real NBA and NFL games only: the demo world, bots, DEV games and Dev page
   are off.
 - In scope: U2Pick, Total Disaster, Give And Take, Either Or, Prop Hunt, King
-  Of The Hill, Scorcerer (NFL and NBA) and Blackjack.
+  Of The Hill, Scorcerer (NFL and NBA) and Jackblack.
 - Data must survive the night. It can be wiped afterwards.
 
 ## HTTPS

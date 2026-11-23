@@ -105,7 +105,7 @@ class SessionSecurity {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http, JwtDecoder decoder, CsrfTokenRepository csrfRepository, JdbcTemplate jdbc,
-            AppMode mode,
+            AppMode mode, SessionCookies sessionCookies,
             @Value("${PVPICKS_ORIGIN:${PVPICKS_DEV_ORIGIN:http://127.0.0.1:8080}}") String allowedOrigin)
             throws Exception {
         AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
@@ -160,7 +160,7 @@ class SessionSecurity {
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
                 .addFilterBefore(new OriginFilter(allowedOrigin, mode == AppMode.LAN), org.springframework.security.web.csrf.CsrfFilter.class)
-                .addFilterAfter(new JwtCookieFilter(decoder, entry), org.springframework.security.web.csrf.CsrfFilter.class)
+                .addFilterAfter(new JwtCookieFilter(decoder, entry, sessionCookies), org.springframework.security.web.csrf.CsrfFilter.class)
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint(entry)
                         .accessDeniedHandler((request, response, exception) -> {

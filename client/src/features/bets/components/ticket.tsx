@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MODES } from "@/features/bets/modes";
 import { StatusBadge } from "./status-badge";
+import { TicketFooter } from "./ticket-footer";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
@@ -32,8 +33,10 @@ import {
   secondsLeft,
   ticketStatus,
 } from "@/features/bets/ticket-model";
+import { LATE_ENTRY_SEC } from "@/features/bets/wager";
 import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
 import { JackblackTicket } from "./jackblack-ticket";
+import { HoldemTicket } from "./holdem-ticket";
 
 interface TicketProps {
   bet: Bet;
@@ -51,9 +54,11 @@ interface TicketProps {
  * locked ticket when your settler rule allows. Without `actions` it renders as a preview.
  */
 export function BetTicket(props: TicketProps & { actions?: BetActions }) {
-  // Jackblack is played on its ticket rather than picked.
+  // The card games are played on their tickets rather than picked.
   return props.bet.modeId === "jackblack" ? (
     <JackblackTicket {...props} />
+  ) : props.bet.modeId === "holdem" ? (
+    <HoldemTicket {...props} />
   ) : (
     <PickTicket {...props} />
   );
@@ -79,7 +84,9 @@ function PickTicket({
   const result = myResultCents(bet, user.id);
   const canBet = canBetAt(table, user.id);
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
-  const canPick = status === "active" && canBet && left > 0 && !blocked;
+  // In the last seconds only someone already in can change their pick (the server enforces it too).
+  const late = status === "active" && left <= LATE_ENTRY_SEC && !bet.myPick;
+  const canPick = status === "active" && canBet && left > 0 && !blocked && !late;
   const proposer = usePerson(bet.proposerId, user, expire, peopleKey);
   const ticker = useTicker(user.id);
   const game = bet.gameId ? ticker.data?.find((g) => g.id === bet.gameId) : undefined;
@@ -110,7 +117,7 @@ function PickTicket({
                 )}
                 aria-label="Time left to change your pick"
               >
-                {left > 0 ? formatClock(left) : "Locking…"}
+                {formatClock(Math.max(0, left))}
               </span>
             )}
           </div>
@@ -244,10 +251,22 @@ function PickTicket({
         </ul>
 
         {status === "active" && (
-          <p className="flex items-center gap-2 text-xs text-ticket-muted">
-            <EyeOff className="size-3.5 shrink-0" />
-            {activeHint(bet, canBet, wager)}
-          </p>
+          // Override shares the hint's row while picks are open.
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex min-w-0 items-center gap-2 text-xs text-ticket-muted">
+              <EyeOff className="size-3.5 shrink-0" />
+              {activeHint(bet, canBet, wager, late)}
+            </p>
+            {canOverride && (
+              <OutcomeMenu
+                bet={bet}
+                tableId={table.id}
+                actions={actions!}
+                disabled={blocked}
+                override
+              />
+            )}
+          </div>
         )}
         {status === "pending" && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-status-pending/20 px-3 py-2 text-xs font-medium">
@@ -306,7 +325,7 @@ function PickTicket({
             <ShieldAlert className="size-3.5" /> Result set by a host
           </p>
         )}
-        {canOverride && status !== "pending" && (
+        {canOverride && status !== "pending" && status !== "active" && (
           <div className="flex justify-end">
             <OutcomeMenu
               bet={bet}
@@ -318,41 +337,17 @@ function PickTicket({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-t border-ticket-foreground/10 pt-3">
-          <p className="flex min-w-0 items-center gap-1.5 text-xs">
-            <span
-              aria-hidden
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-ticket-foreground/10 text-sm"
-            >
-              {table.emoji}
-            </span>
-            {preview ? (
-              <span className="truncate font-semibold text-ticket-foreground">{table.name}</span>
-            ) : (
-              <Link
-                to="/tables/$tableId"
-                params={{ tableId: table.id }}
-                className="truncate font-semibold text-ticket-foreground underline underline-offset-2"
-              >
-                {table.name}
-              </Link>
-            )}
-          </p>
-          <dl className="flex gap-4 text-right font-mono text-[11px] uppercase tracking-wider text-ticket-muted">
-            <div>
-              <dt>Wager</dt>
-              <dd className="scoreboard text-base text-ticket-foreground">
-                {bet.forFun ? "4fun" : wager}
-              </dd>
-            </div>
-            <div>
-              <dt>{pot === null ? "Picks" : "Pot"}</dt>
-              <dd className="scoreboard text-base text-ticket-foreground">
-                {pot === null ? bet.pickCount : bet.forFun ? "–" : formatCents(pot)}
-              </dd>
-            </div>
-          </dl>
-        </div>
+        <TicketFooter
+          table={table}
+          preview={preview}
+          stats={[
+            { label: "Wager", value: bet.forFun ? "4fun" : wager },
+            {
+              label: pot === null ? "Participants" : "Pot",
+              value: pot === null ? bet.pickCount : bet.forFun ? "–" : formatCents(pot),
+            },
+          ]}
+        />
       </div>
 
       <AlertDialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>

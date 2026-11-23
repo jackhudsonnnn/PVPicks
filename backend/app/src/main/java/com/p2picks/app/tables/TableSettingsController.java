@@ -26,8 +26,10 @@ class TableSettingsController {
     }
 
     private static final java.util.List<String> SETTINGS = java.util.List.of("hostsOnlyBets", "u2pickEnabled",
-            "pollsEnabled", "jackblackAccess");
-    private static final java.util.Set<String> JACKBLACK_ACCESS = java.util.Set.of("hosts", "everyone", "off");
+            "pollsEnabled", "jackblackAccess", "holdemAccess");
+    /** Who may propose a card game (Jackblack, Hold'em). */
+    private static final java.util.Set<String> ACCESS = java.util.Set.of("hosts", "everyone", "off");
+    private static final java.util.Set<String> ACCESS_SETTINGS = java.util.Set.of("jackblackAccess", "holdemAccess");
 
     private static Boolean flag(JsonNode input, String name) {
         return input.has(name) ? input.get(name).booleanValue() : null;
@@ -39,14 +41,16 @@ class TableSettingsController {
         if (!IdempotencyGuard.validKey(key)) return error(400, "bad_request", "A valid Idempotency-Key is required.");
         if (!input.isObject() || input.isEmpty()
                 || input.size() != SETTINGS.stream().filter(input::has).count()
-                || SETTINGS.stream().anyMatch(name -> !name.equals("jackblackAccess") && input.has(name)
+                || SETTINGS.stream().anyMatch(name -> !ACCESS_SETTINGS.contains(name) && input.has(name)
                         && !input.get(name).isBoolean())
-                || (input.has("jackblackAccess") && !JACKBLACK_ACCESS.contains(input.get("jackblackAccess").asText("")))) {
+                || ACCESS_SETTINGS.stream().anyMatch(name -> input.has(name)
+                        && !ACCESS.contains(input.get(name).asText("")))) {
             return error(400, "bad_request", "Invalid table settings.");
         }
         var changes = new TableSettingsService.Changes(flag(input, "hostsOnlyBets"), flag(input, "u2pickEnabled"),
                 flag(input, "pollsEnabled"),
-                input.has("jackblackAccess") ? input.get("jackblackAccess").textValue() : null);
+                input.has("jackblackAccess") ? input.get("jackblackAccess").textValue() : null,
+                input.has("holdemAccess") ? input.get("holdemAccess").textValue() : null);
         try {
             return switch (settings.update(jwt, tableId, changes, key)) {
                 case UPDATED, REPLAYED -> tableReads.get(jwt, tableId);

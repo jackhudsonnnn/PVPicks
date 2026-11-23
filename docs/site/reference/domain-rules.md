@@ -7,10 +7,10 @@ are examples rather than a list of implemented tests.
 
 | Area | Invariants to preserve | Client tests | Example JUnit targets |
 |---|---|---|---|
-| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Host/proposer can receive remainder even when not a winner; earliest/random distribute to winners. | None (server only) | `splitsLoserPotInCents`, `washWhenNoWinner`, `remainderCanGoToNonParticipant`, `settlementIsZeroSum` |
-| Lifecycle | ACTIVE accepts picks; only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING and snapshots remainder rule. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `snapshotRemainderAtLock`, `rejectManualGameResult` |
+| Payout | Integer cents; losers fund winners; zero sum; No guess excluded; wash for insufficient pot, same side, unpicked winner or invalid outcome. Leftover cents go one each to winners at random ([Payouts](#payouts)). | None (server only) | `splitsLoserPotInCents`, `washWhenNoWinner`, `leftoverCentsGoToRandomWinners`, `settlementIsZeroSum` |
+| Lifecycle | ACTIVE accepts picks, but no first pick (or Jackblack join or leave) in the last 10 seconds before lock; anyone already in may still change or clear theirs (owner decision, 2026-11-22; `late_entry`); only the caller's own pick and aggregate counts are visible until lock, not other participants or their picks. Lock moves to PENDING. Game outcomes come from the feed unless a host overrides them (planned); authorized people settle U2Pick. | `bets/ticket-model.test.ts`, `bets/u2pick.test.ts`, `bets/bet-results.test.ts` | `hideOtherPicksUntilLock`, `rejectManualGameResult` |
 | Bets | Wagers are 0.10–10.00 points except 4fun; validate each mode and overtime behavior; 4fun creates no tracked pot. | `bets/wager.test.ts`, `bets/sports-model.test.ts`, `bets/betting.test.tsx` | `rejectOutOfRangeWager`, `fourFunDoesNotPostLedger`, `validateModeAndOvertime` |
-| Balances and cap | Settle is unresolved-settlement deltas; True subtracts pending wagers. Debt sums negative table True balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `bets/api.test.ts` (balances), `preferences/preferences.test.tsx` (debt cap) | `trueIncludesPendingWagers`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
+| Balances and cap | One balance per table: unsettled results minus points in play ([Balances](#balances)). Host settle moves only unsettled results. Debt sums negative table balances and negative open person nets without positive offsets. A cap cannot change with debt; enforce on propose, pick and lock; 4fun is exempt. | `tables/api.test.ts` (balances), `tables/table-page.test.tsx` (what-if), `preferences/preferences.test.tsx` (debt cap) | `MyBetsAndBalancesIntegrationTest`, `positiveBalancesDoNotOffsetDebt`, `overCapPickPassesAtLock` |
 | Settle-ups | Host creates separate receipts per settlement; a settle closes chosen open receipts with one person at once, netted; the person down settles (`sent`: settled at once, rejectable by the other for 48 hours, still counted toward the points limit until then); the person up, or either side when even, marks as settled (`received`, final); no forgive; at most 3 sent settles per pair per rolling 24 hours; a changed balance must be reviewed before settling; cards are yellow, red, green, neutral. | `settlements/api.test.ts`, `settlements/settlements.test.tsx`, `settlements/ledger-model.test.ts`, `settlements/settlement-integration.test.tsx` | `SettleRulesTest`, `SettleIntegrationTest`, `PointsSettlementIntegrationTest`, `MigrationIntegrationTest` (V38, V42) |
 | Quick Picks | Exact copies do not chain; source results propagate; a subscriber host may wash or set a result on their copy, which then stops following the source; existing copies persist when subscriptions change. Every table retains a six-character code; hosts may disable sharing. | `tables/table-page.test.tsx` (sharing and codes) | `copyDoesNotFanOut`, `hostWashStopsSourcePropagation`, `copiesSurviveUnsubscribe` |
 | Identity and deletion | Case-insensitive unique username, 3–15 lowercase alphanumeric/underscore characters; deletion removes personal data, preserves ledger identity as Deleted user and hands off hosted tables. | `preferences/profile-rules.test.ts`, `auth/api.test.ts` | `usernameIsUniqueIgnoringCase`, `deletedUserRetainsLedger`, `deletionHandsOffHostedTables` |
@@ -57,7 +57,7 @@ Owner decisions, 2026-11-14:
   - It's blocked until you're square: no Active or Pending bet you proposed or
     joined, no unsettled table points, and no open receipts.
   - It then removes personal data: profile, relationships, invite
-    preferences, chat text, GIFs and polls, reactions, poll votes, read positions, feedback,
+    preferences, chat text, GIFs and polls, reactions, poll votes, read positions, starred GIFs, feedback,
     debt cap, memberships and archive access, invitations and tomatoes.
   - The account becomes "Deleted user", which bets, the ledger and receipts
     keep referencing. Moderation records (reports, strikes) are kept.
@@ -160,7 +160,7 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | Trigger | Modes | Wash reason | Status |
 |---|---|---|---|
 | Nobody picked the winning option (only possible with 3+ options, since a 2-option bet with both sides picked always has a winner) | All | "Nobody picked the winning choice" | Implemented |
-| Push on a whole-number line | Total Disaster, Give And Take, Prop Hunt | "Push" | Implemented |
+| Push (an exact line; can't happen now that lines end in .5, kept as a fallback) | Total Disaster, Give And Take, Prop Hunt | "Push" | Implemented |
 | Tie | Either Or | "Tie" | Implemented |
 | Both players first reach the target in the same update | King Of The Hill | "Both reached it in the same update" | Implemented |
 | A player in the bet didn't play | Either Or, Prop Hunt, King Of The Hill | "A player in the bet didn't play" | Implemented |
@@ -172,9 +172,7 @@ debt cap) are dropped first. "No guess" isn't a pick.
 | Team scoring totals from player stats still disagree with the score once the grace period has passed, or two different scores (either team's touchdown or field goal, or 3 or 2) first appear in the same update | Scorcerer | "Couldn't tell the scoring play" | Implemented |
 | Nobody called the result 7 days after lock (checked every ten minutes; Quick Pick originals with copies are skipped) | U2Pick | "Nobody called the result" | Implemented |
 | The admin deleted a player who proposed or picked in it ([Admin account deletion](#admin-account-deletion)) | All | "A player's account was deleted" | Implemented |
-| Nobody sat down by the deal | Blackjack | "Nobody sat down" | Implemented |
-| The dealer left the table or was deleted before the deal | Blackjack | "The dealer left the table" | Implemented |
-| The dealer's points limit can't cover even one seat at the deal | Blackjack | "The dealer's points limit couldn't cover anyone" | Implemented |
+| Fewer than two players at the deal (after dropping anyone who can't bet here or cover their worst case) | Jackblack | "Not enough players" | Implemented |
 
 Every wash trigger for the LAN modes is implemented and tested (owner
 decisions, 2026-11-15). Hosts can still override any automatic wash.
@@ -211,7 +209,7 @@ and only a host may override them (see Sports outcomes and host overrides).
 Neither mode may bypass the shared transactional lifecycle.
 Every mode proposes through one shared transaction (`bets/BetProposalWriter`):
 authorization, the retry key, the table's betting switches (a mode gate for
-U2Pick and Blackjack), the debt cap and the deadline. Modes supply only the
+U2Pick and Jackblack), the debt cap and the deadline. Modes supply only the
 validated bet row; U2Pick's custom definition and settler rules stay
 U2Pick's.
 The user chose debt caps as the only spending limit: the prototype's separate
@@ -238,12 +236,10 @@ The user chose debt caps as the only spending limit: the prototype's separate
 - **Lock:** serialize with picks, membership and table-setting changes; recheck
   caps and apply the documented over-cap behavior. If a participant is frozen
   or lacks betting permission at lock, remove their pick and retain their
-  No guess participation. Snapshot the remainder rule and, for Host, persist
-  one randomly chosen current host. Commit the Pending transition, snapshots
-  and outbox event together. A delayed lock worker must not extend the pick
-  deadline; retries must not redraw the recipient. Settings, current hosts
-  and participant eligibility are evaluated at actual lock processing time,
-  not reconstructed at the deadline; outages can therefore affect the snapshot.
+  No guess participation. Commit the Pending transition and outbox event
+  together. A delayed lock worker must not extend the pick deadline.
+  Participant eligibility is evaluated at actual lock processing time, not
+  reconstructed at the deadline.
   The dev worker scans overdue Active bets on startup and after each
   five-second delay, ordered by deadline and ID in pages of 100 using a
   database-clock scan horizon. It continues past individual failures and
@@ -269,8 +265,8 @@ The user chose debt caps as the only spending limit: the prototype's separate
   the bet twice. For the non-participants rule, only active player members
   count when deciding whether everyone is in the pot and hosts may call it.
   Frozen accounts do not prevent that fallback; No guess is outside the pot.
-  The internal resolver locks and rechecks eligible membership, picked users
-  and remainder recipients before calling `U2PickSettler`. A null winning
+  The internal resolver locks and rechecks eligible membership and picked
+  users before calling `U2PickSettler`. A null winning
   choice explicitly washes; a non-null choice must match an available option.
   Until Quick Pick propagation is implemented, the resolver rejects originals
   with copies and does not allow direct resolution of a copy.
@@ -292,7 +288,10 @@ receipt revisions and concurrent net changes. The worker has log-based error
 visibility but no operational dashboard or alerting.
 
 For table reads, the user chose to expose the Quick Pick code only to current
-hosts. Hosts can see all disabled member permissions; other members can see
+hosts. The same goes for `subscribedTo` (the source tables' ids), and bet reads
+never send a Quick Pick copy's source bet or table id (owner decision,
+2026-11-22: no other table's ids, and no raw ids on screen; Details no longer
+shows the ticket id). Hosts can see all disabled member permissions; other members can see
 only their own. Current, non-archived table membership is required even for an
 administrator or invitee. The dev read endpoints use one PostgreSQL statement
 to check the session, account, membership and role while retrieving the view;
@@ -344,7 +343,7 @@ table after the account's user lock.
 
 Promotion clears all member restrictions; demotion leaves those permissions
 enabled and cancels that host's pending invitations for the table in the same
-transaction. Existing accepted invitations and bet remainder snapshots remain
+transaction. Existing accepted invitations remain
 unchanged. A matching retry rechecks current host access and target membership
 without reapplying, so a successful self-demotion retry returns 403 until the
 caller is a host again. Host-change system messages store a constrained event
@@ -353,13 +352,7 @@ and subject ID, not a username; chat reads render the current username or
 messages, including invitation-acceptance messages, whose deletion cleanup
 remains unfinished. Host and chat invalidations are internal outbox rows only.
 
-For remainder changes, lock the actor and session, active table, and membership
-in that order. Recheck host access before retry replay. A fresh change checks
-for Active bets after acquiring the table lock and returns 409 without storing
-its retry claim if any exist; an unchanged value is a successful no-op.
-Pending bets retain their previously stored snapshots. Each actual change
-creates a neutral system chat message and internal table/chat outbox events.
-Future bet creation and status writers must acquire their required user locks,
+Bet creation and status writers must acquire their required user locks,
 then the same table lock before inspecting or writing bet state, using a fresh
 READ COMMITTED statement snapshot after that lock. The schema alone does not
 enforce this coordination; the internal U2Pick proposal and lock transactions
@@ -416,12 +409,11 @@ writer invokes the bets module's pure payout calculator and posts its results;
 `POST /bets/{id}/settle` exposes it.
 
 The calculator accepts participants in first-participation order, with no choice
-for No guess, and applies the lock-time remainder snapshot. Host and proposer
-rules require their recipient rather than falling back; random uses the
-prototype-compatible deterministic shuffle seeded by the bet ID. This is
-pseudorandom, not an unpredictable draw. It returns nonzero ledger deltas in
+for No guess. Leftover cents go to winners in the order of a deterministic
+shuffle seeded by the bet ID ([Payouts](#payouts)): pseudorandom, the same on
+every replay, and the same information for everyone. It returns nonzero ledger deltas in
 integer cents, or a wash reason; 4fun produces no ledger deltas. A future
-caller must provide validated, authoritative picks and snapshots, protect the
+caller must provide validated, authoritative picks, protect the
 bet ID and inputs from manipulation, and authorize the result. The internal
 writer atomically persists the outcome, ledger and outbox event. The calculator
 does not validate authorization.
@@ -441,7 +433,7 @@ including an unchanged value; a matching retry replays the prior success
 without reapplying it. Previously stored non-whole-point caps remain readable.
 This does not enforce the cap on bets.
 
-The settlement module's pure debt calculator sums negative True balances per
+The settlement module's pure debt calculator sums negative table balances per
 table and negative open-receipt nets per counterparty, without offsetting
 different tables or people. It checks exact cap boundaries and the 4fun
 exemption. Its caller must supply current-member tables, only unsettled
@@ -546,7 +538,12 @@ or GIF permission. The user delegated the text limit; it is 1–2000 Unicode
 code points after trimming. GIFs come only from the catalog in
 `chat/gifs.json`; its IDs are the accepted ones. IDs are never reused or
 removed, since sent messages look their GIF up by ID. The picker's search
-needs every word to appear in a GIF's caption, tags or category.
+needs every word to appear in a GIF's caption, tags or category. Categories are
+Hype, Pain, React and Roast (Money merged into Hype, owner decision,
+2026-11-23). Each player can star up to 100 library GIFs (`gif_favorites`,
+V47; `GET /me/gif-favorites`, `PUT`/`DELETE /me/gif-favorites/{gifId}`, which
+set the star so repeating either changes nothing); the picker shows them first
+in a Starred tab. Stars are personal data, deleted with the account.
 A send atomically stores a message, internal outbox event and retry claim.
 Matching retries recheck current access, permission and unchanged message content,
 then return the original 201 message without later reactions. If the message
@@ -592,7 +589,7 @@ Chat read positions advance monotonically to visible messages. Matching
 retries recheck access and visibility without reapplying the update.
 
 The per-user idempotency guard protects table creation and membership requests,
-table profile/host/permission/remainder/betting-setting changes, settings updates,
+table profile/host/permission/betting-setting changes, settings updates,
 feedback, invitation responses, reactions, chat sending, polls and votes, last-read,
 and follow/block mutations. It rechecks active account and session, serializes
 the update and retry claim, and fingerprints canonical requests using a separate
@@ -638,9 +635,7 @@ exist.
 The proposer is visible as the bet's author but is not automatically a
 participant.
 A participant keeps their position when changing or clearing a guess and
-choosing again. For the earliest-pick remainder rule, preserve that
-first participation order instead of ordering by the latest pick timestamp.
-Future pick transactions must serialize per bet so concurrent first picks
+choosing again. Future pick transactions must serialize per bet so concurrent first picks
 have a well-defined order; database sequence values alone do not establish
 commit order.
 
@@ -658,20 +653,9 @@ and internal invalidations, not delivered events. Historical codes are not
 permanently reserved; subscription authorization and safe code reuse require
 design before subscription endpoints are implemented.
 
-For the Host remainder rule, select one of the table's current hosts uniformly
-at random when each bet locks and persist that recipient with the rule in the
-same transaction. Use server-side randomness, not client input; retries after a
-committed lock must reuse the persisted selection. The selected recipient need
-not have participated and remains the recipient after later host removal or
-account deletion (represented by the retained deleted-user identity). Do not
-confuse this recipient with the host who later settles table points. If a
-table has no host at lock, reject the transition and surface the invariant
-violation instead of falling back to a winner. Table creation, host changes,
-account deletion and locking must serialize as necessary to preserve host
-continuity and a consistent lock-time selection. The internal lock transition
-implements the snapshot. The lock worker locks U2Pick and sports bets at
-their deadline; Blackjack has its own worker that deals and times out
-decisions (see Blackjack).
+The lock worker locks U2Pick and sports bets at
+their deadline; Jackblack has its own worker that deals and times out
+decisions (see Jackblack).
 
 The dev relationships read returns only the caller's outgoing blocks, never
 the list of people who blocked them. It filters follow rows across blocks in
@@ -795,73 +779,228 @@ Realtime: every settle and rejection sends the private `settlements.changed`
 invalidation to the two people. The pending-review list, each person's
 review, and group reads stay private to the pair.
 
-## Blackjack
+## Fairness
 
-Owner decisions, 2026-11-20. One ticket is one hand. Whoever proposes it is
-the **dealer** and **banks** it: each player's bet is against the dealer, not
-a pot. The ledger entries are zero-sum like every bet's: each seat's result,
-and the dealer gets minus their sum.
+Owner rule, 2026-11-21: every mode is fair to everyone in it.
 
-- **Who can deal** is a table setting, `blackjackAccess`: `everyone`
-  (default), `hosts` or `off`. "Only hosts start bets" applies too.
-- **Rules**, set by the dealer, each held to a minimum and maximum (the server
-  refuses anything outside them; missing ones take the default):
+- **No information advantage.** Nobody sees anything that bears on their
+  choice before anyone else: picks stay hidden until lock, and where players
+  act in turns, choices are made together and revealed together (no
+  sequential, visible turns).
+- **No structural edge.** Proposing a bet, dealing or going first gives no
+  better odds or payout.
+- **Neutral ties.** A tie or an amount that doesn't divide is settled the
+  same way for everyone: an exact tie washes or pushes, and leftover cents go
+  to winners at random (see Payouts).
+- **Exception: Hold'em's turns** (owner decision, 2026-11-22). Poker betting
+  is in turn, so later players see earlier bets, and position is an edge. It's
+  allowed because a game is whole cycles: everyone holds every position
+  (button, blinds) equally often, so nobody keeps the edge.
+
+## Balances
+
+Owner decisions, 2026-11-22. There is one balance; the old Settle and True
+views are gone.
+
+- **A table balance** is your results from resolved bets whose points aren't
+  settled yet, minus everything you have in play: your wager in every Pending
+  (locked) non-4fun pot you picked in, and each Jackblack game's worst case.
+  It assumes every pending ticket loses. Active picks never count.
+- **Host settle** moves only the resolved results into settle-ups; pending
+  bets keep running and stay in the balance.
+- **What-if** (Peers tab: tap a balance, yours or a peer's): that member's
+  tickets in play, each with a "Win?" checkbox, plus All win (best case) and
+  All lose (the balance). A checked pot adds its payout if the member's pick
+  wins, from the resolution calculator (leftover cents included); a checked
+  Jackblack game adds its best case, the mirror of the worst case. Only
+  locked tickets are listed, so it shows nothing a member couldn't already
+  read. Nothing is saved.
+- **Your balance** (the points pill) is every current table's balance plus
+  the net of your open settle-up receipts, so a host settle leaves it
+  unchanged.
+
+In code: `bets/TableBalanceController` (`GET /tables/{id}/balances`,
+`GET /tables/{id}/members/{userId}/balance`), `settlement/MyBalanceController`
+(`GET /me/balance`); test `MyBetsAndBalancesIntegrationTest`.
+
+## Payouts
+
+Owner decision, 2026-11-21: winners split the losers' pot evenly, in whole
+cents; the cents that don't divide go one each to winners in a random order
+(seeded by the bet, so a replay pays the same). There is no table setting for
+it; the old leftover-cents rule (host, proposer, earliest pick, random) is
+gone. Ledger entries are zero-sum, No guess is outside the pot, and a winner
+whose share rounds to nothing has no ledger entry. In code:
+`bets/PayoutCalculator`; test `PayoutCalculatorTest`.
+
+## Jackblack
+
+Owner decisions, 2026-11-21. Jackblack replaces Blackjack, where the
+proposer banked every hand (an edge against the fairness rule). One ticket is
+one game of several rounds:
+
+- **Everyone deals.** The players' order is shuffled at the deal; each round
+  the next player in it is the **dealer** and banks that round against
+  everyone else (each seat's hand is against the dealer, not a pot). Each
+  player deals once per **rotation**; a game is players × rotations rounds.
+- **Who can propose** is a table setting, `jackblackAccess`: `everyone`
+  (default), `hosts` or `off`. "Only hosts start bets" applies too. The
+  proposer is the first player and can't leave their own game.
+- **Ante and join window** are the shared wager slider (0.10–10 points a
+  hand, or 0 for a 4fun game: hands still win, lose or push, but totals stay
+  at 0) and the shared window
+  tabs (default 30 s). Players join or leave until the deal, within the proposer's
+  players range (the dealer counts); fewer than its minimum at the deal
+  washes the game.
+- **Rules**, set by the proposer, each held to a minimum and maximum (the
+  server refuses anything outside them; missing ones take the default):
 
   | Rule | Range | Default |
   |---|---|---|
-  | Decks | 1–8 | 6 |
-  | Minimum / maximum bet | 0.10–10 points (min ≤ max) | 1 / 10 |
-  | Max splits | 0–5 | 3 |
-  | Seats | 1–7 | 7 |
-  | Join window | 30 s–10 min | 2 min |
-  | Decision timer | 10 s–2 min | 30 s |
+  | Rotations | 1–3 | 1 |
+  | Doubling | on/off (any two cards, after splits too) | on |
+  | Max splits | 0–3 | 1 |
   | Blackjack pays | 3:2 or 6:5 | 3:2 |
-  | Dealer hits soft 17 | on/off | off (stands) |
-  | Double on | any two cards, or 9–11 | any |
-  | Double after split | on/off | on |
-  | Insurance | on/off | off |
-  | Turns | everyone at once, or seat by seat | at once |
+  | Decision timer | 10–60 s | 30 s |
+  | Players (min–max, one slider) | 2–7 | 2–7 |
 
-- **Join window**: players sit down with a bet between the minimum and
-  maximum (the dealer can't), can change it or leave, until the deal. A seat's
-  bet must fit the player's points limit.
-- **The deal** (when the window closes, by the worker): seats that can no
-  longer bet or afford their bet are dropped; then, from the last to sit, seats
-  are dropped until the dealer's worst case fits their points limit. Two cards
-  each, the dealer's second face down. The shoe is shuffled per hand on the
-  server and never sent.
-- **Insurance** (if on, when the dealer shows an ace): everyone decides at once;
-  it costs half the bet (rounded down) and pays 2:1 if the dealer has a natural.
-- **Peek**: on an ace or ten the dealer checks for a natural, and if so the
-  hand ends: player naturals push, everything else loses.
-- **Play**: hit, stand, double (one card, stake doubled), split (equal values,
-  up to the max; split aces get one card each and can't be re-split; a split
-  21 isn't a natural). Reaching 21 stands automatically. Seat by seat, only the
-  current seat acts. A player whose **decision timer** runs out stands (and
-  declines insurance).
-- **Dealer's turn** (owner decision, 2026-11-20, for suspense): once the
-  players are done, the dealer taps one button that does what the rules
-  require: **Flip** (turn the hole card), then **Hit** while under 17 (or on a
-  soft 17 if the rules say so), then **Stand** to pay out; a bust pays out by
-  itself. If the dealer doesn't tap within the decision timer, the rest plays
-  itself. No dealer turn when every player hand is bust or a paid natural.
-- **Payouts** per hand: win 1:1, natural 3:2 or 6:5 (rounded down to the cent),
-  push 0, lose or bust −stake; insurance on top.
-- **Points limit**: proposing needs the dealer's worst case with every seat
-  taken at the maximum bet (every split taken, every hand doubled and won) to
-  fit their limit. While a hand is in play, a player's whole stake and the
-  dealer's worst case for the seats taken count as pending (balances and
-  debt). A double, split or insurance that would pass a player's limit is
-  refused.
-- 4fun hands play the same with nothing at stake.
-- Blackjack is never picked: `PUT /bets/{id}/pick` on a Blackjack bet is
-  400 `invalid_choice` (seats are the only way in).
+- **A round**: a fresh shoe of 1–8 decks, its size drawn at random for that
+  round (owner decision, 2026-11-22; there's no Decks rule), shuffled on the
+  server and never sent (see "Shuffle audit"); two cards to every seat and the dealer, the
+  dealer's second face down. On an ace or ten the dealer peeks: a dealer
+  natural ends the round (seat naturals push, the rest lose). A seat's
+  natural is done at once.
+- **Lockstep steps** (the fairness rule): everyone with a hand still to play
+  chooses hit, stand, double (one card, stake doubled) or split (equal
+  values, up to the max; split aces get one card each and can't be re-split;
+  a split 21 isn't a natural) for their current hand. Nobody sees anyone's
+  choice, only who is still deciding. Once everyone has chosen, or the
+  decision timer runs out (no choice stands), the new cards are dealt in seat
+  order and shown together. Reaching 21 stands automatically.
+- **Dealer's turn**: when no seat has a hand left, the round's dealer taps
+  one button that does what the rules require: **Flip**, then **Hit** while
+  under 17, then **Stand** (soft 17 stands). A bust pays out by itself; an
+  idle dealer's turn plays itself out when the timer runs out. No dealer turn
+  when every seat hand is bust or a paid natural.
+- **Payouts** per hand against the round's dealer: win 1:1, natural 3:2 or
+  6:5 (rounded down to the cent), push 0, lose or bust −stake. Each player's
+  results add up over the game; the ledger gets each player's total at the
+  end (zero-sum).
+- **Points limit** (owner: assume the worst): each player's worst case is
+  held as pending while the game is on: every round they sit, a hand split
+  to the max and doubled and lost; every round they deal, every other seat
+  winning the most a seat can (that worst case, or a natural). That is
+  (hand worst case + dealer's worst per seat) × (players − 1) × rotations.
+  It's checked when someone joins (and when proposing, for two players), and
+  again at the deal for the final count: anyone who can no longer cover it is
+  dropped, latest joiner first, which lowers it for the rest.
+- **Between rounds** (owner decision, 2026-11-22): the finished round stays up
+  for 4 seconds (phase `results`): the dealer's final hand and every player's
+  result for that round, no seat's cards, then the next round deals. After
+  the last round the game goes straight to its final standings.
+- 4fun games play the same with nothing paid.
+- Jackblack is never picked: `PUT /bets/{id}/pick` on a Jackblack bet is 400
+  `invalid_choice` (joining is the only way in).
 
-In code: `bets/BlackjackRules` (limits), `bets/BlackjackGame` (the pure hand),
-`bets/BlackjackService` (propose, seats, deal, decisions, payouts),
-`bets/BlackjackWorker` (deals and timeouts every second); V44. Tests:
-`BlackjackGameTest`, `BlackjackIntegrationTest`; client
-`features/bets/blackjack.ts` and its test.
+**Who sees what (owner decision, 2026-11-22).** To stop counting, nobody sees
+more than the dealer and one seat at a time. During a round a player gets only
+their own seat's cards and the dealer's (hole card once flipped); the round's
+dealer, who makes no choices, sees every seat and swipes across them one at a
+time; members not playing see only the dealer. Other seats come with just who
+is there and whether they're still deciding. The server enforces this in
+`GET /bets/{id}/jackblack`, so it can't be read from the network. Finished
+rounds (history, Details) show every seat: each round's shoe is fresh and of a
+random size, so past cards say nothing about the next.
+
+**Shuffle audit (owner decision, 2026-11-22).** Shared by the card games
+(Jackblack's shoe each round, Hold'em's deck each hand). At the deal the server
+draws every round's secret: a deck count (Jackblack: 1–8 at random; Hold'em:
+one) and a 32-byte seed. The ticket shows
+each round's commitment from the start, the SHA-256 hex of
+`cards-v1|<round>|<decks>|<seed hex>`; the deck count and seed are
+revealed only once the game is over. The shoe is a fixed function of the
+secret, so anyone can replay it: cards in order (per deck, suits S H D C, ranks
+A 2–9 T J Q K); a word stream where block k is the SHA-256 of
+`cards-v1|<seed hex>|<pass>|<k>`, eight 32-bit big-endian words per
+block; a uniform number below b by drawing words until one is below
+2^32 − (2^32 mod b), then taking it mod b; Fisher–Yates from the last card down
+(swap card i with uniform(i + 1)). The first card is the top. Pass 0 is the
+shoe; a round that runs through it continues with pass 1, 2…. Details checks
+each finished round in the browser: the secret matches its commitment, and the
+cards dealt are exactly the top of that shoe. In code: `bets/CardShuffle` and
+`features/bets/card-audit.ts` (the same steps; tests pin the same values on
+both sides).
+
+In code: `bets/JackblackRules` (limits and worst case), `bets/JackblackGame`
+(the pure game), `bets/JackblackService` (propose, join, deal, steps, the
+dealer, timeouts, payouts), `bets/CardGameWorker` (deals and timeouts every
+second, for both card games); V44, V46 (shared `card_games` and `card_players`). Tests: `JackblackGameTest` (including 400 random games checked
+zero-sum and inside the worst case), `JackblackIntegrationTest`; client
+`features/bets/jackblack.ts` and its test.
+
+## Hold'em
+
+Owner decisions, 2026-11-22. No-limit Texas hold'em, played on its ticket
+like Jackblack:
+
+- **Rotations.** A game is 1 to 3 full cycles (the proposer's choice,
+  default 1): one hand per player at the deal each time round. Seating is
+  shuffled at the deal; the button starts on the first seat and moves one seat
+  (to the next player still in) each hand. Heads-up the button is the small
+  blind and acts first before the flop only; otherwise the two after the
+  button post the blinds and the player after the big blind acts first.
+- **Stakes.** The shared wager slider is the big blind (0.10–10 points; the
+  small blind is half), or 0 for a 4fun game, which plays with chips worth
+  nothing (1.00 a big blind). Everyone buys in for 100 big blinds.
+- **Who can propose** is a table setting, `holdemAccess`: `everyone`
+  (default), `hosts` or `off`; "Only hosts start bets" applies too. Players
+  join during the join window, within the proposer's players range (2–9 on one
+  slider, default 2–9; fewer than its minimum at the deal washes the game) (not in its last 10 seconds); the
+  proposer can't leave.
+- **Betting.** No-limit, in turn: fold, check, call, raise (at least the
+  current bet plus the last full raise) or all in. An all-in for less than a
+  full raise doesn't reopen raising to players who already acted (they may
+  call or fold). The turn timer is the proposer's (10–60 s, default 30); when
+  it runs out you check if you can, otherwise fold. While it isn't your turn
+  you can arm a pre-move, Check/Fold (check if you can, otherwise fold) or
+  Call any (check or call whatever the bet is); the server keeps it, only you
+  see it, and it's played the moment the action reaches you, for that one
+  decision. When at most one player
+  can still bet, the rest of the board comes out with no more betting.
+- **Pots.** Main and side pots from what everyone put in; folded chips stay in
+  but folded players can't win. A pot splits evenly between the best hands;
+  chips that don't divide go one each to its winners in a random order (fixed
+  by the hand's secret, so it replays the same). An uncalled bet comes back.
+- **Showdown.** Everyone still in shows their cards; there's no mucking,
+  since the audit reveals every hand once the game is over anyway (owner
+  decision, 2026-11-23). Folded hands are never shown during the game. A
+  finished hand stays up for 5 seconds before the next deal.
+- **Rebuy.** Stacks carry from hand to hand. A player who busts gets one
+  rebuy for the whole game (whatever the rotations), offered only right after that first bust: the
+  next hand waits up to 15 seconds for the answer, and letting it pass (or
+  busting again) sits them out for the rest. No rebuy after the last hand.
+- **Result.** Each player's final stack minus what they bought in for; the
+  ledger gets everyone's total at the end (zero-sum).
+- **Points limit.** Both buy-ins (200 big blinds) are held while the game is
+  on: checked when joining (and proposing) and again at the deal, where anyone
+  who can't cover it is dropped. The balance what-if shows a Hold'em game's
+  best case as every other player's buy-ins.
+- **Who sees what.** Never the deck; only your own hole cards while a hand is
+  on. Stacks, bets, the board, the pot and whose turn it is are public, as at
+  a real table. Members not playing see everything public and no hole cards.
+- **Shuffle audit.** Each hand's deck is one 52-card deck from its own secret
+  (see "Shuffle audit" above). Once the game is over every secret is revealed,
+  and with it every hand, folded ones included; Details says so up front and
+  checks each deck in the browser.
+- Hold'em is never picked: `PUT /bets/{id}/pick` on it is 400.
+
+In code: `bets/HoldemRules`, `bets/HoldemGame` (the pure game),
+`bets/HandEvaluator`, `bets/HoldemService`, `bets/HoldemController`,
+`bets/CardGameWorker`; V46. Demo bots play it with `demo/HoldemBot`. Tests:
+`HoldemGameTest` (including 500 random games checked zero-sum, no negative
+stacks and nobody down more than two buy-ins), `HandEvaluatorTest`,
+`HoldemIntegrationTest`, `HoldemBotTest`; client `features/bets/holdem.test.tsx`
+and `card-audit.test.ts`.
 
 ## Membership limits
 
@@ -908,7 +1047,8 @@ Implementation notes:
 - The server builds a score-mode bet's question and choices from the stored
   game: Total Disaster "AWY + HOM combined: over or under L?" with Over and
   Under; Give And Take "HOM ±S, who covers?" with the home side first. Lines
-  are in half points.
+  end in .5 (owner decision, 2026-11-22), so they never push; the form steps
+  them a whole point at a time. King Of The Hill targets are whole numbers.
 - A pregame bet's picks lock at its window's end or the game's scheduled start,
   whichever is first. A delayed start never reopens picks.
 - The resolution worker checks Pending score bets every 30 seconds without
@@ -955,8 +1095,8 @@ Sports bet rules (decided 2026-11-14):
   when proposed. If either player reaches it before picks lock, the bet washes.
   If both first reach it in the same feed update, the bet washes. If neither
   reaches it by the end, Neither wins.
-- **Lines:** a push on a whole-number line (Total Disaster, Give And Take, Prop
-  Hunt) washes; half-point lines can't push. Either Or washes on a tie.
+- **Lines:** Total Disaster, Give And Take and Prop Hunt lines must end in .5
+  (the server refuses anything else), so they can't push. Either Or washes on a tie.
 
 Host override:
 
@@ -982,7 +1122,7 @@ plus a wash). In dev, scenario files and recorded chunks drive sports results
 Open:
 
 - A host setting for who may override (for example all hosts, or only hosts
-  outside the pot), similar to the remainder rule, may be added later.
+  outside the pot) may be added later.
 - Showing host-modified outcomes in the settlement message (for example a
   details popup) may be added later.
 - Whether the same host override applies to U2Pick results is not decided;

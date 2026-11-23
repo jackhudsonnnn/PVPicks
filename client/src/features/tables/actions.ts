@@ -40,6 +40,7 @@ const intentSchema = z.discriminatedUnion("kind", [
     u2pickEnabled: z.boolean().optional(),
     pollsEnabled: z.boolean().optional(),
     jackblackAccess: z.enum(["hosts", "everyone", "off"]).optional(),
+    holdemAccess: z.enum(["hosts", "everyone", "off"]).optional(),
   }),
   z.object({ kind: z.literal("delete"), tableId: uuid }),
   z.object({ kind: z.literal("add"), tableId: uuid, userIds: z.array(uuid).min(1).max(100) }),
@@ -135,6 +136,7 @@ export function useTableActions(
               ...(intent.jackblackAccess === undefined
                 ? {}
                 : { jackblackAccess: intent.jackblackAccess }),
+              ...(intent.holdemAccess === undefined ? {} : { holdemAccess: intent.holdemAccess }),
             },
             key,
           );

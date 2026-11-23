@@ -80,6 +80,19 @@ class RealtimeAccess implements Audiences {
     }
 
     @Override
+    public Set<UUID> betPlayers(UUID betId) {
+        return ids("""
+                SELECT player.user_id FROM (
+                    SELECT user_id FROM bet_participants WHERE bet_id = ?
+                    UNION SELECT user_id FROM card_players WHERE bet_id = ?
+                ) player
+                JOIN bets b ON b.id = ?
+                JOIN tables t ON t.id = b.table_id AND t.archived_at IS NULL
+                JOIN table_members m ON m.table_id = t.id AND m.user_id = player.user_id
+                """, betId, betId, betId);
+    }
+
+    @Override
     public Set<UUID> pendingInvitees(UUID tableId) {
         return ids("SELECT user_id FROM table_invites WHERE table_id = ? AND status = 'PENDING'", tableId);
     }

@@ -42,7 +42,7 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
 - Create (names up to 14 characters), edit, delete (with a 90-day read-only
   chat archive).
 - Members, invitations, hosts, per-member permissions (bets, texts,
-  reactions, GIFs, polls), the leftover-cents rule, betting settings and the
+  reactions, GIFs, polls), betting settings and the
   polls switch.
 - Membership limits: 100 tables per account, 500 members per table, 100
   waiting requests, and requests that expire after 30 days.
@@ -62,13 +62,16 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
   touchdown or field goal, NBA 3 or 2). They settle from the feed (most 20
   minutes after Final, King Of The Hill and Scorcerer as soon as it's
   decided), and hosts can wash or set a result until points are settled.
-- Blackjack: the proposer deals and banks one hand. They set the house rules,
-  each held to a minimum and maximum, and hosts choose who can deal. Players
-  sit down with a bet, play hit, stand, double, split and insurance against
-  a decision timer, and the dealer flips, hits and stands with one button.
-  In-play stakes count toward the points limit. It's played on the ticket;
-  the felt shows each seat's total and result (see the domain rules,
-  "Blackjack").
+- Jackblack (replaced Blackjack): everyone who joins deals once per rotation,
+  in a random order, and banks that round against the rest. Choices are made
+  in lockstep (new cards come out once everyone has chosen or the timer runs
+  out), the round's dealer flips, hits and stands with one button, and each
+  player's worst case is held against their points limit. Hosts choose who
+  can propose it. It's played on the ticket; the felt shows each player's
+  total and result (see the domain rules, "Jackblack").
+- Payouts: winners split the losers' pot and leftover cents go to winners at
+  random; the leftover-cents table setting is gone. Every mode follows the
+  fairness rule (domain rules, "Fairness").
 - Wash triggers at lock (nobody picked, everyone on one option, a line or
   target already reached) and at resolution (nobody picked the winner, ties,
   pushes, a player who didn't play), listed in the domain rules.
@@ -95,7 +98,7 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
 **Demo world (dev)**
 
 - 250 demo users (including the 50-person Mosh Pit crowd) with play-style
-  profiles, played by bots through the real services, Blackjack included. newbie, intermediate and pro are seeded with friends, tables,
+  profiles, played by bots through the real services, Jackblack included. newbie, intermediate and pro are seeded with friends, tables,
   blocks and history, the admin with open reports and feedback. Demo games are always
   live, and the Dev page has a Reset (see [Demo world](/demo-data)).
 

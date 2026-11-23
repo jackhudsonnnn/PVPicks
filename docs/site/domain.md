@@ -32,13 +32,14 @@ means mutual follows, not people you already share a table with.
 - Active views must not expose other users' individual choices or
   participation; the caller may see their own and aggregate counts. Admin
   accounts cannot use player APIs or participate in bets.
-- A remainder rule is snapshotted at lock. The Host rule selects one current
-  host randomly and retains the chosen recipient, even if hosting changes later.
+- Winners split the losers' pot; cents that don't divide go one each to
+  winners at random. Every mode is fair to everyone in it: no information
+  advantage, no edge for the proposer or dealer, neutral ties.
 - The points limit (debt cap in code) is off by default; changing it requires zero debt. Proposal, pick
   and lock transactions enforce the cap.
 
 Every mode but Choose Their Fate is available over HTTP and in the frontend:
-U2Pick, the score modes, the player modes, Scorcerer and Blackjack, with points
+U2Pick, the score modes, the player modes, Scorcerer and Jackblack, with points
 settlement and receipts. When a bet washes, at lock or at resolution, is listed
 in the domain rules ("Wash triggers").
 
@@ -82,8 +83,6 @@ ids in the paths are discarded and nothing is tied to the account.
   their read-only chat archive for 90 days; afterward it is hidden but its
   data remains pending a separate deletion policy. Open receipts continue
   counting toward debt and can still be settled.
-- Remainder changes are rejected while a bet is Active, except an unchanged
-  value is a no-op. Pending snapshots remain unchanged.
 - Betting switches affect future proposals and Quick Pick fan-out, not existing
   bets. U2Pick proposal enforces them; fan-out remains planned.
 - Enabling Quick Picks enables sharing. Disabling it disconnects incoming and

@@ -12,15 +12,17 @@ import { Button } from "@/components/ui/button";
 import {
   JackblackStatus,
   useJackblackSeatChips,
+  HoldemMiniBoard,
+  JackblackMiniHand,
+  HoldemStatus,
+  useHoldemSeatChips,
   StatusBadge,
   MODES,
   type Bet,
   formatClock,
-  potCents,
   secondsLeft,
   ticketStatus,
 } from "@/features/bets";
-import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Table, TableBalance } from "@/features/tables/api";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
@@ -78,7 +80,7 @@ export function Felt({
   balances,
   onFocus,
   onOpenBet,
-  onOpenPeers,
+  onOpenOthers,
   onSelectUser,
   onPropose,
   ...people
@@ -89,16 +91,19 @@ export function Felt({
   balances: TableBalance[] | undefined;
   onFocus: (id: string) => void;
   onOpenBet: (id: string) => void;
-  onOpenPeers: () => void;
+  /** The "+n" seat: the focused ticket's Details when they're its players, else the Peers tab. */
+  onOpenOthers: () => void;
   onSelectUser: (userId: string) => void;
   /** Omitted when you can't start bets here. */
   onPropose?: (() => void) | undefined;
 }) {
   const { user } = people;
   const { seated, rail } = arrangeSeats(table.memberIds, user.id, focused);
-  // A focused Jackblack game shows on the felt: its status in the pill and each player's chip.
+  // A focused card game shows on the felt: its status in the pill and each player's chip.
   const jackblack = focused?.modeId === "jackblack" ? focused : undefined;
   const jackblackChip = useJackblackSeatChips(jackblack, user);
+  const holdem = focused?.modeId === "holdem" ? focused : undefined;
+  const holdemChip = useHoldemSeatChips(holdem, user);
   const reduced = !!useReducedMotionConfig();
   const seatTransition = { duration: reduced ? 0 : 0.18 };
   // Keep mounted nodes in table order even when your bottom seat has a different index.
@@ -116,12 +121,19 @@ export function Felt({
         </span>
         <div className="absolute inset-0 flex items-center justify-center">
           <BetStack
+            user={user}
             bets={bets}
             focusedId={focused?.id}
             onFocus={onFocus}
             onOpen={onOpenBet}
             onPropose={onPropose}
-            label={jackblack && <JackblackStatus bet={jackblack} user={user} />}
+            label={
+              jackblack ? (
+                <JackblackStatus bet={jackblack} user={user} />
+              ) : holdem ? (
+                <HoldemStatus bet={holdem} user={user} />
+              ) : undefined
+            }
           />
         </div>
         {slots.map(({ id, index }) => {
@@ -138,7 +150,7 @@ export function Felt({
               <Seat
                 id={id}
                 focused={focused}
-                chipOverride={jackblack ? jackblackChip(id) : undefined}
+                chipOverride={jackblack ? jackblackChip(id) : holdem ? holdemChip(id) : undefined}
                 balance={balances?.find((b) => b.userId === id)}
                 onClick={() => onSelectUser(id)}
                 {...people}
@@ -150,7 +162,7 @@ export function Felt({
           <motion.button
             key="others"
             data-tomato-others={JSON.stringify(rail)}
-            onClick={onOpenPeers}
+            onClick={onOpenOthers}
             className="group absolute z-10 flex w-16 flex-col items-center sm:w-20"
             style={{ x: "-50%", y: "-50%", left: `${othersPos.left}%`, top: `${othersPos.top}%` }}
             initial={reduced ? false : { opacity: 0, scale: 0.85 }}
@@ -195,7 +207,7 @@ function Seat({
   const person = usePerson(id, user, expire, peopleKey);
   const chip = chipOverride !== undefined ? chipOverride : seatStatus(focused, id, user.id);
   const name = person?.name ?? "…";
-  const settle = balance?.settleCents;
+  const settle = balance?.balanceCents;
   return (
     <button
       type="button"
@@ -238,7 +250,7 @@ function Seat({
                 ? "text-win"
                 : "text-loss",
           )}
-          title="Points at this table that the next settlement moves"
+          title="Balance at this table"
         >
           {settle === undefined ? "–" : formatCents(settle, true)}
         </span> */}
@@ -259,6 +271,7 @@ function Seat({
 
 /** Open bets fanned out like cards in the middle of the felt. */
 function BetStack({
+  user,
   bets,
   focusedId,
   onFocus,
@@ -266,12 +279,13 @@ function BetStack({
   onPropose,
   label,
 }: {
+  user: User;
   bets: Bet[];
   focusedId: string | undefined;
   onFocus: (id: string) => void;
   onOpen: (id: string) => void;
   onPropose?: (() => void) | undefined;
-  /** Replaces the pill's "N in" / pot for the focused bet (Jackblack's status). */
+  /** A card game's "N in" for the focused bet (its players aren't picks), pulsing when it's your move. */
   label?: ReactNode;
 }) {
   const reduced = !!useReducedMotionConfig();
@@ -305,7 +319,6 @@ function BetStack({
     dirRef.current = d;
     onFocus(bets[(idx + d + bets.length) % bets.length]!.id);
   };
-  const pot = potCents(focused);
   const behind = [1, -1]
     .map((d) => bets[(idx + d + bets.length) % bets.length]!)
     .filter((b, i, arr) => b.id !== focused.id && arr.findIndex((y) => y.id === b.id) === i);
@@ -340,6 +353,7 @@ function BetStack({
             <MiniTicket
               key={bet.id}
               bet={bet}
+              user={user}
               custom={dir}
               variants={CARD_VARIANTS}
               initial="enter"
@@ -366,19 +380,12 @@ function BetStack({
           </button>
         )}
         <span className="whitespace-nowrap px-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-foreground sm:text-[10px]">
-          {label ? (
-            label
-          ) : pot === null ? (
-            <>{focused.pickCount} in</>
-          ) : (
-            <span className="text-primary">{focused.forFun ? "4fun" : formatCents(pot)}</span>
-          )}
-          {bets.length > 1 && (
-            <span className="text-muted-foreground">
-              {" "}
-              · {idx + 1}/{bets.length}
-            </span>
-          )}
+          {/* The same in every mode and stage: how many are in, and which of the open bets this is. */}
+          {label ?? <>{focused.pickCount} in</>}
+          <span className="text-muted-foreground">
+            {" "}
+            · {idx + 1}/{bets.length}
+          </span>
         </span>
         {bets.length > 1 && (
           <button
@@ -396,10 +403,11 @@ function BetStack({
 
 function MiniTicket({
   bet,
+  user,
   focused,
   className,
   ...props
-}: { bet: Bet; focused?: boolean } & HTMLMotionProps<"button">) {
+}: { bet: Bet; user: User; focused?: boolean } & HTMLMotionProps<"button">) {
   const mode = MODES.find((m) => m.id === bet.modeId)!;
   const Icon = mode.icon;
   const status = ticketStatus(bet);
@@ -419,14 +427,24 @@ function MiniTicket({
         <Icon className="size-3.5 shrink-0" />
         <span className="truncate font-display text-xs font-extrabold uppercase">{mode.name}</span>
       </span>
-      <span className="mt-1 line-clamp-3 break-words font-display text-xs font-bold leading-tight sm:mt-1.5 sm:line-clamp-4 sm:text-base">
-        {bet.question}
-      </span>
+      {bet.modeId === "holdem" || bet.modeId === "jackblack" ? (
+        <span className="mt-2 flex justify-center rounded-md bg-[radial-gradient(ellipse_at_top,#1f6b3a,#0f3d22)] p-1.5">
+          {bet.modeId === "holdem" ? (
+            <HoldemMiniBoard bet={bet} user={user} />
+          ) : (
+            <JackblackMiniHand bet={bet} user={user} />
+          )}
+        </span>
+      ) : (
+        <span className="mt-1 line-clamp-3 break-words font-display text-xs font-bold leading-tight sm:mt-1.5 sm:line-clamp-4 sm:text-base">
+          {bet.question}
+        </span>
+      )}
       <span className="mt-auto flex items-center justify-between pt-1">
         <StatusBadge status={status} className="px-1.5 py-0.5 text-[8px]" />
         {status === "active" && (
           <span className={cn("scoreboard text-sm sm:text-base", left <= 15 && "text-loss")}>
-            {left > 0 ? formatClock(left) : "…"}
+            {formatClock(Math.max(0, left))}
           </span>
         )}
       </span>

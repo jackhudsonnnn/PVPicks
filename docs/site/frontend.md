@@ -2,7 +2,7 @@
 
 The app (`src/app/app.tsx`) is the same in every mode; it asks the backend
 which one it's in (`GET /config`, below). From 1100px wide (the `nav` breakpoint) a sidebar holds Tickets, Friends, Home, Guide and
-Preferences, your tables and table requests (below), and your net settle-up points; narrower screens get a top bar
+Preferences, your tables and table requests (below), and your balance (every table plus open settle-ups, `GET /me/balance`); narrower screens get a top bar
 and a bottom tab bar. It is the only app: every route renders it, and the
 route files only supply paths and page metadata. The design came from an
 earlier prototype (git tag `prototype-ui`).
@@ -118,8 +118,10 @@ earlier prototype (git tag `prototype-ui`).
   showing their points at the table and, for the focused bet, their pick) and
   the open bets fanned as cards in the middle; tap the front card to open its
   ticket. A side panel beside the felt from 1455px wide (the `split`
-  breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's Settle
-  and True points at the table) and Host (or About for members): points
+  breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's balance at
+  the table; a name opens the profile, a balance opens a what-if dialog that
+  lists that member's tickets in play with a "Win?" checkbox each, plus All win
+  and All lose) and Host (or About for members): points
   settlement, members, roles, permissions and table settings. A table can
   have up to 500 people, so Peers, the members list and the followers to add
   mount 20 rows at a time as you scroll. A Peers search asks the server for
@@ -132,7 +134,12 @@ earlier prototype (git tag `prototype-ui`).
 - **Tickets:** every bet at your tables as tickets, by status (Active,
   Pending, Resolved, Washed; it opens on Active), optionally for one table (a
   dropdown under the status tabs: full width on phones, at the right on wider
-  screens), paged. Until there's a bet at one of your tables
+  screens), paged. Scrolled away from the top, the list holds still
+  (`bets/held-feed.ts`): new tickets aren't slotted in above you (which would
+  shift everything and reflow the two columns), only counted in a pinned
+  "↑ N new tickets" pill; they appear once you're back at the top, or when the
+  pill scrolls you there. Tickets already shown keep updating in place, and
+  ones that leave the tab stay until then. Until there's a bet at one of your tables
   (`GET /me/bets?limit=1` is empty), the Tickets entries in the sidebar and
   phone tab bar and a table's Tickets button are greyed out and don't link;
   the page itself still loads if you go to it directly. A status tab with no
@@ -143,8 +150,9 @@ earlier prototype (git tag `prototype-ui`).
   title (each keeps a screen-reader heading). Under the question a ticket shows "Proposed by" with the
   proposer's avatar and name (opening their profile at that table,
   `?profile=<id>`); the time is in Details. The footer shows the table's emoji
-  and name (linking to it) beside the wager and picks or pot, on every
-  ticket.
+  and name (linking to it) beside the wager and the participants (the pot
+  once it shows), on every ticket. Clocks stop at 0:00 when time runs out
+  rather than switching to a word.
 - **Ticket Details** (`bets/components/bet-details.tsx`): the timeline, the
   Bet facts, then for sports bets **Live stats**: the game's score and clock,
   and each number the mode follows with what it was when the bet was
@@ -152,47 +160,85 @@ earlier prototype (git tag `prototype-ui`).
   follows the combined score, Give And Take the home margin, the player modes
   each player's stat (with position and team), and Scorcerer each team's
   touchdowns and field goals. It refreshes every 15 seconds while the game is
-  live (`GET /bets/{id}/live`). Bets made before these snapshots show "–" for
+  live (`GET /bets/{id}/live`). Once the ticket is resolved or washed the
+  section becomes **Result**: the server froze the numbers, score and clock
+  when it was called (`closed`), "Now" becomes "Result", and it stops
+  refreshing. Bets made before these snapshots show "–" for
   proposed and at lock.
 
+- **Mode info** (owner decision, 2026-11-23): the setup form is controls
+  plus the numbers that change with them (worst case, buy-in) and one-line
+  switch states; every explanation lives in the mode's info, the (i) beside
+  its name in the sheet's header, which swaps the setup for How it works, 2–3
+  worked Examples (their own settings and results) and Good to know
+  (`bets/components/mode-info.tsx`, content in `bets/mode-info.ts`). The
+  Guide's Game modes cards open the same info in a dialog (`ModeInfoButton`).
 - **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
-  Choose Their Fate, which shows as coming soon), set up a U2Pick, deal a
-  Blackjack hand (house rules form with each number held to its minimum and
-  maximum, and the dealer's worst case; no preview step), or pick one
+  Choose Their Fate, which shows as coming soon), set up a U2Pick, set up a
+  Jackblack game (its rules, each held to its minimum and maximum; no preview
+  step), or pick one
   of today's games and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
   their position and current number, sorted by position) and the line or target, which starts just above them
   (player modes, `bets/components/player-setup.tsx`); and whether overtime
-  counts. Lines and targets step by a half point or one, with −100 / −10 /
-  +10 / +100 buttons under them (±10 only for spreads). Then the wager (a slider, 0.10 to 10.00 in 0.10 steps, or 4fun) and
-  the pick window, preview the ticket, send. Blackjack's form uses the same
-  layout: Game and Setup sections, then the wager with a Minimum and a
-  Maximum slider (moving one past the other carries it along) and the join
-  window as the last section. On a
+  counts. Lines end in .5 and targets are whole numbers; both step by
+  one (the step shows under − and +), in the shared slider widget
+  (`ValueSlider`: the value large, the slider, then Min, −step, +step and Max,
+  all tappable). Its Max is the ceiling: 399.5 for totals, about 600 for yard
+  stats and 100 for other player stats. Then the wager (a slider, 0 to 10.00 in 0.10 steps; 0 reads "(4fun)" and sends a 4fun bet) and
+  the pick window, preview the ticket, send. Jackblack's form uses the same
+  layout: its Game and Setup sections (`jackblack-setup.tsx`), then the same
+  wager slider as the ante (with each player's worst case under it) and the
+  same window tabs as the join window. On a
   ticket, tap a choice to pick (you confirm first), tap it again to clear it,
   and use "Call it" on a locked ticket if its settler rule allows you. Sports
   tickets show the game's score and settle from the feed; hosts can override
   them (wash or set the result) until the table's points are settled.
-  Blackjack is played on its ticket (`bets/components/blackjack-ticket.tsx`),
-  laid out as a small table: a felt panel with the shoe and the dealer's cards
-  at the top and every player's spot below (cards, total or result, their
-  timer), cards sliding out of the shoe in deal order and the hole card
-  flipping; then a status line and your controls (bet slider to sit down
-  during the join window, Insure / No insurance, Hit / Stand / Double /
-  Split, or the dealer's one Flip / Hit / Stand button). It reads
-  `GET /bets/{id}/blackjack`, refreshing with the table's bet feed and every
-  4 seconds while the hand is live. The table felt stays light
-  (`bets/components/blackjack-felt.tsx`): the usual ticket stack, its pill
-  showing "N in", whose move it is (a pulsing "Your move · 12s" on your
-  turn; tap the ticket to play) or your result (`BlackjackStatus`), and seat
-  chips with each player's total or result and
-  "Dealer" on the dealer's seat (`useBlackjackSeatChips`); no cards on the
-  felt. Details shows Blackjack's own sections (`blackjack-details.tsx`):
-  Hand, House rules and Players with each seat's bet, hand results and
-  points, plus the dealer's. Hosts choose who can deal under "Who can deal
-  Blackjack" in the Host panel. Once dealt, the felt seats only the players
-  and the dealer, and a finished hand stays on the felt for 20 seconds
-  (`FINISHED_HAND_MS`).
+  Jackblack and Hold'em are played on their tickets
+  (`bets/components/jackblack-ticket.tsx`, `holdem-ticket.tsx`), on a shared
+  frame (`card-ticket-shell.tsx`, owner decisions 2026-11-23) that keeps the
+  card the same height from the join window to the final standings. Under the
+  title is the game's progress ("Round 2 / 7", "Hand 3 / 9"; 0 and a total from
+  who's in while the join window is open), with Details beside it. The felt has
+  four fixed regions in every phase: the table (the shoe and the dealer's hand;
+  the deck, board and pot), a row of people that scrolls sideways (who's in;
+  your seat, or every seat when you deal, and in Hold'em your hand then every
+  seat with stack, position and To act / Folded / All in / Bet, the player to
+  act sliding into view; between rounds or hands everyone's result; at the end
+  the standings), one status line, and a controls bar (Join / Leave, Hit /
+  Stand / Double / Split, the dealer's button, Fold / Check or Call / Raise,
+  the rebuy), empty when there's nothing to press. Whoever's decision clock is
+  running has a ring round their avatar that drains (red in the last quarter;
+  `TimerRing`). Hold'em names your best hand under your cards once the flop is
+  out (`me.handName` from the server), offers pre-moves while it isn't your
+  turn (Check/Fold, Call any; kept on the server, `me.preMove`, and played
+  there the moment your turn arrives, ticket open or not), and Raise takes over the felt below the board (seats,
+  status and moves, at their exact height, so the card never changes size):
+  quick sizes (Min, ½ Pot, Pot, All in) with an X to cancel, the slider, and
+  the confirm button. Rules, the shuffle audit and every
+  round or hand are in Details, not on the card. Its footer is every ticket's
+  (`ticket-footer.tsx`): the table link, then Ante or Blinds and Participants
+  (who's in the game).
+  The games read `GET /bets/{id}/jackblack` and `/holdem`, refreshing with the
+  table's bet feed and every 4 seconds while they're live. The table felt stays
+  light (`bets/components/jackblack-felt.tsx`, `holdem-felt.tsx`): the usual
+  ticket stack, its pill the same for every mode and stage, "N in · i/total"
+  (players in, then this ticket's place among the table's pending and active
+  tickets), pulsing when it's your move; the mini card shows the felt in
+  every stage, from the join window on, with the dealer's cards
+  (`JackblackMiniHand`) or the board (`HoldemMiniBoard`), and cards not yet
+  turned over shown face down (on the ticket too); and chips
+  with your own total (every seat's when you deal; others show "Deciding",
+  "Ready" or "Playing"), "Dealing" for the round's dealer, and results at the
+  end (`useJackblackSeatChips`). Details shows Jackblack's
+  own sections (`jackblack-details.tsx`): Game, Rules, a Shuffle audit
+  (each round's fingerprint; once the game is over, its deck count and a
+  check, run in your browser, that it matches and that the dealt cards are the
+  top of that shoe), Players with their totals, and every finished round's
+  dealer and seat results. Hosts choose who can
+  propose it under "Who can propose Jackblack" in the Host panel. Once dealt,
+  the felt seats only its players, and a finished game stays on the felt for
+  20 seconds (`FINISHED_HAND_MS`).
   Creating does not place a pick. Active tickets show only your own pick and
   the pick count; picks, players and the pot appear after lock.
 
@@ -202,7 +248,9 @@ earlier prototype (git tag `prototype-ui`).
   instead of paging through a backlog. Live updates fold a burst of changes
   into one refresh, and a refresh more than two pages behind opens the newest
   window too, so a busy table like Mosh Pit stays responsive. It sends text (1–2000
-  characters) and GIFs from the server's library, toggles one reaction per
+  characters) and GIFs from the server's library (picked in a modal like the
+  poll composer: search, a Starred tab first, then Hype, Pain, React and
+  Roast, with a star on each GIF; `chat/gif-dialog.tsx`), toggles one reaction per
   message, and moves your read position forward as new messages reach the
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
   bet's question, mode and current status, also in deleted tables' archives.

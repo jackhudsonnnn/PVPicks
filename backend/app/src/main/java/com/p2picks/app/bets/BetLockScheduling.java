@@ -12,20 +12,20 @@ class BetLockScheduling {
     private final BetLockWorker worker;
     private final SportsResolutionWorker sports;
     private final U2PickExpiry u2pickExpiry;
-    private final JackblackWorker jackblack;
+    private final CardGameWorker cardGames;
 
     BetLockScheduling(BetLockWorker worker, SportsResolutionWorker sports, U2PickExpiry u2pickExpiry,
-            JackblackWorker jackblack) {
+            CardGameWorker cardGames) {
         this.worker = worker;
         this.sports = sports;
         this.u2pickExpiry = u2pickExpiry;
-        this.jackblack = jackblack;
+        this.cardGames = cardGames;
     }
 
-    /** Jackblack decisions time out in seconds, so check every second. */
+    /** Card game turns (Jackblack, Hold'em) time out in seconds, so check every second. */
     @Scheduled(fixedDelay = 1000, initialDelay = 1000)
-    void jackblack() {
-        jackblack.poll();
+    void cardGames() {
+        cardGames.poll();
     }
 
     @Scheduled(fixedDelay = 5000)

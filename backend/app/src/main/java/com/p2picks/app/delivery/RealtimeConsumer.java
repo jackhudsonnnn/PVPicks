@@ -69,10 +69,14 @@ class RealtimeConsumer {
         Routes routes = new Routes(UUID.fromString(event.path("id").asText()), event.path("createdAt").asText());
         JsonNode payload = event.path("payload");
         switch (type) {
-            case BET_CREATED, BET_PICK_COUNT_CHANGED, BET_LOCKED, BET_RESOLVED, BET_JACKBLACK_CHANGED -> {
-                UUID table = uuid(payload, "tableId");
-                routes.table(table, RealtimeGateway.TableFeed.BETS, Invalidation.BET_CHANGED,
-                        uuid(payload, "betId"), null);
+            case BET_CREATED, BET_PICK_COUNT_CHANGED, BET_CARD_GAME_CHANGED -> routes.table(uuid(payload, "tableId"),
+                    RealtimeGateway.TableFeed.BETS, Invalidation.BET_CHANGED, uuid(payload, "betId"), null);
+            case BET_LOCKED, BET_RESOLVED -> {
+                UUID bet = uuid(payload, "betId");
+                routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.BETS, Invalidation.BET_CHANGED,
+                        bet, null);
+                // Locking puts points in play and resolving moves them, so each player's points pill refetches.
+                routes.personal(audiences.betPlayers(bet), Invalidation.BALANCE_CHANGED, null);
             }
             case SETTLEMENT_CREATED -> {
                 routes.table(uuid(payload, "tableId"), RealtimeGateway.TableFeed.BETS, Invalidation.BETS_CHANGED,

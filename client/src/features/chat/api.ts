@@ -184,3 +184,21 @@ export type Gif = GifCatalog["gifs"][number];
 export async function listGifs(signal?: AbortSignal): Promise<GifCatalog> {
   return read(await request("/gifs", signal ? { signal } : undefined), catalogSchema);
 }
+
+/** Your starred GIFs, newest first (`GET /me/gif-favorites`). */
+export async function listGifFavorites(signal?: AbortSignal): Promise<string[]> {
+  const body = await read(
+    await request("/me/gif-favorites", signal ? { signal } : undefined),
+    z.object({ gifIds: z.array(z.string().min(1)) }),
+  );
+  return body.gifIds;
+}
+
+/** Stars or unstars a GIF. Either is safe to repeat. */
+export async function setGifFavorite(gifId: string, starred: boolean, key: string) {
+  await mutationRequest(
+    `/me/gif-favorites/${encodeURIComponent(gifId)}`,
+    starred ? "PUT" : "DELETE",
+    key,
+  );
+}

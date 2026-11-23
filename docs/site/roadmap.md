@@ -29,7 +29,7 @@ What it delivered:
   blurred and rotatable), an admin with an environment-set password at
   `/admin`, admin account deletion, and the party table: the first player
   hosts it, and everyone after is seated as everyone's friend.
-- Rate limits and the sign-in throttle; every LAN wash trigger; Blackjack;
+- Rate limits and the sign-in throttle; every LAN wash trigger; Jackblack;
   the slur filter.
 - BallDontLie All-Star for the NBA and the NFL.
 

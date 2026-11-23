@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollContainer } from "@/components/scroll-container";
 import { PageEdge } from "@/components/client-pages";
 import { useClientPages } from "@/components/use-client-pages";
-import { SegmentedTabs } from "@/components/segmented-tabs";
 import { AnimatedItem, AnimatedList } from "@/components/animated-list";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -13,51 +12,37 @@ import { searchTableMembers, type Table, type TableBalance } from "@/features/ta
 import { searchTerm } from "@/features/social";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 
-type Scenario = "settle" | "true";
-
-const SCENARIOS: { id: Scenario; label: string; description: string }[] = [
-  {
-    id: "settle",
-    label: "Settle",
-    description:
-      "P2Picks is zero sum, in that one player's loss in points is another player's gain. When the host settles the table, these values are reset to 0 and each player is shown who to send/receive money to/from.",
-  },
-  {
-    id: "true",
-    label: "True",
-    description:
-      "You can view this balance as the worst-case scenario, which assumes you/your peers lose every pending bet. When the host settles the table, these values decrement by your settle balance.",
-  },
-];
-
 interface People {
   user: User;
   expire: () => void;
   peopleKey: readonly string[];
 }
 
-/** Everyone at the table with their points here, biggest winner first. */
+/**
+ * Everyone at the table with their balance here, biggest first. A name opens the profile; a balance opens the
+ * what-if view of that member's tickets in play.
+ */
 export function PeersPanel({
   table,
   balances,
   seatedIds,
   onSelectUser,
+  onSelectBalance,
   className,
   ...people
 }: People & {
   onSelectUser: (userId: string) => void;
+  onSelectBalance: (userId: string) => void;
   table: Table;
   balances: { data?: TableBalance[] | undefined; error: unknown };
   seatedIds: string[];
   className?: string;
 }) {
   const [query, setQuery] = useState("");
-  const [scenario, setScenario] = useState<Scenario>("settle");
-  const active = SCENARIOS.find((s) => s.id === scenario)!;
   const byId = new Map((balances.data ?? []).map((b) => [b.userId, b]));
   const rows = [...table.memberIds].sort((a, b) => {
-    const x = byId.get(a)?.settleCents ?? 0n;
-    const y = byId.get(b)?.settleCents ?? 0n;
+    const x = byId.get(a)?.balanceCents ?? 0n;
+    const y = byId.get(b)?.balanceCents ?? 0n;
     return x === y ? 0 : x < y ? 1 : -1;
   });
   // Up to 500 people: mount them 20 at a time as you scroll. A search asks the server for matching usernames, 50 at
@@ -77,34 +62,9 @@ export function PeersPanel({
   const shownRows = searching ? matches : rowPages.shown;
   return (
     <div className={cn("@container flex min-h-0 flex-col gap-3 p-4", className)}>
-      <dl className="hidden gap-1 rounded-lg border bg-surface px-3 py-2 text-[11px] leading-snug text-muted-foreground @md:grid">
-        {SCENARIOS.map((s) => (
-          <div key={s.id} className="flex gap-1.5">
-            <dt className="font-bold uppercase text-foreground">{s.label}</dt>
-            <dd>{s.description}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="@md:hidden">
-        <SegmentedTabs<Scenario>
-          size="sm"
-          ariaLabel="Balance view"
-          tabs={SCENARIOS.map((s) => ({ id: s.id, label: s.label }))}
-          value={scenario}
-          onChange={setScenario}
-        />
-        <p className="mt-2 px-1 text-center text-[11px] leading-snug text-muted-foreground">
-          {active.description}
-        </p>
-      </div>
-      <div className="hidden grid-cols-[minmax(0,1fr)_repeat(2,4.5rem)] gap-2 px-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground @md:grid">
-        <span />
-        {SCENARIOS.map((s) => (
-          <span key={s.id} className="text-right leading-tight">
-            {s.label}
-          </span>
-        ))}
-      </div>
+      <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+        Each balance assumes every pending ticket loses. Tap one to check which win.
+      </p>
       <Input
         type="search"
         aria-label="Search members"
@@ -131,8 +91,8 @@ export function PeersPanel({
                 id={id}
                 balance={byId.get(id)}
                 seated={seatedIds.includes(id)}
-                scenario={scenario}
                 onSelect={() => onSelectUser(id)}
+                onSelectBalance={() => onSelectBalance(id)}
                 {...people}
               />
             ))}
@@ -174,24 +134,25 @@ function PeerRow({
   id,
   balance,
   seated,
-  scenario,
   onSelect,
+  onSelectBalance,
   ...people
 }: People & {
   onSelect: () => void;
+  onSelectBalance: () => void;
   id: string;
   balance: TableBalance | undefined;
   seated: boolean;
-  scenario: Scenario;
 }) {
   const person = usePerson(id, people.user, people.expire, people.peopleKey);
-  const value = (s: Scenario) => (s === "settle" ? balance?.settleCents : balance?.trueCents);
+  const name = person?.name ?? "…";
   return (
-    <AnimatedItem as="li">
+    <AnimatedItem as="li" className="flex items-stretch gap-1.5">
       <button
         type="button"
         onClick={onSelect}
-        className="flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/60"
+        aria-label={`${name}'s profile`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg border bg-surface px-3 py-2.5 text-left transition-colors hover:border-primary/60"
       >
         <PersonAvatar
           id={id}
@@ -202,21 +163,19 @@ function PeerRow({
           queryKey={people.peopleKey}
         />
         <span className="min-w-0 flex-1">
-          <span className="block break-words text-sm font-semibold leading-tight">
-            {person?.name ?? "…"}
-          </span>
+          <span className="block break-words text-sm font-semibold leading-tight">{name}</span>
           <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             {seated ? "Seated" : "Not seated"}
           </span>
         </span>
-        <span className="@md:hidden">
-          <Points cents={value(scenario)} />
-        </span>
-        <span className="hidden grid-cols-[repeat(2,4.5rem)] gap-2 text-right @md:grid">
-          {SCENARIOS.map((s) => (
-            <Points key={s.id} cents={value(s.id)} />
-          ))}
-        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onSelectBalance}
+        aria-label={`${name}'s balance${balance ? `, ${formatCents(balance.balanceCents, true)} points` : ""}`}
+        className="flex w-24 shrink-0 items-center justify-end rounded-lg border bg-surface px-3 transition-colors hover:border-primary/60"
+      >
+        <Points cents={balance?.balanceCents} />
       </button>
     </AnimatedItem>
   );

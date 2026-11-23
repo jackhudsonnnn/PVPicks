@@ -23,6 +23,7 @@ import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
 import { JackblackFacts, JackblackPlayers } from "./jackblack-details";
+import { HoldemFacts, HoldemPlayers } from "./holdem-details";
 
 const SETTLER = {
   anyone: "Anyone at the table",
@@ -69,6 +70,18 @@ export function BetFacts({
   peopleKey,
   onNavigate,
 }: Props & { onNavigate?: () => void }) {
+  if (bet.modeId === "holdem") {
+    return (
+      <HoldemFacts
+        bet={bet}
+        table={table}
+        user={user}
+        expire={expire}
+        peopleKey={peopleKey}
+        onNavigate={onNavigate}
+      />
+    );
+  }
   if (bet.modeId === "jackblack") {
     return (
       <JackblackFacts
@@ -121,16 +134,32 @@ export function BetFacts({
   );
 }
 
-export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: boolean }) {
+/**
+ * A ticket's Details. By default it brings its own "Details" button; pass `open` and `onOpenChange` to open it from
+ * elsewhere instead (the felt's "+n" seat), with no button.
+ */
+export function BetDetailsDialog({
+  disabled,
+  open: controlledOpen,
+  onOpenChange,
+  ...props
+}: Props & {
+  disabled?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { bet, user, expire, peopleKey } = props;
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : ownOpen;
+  const setOpen = controlled ? (next: boolean) => onOpenChange?.(next) : setOwnOpen;
   const status = ticketStatus(bet);
   const mode = MODES.find((m) => m.id === bet.modeId)!;
   const done = status === "resolved" || status === "washed";
   const steps: { label: string; at?: string | undefined; reached: boolean }[] = [
     { label: "Proposed", at: dateTimeLabel(bet.createdAt), reached: true },
     {
-      label: bet.modeId === "jackblack" ? "Cards dealt" : "Picks locked",
+      label: bet.modeId === "jackblack" || bet.modeId === "holdem" ? "Cards dealt" : "Picks locked",
       at: dateTimeLabel(bet.lockedAt ?? bet.locksAt),
       reached: status !== "active",
     },
@@ -157,7 +186,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
       <Info className="size-3.5" /> Details
     </Button>
   );
-  if (disabled) return trigger;
+  if (disabled && !controlled) return trigger;
 
   const rows = bet.picks
     ? [
@@ -168,7 +197,7 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {!controlled && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="flex max-h-[85dvh] max-w-md flex-col gap-4 p-0">
         <DialogHeader className="px-5 pt-5 text-left">
           <div className="flex items-center gap-2">
@@ -214,6 +243,8 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 
           {bet.modeId === "jackblack" ? (
             <JackblackPlayers {...props} />
+          ) : bet.modeId === "holdem" ? (
+            <HoldemPlayers {...props} />
           ) : (
             <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
               {rows ? (
@@ -257,7 +288,6 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
               )}
             </FactSection>
           )}
-          <p className="font-mono text-[10px] text-muted-foreground">Ticket #{bet.id}</p>
         </ScrollContainer>
       </DialogContent>
     </Dialog>
@@ -268,7 +298,8 @@ export function BetDetailsDialog({ disabled, ...props }: Props & { disabled?: bo
 const LIVE_REFRESH_MS = 15_000;
 
 /**
- * "Live stats": what the bet's mode follows (the combined score, the home margin, each player's stat, each team's
+ * "Live stats", or "Result" once the ticket is resolved or washed (the server freezes the numbers then, and this
+ * stops refreshing): what the bet's mode follows (the combined score, the home margin, each player's stat, each team's
  * touchdowns and field goals) when it was proposed, when picks locked, and now, against its line or target. Mounted
  * only while Details is open, so it fetches on demand.
  */
@@ -277,22 +308,25 @@ function LiveStats({ betId }: { betId: string }) {
     queryKey: ["bet-live", betId],
     queryFn: ({ signal }) => getBetLiveStats(betId, signal),
     retry: false,
-    refetchInterval: (query) => (query.state.data?.status === "LIVE" ? LIVE_REFRESH_MS : false),
+    refetchInterval: (query) =>
+      query.state.data?.status === "LIVE" && !query.state.data.closed ? LIVE_REFRESH_MS : false,
   });
   if (live.isPending || live.isError || live.data.rows.length === 0) return null;
-  const { away, home, status, clock, period } = live.data;
+  const { away, home, status, clock, period, closed } = live.data;
   const when =
-    status === "LIVE"
-      ? (clock ?? (period ? `Period ${period}` : "Live"))
-      : status === "FINAL"
-        ? "Final"
-        : status === "SCHEDULED"
-          ? "Not started"
-          : status.toLowerCase();
+    closed && status === "LIVE"
+      ? `at ${clock ?? (period ? `period ${period}` : "the call")}`
+      : status === "LIVE"
+        ? (clock ?? (period ? `Period ${period}` : "Live"))
+        : status === "FINAL"
+          ? "Final"
+          : status === "SCHEDULED"
+            ? "Not started"
+            : status.toLowerCase();
   return (
     <section className="space-y-1">
       <h4 className="flex items-center justify-between font-mono text-[10px] font-bold uppercase tracking-widest text-primary">
-        Live stats
+        {closed ? "Result" : "Live stats"}
         <span className="font-normal text-muted-foreground">
           {away.abbreviation} {away.score ?? 0} @ {home.abbreviation} {home.score ?? 0} · {when}
         </span>
@@ -318,7 +352,7 @@ function LiveStats({ betId }: { betId: string }) {
                 [
                   ["Proposed", row.proposed],
                   ["At lock", row.locked],
-                  ["Now", row.current],
+                  [closed ? "Result" : "Now", row.current],
                 ] as const
               ).map(([label, value]) => (
                 <div key={label} className="rounded-md bg-muted/50 py-1">
@@ -326,7 +360,10 @@ function LiveStats({ betId }: { betId: string }) {
                     {label}
                   </dt>
                   <dd
-                    className={cn("scoreboard text-lg", label === "Now" && "text-primary")}
+                    className={cn(
+                      "scoreboard text-lg",
+                      (label === "Now" || label === "Result") && "text-primary",
+                    )}
                     aria-label={`${label}: ${value ?? "not recorded"}`}
                   >
                     {value ?? "–"}

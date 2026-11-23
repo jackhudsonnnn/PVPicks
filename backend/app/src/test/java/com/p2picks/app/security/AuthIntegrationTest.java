@@ -106,7 +106,11 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         assertThat(current.path("role").asText()).isEqualTo("ADMIN");
         assertThat(OpenApiSchemas.load("CurrentUser").validate(current)).isEmpty();
         Cookie tampered = new Cookie("session", "x" + session.getValue().substring(1));
-        mvc.perform(get("/me").cookie(tampered)).andExpect(status().isUnauthorized());
+        // A session the server won't accept is cleared from the browser, and never blocks the public config.
+        MvcResult rejected = mvc.perform(get("/me").cookie(tampered)).andExpect(status().isUnauthorized()).andReturn();
+        assertThat(rejected.getResponse().getHeaders("Set-Cookie"))
+                .anySatisfy(header -> assertThat(header).startsWith("session=").contains("Max-Age=0"));
+        mvc.perform(get("/config").cookie(tampered)).andExpect(status().isOk());
         Csrf logoutCsrf = csrf();
         mvc.perform(post("/auth/logout").header("Origin", "http://127.0.0.1:8080")
                         .header("X-CSRF-TOKEN", csrf.token()).cookie(session, logoutCsrf.cookie()))

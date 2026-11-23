@@ -25,5 +25,6 @@ public class ChatAccountCleanup {
         jdbc.update("DELETE FROM poll_votes WHERE user_id = ?", userId);
         jdbc.update("DELETE FROM chat_messages WHERE author_id = ? AND kind IN ('text', 'gif', 'poll')", userId);
         jdbc.update("DELETE FROM chat_read_positions WHERE user_id = ?", userId);
+        jdbc.update("DELETE FROM gif_favorites WHERE user_id = ?", userId);
     }
 }

@@ -8,8 +8,8 @@ import {
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { LoadingList } from "@/components/loading";
 import { byPosition, type GamePlayer, type GamePlayers } from "@/features/sports";
-import { canPush, playerCount, type PlayerMode } from "@/features/bets/sports-model";
-import { Section, Stepper } from "./form-parts";
+import { halfLine, playerCount, type PlayerMode } from "@/features/bets/sports-model";
+import { Section, ValueSlider } from "./form-parts";
 
 /**
  * Setup for the player modes: the stat, one or two players from the game (with their current number), and the line
@@ -89,20 +89,17 @@ export function PlayerSetup({
       {mode !== "either_or" && (
         <div className="mt-3 grid gap-1.5 text-xs font-medium text-muted-foreground">
           {mode === "prop_hunt" ? `${statLabel} line` : `Target (${statLabel.toLowerCase()})`}
-          <Stepper
+          <ValueSlider
             value={line}
-            step={mode === "prop_hunt" ? 0.5 : 1}
+            // A Prop Hunt line ends in .5 (never a push); a target is a whole number. Both move by 1.
+            step={1}
             min={mode === "prop_hunt" ? 0.5 : 1}
-            max={999}
+            max={mode === "prop_hunt" ? 999.5 : 999}
             label={mode === "prop_hunt" ? "Stat line" : "Target"}
-            jumps={[10, 100]}
-            onChange={onLine}
+            // Room for any game: yards run into the hundreds (passing record 554); counting stats stay under 100.
+            sliderMax={(stat?.includes("yards") ? 600 : 100) - (mode === "prop_hunt" ? 0.5 : 0)}
+            onChange={(v) => onLine(mode === "prop_hunt" ? halfLine(v, 0.5, 999.5) : v)}
           />
-          {mode === "prop_hunt" && canPush(line) && (
-            <span className="font-normal">
-              A whole-number line can land exactly on the final number; that washes the bet.
-            </span>
-          )}
           <span className="font-normal">
             {mode === "prop_hunt"
               ? "It has to start above the player's number; if they pass it before picks lock, the bet washes."

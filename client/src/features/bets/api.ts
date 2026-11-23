@@ -17,6 +17,7 @@ const betSchema = z
       "prop_hunt",
       "u2pick",
       "jackblack",
+      "holdem",
     ]),
     config: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])),
     question: z.string(),
@@ -191,6 +192,8 @@ const liveStatsSchema = z.object({
   clock: z.string().nullable(),
   away: liveTeamSchema,
   home: liveTeamSchema,
+  /** Resolved or washed: the numbers, score and clock are as they were when it was called, and stop. */
+  closed: z.boolean(),
   rows: z.array(
     z.object({
       label: z.string(),

@@ -27,7 +27,7 @@ backend/
       users/              profile, user search and lookup
       social/             follows/blocks, invitations, invite preferences
       tables/             create, profile, settings, members, hosts, permissions,
-                          remainder, Quick Pick controls, archives, reads, tomatoes
+                          Quick Pick controls, archives, reads, tomatoes
       chat/               message windows, sending, reactions, read state
       bets/               U2Pick proposal/pick/lock/resolution, payout and settler
                           rules, bet reads (per table and GET /me/bets), table

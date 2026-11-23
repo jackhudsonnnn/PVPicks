@@ -12,3 +12,9 @@ export const PICK_WINDOWS = [
   { label: "10m", sec: 600 },
 ] as const;
 export const PICK_WINDOW_DEFAULT = 30;
+
+/**
+ * No new entries this close to lock: no first pick, no Jackblack join or leave (the server enforces it). Anyone
+ * already in can still change or clear their pick.
+ */
+export const LATE_ENTRY_SEC = 10;

@@ -77,6 +77,37 @@ class BetPickIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void nobodyNewJoinsInTheLastTenSecondsButPicksCanStillChange() throws Exception {
+        UUID host = UUID.randomUUID();
+        UUID early = UUID.randomUUID();
+        UUID late = UUID.randomUUID();
+        UUID table = UUID.randomUUID();
+        String hash = passwords.encode("a secure test password");
+        jdbc.update("""
+                INSERT INTO users (id, username, hue, password_hash, role, status) VALUES
+                (?, 'latehost', 1, ?, 'PLAYER', 'ACTIVE'), (?, 'lateearly', 1, ?, 'PLAYER', 'ACTIVE'),
+                (?, 'latelate', 1, ?, 'PLAYER', 'ACTIVE')
+                """, host, hash, early, hash, late, hash);
+        jdbc.update("INSERT INTO tables (id, name, emoji, quickpick_code) VALUES (?, 'Late', 'T', 'T9R4QB')", table);
+        jdbc.update("""
+                INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER'),
+                (?, ?, 'MEMBER')
+                """, table, host, table, early, table, late);
+        UUID bet = insertDebtBet(table, early, host, "ACTIVE", false, false, false, 100, 0);
+        jdbc.update("UPDATE bets SET locks_at = now() + interval '10 minutes' WHERE id = ?", bet);
+        Jwt earlyJwt = decoder.decode(loginAs("lateearly").getValue());
+        Jwt lateJwt = decoder.decode(loginAs("latelate").getValue());
+        assertThat(betPicks.change(earlyJwt, bet, "Yes", "late-1")).isEqualTo(BetPickService.Outcome.UPDATED);
+
+        jdbc.update("UPDATE bets SET locks_at = clock_timestamp() + interval '5 seconds' WHERE id = ?", bet);
+        assertThatThrownBy(() -> betPicks.change(lateJwt, bet, "Yes", "late-2"))
+                .isInstanceOf(BetPickService.LateEntry.class);
+        // Already in: still free to change or clear until lock.
+        assertThat(betPicks.change(earlyJwt, bet, "No", "late-3")).isEqualTo(BetPickService.Outcome.UPDATED);
+        assertThat(betPicks.change(earlyJwt, bet, null, "late-4")).isEqualTo(BetPickService.Outcome.UPDATED);
+    }
+
+    @Test
     void betPicksUseSharedCapAndExemptFourFun() throws Exception {
         UUID host = UUID.randomUUID();
         UUID player = UUID.randomUUID();
@@ -122,6 +153,9 @@ class BetPickIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO table_members (table_id, user_id, role) VALUES (?, ?, 'HOST'), (?, ?, 'MEMBER')",
                 table, host, table, player);
         UUID bet = insertDebtBet(table, player, host, "ACTIVE", false, false, false, 100, 0);
+        // Already in, so this is a change (a first pick this close to lock is a late entry).
+        jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", bet, player);
+        jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'No')", bet, player);
         Jwt jwt = decoder.decode(loginAs("pickwaituser").getValue());
         var held = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
@@ -162,7 +196,9 @@ class BetPickIntegrationTest extends IntegrationTestSupport {
             release.countDown();
             holder.get(10, TimeUnit.SECONDS);
             assertThatThrownBy(() -> pick.get(10, TimeUnit.SECONDS)).hasCauseInstanceOf(BetPickService.Closed.class);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, bet)).isZero();
+            // The refused change left the earlier pick as it was.
+            assertThat(jdbc.queryForObject("SELECT choice FROM picks WHERE bet_id = ? AND user_id = ?",
+                    String.class, bet, player)).isEqualTo("No");
             jdbc.update("UPDATE bets SET locks_at = clock_timestamp() + interval '1 minute' WHERE id = ?", bet);
             assertThat(betPicks.change(jwt, bet, "Yes", "pick-wait")).isEqualTo(BetPickService.Outcome.UPDATED);
         } finally {

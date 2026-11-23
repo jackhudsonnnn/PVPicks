@@ -50,12 +50,32 @@ class RealtimeConsumerTest {
         public Set<UUID> profileAudience(UUID user) {
             return Set.of(HOST);
         }
+
+        public Set<UUID> betPlayers(UUID bet) {
+            return Set.of(MEMBER);
+        }
     };
+
+    @Test
+    void lockAndResultAlsoTellEachPlayerTheirBalanceChanged() {
+        for (OutboxEvent type : List.of(OutboxEvent.BET_LOCKED, OutboxEvent.BET_RESOLVED)) {
+            List<RealtimeConsumer.Route> routes = routes(type, Map.of("tableId", TABLE, "betId", BET));
+            assertThat(routes).hasSize(2);
+            assertThat(routes.getFirst().invalidation().type()).isEqualTo("bet.changed");
+            assertThat(routes.get(1)).satisfies(route -> {
+                assertThat(route.userId()).isEqualTo(MEMBER);
+                assertThat(route.destination()).isEqualTo(RealtimeGateway.PERSONAL_DESTINATION);
+                assertThat(route.invalidation().type()).isEqualTo("balance.changed");
+                assertThat(route.invalidation().tableId()).isNull();
+                assertThat(route.invalidation().resourceId()).isNull();
+            });
+        }
+    }
 
     @Test
     void betEventsInvalidateTheBetForTableMembers() {
         for (OutboxEvent type : List.of(OutboxEvent.BET_CREATED, OutboxEvent.BET_PICK_COUNT_CHANGED,
-                OutboxEvent.BET_LOCKED, OutboxEvent.BET_RESOLVED)) {
+                OutboxEvent.BET_CARD_GAME_CHANGED)) {
             assertThat(routes(type, Map.of("tableId", TABLE, "betId", BET))).singleElement().satisfies(route -> {
                 assertThat(route.tableId()).isEqualTo(TABLE);
                 assertThat(route.tableFeed()).isEqualTo(RealtimeGateway.TableFeed.BETS);

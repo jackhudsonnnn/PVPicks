@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -6,8 +7,14 @@ import type { Bet } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { ticketStatus } from "@/features/bets/ticket-model";
-import { PLAYER_LIMITS, playersOf, rulesFromConfig, worstCase } from "@/features/bets/jackblack";
+import {
+  playersOf,
+  rulesFromConfig,
+  worstCase,
+  type JackblackGame,
+} from "@/features/bets/jackblack";
 import { RESULT, useJackblackGame } from "@/features/bets/jackblack-game";
+import { auditGame } from "@/features/bets/card-audit";
 
 /** Jackblack's sections in the Details dialog, in place of the pick-mode facts and the picks list. */
 
@@ -78,7 +85,9 @@ export function JackblackFacts({
           {formatCents(bet.wagerCents)} pts a hand{bet.forFun && " (4fun, no points)"}
         </Row>
         <Row label="Players">
-          {players === null ? `Up to ${PLAYER_LIMITS.max}` : `${players} of ${PLAYER_LIMITS.max}`}
+          {players === null
+            ? `${rules.minPlayers}–${rules.maxPlayers}`
+            : `${players} of ${rules.maxPlayers} (at least ${rules.minPlayers})`}
         </Row>
         {game?.rounds !== undefined && <Row label="Rounds">{game.rounds}</Row>}
         {!bet.forFun && players !== null && players >= 2 && (
@@ -92,7 +101,7 @@ export function JackblackFacts({
         <Row label="Dealing">
           Everyone deals {rules.rotations === 1 ? "once" : `${rules.rotations} times`}, random order
         </Row>
-        <Row label="Decks">{rules.decks}, fresh shoe every round</Row>
+        <Row label="Shoe">Fresh every round, 1–8 decks at random, hidden</Row>
         <Row label="Blackjack pays">{rules.blackjackPays}</Row>
         <Row label="Dealer">Draws to 17, stands on soft 17</Row>
         <Row label="Double down">{rules.doubling ? "Any two cards, after splits too" : "Off"}</Row>
@@ -101,7 +110,66 @@ export function JackblackFacts({
         </Row>
         <Row label="Decision timer">{rules.decisionSec}s, then you stand</Row>
       </Section>
+
+      {game && (game.shuffles?.length ?? 0) > 0 && <ShuffleAudit game={game} />}
     </>
+  );
+}
+
+/**
+ * Each round's shoe fingerprint, shown from the deal. Once the game is over the server reveals each round's deck
+ * count and seed, and this checks them here in your browser: the fingerprint matches, and the cards dealt are the
+ * top of that shoe.
+ */
+function ShuffleAudit({ game }: { game: JackblackGame }) {
+  const done = game.phase === "done";
+  const audit = useQuery({
+    queryKey: ["card-audit", game.shuffles, game.history?.length],
+    queryFn: () => auditGame(game),
+    enabled: done,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const result = (round: number) => audit.data?.find((r) => r.round === round);
+  return (
+    <Section title="Shuffle audit">
+      <p className="py-1.5 text-xs text-muted-foreground">
+        {done
+          ? "Each round's hidden shoe, revealed now that the game is over and checked here against the fingerprint shown from the deal and the cards dealt."
+          : "Each round's shoe is fixed at the deal and hidden. Its fingerprint is here now; the deck count and seed are revealed once the game is over, so anyone can check them."}
+      </p>
+      {(game.shuffles ?? []).map((shuffle) => {
+        const checked = result(shuffle.round);
+        const ok = checked?.committed && checked.dealt;
+        return (
+          <Row key={shuffle.round} label={`Round ${shuffle.round}`}>
+            <span className="block font-mono text-xs" title={shuffle.commitment}>
+              #{shuffle.commitment.slice(0, 16)}…
+            </span>
+            {shuffle.decks !== undefined && (
+              <span className="block text-xs text-muted-foreground">
+                {shuffle.decks} deck{shuffle.decks === 1 ? "" : "s"}
+                {checked === undefined ? (
+                  audit.isError ? (
+                    " · couldn't check"
+                  ) : (
+                    " · checking…"
+                  )
+                ) : (
+                  <span className={cn("font-semibold", ok ? "text-win" : "text-loss")}>
+                    {ok
+                      ? " · checks out"
+                      : !checked.committed
+                        ? " · doesn't match its fingerprint"
+                        : " · cards don't match the shoe"}
+                  </span>
+                )}
+              </span>
+            )}
+          </Row>
+        );
+      })}
+    </Section>
   );
 }
 
@@ -145,7 +213,7 @@ export function JackblackPlayers({ bet, user, expire, peopleKey }: Props) {
               <span className="min-w-0 flex-1 break-words">
                 {name(seat.userId)}
                 <span className="block text-xs text-muted-foreground">
-                  {seat.hands
+                  {(seat.hands ?? [])
                     .map(
                       (h) => `${h.result ? RESULT[h.result] : h.total}${h.doubled ? " (2×)" : ""}`,
                     )

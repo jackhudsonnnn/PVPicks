@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  canPush,
   playerNames,
   playerProblem,
   playerTerms,
@@ -8,6 +7,7 @@ import {
   scoreLine,
   scoreTerms,
   startingLine,
+  halfLine,
   stepLine,
 } from "./sports-model";
 import type { TickerGame } from "@/features/sports/api";
@@ -37,12 +37,14 @@ describe("score modes", () => {
     expect(scoreTerms("give_and_take", 0, "BOS", "NYK").choices).toEqual(["BOS 0", "NYK 0"]);
   });
 
-  it("steps lines by half points within limits", () => {
-    expect(stepLine("total_disaster", 224.5, 0.5)).toBe(225);
+  it("keeps lines on a .5 within limits, so they never push", () => {
+    expect(stepLine("total_disaster", 224.5, 1)).toBe(225.5);
+    expect(stepLine("total_disaster", 225, 0)).toBe(225.5);
     expect(stepLine("total_disaster", 0.5, -1)).toBe(0.5);
-    expect(stepLine("give_and_take", -99.5, -0.5)).toBe(-99.5);
-    expect(canPush(225)).toBe(true);
-    expect(canPush(224.5)).toBe(false);
+    expect(stepLine("give_and_take", -5.5, 1)).toBe(-4.5);
+    expect(stepLine("give_and_take", -0.5, 1)).toBe(0.5);
+    expect(stepLine("give_and_take", -99.5, -1)).toBe(-99.5);
+    expect(halfLine(24, 0.5, 999.5)).toBe(24.5);
   });
 
   it("offers only games still taking bets, live first", () => {

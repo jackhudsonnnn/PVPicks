@@ -12,7 +12,10 @@ destinations.
   logout and `/me`. Failed logins are throttled (429 `rate_limited` with
   `Retry-After`); the passwordless demo sign-in is not. In dev, `/dev/demo/accounts` and `/dev/demo/sign-in` sign
   in as any demo account without a password; like login, they ignore a stale
-  session cookie. In dev, every `/dev/**` path (dev data and the demo) works
+  session cookie, and so does the public `GET /config`. Anywhere else a session
+  the server won't accept (expired, revoked, or wiped by a reset) gets a 401
+  that also clears the cookie, so the next request is simply signed out. In
+  dev, every `/dev/**` path (dev data and the demo) works
   without a session, so the Dev page works signed out. The security filter checks the current database role for
   `/admin` routes (see [Admin dashboard](/admin#endpoints)). Accounts come from
   the admin: `POST /admin/players` creates one with its sign-in code,
@@ -34,7 +37,8 @@ destinations.
   emoji, whether you host, your own disabled permissions, a four-member
   preview, the member count, `joinedAt` and, once there's a bet, `lastBetAt`,
   most recent activity first. `GET /tables/{id}` returns the full table: hosts
-  see the Quick Pick code and all disabled permissions, other members see only
+  see the Quick Pick code, Quick Pick subscriptions (`subscribedTo`) and all
+  disabled permissions, other members see only
   their own, and missing, archived and non-member tables all return 404. `GET /me/relationships` returns the caller's private
   relationship view (following, followers, friends and blocks, each newest
   first), suppressing follows across blocks and to deleted users, and
@@ -76,10 +80,6 @@ destinations.
   current non-host members, including frozen members. Retries recheck the
   current host and target role without reapplying. Chat and reactions enforce
   their permissions; internal betting transactions also enforce relevant permissions.
-- Dev remainder PATCH rejects a change while an Active bet exists, leaves
-  Pending snapshots intact and creates a system chat message when changed.
-  An unchanged value and a matching authorized retry are no-ops, including
-  while a bet is Active. Internal bet proposal and locking enforce this setting.
 - Dev betting-settings PATCH lets a current host change either switch, adds
   neutral system messages for actual changes, and returns the current table.
   Retries recheck host access and do not reapply; existing bets are unchanged.
@@ -174,7 +174,7 @@ destinations.
   of event-consumer markers. The dev invite-preference PUT, debt-cap PUT,
   feedback POST, invitation response
   POST, follow/block POST/DELETE, reaction PUT/DELETE, chat POST, last-read PUT
-  member-permission PUT, remainder PATCH, host PUT/DELETE, bet proposal,
+  member-permission PUT, host PUT/DELETE, bet proposal,
   pick/clear and result POSTs, points-settlement POST, and receipt, group and
   review-acknowledgment POSTs implement it
   using a PostgreSQL transaction, keyed fingerprints and bodyless 201 or 204
@@ -221,17 +221,23 @@ destinations.
   `combined`, `margin`, `player:<id>`, `home_td`, `home_fg`, `away_td`,
   `away_fg`); `BetLiveStats` reads them back with the current values.
 
-- Blackjack (domain rules, "Blackjack"): `POST /tables/{id}/bets` with
-  `{modeId: "blackjack", rules, forFun}` proposes (the proposer deals; rules
-  outside their limits are 400; a worst case past the points limit is 409
-  `debt_cap_exceeded`). `PUT`/`DELETE /bets/{id}/blackjack/seat` sit down
-  (`{betCents}`) or leave while the join window is open.
-  `POST /bets/{id}/blackjack/actions` takes `hit`, `stand`, `double`,
-  `split`, `insurance`, `no_insurance`, or `dealer` (the dealer's one
-  button); anything the hand doesn't allow is 409 `blackjack_refused` with
-  the reason. `GET /bets/{id}/blackjack` is the hand for table members: no
-  shoe, and the hole card is `"??"` until it's turned. `PUT /bets/{id}/pick`
-  on a Blackjack bet is 400.
+- Jackblack (domain rules, "Jackblack"): `POST /tables/{id}/bets` with
+  `{modeId: "jackblack", wagerCents, durationSec, rules, forFun}` proposes
+  (the wager is the ante, the duration the join window; the proposer is the
+  first player; rules outside their limits are 400; a worst case past the
+  points limit is 409 `debt_cap_exceeded`). `PUT`/`DELETE
+  /bets/{id}/jackblack/seat` join or leave while the join window is open (no
+  body). `POST /bets/{id}/jackblack/actions` takes `hit`, `stand`, `double`
+  or `split` (your choice this step) or `deal` (the round's dealer's one
+  button); a tap after the timer ran out is ignored, and anything the game
+  doesn't allow is 409 `jackblack_refused` with the reason. `GET
+  /bets/{id}/jackblack` is the game for table members: no shoe, the hole
+  card is `"??"` until it's turned, and during a step only who is still
+  deciding (your own choice comes back to you). `PUT /bets/{id}/pick` on a
+  Jackblack bet is 400.
+- There is no leftover-cents setting: `PATCH /tables/{id}/remainder` and the
+  `remainderRule` / `remainderHostId` fields are gone (domain rules,
+  "Payouts").
 
 - `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one
   person, `{open, closed, nextCursor}`. Every open receipt comes in full (you

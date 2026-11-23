@@ -9,17 +9,18 @@ import { idSchema, read, request } from "@/lib/api-client";
  */
 
 export interface JackblackRules {
-  decks: number;
   rotations: number;
   doubling: boolean;
   maxSplits: number;
   blackjackPays: "3:2" | "6:5";
   decisionSec: number;
+  /** Fewer at the deal washes; joins stop at the most (the dealer counts). */
+  minPlayers: number;
+  maxPlayers: number;
 }
 
 /** Each number's minimum and maximum (the server enforces the same). */
 export const RULE_LIMITS = {
-  decks: { min: 1, max: 8 },
   rotations: { min: 1, max: 3 },
   maxSplits: { min: 0, max: 3 },
   decisionSec: { min: 10, max: 60 },
@@ -29,22 +30,28 @@ export const RULE_LIMITS = {
 export const PLAYER_LIMITS = { min: 2, max: 7 } as const;
 
 export const DEFAULT_RULES: JackblackRules = {
-  decks: 6,
   rotations: 1,
   doubling: true,
   maxSplits: 1,
   blackjackPays: "3:2",
   decisionSec: 30,
+  minPlayers: 2,
+  maxPlayers: 7,
 };
 
 /** What's wrong with the rules, or null. */
 export function rulesProblem(rules: JackblackRules): string | null {
   const within = (v: number, { min, max }: { min: number; max: number }) => v >= min && v <= max;
-  if (!within(rules.decks, RULE_LIMITS.decks)) return "Use 1 to 8 decks.";
   if (!within(rules.rotations, RULE_LIMITS.rotations)) return "Play 1 to 3 rotations.";
   if (!within(rules.maxSplits, RULE_LIMITS.maxSplits)) return "Allow 0 to 3 splits.";
   if (!within(rules.decisionSec, RULE_LIMITS.decisionSec))
     return "The decision timer is 10 to 60 seconds.";
+  if (
+    rules.minPlayers < PLAYER_LIMITS.min ||
+    rules.maxPlayers > PLAYER_LIMITS.max ||
+    rules.minPlayers > rules.maxPlayers
+  )
+    return "Players are 2 to 7.";
   return null;
 }
 
@@ -67,15 +74,16 @@ export function worstCase(rules: JackblackRules, anteCents: number, players: num
 
 /** Reads rules back from a bet's config (booleans are stored as "yes"/"no"). */
 export function rulesFromConfig(config: Record<string, unknown>): JackblackRules {
-  const num = (key: "decks" | "rotations" | "maxSplits" | "decisionSec") =>
+  const num = (key: "rotations" | "maxSplits" | "decisionSec" | "minPlayers" | "maxPlayers") =>
     Number(config[key] ?? DEFAULT_RULES[key]);
   return {
-    decks: num("decks"),
     rotations: num("rotations"),
     doubling: config["doubling"] !== "no",
     maxSplits: num("maxSplits"),
     blackjackPays: config["blackjackPays"] === "6:5" ? "6:5" : "3:2",
     decisionSec: num("decisionSec"),
+    minPlayers: num("minPlayers"),
+    maxPlayers: num("maxPlayers"),
   };
 }
 
@@ -95,7 +103,11 @@ const handSchema = z.object({
 const choice = z.enum(["hit", "stand", "double", "split"]);
 const seatSchema = z.object({
   userId: idSchema,
-  hands: z.array(handSchema),
+  /**
+   * In a live round, only your own seat's hands, or every seat's when you're dealing: nobody sees other players'
+   * cards (domain rules, "Jackblack", "Who sees what"). Finished rounds carry every seat's.
+   */
+  hands: z.array(handSchema).optional(),
   /** During a step: whether this player still has to choose (never what anyone chose). */
   deciding: z.boolean().optional(),
   /** Your own choice this step, before the cards come out. */
@@ -114,7 +126,8 @@ const roundSchema = z.object({
   seats: z.array(seatSchema),
 });
 const gameSchema = z.object({
-  phase: z.enum(["waiting", "play", "dealer", "done"]),
+  /** "results": the pause after a round, showing how it went (its results are the last of `history`). */
+  phase: z.enum(["waiting", "play", "dealer", "results", "done"]),
   /** While waiting: who has joined, in joining order. */
   players: z.array(idSchema).optional(),
   round: z.number().int().optional(),
@@ -129,12 +142,27 @@ const gameSchema = z.object({
   seats: z.array(seatSchema).optional(),
   totals: z.record(idSchema, z.number().int()).optional(),
   history: z.array(roundSchema).optional(),
+  /** Each round's shoe commitment from the deal; its deck count and seed once the game is over. */
+  shuffles: z
+    .array(
+      z.object({
+        round: z.number().int().min(1),
+        commitment: z.string().regex(/^[0-9a-f]{64}$/),
+        decks: z.number().int().min(1).max(8).optional(),
+        seed: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type JackblackGame = z.infer<typeof gameSchema>;
 export type JackblackSeat = z.infer<typeof seatSchema>;
 export type JackblackHand = z.infer<typeof handSchema>;
 export type JackblackRound = z.infer<typeof roundSchema>;
+export type JackblackShuffle = NonNullable<JackblackGame["shuffles"]>[number];
 export type JackblackChoice = z.infer<typeof choice>;
 export type JackblackMove = JackblackChoice | "deal";
 

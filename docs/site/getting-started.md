@@ -75,7 +75,7 @@ account.
   checks against `PVPICKS_DEV_ORIGIN` (default the app's address; `127.0.0.1` and
   `localhost` on that port both work). See
   [Frontend](/frontend) for running it outside Docker.
-- The lock worker locks bets at their deadline (and deals Blackjack hands),
+- The lock worker locks bets at their deadline (and deals Jackblack games),
   and the outbox relay publishes live updates; `PVPICKS_BET_LOCK_WORKER_ENABLED=false` or
   `PVPICKS_OUTBOX_RELAY_ENABLED=false` turns either off.
 - Live scores need `PVPICKS_BALLDONTLIE_API_KEY`; without it the ticker says

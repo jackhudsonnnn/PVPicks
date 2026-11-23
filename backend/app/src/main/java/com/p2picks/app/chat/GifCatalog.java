@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * The curated GIF library (`chat/gifs.json`, hosted on Tenor's CDN). The server owns it: sending checks ids
+ * The curated GIF library (`chat/gifs.json`, hosted on Tenor's and GIPHY's CDNs). The server owns it: sending checks ids
  * against it and `GET /gifs` serves it to the picker, so a live GIF search can replace it in one place.
  */
 @Component

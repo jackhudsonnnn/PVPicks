@@ -41,7 +41,7 @@ class BetLockWorkerTest {
         transaction = new TransactionTemplate(manager);
         worker = new BetLockWorker(jdbc,
                 new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
-                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules(), noLiveStats()), manager);
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper()), noLiveStats()), noModeRules(), noLiveStats()), manager);
     }
 
     @Test
@@ -52,6 +52,8 @@ class BetLockWorkerTest {
         UUID brokenTable = table("W3A4QA");
         member(table, host, "HOST");
         member(brokenTable, frozen, "MEMBER");
+        // An archived table makes its bet fail to lock until the table is back.
+        jdbc.update("UPDATE tables SET archived_at = now() WHERE id = ?", brokenTable);
         UUID broken = bet(brokenTable, frozen, "u2pick", "3 minutes");
         jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", broken, frozen);
         jdbc.update("INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'Yes')", broken, frozen);
@@ -73,14 +75,14 @@ class BetLockWorkerTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, sports)).isEqualTo("ACTIVE");
         var locks = new BetLockService(jdbc, new DebtQuery(jdbc), new Outbox(jdbc, new ObjectMapper()),
-                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper())), noModeRules(), noLiveStats());
+                new BetResolutionWriter(jdbc, new Outbox(jdbc, new ObjectMapper()), noLiveStats()), noModeRules(), noLiveStats());
         assertThatThrownBy(() -> transaction.executeWithoutResult(ignored -> locks.lock(sports, Set.of("u2pick"))))
                 .isInstanceOf(BetLockService.UnsupportedMode.class);
         assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, future)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM bets WHERE table_id = ? AND status = 'WASHED'
                 """, Integer.class, table)).isEqualTo(101);
-        member(brokenTable, host, "HOST");
+        jdbc.update("UPDATE tables SET archived_at = NULL WHERE id = ?", brokenTable);
         worker.poll();
         // The frozen player's pick is dropped at lock, leaving nobody: it washes.
         assertThat(jdbc.queryForObject("SELECT status || ':' || wash_reason FROM bets WHERE id = ?", String.class,
@@ -207,7 +209,7 @@ class BetLockWorkerTest {
         var failingJdbc = new JdbcTemplate(missing);
         var failing = new BetLockWorker(failingJdbc,
                 new BetLockService(failingJdbc, new DebtQuery(failingJdbc), new Outbox(failingJdbc, new ObjectMapper()),
-                new BetResolutionWriter(failingJdbc, new Outbox(failingJdbc, new ObjectMapper())), noModeRules(), noLiveStats()),
+                new BetResolutionWriter(failingJdbc, new Outbox(failingJdbc, new ObjectMapper()), noLiveStats()), noModeRules(), noLiveStats()),
                 new DataSourceTransactionManager(missing));
         assertThatThrownBy(failing::poll).isInstanceOf(DataAccessException.class);
     }

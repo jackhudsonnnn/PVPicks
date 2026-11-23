@@ -9,29 +9,33 @@ import java.util.Set;
  * Jackblack's settings (domain rules, "Jackblack"), each held to a minimum and maximum; anything left out takes its
  * default. The ante and the join window are the bet's wager and pick window, shared with every mode.
  */
-public record JackblackRules(int decks, int rotations, boolean doubling, int maxSplits, String blackjackPays,
-        int decisionSec) {
+public record JackblackRules(int rotations, boolean doubling, int maxSplits, String blackjackPays,
+        int decisionSec, int minPlayers, int maxPlayers) {
 
-    static final int MIN_DECKS = 1, MAX_DECKS = 8, DEFAULT_DECKS = 6;
     static final int MIN_ROTATIONS = 1, MAX_ROTATIONS = 3, DEFAULT_ROTATIONS = 1;
     static final int MIN_SPLITS = 0, MAX_SPLITS = 3, DEFAULT_SPLITS = 1;
     static final int MIN_DECISION_SEC = 10, MAX_DECISION_SEC = 60, DEFAULT_DECISION_SEC = 30;
-    /** Players at one hand, the dealer included. Fewer than two washes; more would make a rotation drag. */
+    /**
+     * The range the proposer can set for players at one game, the dealer included (owner decision, 2026-11-23):
+     * fewer than their minimum at the deal washes; more than seven would make a rotation drag.
+     */
     static final int MIN_PLAYERS = 2, MAX_PLAYERS = 7;
     static final Set<String> PAYS = Set.of("3:2", "6:5");
-    private static final Set<String> FIELDS = Set.of("decks", "rotations", "doubling", "maxSplits", "blackjackPays",
-            "decisionSec");
+    private static final Set<String> FIELDS = Set.of("rotations", "doubling", "maxSplits", "blackjackPays",
+            "decisionSec", "minPlayers", "maxPlayers");
 
     public JackblackRules {
-        range("decks", decks, MIN_DECKS, MAX_DECKS);
         range("rotations", rotations, MIN_ROTATIONS, MAX_ROTATIONS);
         range("maxSplits", maxSplits, MIN_SPLITS, MAX_SPLITS);
         range("decisionSec", decisionSec, MIN_DECISION_SEC, MAX_DECISION_SEC);
         if (!PAYS.contains(blackjackPays)) throw new IllegalArgumentException("blackjackPays must be 3:2 or 6:5");
+        range("minPlayers", minPlayers, MIN_PLAYERS, MAX_PLAYERS);
+        range("maxPlayers", maxPlayers, minPlayers, MAX_PLAYERS);
     }
 
     public static JackblackRules defaults() {
-        return new JackblackRules(DEFAULT_DECKS, DEFAULT_ROTATIONS, true, DEFAULT_SPLITS, "3:2", DEFAULT_DECISION_SEC);
+        return new JackblackRules(DEFAULT_ROTATIONS, true, DEFAULT_SPLITS, "3:2", DEFAULT_DECISION_SEC, MIN_PLAYERS,
+                MAX_PLAYERS);
     }
 
     /** Reads a proposal's settings; missing fields take their defaults, unknown or invalid ones are refused. */
@@ -42,27 +46,30 @@ public record JackblackRules(int decks, int rotations, boolean doubling, int max
             if (!FIELDS.contains(name)) throw new IllegalArgumentException("Unknown rule " + name);
         });
         JackblackRules d = defaults();
-        return new JackblackRules(integer(input, "decks", d.decks()), integer(input, "rotations", d.rotations()),
+        return new JackblackRules(integer(input, "rotations", d.rotations()),
                 flag(input, "doubling", d.doubling()), integer(input, "maxSplits", d.maxSplits()),
-                text(input, "blackjackPays", d.blackjackPays()), integer(input, "decisionSec", d.decisionSec()));
+                text(input, "blackjackPays", d.blackjackPays()), integer(input, "decisionSec", d.decisionSec()),
+                integer(input, "minPlayers", d.minPlayers()), integer(input, "maxPlayers", d.maxPlayers()));
     }
 
     /** Stored on the bet as its config (booleans as yes/no, like other bet configs). */
     Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("decks", decks);
         map.put("rotations", rotations);
         map.put("doubling", doubling ? "yes" : "no");
         map.put("maxSplits", maxSplits);
         map.put("blackjackPays", blackjackPays);
         map.put("decisionSec", decisionSec);
+        map.put("minPlayers", minPlayers);
+        map.put("maxPlayers", maxPlayers);
         return map;
     }
 
     static JackblackRules fromConfig(JsonNode config) {
-        return new JackblackRules(config.path("decks").asInt(), config.path("rotations").asInt(),
+        return new JackblackRules(config.path("rotations").asInt(),
                 "yes".equals(config.path("doubling").asText()), config.path("maxSplits").asInt(),
-                config.path("blackjackPays").asText(), config.path("decisionSec").asInt());
+                config.path("blackjackPays").asText(), config.path("decisionSec").asInt(),
+                config.path("minPlayers").asInt(), config.path("maxPlayers").asInt());
     }
 
     /** The most one hand can put at risk: every split taken and every hand doubled. */

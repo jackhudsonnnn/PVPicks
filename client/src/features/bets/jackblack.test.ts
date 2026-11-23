@@ -28,7 +28,6 @@ const hand = (cards: string[], current = false) => ({
 describe("jackblack rules", () => {
   it("keeps every number inside its minimum and maximum", () => {
     expect(rulesProblem(DEFAULT_RULES)).toBeNull();
-    expect(rulesProblem({ ...DEFAULT_RULES, decks: 9 })).toMatch(/decks/);
     expect(rulesProblem({ ...DEFAULT_RULES, rotations: 4 })).toMatch(/rotations/);
     expect(rulesProblem({ ...DEFAULT_RULES, maxSplits: 4 })).toMatch(/splits/);
     expect(rulesProblem({ ...DEFAULT_RULES, decisionSec: 5 })).toMatch(/decision/);
@@ -48,21 +47,26 @@ describe("jackblack rules", () => {
   it("reads rules back from a bet's config", () => {
     expect(
       rulesFromConfig({
-        decks: 2,
         rotations: 3,
         doubling: "no",
         maxSplits: 0,
         blackjackPays: "6:5",
         decisionSec: 15,
+        minPlayers: 3,
+        maxPlayers: 5,
       }),
     ).toEqual({
-      decks: 2,
       rotations: 3,
       doubling: false,
       maxSplits: 0,
       blackjackPays: "6:5",
       decisionSec: 15,
+      minPlayers: 3,
+      maxPlayers: 5,
     });
+    expect(rulesProblem({ ...DEFAULT_RULES, minPlayers: 5, maxPlayers: 4 })).toBe(
+      "Players are 2 to 7.",
+    );
   });
 });
 

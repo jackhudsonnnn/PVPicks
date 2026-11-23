@@ -23,7 +23,7 @@ class JackblackGameTest {
     private static JackblackGame.Shoes stacked(List<String>... shoes) {
         Deque<List<String>> queue = new ArrayDeque<>(List.of(shoes));
         Random random = new Random(1);
-        return decks -> queue.isEmpty() ? JackblackGame.shuffledShoe(decks, random) : queue.poll();
+        return secret -> queue.isEmpty() ? CardShuffle.cards(secret, 0) : queue.poll();
     }
 
     private static List<String> cards(String spaced) {
@@ -48,6 +48,12 @@ class JackblackGameTest {
         game.dealerStep(RULES, shoes, 2);
         assertThat(game.dealerMove()).isEqualTo("stand");
         game.dealerStep(RULES, shoes, 3);
+
+        // The finished round stays up for a moment; nobody can move, then the next round deals.
+        assertThat(game.phase).isEqualTo(JackblackGame.RESULTS);
+        assertThat(game.nextDeadline()).isEqualTo(3 + JackblackGame.ROUND_PAUSE_MS);
+        assertThat(game.timeout(RULES, shoes, 4)).isFalse();
+        assertThat(game.timeout(RULES, shoes, 3 + JackblackGame.ROUND_PAUSE_MS)).isTrue();
 
         // Round 2: the other player deals.
         assertThat(game.round).isEqualTo(1);
@@ -127,7 +133,7 @@ class JackblackGameTest {
 
     @Test
     void naturalsPayByTheRulesRoundedDown() {
-        JackblackRules sixFive = new JackblackRules(6, 1, true, 1, "6:5", 30);
+        JackblackRules sixFive = new JackblackRules(1, true, 1, "6:5", 30, 2, 7);
         JackblackGame game = JackblackGame.start(sixFive, List.of(A, B), 105, new Random(7),
                 stacked(cards("AS 9H KD 9C")), 0);
         // The seat's natural is done at once, and with no live hand left the dealer doesn't play.
@@ -137,7 +143,7 @@ class JackblackGameTest {
 
     @Test
     void splitAndDoubleFollowTheRules() {
-        JackblackRules noSplits = new JackblackRules(6, 1, false, 0, "3:2", 30);
+        JackblackRules noSplits = new JackblackRules(1, false, 0, "3:2", 30, 2, 7);
         JackblackGame game = JackblackGame.start(noSplits, List.of(A, B), 100, new Random(7),
                 stacked(cards("8S 9H 8D 7C")), 0);
         UUID player = game.seats.getFirst().userId;
@@ -166,13 +172,13 @@ class JackblackGameTest {
         Random random = new Random(42);
         JackblackGame.Action[] actions = JackblackGame.Action.values();
         for (int g = 0; g < 400; g++) {
-            JackblackRules rules = new JackblackRules(1 + random.nextInt(8), 1 + random.nextInt(3),
-                    random.nextBoolean(), random.nextInt(4), random.nextBoolean() ? "3:2" : "6:5", 10);
+            JackblackRules rules = new JackblackRules(1 + random.nextInt(3),
+                    random.nextBoolean(), random.nextInt(4), random.nextBoolean() ? "3:2" : "6:5", 10, 2, 7);
             int count = 2 + random.nextInt(6);
             List<UUID> players = new ArrayList<>();
             for (int i = 0; i < count; i++) players.add(UUID.randomUUID());
             long ante = 10 + random.nextInt(991);
-            JackblackGame game = JackblackGame.start(rules, players, ante, random, JackblackGame.shuffled(random),
+            JackblackGame game = JackblackGame.start(rules, players, ante, random, JackblackGame.FROM_SECRETS,
                     0);
             long now = 0;
             int guard = 0;
@@ -180,21 +186,21 @@ class JackblackGameTest {
                 assertThat(guard++).isLessThan(10_000);
                 now += 1;
                 if (JackblackGame.DEALER.equals(game.phase)) {
-                    if (random.nextInt(4) == 0) game.timeout(rules, JackblackGame.shuffled(random), game.deadline);
-                    else game.dealerStep(rules, JackblackGame.shuffled(random), now);
+                    if (random.nextInt(4) == 0) game.timeout(rules, JackblackGame.FROM_SECRETS, game.deadline);
+                    else game.dealerStep(rules, JackblackGame.FROM_SECRETS, now);
                     continue;
                 }
                 if (random.nextInt(6) == 0) {
-                    game.timeout(rules, JackblackGame.shuffled(random), game.deadline);
+                    game.timeout(rules, JackblackGame.FROM_SECRETS, game.deadline);
                     continue;
                 }
                 for (UUID player : players) {
                     if (!game.deciding(player)) continue;
                     JackblackGame.Action action = actions[random.nextInt(actions.length)];
                     try {
-                        game.choose(rules, player, action, JackblackGame.shuffled(random), now);
+                        game.choose(rules, player, action, JackblackGame.FROM_SECRETS, now);
                     } catch (IllegalStateException refused) {
-                        game.choose(rules, player, JackblackGame.Action.HIT, JackblackGame.shuffled(random), now);
+                        game.choose(rules, player, JackblackGame.Action.HIT, JackblackGame.FROM_SECRETS, now);
                     }
                 }
             }

@@ -15,10 +15,11 @@ const tableSchema = z.object({
   pollsEnabled: z.boolean(),
   /** Who may propose Jackblack here; hosts set it. */
   jackblackAccess: z.enum(["hosts", "everyone", "off"]),
+  /** Who may propose Hold'em here; hosts set it. */
+  holdemAccess: z.enum(["hosts", "everyone", "off"]),
   quickPicksEnabled: z.boolean(),
   quickPickSharing: z.boolean(),
   quickPickCode: z.string().optional(),
-  subscribedTo: z.array(z.guid()),
   disabledPermissions: z.record(
     z.string(),
     z.array(z.enum(["bets", "text", "react", "gifs", "polls"])),
@@ -27,6 +28,7 @@ const tableSchema = z.object({
 
 export type Table = z.infer<typeof tableSchema>;
 export type JackblackAccess = Table["jackblackAccess"];
+export type HoldemAccess = Table["holdemAccess"];
 
 /** Most tables one account can be in, and most members one table can have (enforced by the server). */
 export const TABLES_PER_USER = 100;
@@ -91,11 +93,29 @@ const archiveSchema = z.object({
 });
 
 const cents = z.union([z.number().int().safe(), z.bigint()]).transform((value) => BigInt(value));
-const balanceSchema = z.object({ userId: uuid, settleCents: cents, trueCents: cents });
+const balanceSchema = z.object({ userId: uuid, balanceCents: cents, unsettledCents: cents });
+const memberBalanceSchema = balanceSchema.extend({
+  tickets: z.array(
+    z.object({
+      betId: uuid,
+      mode: z.string(),
+      question: z.string(),
+      choice: z.string().optional(),
+      loseCents: cents.refine((value) => value <= 0n),
+      winCents: cents.refine((value) => value >= 0n),
+    }),
+  ),
+});
 
 export type MemberOutcome = z.infer<typeof outcomeSchema>;
-/** A member's points at a table: what the next settlement moves, and that minus their locked wagers. */
+/**
+ * A member's points at a table. `balanceCents` is their balance: unsettled results minus everything in play (it
+ * assumes every pending ticket loses). `unsettledCents` is only the resolved part, what the next host settle moves.
+ */
 export type TableBalance = z.infer<typeof balanceSchema>;
+/** One member's balance with each ticket in play: what it adds if it loses (already in the balance) or wins. */
+export type MemberBalance = z.infer<typeof memberBalanceSchema>;
+export type BalanceTicket = MemberBalance["tickets"][number];
 type TableArchive = z.infer<typeof archiveSchema>;
 export type Permission = "bets" | "text" | "react" | "gifs" | "polls";
 
@@ -136,6 +156,7 @@ export async function updateTableSettings(
     u2pickEnabled?: boolean;
     pollsEnabled?: boolean;
     jackblackAccess?: JackblackAccess;
+    holdemAccess?: HoldemAccess;
   },
   key: string,
 ) {
@@ -206,6 +227,34 @@ export async function listTableBalances(
     ),
     z.array(balanceSchema),
   );
+}
+
+export async function getMemberBalance(
+  tableId: string,
+  memberId: string,
+  signal?: AbortSignal,
+): Promise<MemberBalance> {
+  if (!uuid.safeParse(tableId).success || !uuid.safeParse(memberId).success)
+    throw new BackendError("Table not found.", 404);
+  const balance = await read(
+    await request(
+      `/tables/${encodeURIComponent(tableId)}/members/${encodeURIComponent(memberId)}/balance`,
+      signal ? { signal } : undefined,
+    ),
+    memberBalanceSchema,
+  );
+  if (balance.userId !== memberId)
+    throw new BackendError("The backend returned an unexpected response.");
+  return balance;
+}
+
+/** Your balance across every table plus the net of your open settle-ups. */
+export async function getMyBalance(signal?: AbortSignal): Promise<bigint> {
+  const body = await read(
+    await request("/me/balance", signal ? { signal } : undefined),
+    z.object({ balanceCents: cents }),
+  );
+  return body.balanceCents;
 }
 
 export async function setQuickPicksEnabled(tableId: string, enabled: boolean, key: string) {

@@ -38,11 +38,11 @@ subscribing connection only.
 
 | Subscribe to | Audience | Payload | Source outbox events |
 |---|---|---|---|
-| `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`: refetch the table; `tomatoes.changed`: refetch `GET /tables/{id}/tomatoes` (from `table.tomato.thrown`) | `table.profile.changed`, `table.settings.changed`, `table.remainder.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
-| `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`, `bet.blackjack.changed` (someone sat, acted or timed out); `settlement.created` (list) |
+| `/user/queue/tables/{id}` | Current table members; hosts and the affected member only for permission changes | `table.changed`: refetch the table; `tomatoes.changed`: refetch `GET /tables/{id}/tomatoes` (from `table.tomato.thrown`) | `table.profile.changed`, `table.settings.changed`, `table.host.changed`, `table.quickpicks.changed`, `table.member.joined`, `table.member.removed`, `table.member.permission.changed` |
+| `/user/queue/tables/{id}/bets` | Current table members | `bet.changed` with the bet ID, or `bets.changed` for the whole list | `bet.created`, `bet.pick_count.changed`, `bet.locked`, `bet.resolved`, `bet.jackblack.changed` (someone joined, chose, dealt or timed out); `settlement.created` (list) |
 | `/user/queue/tables/{id}/chat` | Current table members | `chat.changed`, without a message identity; fetch the filtered HTTP window | `chat.message.created`, `chat.reaction.changed`, `chat.poll.voted` |
 | `/user/queue/settlements` | The two parties to a receipt or net | `settlements.changed`, with no IDs or amounts; refetch reviews, groups and history | `settlement.created` (each party), `settlement.group.changed` (a settle or a rejection), `settlement.net.changed`; `settlement.line.changed` is no longer written |
-| `/user/queue/me` | The user only | `tables.changed`, `invitations.changed` (no IDs) or `profile.changed` with the user ID | see below |
+| `/user/queue/me` | The user only | `tables.changed`, `invitations.changed`, `balance.changed` (no IDs) or `profile.changed` with the user ID | see below |
 | `/user/queue/ticker` | Every signed-in player | `ticker.changed`, no IDs; refetch `GET /ticker` | `sports.games.changed` (one per feed poll that changed a game) |
 
 Personal-feed audiences, looked up when each event is delivered:
@@ -53,6 +53,9 @@ Personal-feed audiences, looked up when each event is delivered:
 - `invitations.changed`: the invitee of a new invitation, and every pending
   invitee when the table's name or emoji changes. Invitees never gain access to
   table feeds.
+- `balance.changed`: every player in a bet (its participants and a Jackblack
+  game's players) still at its table, when it locks or resolves; refetch
+  `GET /me/balance`.
 - `profile.changed`: the user and everyone who shares a current table or a
   receipt with them, excluding anyone in a block relationship with them in
   either direction. It names only the user whose profile changed.

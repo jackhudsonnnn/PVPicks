@@ -1,0 +1,205 @@
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { formatClock, type ticketStatus } from "@/features/bets/ticket-model";
+import { StatusBadge } from "./status-badge";
+
+/**
+ * The frame both card-game tickets (Jackblack, Hold'em) share (owner decisions, 2026-11-23): a header with the game's
+ * progress, and a felt with the same fixed regions in every phase, so the card keeps its height from the join window
+ * to the final standings. Anything wider than the felt scrolls sideways (`FeltRow`), never down.
+ */
+
+export function CardTicketHeader({
+  icon,
+  name,
+  status,
+  joinLeft,
+  progress,
+  details,
+}: {
+  icon: ReactNode;
+  name: string;
+  status: ReturnType<typeof ticketStatus>;
+  /** Seconds left to join (shown while the join window is open). */
+  joinLeft: number;
+  /** "Round 2 / 7", "Hand 0 / 4". */
+  progress: string;
+  /** The Details button. */
+  details: ReactNode;
+}) {
+  return (
+    <header className="flex min-h-19 items-center gap-3 py-3 pl-4 pr-10">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-ticket-foreground text-ticket">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="font-display text-lg font-extrabold uppercase leading-none">{name}</p>
+          <StatusBadge status={status} />
+          {status === "active" && (
+            <span
+              className={cn("scoreboard text-lg leading-none", joinLeft <= 15 && "text-loss")}
+              aria-label="Time left to join"
+            >
+              {formatClock(Math.max(0, joinLeft))}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-ticket-muted">
+            {progress}
+          </p>
+          {details}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+const FELT = "rounded-xl bg-[radial-gradient(ellipse_at_top,#1f6b3a,#0f3d22)] p-3 shadow-inner";
+
+/**
+ * The felt's four regions, each a fixed height: the table (the dealer's hand or the board, with the deck), a row of
+ * people (seats, players, results or standings, scrolling sideways), one status line, and the controls (an empty
+ * bar when there's nothing to press). `takeover` replaces those last three with one panel of exactly their combined
+ * height (Hold'em's raise), so the card never changes height.
+ */
+export function Felt({
+  table,
+  people,
+  status,
+  controls,
+  takeover,
+}: {
+  table: ReactNode;
+  people: ReactNode;
+  status: ReactNode;
+  controls?: ReactNode;
+  takeover?: ReactNode;
+}) {
+  return (
+    <div className={cn("relative grid gap-2", FELT)}>
+      <div className="flex h-[5.5rem] items-center">{table}</div>
+      {takeover ? (
+        // People (7.5rem) + gap + status (1px rule, 0.5rem padding, 1.25rem line) + gap + controls (2.25rem).
+        <div className="h-[calc(12.5rem+1px)] min-w-0 overflow-hidden">{takeover}</div>
+      ) : (
+        <>
+          <div className="h-[7.5rem] min-w-0">{people}</div>
+          <div className="border-t border-white/10 pt-2">
+            <p
+              className="h-5 truncate text-center text-sm font-semibold leading-5 text-white"
+              aria-live="polite"
+            >
+              {status}
+            </p>
+          </div>
+          <div className="h-9">{controls}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A row that scrolls sideways inside the felt's people region, at its full height. */
+export function FeltRow({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <ul
+      aria-label={label}
+      className={cn(
+        "scrollbar-none flex h-full snap-x items-stretch gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain",
+        className,
+      )}
+    >
+      {children}
+    </ul>
+  );
+}
+
+/** A quiet message filling the people region (washed, watching, nobody yet). */
+export function FeltNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex h-full items-center justify-center rounded-lg bg-black/15 px-4 text-center text-xs text-white/70">
+      {children}
+    </p>
+  );
+}
+
+export const CARD_BACK =
+  "border-white/40 bg-[repeating-linear-gradient(45deg,#b91c1c_0_3px,#7f1d1d_3px_6px)]";
+
+/** The undealt deck on the felt. */
+export function Deck({ label }: { label?: string }) {
+  return (
+    <span className="flex shrink-0 flex-col items-center gap-1">
+      <span className="relative block h-14 w-10" aria-hidden>
+        <span
+          className={cn(
+            "absolute inset-0 translate-x-1 translate-y-1 rounded-md border shadow",
+            CARD_BACK,
+          )}
+        />
+        <span className={cn("absolute inset-0 rounded-md border shadow-md", CARD_BACK)} />
+      </span>
+      {label && (
+        <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-white/60">
+          {label}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** A card still face down where it will be turned over (the board before the flop, the dealer before the deal). */
+export function FaceDown({ small }: { small?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-md border shadow",
+        CARD_BACK,
+        small ? "h-10 w-7" : "h-14 w-10",
+      )}
+      aria-hidden
+    />
+  );
+}
+
+/**
+ * A ring around a player's avatar that drains as their turn timer runs out (green, then red in the last quarter), so
+ * whose clock is running shows at a glance in the people row.
+ */
+export function TimerRing({ fraction, children }: { fraction: number; children: ReactNode }) {
+  const r = 20;
+  const c = 2 * Math.PI * r;
+  const left = Math.max(0, Math.min(1, fraction));
+  return (
+    <span className="relative inline-flex items-center justify-center p-1">
+      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 44 44" aria-hidden>
+        <circle cx="22" cy="22" r={r} fill="none" strokeWidth="3" className="stroke-white/15" />
+        <circle
+          cx="22"
+          cy="22"
+          r={r}
+          fill="none"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - left)}
+          className={cn(
+            "transition-[stroke-dashoffset] duration-1000 ease-linear",
+            left <= 0.25 ? "stroke-loss" : "stroke-primary",
+          )}
+        />
+      </svg>
+      {children}
+    </span>
+  );
+}

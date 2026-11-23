@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowUp } from "lucide-react";
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
 import { BetTicket } from "./ticket";
 import { ticketTab } from "@/features/bets/ticket-tabs";
+import { useHeldFeed } from "@/features/bets/held-feed";
 import { useBetActions } from "@/features/bets/actions";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
@@ -84,7 +86,9 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
   const refresh = () =>
     void queryClient.invalidateQueries({ queryKey: userKey(user.id, "my-bets") });
   const peopleKey = userKey(user.id, "people");
-  const shown = bets.data?.pages.flatMap((page) => page.items) ?? [];
+  const all = bets.data?.pages.flatMap((page) => page.items) ?? [];
+  // Scrolled down, the list holds still: new tickets wait behind a pill instead of pushing everything down.
+  const { shown, held, showNew } = useHeldFeed(all, key.join(":"));
   const byId = new Map((tables.data ?? []).map((t) => [t.id, t]));
 
   return (
@@ -152,6 +156,18 @@ export function TicketsPage({ user, expire }: { user: User; expire: () => void }
         <EmptyState boxed>Nothing here yet.</EmptyState>
       ) : (
         <div className="space-y-4">
+          {held > 0 && (
+            // Pinned to the screen, so showing it doesn't move the list.
+            <div className="pointer-events-none fixed inset-x-0 top-[calc(var(--app-top-height,3.5rem)+0.75rem)] z-30 flex justify-center nav:left-64">
+              <Button
+                size="sm"
+                className="pointer-events-auto rounded-full shadow-lg"
+                onClick={showNew}
+              >
+                <ArrowUp /> {held} new ticket{held === 1 ? "" : "s"}
+              </Button>
+            </div>
+          )}
           <div className="gap-4 [columns:20rem_2]">
             <AnimatedList key={key.join(":")}>
               {shown.map((bet) => {

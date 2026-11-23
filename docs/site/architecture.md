@@ -57,7 +57,7 @@ flowchart LR
 | `social` | `follows`, `blocks`, `invite_preferences`, `table_invites` (responses) |
 | `tables` | `tables`, `table_members`, `table_archive_members`, `quickpick_subscriptions`, `table_invites` (creation) |
 | `chat` | `chat_messages` (other modules use `ChatMessageWriter`), `reactions`, `chat_read_positions`; the GIF library (`chat/gifs.json`, served at `GET /gifs`). Chat windows read each bet card's question, mode and status from `bets` in the same query. |
-| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries`, `blackjack_rounds`, `blackjack_seats` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
+| `bets` | `bets`, `bet_participants`, `picks`, `ledger_entries`, `jackblack_games`, `jackblack_players` (reads games through `sports.GameLookup`; posts override notices through `chat.ChatMessageWriter`) |
 | `settlement` | `settlements`, `settlement_lines`, `settlement_bets`, `settlement_pair_reviews`, `debt_caps` |
 | `feedback` | `feedback` (submissions and the admin inbox) |
 | `admin` | `admin_audit_log`, `perf_minutes`: player audits (read-only across modules), request timings, health and runtime gauges |
@@ -127,7 +127,7 @@ How code is split (owner decision, 2026-11-18: reuse as much as possible):
 ## Shared betting and mode boundaries
 
 U2Pick and sports bets share table authorization, pick privacy, debt-cap
-checks, locking, remainder snapshots, payout, ledger and points settlement.
+checks, locking, payout, ledger and points settlement.
 The payout and table-settlement calculators are exposed through their modules'
 named APIs so both paths can use the same cent-safe rules. They do not perform
 authorization, database writes or event delivery.

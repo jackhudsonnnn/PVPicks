@@ -36,12 +36,13 @@ const sportsProposalSchema = z.object({
   forFun: z.boolean(),
 });
 const jackblackRulesSchema = z.object({
-  decks: z.number().int().min(1).max(8),
   rotations: z.number().int().min(1).max(3),
   doubling: z.boolean(),
   maxSplits: z.number().int().min(0).max(3),
   blackjackPays: z.enum(["3:2", "6:5"]),
   decisionSec: z.number().int().min(10).max(60),
+  minPlayers: z.number().int().min(2).max(7),
+  maxPlayers: z.number().int().min(2).max(7),
 });
 const intentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("propose"), tableId: uuid, proposal: proposalSchema }),
@@ -65,7 +66,8 @@ const intentSchema = z.discriminatedUnion("kind", [
     kind: z.literal("propose-jackblack"),
     tableId: uuid,
     rules: jackblackRulesSchema,
-    wagerCents: z.number().int().min(10).max(1000),
+    // 0 is a 4fun game.
+    wagerCents: z.number().int().min(0).max(1000),
     durationSec: z.number().int().min(30).max(600),
     forFun: z.boolean(),
   }),
@@ -76,6 +78,41 @@ const intentSchema = z.discriminatedUnion("kind", [
     tableId: uuid,
     betId: uuid,
     action: z.enum(["hit", "stand", "double", "split", "deal"]),
+  }),
+  z.object({
+    kind: z.literal("propose-holdem"),
+    tableId: uuid,
+    rules: z.object({
+      rotations: z.number().int().min(1).max(3),
+      decisionSec: z.number().int().min(10).max(60),
+      minPlayers: z.number().int().min(2).max(9),
+      maxPlayers: z.number().int().min(2).max(9),
+    }),
+    // The big blind; 0 is a 4fun game.
+    wagerCents: z.number().int().min(0).max(1000),
+    durationSec: z.number().int().min(30).max(600),
+    forFun: z.boolean(),
+  }),
+  z.object({ kind: z.literal("holdem-join"), tableId: uuid, betId: uuid }),
+  z.object({ kind: z.literal("holdem-leave"), tableId: uuid, betId: uuid }),
+  z.object({
+    kind: z.literal("holdem-act"),
+    tableId: uuid,
+    betId: uuid,
+    action: z.enum([
+      "fold",
+      "check",
+      "call",
+      "raise",
+      "all_in",
+      "rebuy",
+      "pass",
+      "check_fold",
+      "call_any",
+      "no_pre_move",
+    ]),
+    /** The raise-to total for this street (only with raise). */
+    amount: z.number().int().min(1).optional(),
   }),
 ]);
 type BetIntent = z.infer<typeof intentSchema>;
@@ -127,6 +164,30 @@ export async function executeBetAction(userId: string, intent: BetIntent, key: s
       key,
       { action: intent.action },
     );
+  } else if (intent.kind === "propose-holdem") {
+    const { tableId, kind: _kind, ...body } = intent;
+    const response = await mutationRequest(
+      `/tables/${encodeURIComponent(tableId)}/bets`,
+      "POST",
+      key,
+      { modeId: "holdem", ...body },
+    );
+    await readProposedBet(response, tableId, userId, "holdem");
+  } else if (intent.kind === "holdem-join" || intent.kind === "holdem-leave") {
+    await mutationRequest(
+      `/bets/${encodeURIComponent(intent.betId)}/holdem/seat`,
+      intent.kind === "holdem-join" ? "PUT" : "DELETE",
+      key,
+    );
+  } else if (intent.kind === "holdem-act") {
+    await mutationRequest(
+      `/bets/${encodeURIComponent(intent.betId)}/holdem/actions`,
+      "POST",
+      key,
+      intent.action === "raise"
+        ? { action: "raise", amount: intent.amount }
+        : { action: intent.action },
+    );
   } else if (intent.kind === "override") {
     await mutationRequest(`/bets/${encodeURIComponent(intent.betId)}/override`, "POST", key, {
       winningChoice: intent.winningChoice,
@@ -165,6 +226,7 @@ export function useBetActions(userId: string, refresh: () => Promise<void>, expi
 
 const betErrors: Record<string, string> = {
   bet_closed: "The pick window has closed. Refresh the bet before continuing.",
+  late_entry: "Too late to get in: picks close to newcomers 10 seconds before lock.",
   debt_cap_exceeded: "This would put you further down than your points limit.",
   bet_not_pending: "This bet is no longer waiting for a result. Refresh to see its outcome.",
   bet_affected_users_changed: "Players changed while the result was being saved. Try again.",

@@ -2,7 +2,7 @@
 
 P2Picks is a peer-to-peer betting app for friend groups. Friends sit at
 tables, chat, and bet against each other on live NBA and NFL games, on custom
-questions, or at a hand of Blackjack. Everything is settled in points, which
+questions, or at a game of Jackblack. Everything is settled in points, which
 have no cash value. It's a React frontend and a Spring Boot backend, run with
 Docker Compose.
 

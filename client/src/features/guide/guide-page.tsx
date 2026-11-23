@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
-import { MODES, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
+import { MODES, ModeInfoButton, STATUS_ORDER, STATUSES, StatusBadge } from "@/features/bets";
 import { ScrollContainer } from "@/components/scroll-container";
 import { cn } from "@/lib/utils";
 
@@ -41,8 +41,11 @@ function ModesSection() {
               <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Icon className="size-5" />
               </span>
-              <div>
-                <h3 className="text-2xl font-extrabold uppercase leading-none">{m.name}</h3>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-1">
+                  <h3 className="text-2xl font-extrabold uppercase leading-none">{m.name}</h3>
+                  <ModeInfoButton mode={m} className="-mr-2 -mt-1.5 shrink-0" />
+                </div>
                 <p className="mt-0.5 font-mono text-[11px] uppercase tracking-wider text-primary">
                   {m.tagline}
                 </p>

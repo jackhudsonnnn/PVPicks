@@ -35,6 +35,7 @@ export function PageEdge({
     <button
       ref={ref}
       type="button"
+      data-page-edge
       onClick={onMore}
       className={cn(
         "shrink-0 rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground",

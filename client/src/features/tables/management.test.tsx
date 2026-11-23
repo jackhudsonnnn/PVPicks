@@ -88,9 +88,9 @@ const table: Table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
-  subscribedTo: [],
   disabledPermissions: { [friend]: ["gifs"] },
 };
 const expire = vi.fn();
@@ -554,7 +554,6 @@ describe("table members", () => {
 
   it("shows members read-only settings without host controls", async () => {
     wrap(<Members value={{ ...table, hostIds: [friend] }} />);
-    expect(await screen.findByText("Leftover cents go to")).toBeInTheDocument();
     expect(screen.getByText("Your permissions")).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(screen.queryByText("Add players")).not.toBeInTheDocument();

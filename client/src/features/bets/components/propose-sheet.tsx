@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Eye, Send } from "lucide-react";
+import { ArrowLeft, Eye, Info, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -11,12 +11,15 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ScrollContainer } from "@/components/scroll-container";
 import { SegmentedTabs } from "@/components/segmented-tabs";
-import { FunToggle, Section, Stepper, WagerBox, WagerSlider } from "./form-parts";
+import { Section, ValueSlider } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
 import { JackblackSetup, JackblackWorstCase } from "./jackblack-setup";
+import { HoldemSetup, HoldemWorstCase } from "./holdem-setup";
+import { DEFAULT_HOLDEM_RULES, holdemRulesProblem, type HoldemRules } from "@/features/bets/holdem";
 import { DEFAULT_RULES, rulesProblem, type JackblackRules } from "@/features/bets/jackblack";
 import { type ModeDef, useModeAvailability } from "@/features/bets/modes";
 import { ModeGrid } from "./mode-grid";
+import { ModeInfo } from "./mode-info";
 import type { SettlerRule } from "@/features/bets/types";
 import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
 import {
@@ -24,7 +27,6 @@ import {
   PICK_WINDOWS,
   WAGER_DEFAULT_CENTS,
   WAGER_MAX_CENTS,
-  WAGER_MIN_CENTS,
 } from "@/features/bets/wager";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -34,9 +36,13 @@ import type { User } from "@/features/people";
 import { BetFacts } from "./bet-details";
 import type { BetActions } from "./bet-controls";
 import { BetTicket } from "./ticket";
-import { jackblackBlock, proposeBlock, u2pickBlock } from "@/features/bets/ticket-model";
 import {
-  canPush,
+  holdemBlock,
+  jackblackBlock,
+  proposeBlock,
+  u2pickBlock,
+} from "@/features/bets/ticket-model";
+import {
   DEFAULT_LINE,
   isPlayerMode,
   isScoreMode,
@@ -81,10 +87,13 @@ export function ProposeBetSheet({
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["Yes", "No"]);
   const [settledBy, setSettledBy] = useState<SettlerRule>("hosts");
-  const [forFun, setForFun] = useState(false);
   const [wager, setWager] = useState(WAGER_DEFAULT_CENTS);
+  // The slider's 0 is a 4fun bet: no points at stake and nothing tracked.
+  const forFun = wager === 0;
   const [timer, setTimer] = useState(PICK_WINDOW_DEFAULT);
   const [previewing, setPreviewing] = useState(false);
+  // The mode's info (the (i) beside its name), shown in place of the setup.
+  const [about, setAbout] = useState(false);
   const [gameId, setGameId] = useState<string | null>(null);
   const [league, setLeague] = useState<TickerGame["league"]>("NBA");
   const [line, setLine] = useState(0);
@@ -92,6 +101,7 @@ export function ProposeBetSheet({
   const [stat, setStat] = useState<string | null>(null);
   const [playerIds, setPlayerIds] = useState<string[]>([]);
   const [rules, setRules] = useState<JackblackRules>(DEFAULT_RULES);
+  const [holdemRules, setHoldemRules] = useState<HoldemRules>(DEFAULT_HOLDEM_RULES);
   const ticker = useTicker(user.id);
   const sportsMode: SportsMode | null = mode && isSportsMode(mode.id) ? mode.id : null;
   const scoreMode: ScoreMode | null = mode && isScoreMode(mode.id) ? mode.id : null;
@@ -110,15 +120,17 @@ export function ProposeBetSheet({
   const busy = actions.busy || !!actions.pending || !!actions.storageError;
   const problem = !mode
     ? null
-    : mode.dealer
+    : mode.cardGame === "jackblack"
       ? (jackblackBlock(table, user.id) ?? rulesProblem(rules))
-      : mode.custom
-        ? (u2pickBlock(table) ?? customBetProblem(question, options))
-        : !game
-          ? "Pick a game."
-          : playerMode
-            ? playerProblem(playerMode, pickedStats, line)
-            : null;
+      : mode.cardGame === "holdem"
+        ? (holdemBlock(table, user.id) ?? holdemRulesProblem(holdemRules))
+        : mode.custom
+          ? (u2pickBlock(table) ?? customBetProblem(question, options))
+          : !game
+            ? "Pick a game."
+            : playerMode
+              ? playerProblem(playerMode, pickedStats, line)
+              : null;
 
   function pickGame(next: TickerGame) {
     setGameId(next.id);
@@ -147,6 +159,7 @@ export function ProposeBetSheet({
 
   function pickMode(next: ModeDef) {
     setMode(next);
+    setAbout(false);
     setPlayerIds([]);
     setStat(null);
     if (isSportsMode(next.id)) {
@@ -214,7 +227,7 @@ export function ProposeBetSheet({
               question: question.trim() || "Your question shows up here",
               choices: cleanOptions(options),
             }),
-      wagerCents: forFun ? 0 : wager,
+      wagerCents: wager,
       forFun,
       status: "ACTIVE",
       locksAt: new Date(now + timer * 1000).toISOString(),
@@ -253,29 +266,40 @@ export function ProposeBetSheet({
     setQuestion("");
     setOptions(["Yes", "No"]);
     setSettledBy("hosts");
-    setForFun(false);
     setWager(WAGER_DEFAULT_CENTS);
     setTimer(PICK_WINDOW_DEFAULT);
     setPreviewing(false);
+    setAbout(false);
     setGameId(null);
     setOvertime(true);
     setStat(null);
     setPlayerIds([]);
     setRules(DEFAULT_RULES);
+    setHoldemRules(DEFAULT_HOLDEM_RULES);
   }
 
   function submit() {
     if (!mode || problem || block || busy) return;
-    if (mode.dealer) {
-      // The ante counts in a 4fun game too (nothing is paid), so the slider's value is always sent.
-      actions.start({
-        kind: "propose-jackblack",
-        tableId: table.id,
-        rules,
-        wagerCents: wager,
-        durationSec: timer,
-        forFun,
-      });
+    if (mode.cardGame) {
+      actions.start(
+        mode.cardGame === "holdem"
+          ? {
+              kind: "propose-holdem",
+              tableId: table.id,
+              rules: holdemRules,
+              wagerCents: wager,
+              durationSec: timer,
+              forFun,
+            }
+          : {
+              kind: "propose-jackblack",
+              tableId: table.id,
+              rules,
+              wagerCents: wager,
+              durationSec: timer,
+              forFun,
+            },
+      );
       onOpenChange(false);
       reset();
       return;
@@ -296,7 +320,7 @@ export function ProposeBetSheet({
           stat: playerMode ? statKey : null,
           players: playerMode ? playerIds : [],
           includesOvertime: overtime,
-          wagerCents: forFun ? 0 : wager,
+          wagerCents: wager,
           durationSec: timer,
           forFun,
         },
@@ -311,7 +335,7 @@ export function ProposeBetSheet({
       proposal: {
         question: question.trim(),
         choices: cleanOptions(options),
-        wagerCents: forFun ? 0 : wager,
+        wagerCents: wager,
         durationSec: timer,
         forFun,
         settledBy,
@@ -337,8 +361,10 @@ export function ProposeBetSheet({
                 variant="ghost"
                 size="icon"
                 className="-ml-2 size-8"
-                onClick={() => (previewing ? setPreviewing(false) : setMode(null))}
-                aria-label={previewing ? "Back to setup" : "Back to modes"}
+                onClick={() =>
+                  about ? setAbout(false) : previewing ? setPreviewing(false) : setMode(null)
+                }
+                aria-label={about || previewing ? "Back to setup" : "Back to modes"}
               >
                 <ArrowLeft />
               </Button>
@@ -346,18 +372,32 @@ export function ProposeBetSheet({
             <SheetTitle className="font-display text-2xl font-extrabold uppercase">
               {previewing ? "Preview ticket" : mode ? mode.name : "Propose a bet"}
             </SheetTitle>
+            {mode && !previewing && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("size-8", about ? "text-primary" : "text-muted-foreground")}
+                onClick={() => setAbout((open) => !open)}
+                aria-label={`How ${mode.name} works`}
+                aria-pressed={about}
+              >
+                <Info />
+              </Button>
+            )}
           </div>
-          <SheetDescription>
-            {mode ? mode.description : "Choose a game mode to send a ticket to your tablemates."}
+          <SheetDescription className={cn(!mode && "sr-only")}>
+            {mode ? mode.tagline : "Choose a mode to set up a bet."}
           </SheetDescription>
         </SheetHeader>
 
         <ScrollContainer
-          key={previewing ? "preview" : (mode?.id ?? "modes")}
+          key={previewing ? "preview" : about ? "about" : (mode?.id ?? "modes")}
           isVisible={false}
           className="min-h-0 flex-1 px-5 py-5"
         >
-          {previewing ? (
+          {mode && about ? (
+            <ModeInfo mode={mode} />
+          ) : previewing ? (
             <div className="space-y-4">
               <BetTicket
                 bet={previewBet}
@@ -385,8 +425,10 @@ export function ProposeBetSheet({
             />
           ) : (
             <div className="space-y-6">
-              {mode.dealer ? (
+              {mode.cardGame === "jackblack" ? (
                 <JackblackSetup rules={rules} onChange={setRules} />
+              ) : mode.cardGame === "holdem" ? (
+                <HoldemSetup rules={holdemRules} onChange={setHoldemRules} />
               ) : sportsMode ? (
                 <>
                   <Section label="Game">
@@ -463,25 +505,16 @@ export function ProposeBetSheet({
                       onLine={setLine}
                     />
                   )}
-                  {sportsMode === "scorcerer" && (
-                    <p className="text-sm text-muted-foreground">
-                      Picks are on which team scores first after picks lock, and how:{" "}
-                      {league === "NFL"
-                        ? "a touchdown or a field goal (safeties and 2-point plays don't count)"
-                        : "a 3 or a 2 (free throws don't count)"}
-                      , or no more scores before the end. If two different scores land between
-                      updates, the bet washes.
-                    </p>
-                  )}
                   {scoreMode && (
                     <Section label="Setup">
                       <div className="grid gap-1.5 text-xs font-medium text-muted-foreground">
                         {scoreMode === "total_disaster"
                           ? "Total points line"
                           : `${game?.home.abbreviation ?? "Home"} spread`}
-                        <Stepper
+                        <ValueSlider
                           value={line}
-                          step={0.5}
+                          // Lines end in .5 (never a push), so they move a whole point at a time.
+                          step={1}
                           min={LINE_LIMITS[scoreMode].min}
                           max={LINE_LIMITS[scoreMode].max}
                           label={
@@ -492,15 +525,10 @@ export function ProposeBetSheet({
                           format={(v) =>
                             scoreMode === "give_and_take" && v > 0 ? `+${v}` : String(v)
                           }
-                          // Totals run into the hundreds; spreads stay under 100.
-                          jumps={scoreMode === "total_disaster" ? [10, 100] : [10]}
+                          // Totals run into the hundreds; 399.5 covers any game. Spreads stay under 100.
+                          sliderMax={scoreMode === "total_disaster" ? 399.5 : undefined}
                           onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
                         />
-                        {canPush(line) && (
-                          <span className="font-normal">
-                            A whole-number line can land exactly on the score; that washes the bet.
-                          </span>
-                        )}
                       </div>
                     </Section>
                   )}
@@ -535,41 +563,56 @@ export function ProposeBetSheet({
                 />
               )}
 
-              <Section label={mode.dealer ? "Ante (points a hand)" : "Wager (points each)"}>
+              <Section
+                label={
+                  mode.cardGame === "jackblack"
+                    ? "Ante (points a hand)"
+                    : mode.cardGame === "holdem"
+                      ? "Big blind (points)"
+                      : "Wager (points each)"
+                }
+              >
                 <div className="space-y-3">
-                  <FunToggle checked={forFun} onChange={setForFun} />
-                  <WagerBox off={forFun && !mode.dealer}>
-                    <WagerSlider
-                      value={wager}
-                      min={WAGER_MIN_CENTS}
-                      max={WAGER_MAX_CENTS}
-                      disabled={forFun && !mode.dealer}
-                      onChange={setWager}
-                    />
-                  </WagerBox>
-                  {mode.dealer && !forFun && <JackblackWorstCase rules={rules} anteCents={wager} />}
+                  <ValueSlider
+                    value={wager}
+                    min={0}
+                    max={WAGER_MAX_CENTS}
+                    step={10}
+                    format={(v) => formatCents(v)}
+                    sliderLabel="Wager in points"
+                    note={wager === 0 ? "(4fun)" : undefined}
+                    onChange={setWager}
+                  />
+                  {mode.cardGame === "jackblack" && !forFun && (
+                    <JackblackWorstCase rules={rules} anteCents={wager} />
+                  )}
+                  {mode.cardGame === "holdem" && !forFun && (
+                    <HoldemWorstCase bigBlindCents={wager} />
+                  )}
                 </div>
               </Section>
 
-              <Section label={mode.dealer ? "Join window" : "Pick window"}>
+              <Section label={mode.cardGame ? "Join window" : "Pick window"}>
                 <SegmentedTabs<string>
                   size="sm"
-                  ariaLabel={mode.dealer ? "Join window" : "Pick window"}
+                  ariaLabel={mode.cardGame ? "Join window" : "Pick window"}
                   tabs={PICK_WINDOWS.map((t) => ({ id: String(t.sec), label: t.label }))}
                   value={String(timer)}
                   onChange={(v) => setTimer(Number(v))}
                 />
               </Section>
-              <p className="text-xs text-muted-foreground">
-                {mode.dealer
-                  ? "You're in your own game; others join from the ticket."
-                  : "Sending a bet doesn't place your pick; pick on the ticket like everyone else."}
-              </p>
             </div>
           )}
         </ScrollContainer>
 
-        {mode && (
+        {mode && about && (
+          <div className="border-t bg-sidebar p-4">
+            <Button variant="outline" size="lg" className="w-full" onClick={() => setAbout(false)}>
+              <ArrowLeft /> Back to setup
+            </Button>
+          </div>
+        )}
+        {mode && !about && (
           <div className="space-y-2 border-t bg-sidebar p-4">
             {(problem ?? block) && (
               <p className="text-center text-xs text-muted-foreground">{problem ?? block}</p>
@@ -578,10 +621,10 @@ export function ProposeBetSheet({
               variant="hero"
               size="lg"
               className="w-full"
-              onClick={() => (previewing || mode.dealer ? submit() : setPreviewing(true))}
-              disabled={!!problem || !!block || ((previewing || !!mode.dealer) && busy)}
+              onClick={() => (previewing || mode.cardGame ? submit() : setPreviewing(true))}
+              disabled={!!problem || !!block || ((previewing || !!mode.cardGame) && busy)}
             >
-              {mode.dealer ? (
+              {mode.cardGame ? (
                 <>
                   <Send /> Open the table
                 </>

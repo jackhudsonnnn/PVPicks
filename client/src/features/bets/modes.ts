@@ -1,4 +1,5 @@
 import {
+  Club,
   Crown,
   Flame,
   PenLine,
@@ -26,8 +27,11 @@ export interface ModeDef {
   icon: LucideIcon;
   /** U2Pick: no game; the proposer writes the question and options and picks who settles it. */
   custom?: boolean;
-  /** Jackblack: no game; everyone who joins takes a turn as the dealer. */
-  dealer?: boolean;
+  /**
+   * A card game played on its ticket, not picked (Jackblack, Hold'em): no game; players join during a join window,
+   * the wager is the ante or big blind, and the game deals when the window closes.
+   */
+  cardGame?: "jackblack" | "holdem";
 }
 
 export const MODES: ModeDef[] = [
@@ -103,7 +107,16 @@ export const MODES: ModeDef[] = [
     description:
       "Blackjack where the deal goes round the table: everyone who joins banks a round against the rest, in a random order. Choices are made together, and new cards come out only once everyone has chosen.",
     icon: Spade,
-    dealer: true,
+    cardGame: "jackblack",
+  },
+  {
+    id: "holdem",
+    name: "Hold'em",
+    tagline: "No-limit poker, once round the table",
+    description:
+      "No-limit Texas hold'em: one hand each with the button moving round, small and big blinds, 100 big blinds to buy in and one rebuy. You see only your own cards; the board, the bets and the pot are out in the open.",
+    icon: Club,
+    cardGame: "holdem",
   },
 ];
 

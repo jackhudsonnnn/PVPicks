@@ -16,9 +16,9 @@ export function arrangeSeats(
   cap = SEAT_CAP,
 ) {
   const inBet =
-    // A finished Jackblack game stays on the felt a little while; keep its players seated.
+    // A finished card game (Jackblack, Hold'em) stays on the felt a little while; keep its players seated.
     (focused?.status === "PENDING" ||
-      (focused?.modeId === "jackblack" && focused.status !== "ACTIVE")) &&
+      (!!focused && isCardGame(focused.modeId) && focused.status !== "ACTIVE")) &&
     focused.picks &&
     focused.noGuessUserIds
       ? new Set([...focused.picks.map((pick) => pick.userId), ...focused.noGuessUserIds])
@@ -26,8 +26,10 @@ export function arrangeSeats(
   const eligible = inBet ? memberIds.filter((id) => inBet.has(id)) : memberIds;
   const others = eligible.filter((id) => id !== me);
   const all = eligible.includes(me) ? [me, ...others] : others;
-  if (all.length <= cap) return { seated: all, rail: [] as string[] };
-  return { seated: all.slice(0, cap - 1), rail: all.slice(cap - 1) };
+  // `fromBet`: everyone seated (and on the rail) is in the focused ticket, not just at the table.
+  const fromBet = inBet !== null;
+  if (all.length <= cap) return { seated: all, rail: [] as string[], fromBet };
+  return { seated: all.slice(0, cap - 1), rail: all.slice(cap - 1), fromBet };
 }
 
 /** Seat centers on the table's oval edge, as % of the felt box. Seat 0 sits at the bottom. */
@@ -47,7 +49,7 @@ export function seatStatus(
   me: string,
 ): { label: string; tone: SeatTone } | null {
   if (!bet) return null;
-  if (bet.modeId === "jackblack") return jackblackSeat(bet, userId, me);
+  if (isCardGame(bet.modeId)) return cardGameSeat(bet, userId, me);
   if (bet.status === "ACTIVE") {
     if (userId !== me) return null;
     if (bet.myParticipation === "picked") return { label: bet.myPick!, tone: "pick" };
@@ -68,11 +70,14 @@ export function seatStatus(
     : { label: `Lost ${formatCents(-delta)}`, tone: "loss" };
 }
 
+/** The card games (Jackblack, Hold'em) are played on their tickets, never picked. */
+export const isCardGame = (modeId: Bet["modeId"]) => modeId === "jackblack" || modeId === "holdem";
+
 /**
- * Jackblack has no picks: its players are the bet's participants, which the server lists as No guess. (The felt
- * shows the live game's chips from the game itself; this is the fallback.)
+ * The card games have no picks: their players are the bet's participants, which the server lists as No guess. (The
+ * felt shows the live game's chips from the game itself; this is the fallback.)
  */
-function jackblackSeat(
+function cardGameSeat(
   bet: Bet,
   userId: string,
   me: string,
@@ -92,17 +97,17 @@ function jackblackSeat(
     : { label: `Down ${formatCents(-delta)}`, tone: "loss" };
 }
 
-/** How long a finished Jackblack game stays on the felt, so everyone sees how it ended. */
+/** How long a finished card game stays on the felt, so everyone sees how it ended. */
 export const FINISHED_HAND_MS = 20_000;
 
-/** Open bets for the deck, newest first, plus a Jackblack game that just finished. */
+/** Open bets for the deck, newest first, plus a card game that just finished. */
 export function openBets(bets: Bet[], now = Date.now()) {
   return bets
     .filter(
       (bet) =>
         bet.status === "ACTIVE" ||
         bet.status === "PENDING" ||
-        (bet.modeId === "jackblack" &&
+        (isCardGame(bet.modeId) &&
           !!bet.closedAt &&
           now - Date.parse(bet.closedAt) < FINISHED_HAND_MS),
     )

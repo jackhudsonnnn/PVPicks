@@ -28,6 +28,10 @@ final class JackblackGame {
     static final String PLAY = "play";
     static final String DEALER = "dealer";
     static final String DONE = "done";
+    /** Between rounds: the finished round's results stay up for a moment before the next deal. */
+    static final String RESULTS = "results";
+    /** How long a finished round's results stay up (owner decision, 2026-11-22). */
+    static final long ROUND_PAUSE_MS = 4000;
 
     static final class Hand {
         public List<String> cards = new ArrayList<>();
@@ -70,7 +74,18 @@ final class JackblackGame {
     /** When this step (or the dealer's turn) times out. */
     public long deadline;
     public Map<UUID, Long> totals = new LinkedHashMap<>();
+    /** Each round's shoe secret, fixed at the deal and revealed only when the game is over (CardShuffle). */
+    public List<CardShuffle.Secret> secrets = new ArrayList<>();
+    /** How many times this round's shoe has run out (it continues from the same secret). */
+    public int pass;
     public List<Round> history = new ArrayList<>();
+
+    /** A move the rules don't allow right now; its message is for the player. Anything else is a bug. */
+    static final class NotAllowed extends IllegalStateException {
+        NotAllowed(String message) {
+            super(message);
+        }
+    }
 
     UUID dealerId() {
         return order.get(round % order.size());
@@ -86,29 +101,18 @@ final class JackblackGame {
         Collections.shuffle(game.order, random);
         game.rounds = game.order.size() * rules.rotations();
         for (UUID player : game.order) game.totals.put(player, 0L);
+        // Every round's shoe is fixed now (a random deck count and seed), so its commitment can be shown up front.
+        for (int r = 1; r <= game.rounds; r++) game.secrets.add(CardShuffle.draw(r, random));
         game.startRound(rules, shoes, now);
         return game;
     }
 
-    /** Where a round's shoe comes from (tests stack it). */
+    /** Where a round's shoe comes from: its secret's shuffle (tests stack it). */
     interface Shoes {
-        List<String> next(int decks);
+        List<String> next(CardShuffle.Secret secret);
     }
 
-    static Shoes shuffled(Random random) {
-        return decks -> shuffledShoe(decks, random);
-    }
-
-    static List<String> shuffledShoe(int decks, Random random) {
-        List<String> shoe = new ArrayList<>(decks * 52);
-        for (int d = 0; d < decks; d++) {
-            for (char suit : "SHDC".toCharArray()) {
-                for (char rank : "A23456789TJQK".toCharArray()) shoe.add("" + rank + suit);
-            }
-        }
-        Collections.shuffle(shoe, random);
-        return shoe;
-    }
+    static final Shoes FROM_SECRETS = secret -> CardShuffle.cards(secret, 0);
 
     // ----- Decisions -----
 
@@ -121,13 +125,13 @@ final class JackblackGame {
     /** Records a player's choice for this step; once everyone still playing has chosen, the cards come out. */
     void choose(JackblackRules rules, UUID userId, Action action, Shoes shoes, long now) {
         Seat seat = seatOf(userId);
-        if (!deciding(userId)) throw new IllegalStateException("You've no choice to make right now");
+        if (!deciding(userId)) throw new NotAllowed("You've no choice to make right now");
         Hand hand = current(seat);
         if (action == Action.DOUBLE && !canDouble(rules, hand)) {
-            throw new IllegalStateException("You can't double this hand");
+            throw new NotAllowed("You can't double this hand");
         }
         if (action == Action.SPLIT && !canSplit(rules, seat, hand)) {
-            throw new IllegalStateException("You can't split this hand");
+            throw new NotAllowed("You can't split this hand");
         }
         seat.pending = action.name();
         if (seats.stream().filter(s -> current(s) != null).allMatch(s -> s.pending != null)) {
@@ -145,7 +149,7 @@ final class JackblackGame {
     /** One tap of the dealer's button. */
     void dealerStep(JackblackRules rules, Shoes shoes, long now) {
         String move = dealerMove();
-        if (move == null) throw new IllegalStateException("It isn't the dealer's turn");
+        if (move == null) throw new NotAllowed("It isn't the dealer's turn");
         switch (move) {
             case "flip" -> revealed = true;
             case "hit" -> {
@@ -168,6 +172,8 @@ final class JackblackGame {
         if (DONE.equals(phase) || deadline == 0 || deadline > now) return false;
         if (PLAY.equals(phase)) {
             resolveStep(rules, shoes, now);
+        } else if (RESULTS.equals(phase)) {
+            startRound(rules, shoes, now);
         } else {
             int started = round;
             while (DEALER.equals(phase) && round == started) dealerStep(rules, shoes, now);
@@ -234,7 +240,8 @@ final class JackblackGame {
     // ----- Flow -----
 
     private void startRound(JackblackRules rules, Shoes shoes, long now) {
-        shoe = new ArrayList<>(shoes.next(rules.decks()));
+        pass = 0;
+        shoe = new ArrayList<>(shoes.next(secrets.get(round)));
         dealer = new ArrayList<>();
         revealed = false;
         seats = new ArrayList<>();
@@ -375,15 +382,15 @@ final class JackblackGame {
             phase = DONE;
             deadline = 0;
         } else {
-            startRound(rules, shoes, now);
+            // Everyone sees how the round went before the next one deals.
+            phase = RESULTS;
+            deadline = now + ROUND_PAUSE_MS;
         }
     }
 
-    private static final Random RESHUFFLE = new java.security.SecureRandom();
-
-    /** Takes the top card; a shoe that runs out gets a fresh shuffled deck. */
+    /** Takes the top card; a shoe that runs out continues with the next pass of the same secret. */
     private String draw() {
-        if (shoe.isEmpty()) shoe.addAll(shuffledShoe(1, RESHUFFLE));
+        if (shoe.isEmpty()) shoe.addAll(CardShuffle.cards(secrets.get(round), ++pass));
         return shoe.removeFirst();
     }
 }

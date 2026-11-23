@@ -1,5 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
-import { listGifs, type Gif, type GifCatalog } from "./api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { backendErrorMessage } from "@/lib/api-client";
+import { userKey } from "@/lib/query-keys";
+import { listGifFavorites, listGifs, setGifFavorite, type Gif, type GifCatalog } from "./api";
 
 /**
  * The chat GIF library (hosted on Tenor and GIPHY CDNs). The server owns it (`GET /gifs`) and accepts only its ids, so a
@@ -28,5 +31,56 @@ export function searchGifs(catalog: GifCatalog, query: string, category: string)
   return catalog.gifs.filter((g) => {
     const text = [g.alt, ...g.tags, labels.get(g.category) ?? ""].join(" ").toLowerCase();
     return words.every((word) => text.includes(word));
+  });
+}
+
+/** The picker's own first tab: your starred GIFs. */
+export const STARRED = "starred";
+
+/**
+ * Your starred GIFs, newest first, kept with your account. Starring updates the list at once and rolls back if the
+ * server refuses (for example at the 100-star cap).
+ */
+export function useGifFavorites(userId: string) {
+  const queryClient = useQueryClient();
+  const key = userKey(userId, "gif-favorites");
+  const favorites = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => listGifFavorites(signal),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const toggle = useMutation({
+    mutationFn: ({ gifId, starred }: { gifId: string; starred: boolean }) =>
+      setGifFavorite(gifId, starred, crypto.randomUUID()),
+    onMutate: ({ gifId, starred }) => {
+      const before = queryClient.getQueryData<string[]>(key) ?? [];
+      queryClient.setQueryData<string[]>(
+        key,
+        starred
+          ? [gifId, ...before.filter((id) => id !== gifId)]
+          : before.filter((id) => id !== gifId),
+      );
+      return { before };
+    },
+    onError: (error, _vars, context) => {
+      if (context) queryClient.setQueryData(key, context.before);
+      toast.error(backendErrorMessage(error));
+    },
+  });
+  const ids = favorites.data ?? [];
+  return {
+    ids,
+    isStarred: (gifId: string) => ids.includes(gifId),
+    toggle: (gifId: string) => toggle.mutate({ gifId, starred: !ids.includes(gifId) }),
+  };
+}
+
+/** Your starred GIFs from the library, in the order you starred them (newest first). */
+export function starredGifs(catalog: GifCatalog, ids: string[]): Gif[] {
+  const byId = new Map(catalog.gifs.map((g) => [g.id, g]));
+  return ids.flatMap((id) => {
+    const gif = byId.get(id);
+    return gif ? [gif] : [];
   });
 }

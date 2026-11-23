@@ -73,7 +73,7 @@ export const SWITCHES = [
   },
 ] as const;
 
-/** Who may propose Jackblack at the table. */
+/** Who may propose a card game (Jackblack, Hold'em) at the table. */
 export const JACKBLACK_ACCESS = [
   { id: "everyone", label: "Everyone" },
   { id: "hosts", label: "Hosts" },

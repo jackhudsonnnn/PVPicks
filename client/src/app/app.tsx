@@ -14,7 +14,7 @@ import {
   SignIn,
   AdminSignIn,
 } from "@/features/auth";
-import { ArchivedTable, HomePage, TablePage } from "@/features/tables";
+import { ArchivedTable, HomePage, TablePage, myBalanceKey } from "@/features/tables";
 import type { User } from "@/features/people";
 import { AdminWorkspace } from "@/features/admin";
 import { FriendsPage } from "@/features/social";
@@ -279,7 +279,7 @@ function TableWorkspace({
   );
 }
 
-/** Refreshes the table list and displayed profiles when the personal feed says they changed. */
+/** Refreshes the table list, your balance and displayed profiles when the personal feed says they changed. */
 function PersonalUpdates({ user }: { user: User }) {
   const queryClient = useQueryClient();
   useRealtimeFeed(personalFeed, (event) => {
@@ -287,6 +287,10 @@ function PersonalUpdates({ user }: { user: User }) {
       void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "invites"] });
     } else if (event.type === "tables.changed") {
       void queryClient.invalidateQueries({ queryKey: [...tablesKey, user.id, "list"] });
+      // Joining, leaving or a deleted table changes which tables your balance sums.
+      void queryClient.invalidateQueries({ queryKey: myBalanceKey(user.id) });
+    } else if (event.type === "balance.changed") {
+      void queryClient.invalidateQueries({ queryKey: myBalanceKey(user.id) });
     } else if (event.type === "profile.changed" && event.resourceId) {
       const id = event.resourceId;
       void queryClient.invalidateQueries({

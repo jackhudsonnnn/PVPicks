@@ -41,14 +41,15 @@ cover.
     every path that adds someone (create, add, accept) and request expiry.
   - `tables.TableMembershipIntegrationTest` and
     `tables.TableSettingsIntegrationTest`: creation, members, hosts, archives,
-    reads, profile, settings, permissions, remainder and Quick Pick controls.
+    reads, profile, settings, permissions and Quick Pick controls.
   - `bets`: `BetLifecycleIntegrationTest` (reads, end-to-end U2Pick flow and
     HTTP adapters), `BetProposalIntegrationTest`, `BetPickIntegrationTest`,
     `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
-    Blackjack: `BlackjackGameTest` (the pure hand, including 500 random hands
-    checked zero-sum) and `BlackjackIntegrationTest` (propose, seats, deal,
-    turns, timeouts, the dealer's turn, the points limit, the host setting);
-    `demo.BlackjackBotTest` covers the bots' strategy.
+    Jackblack: `JackblackGameTest` (the pure game, including 400 random games
+    checked zero-sum and inside the worst case) and `JackblackIntegrationTest`
+    (propose, join, deal, lockstep steps and hidden choices, timeouts, the
+    dealer's turn, the points limit, the host setting);
+    `demo.JackblackBotTest` covers the bots' strategy.
   - `common.AbusiveLanguageTest` and `AbusiveLanguageIntegrationTest`: the
     slur filter and every endpoint it guards.
   - `settlement`: `PointsSettlementIntegrationTest`, `SettleIntegrationTest`

@@ -149,7 +149,7 @@ class TableReadController {
         UUID sessionId = UUID.fromString(jwt.getId());
         return jdbc.query("""
                 SELECT t.id, t.name, t.emoji, t.hosts_only_bets,
-                       t.u2pick_enabled, t.polls_enabled, t.jackblack_access, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
+                       t.u2pick_enabled, t.polls_enabled, t.jackblack_access, t.holdem_access, t.quickpick_code, t.quickpicks_enabled, t.quickpick_sharing,
                        me.role AS viewer_role, member.user_id AS member_id, member.role AS member_role,
                        member.can_bet, member.can_text, member.can_react, member.can_send_gifs, member.can_poll,
                        ARRAY(SELECT q.source_table_id::text FROM quickpick_subscriptions q
@@ -196,9 +196,11 @@ class TableReadController {
     private record TableView(
             UUID id, String name, String emoji, List<UUID> memberIds, List<UUID> hostIds,
             boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
-            String jackblackAccess,
+            String jackblackAccess, String holdemAccess,
             @JsonInclude(JsonInclude.Include.NON_NULL) String quickPickCode,
-            boolean quickPicksEnabled, boolean quickPickSharing, List<UUID> subscribedTo,
+            boolean quickPicksEnabled, boolean quickPickSharing,
+            // Other tables' ids: hosts only, like the Quick Pick code.
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<UUID> subscribedTo,
             Map<String, List<String>> disabledPermissions) {}
 
     private static final class TableBuilder {
@@ -209,6 +211,7 @@ class TableReadController {
         private final boolean u2pickEnabled;
         private final boolean pollsEnabled;
         private final String jackblackAccess;
+        private final String holdemAccess;
         private final String quickPickCode;
         private final boolean quickPicksEnabled;
         private final boolean quickPickSharing;
@@ -226,12 +229,14 @@ class TableReadController {
             u2pickEnabled = rs.getBoolean("u2pick_enabled");
             pollsEnabled = rs.getBoolean("polls_enabled");
             jackblackAccess = rs.getString("jackblack_access");
+            holdemAccess = rs.getString("holdem_access");
             viewerIsHost = rs.getString("viewer_role").equals("HOST");
             quickPickCode = viewerIsHost ? rs.getString("quickpick_code") : null;
             quickPicksEnabled = rs.getBoolean("quickpicks_enabled");
             quickPickSharing = rs.getBoolean("quickpick_sharing");
-            subscribedTo = Arrays.stream((String[]) rs.getArray("subscriptions").getArray())
-                    .map(UUID::fromString).toList();
+            subscribedTo = viewerIsHost
+                    ? Arrays.stream((String[]) rs.getArray("subscriptions").getArray()).map(UUID::fromString).toList()
+                    : null;
         }
 
         private void addMember(ResultSet rs, UUID viewerId) throws SQLException {
@@ -256,7 +261,7 @@ class TableReadController {
                 throw new IllegalStateException("Table has no host: " + id);
             }
             return new TableView(id, name, emoji, List.copyOf(memberIds), List.copyOf(hostIds),
-                    hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, quickPickCode,
+                    hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, holdemAccess, quickPickCode,
                     quickPicksEnabled,
                     quickPickSharing, subscribedTo, Map.copyOf(disabledPermissions));
         }

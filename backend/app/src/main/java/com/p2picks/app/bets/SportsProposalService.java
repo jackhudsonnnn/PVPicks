@@ -59,8 +59,10 @@ public class SportsProposalService {
             boolean needsLine = !mode.equals("either_or") && !mode.equals(SCORCERER);
             if (needsLine != (line != null)) throw new IllegalArgumentException("Line mismatch");
             if (line != null) {
-                // Half-point steps; whole numbers can push (and wash). Targets are whole numbers.
-                if (line.remainder(HALF).signum() != 0) throw new IllegalArgumentException("Line must be in half points");
+                // Lines end in .5, so they never push (owner decision, 2026-11-22). Targets are whole numbers.
+                if (!mode.equals("king_of_the_hill") && line.remainder(BigDecimal.ONE).abs().compareTo(HALF) != 0) {
+                    throw new IllegalArgumentException("Line must end in .5");
+                }
                 if (mode.equals("total_disaster") && (line.signum() <= 0 || line.compareTo(new BigDecimal("999.5")) > 0)) {
                     throw new IllegalArgumentException("Total line out of range");
                 }

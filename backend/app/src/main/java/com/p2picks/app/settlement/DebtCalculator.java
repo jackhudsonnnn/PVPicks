@@ -51,9 +51,9 @@ final class DebtCalculator {
             if (!tableIds.add(table.tableId())) {
                 throw new IllegalArgumentException("Duplicate table");
             }
-            BigInteger trueBalance = table.unsettledResults().subtract(table.pendingWagers());
-            if (trueBalance.signum() < 0) {
-                debt = debt.subtract(trueBalance);
+            BigInteger balance = table.unsettledResults().subtract(table.pendingWagers());
+            if (balance.signum() < 0) {
+                debt = debt.subtract(balance);
             }
         }
         Set<UUID> receiptIds = new HashSet<>();

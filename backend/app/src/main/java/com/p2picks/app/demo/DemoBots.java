@@ -3,6 +3,7 @@ package com.p2picks.app.demo;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2picks.app.bets.BetPickService;
+import com.p2picks.app.bets.HoldemService;
 import com.p2picks.app.bets.JackblackService;
 import com.p2picks.app.bets.SportsProposalService;
 import com.p2picks.app.bets.U2PickDefinition;
@@ -91,6 +92,7 @@ public class DemoBots {
     private final TablePointsSettlementService pointsSettlement;
     private final PlayerStatsLookup playerStats;
     private final JackblackService jackblack;
+    private final HoldemService holdem;
 
     private final Map<UUID, DemoUser> bots = DemoRoster.users().stream()
             .collect(Collectors.toMap(DemoUser::id, Function.identity()));
@@ -115,8 +117,9 @@ public class DemoBots {
             SocialMutationService social, InvitationResponseService invitations, ChatSendService chat,
             ReactionService reactions, GifCatalog gifs, ReportService reports, SettleService settles,
             SettlementReviewService reviews, TablePointsSettlementService pointsSettlement,
-            PlayerStatsLookup playerStats, JackblackService jackblack) {
+            PlayerStatsLookup playerStats, JackblackService jackblack, HoldemService holdem) {
         this.jackblack = jackblack;
+        this.holdem = holdem;
         this.jdbc = jdbc;
         this.json = json;
         this.clock = clock;
@@ -187,6 +190,7 @@ public class DemoBots {
             if (world.members.isEmpty() && world.botIds.isEmpty()) return;
             planPicks(world, now);
             planJackblack(world, now);
+            planHoldem(world, now);
             planProposals(world, now);
             planResults(world, now);
             planChat(world, now);
@@ -208,7 +212,8 @@ public class DemoBots {
     private record Member(UUID table, UUID user, boolean host, boolean canBet, boolean canText, boolean canReact,
             boolean canGif) {}
 
-    private record Table(UUID id, boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess) {}
+    private record Table(UUID id, boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess,
+            String holdemAccess) {}
 
     private record World(UUID pro, Set<UUID> mainIds, Map<UUID, Table> tables, List<Member> members,
             Set<UUID> proTables, Set<UUID> botIds) {
@@ -227,13 +232,14 @@ public class DemoBots {
                 "SELECT id FROM users WHERE id = ANY (?::uuid[]) AND status = 'ACTIVE'", UUID.class, array(bots.keySet())));
         Map<UUID, Table> tables = new LinkedHashMap<>();
         jdbc.query("""
-                SELECT DISTINCT t.id, t.hosts_only_bets, t.u2pick_enabled, t.jackblack_access FROM tables t
+                SELECT DISTINCT t.id, t.hosts_only_bets, t.u2pick_enabled, t.jackblack_access, t.holdem_access
+                FROM tables t
                 JOIN table_members m ON m.table_id = t.id
                 WHERE t.archived_at IS NULL AND m.user_id = ANY (?::uuid[])
                 """, rs -> {
                     UUID id = rs.getObject("id", UUID.class);
                     tables.put(id, new Table(id, rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled"),
-                            rs.getString("jackblack_access")));
+                            rs.getString("jackblack_access"), rs.getString("holdem_access")));
                 }, array(mainIds));
         List<Member> members = tables.isEmpty() ? List.of() : jdbc.query("""
                 SELECT table_id, user_id, role, can_bet, can_text, can_react, can_send_gifs FROM table_members
@@ -272,8 +278,8 @@ public class DemoBots {
                     .put(rs.getObject("user_id", UUID.class), rs.getString("choice"));
         }, array(open.stream().map(OpenBet::id).toList()));
         for (OpenBet bet : open) {
-            // Jackblack is played at the table (planJackblack), not picked.
-            if (bet.mode().equals(JackblackService.MODE)) continue;
+            // The card games are played at the table (planJackblack, planHoldem), not picked.
+            if (bet.mode().equals(JackblackService.MODE) || bet.mode().equals(HoldemService.MODE)) continue;
             Map<UUID, String> betPicks = picked.getOrDefault(bet.id(), Map.of());
             for (Member member : world.botsIn(bet.table(), bots)) {
                 if (!member.canBet() || betPicks.containsKey(member.user())) continue;
@@ -356,7 +362,7 @@ public class DemoBots {
         }
         if (world.botIds.isEmpty()) return;
         jdbc.query("""
-                SELECT p.bet_id, p.user_id FROM jackblack_players p JOIN bets b ON b.id = p.bet_id
+                SELECT p.bet_id, p.user_id FROM card_players p JOIN bets b ON b.id = p.bet_id
                 WHERE b.mode = 'jackblack' AND b.status = 'PENDING' AND p.user_id = ANY (?::uuid[])
                 """, rs -> {
                     UUID betId = rs.getObject("bet_id", UUID.class);
@@ -384,6 +390,53 @@ public class DemoBots {
                 }, array(world.botIds));
     }
 
+    /**
+     * Hold'em: bots join open games at their tables, then play their own turns with {@link HoldemBot}'s strategy a
+     * moment after it's their move, and decide on a rebuy when they bust.
+     */
+    private void planHoldem(World world, Instant now) {
+        for (OpenBet bet : openBets(world.tables.keySet(), now)) {
+            if (!bet.mode().equals(HoldemService.MODE)) continue;
+            for (Member member : world.botsIn(bet.table(), bots)) {
+                if (!member.canBet()) continue;
+                DemoUser bot = bots.get(member.user());
+                if (!BotMind.online(bot.id(), bot.profile(), now) || !decide("he-join", bet.id(), bot.id())) continue;
+                if (random.nextDouble() >= bot.profile().joinBetChance()) continue;
+                Duration delay = BotMind.delay(random, bot.profile(),
+                        Duration.between(now, bet.locksAt().minus(LOCK_MARGIN)));
+                plan(now.plus(delay), "holdem-join",
+                        () -> act(bot.id(), jwt -> holdem.join(jwt, bet.id(), key()).name()));
+            }
+        }
+        if (world.botIds.isEmpty()) return;
+        jdbc.query("""
+                SELECT p.bet_id, p.user_id FROM card_players p JOIN bets b ON b.id = p.bet_id
+                WHERE b.mode = 'holdem' AND b.status = 'PENDING' AND p.user_id = ANY (?::uuid[])
+                """, rs -> {
+                    UUID betId = rs.getObject("bet_id", UUID.class);
+                    UUID botId = rs.getObject("user_id", UUID.class);
+                    if (holdem.rebuyOffered(betId, botId) && decided.add("he-rebuy:" + betId + ":" + botId)) {
+                        String choice = random.nextDouble() < 0.7 ? "rebuy" : "pass";
+                        plan(now.plusMillis(2000 + random.nextInt(4000)), "holdem-rebuy",
+                                () -> act(botId, jwt -> holdem.act(jwt, betId, choice, 0, key()).name()));
+                    }
+                    holdem.turn(betId, botId).ifPresent(turn -> {
+                        // One decision per spot: the same street and bet aren't decided twice.
+                        if (!decided.add("he-act:" + betId + ":" + turn.board() + ":" + turn.toCall() + ":"
+                                + turn.pot() + ":" + botId)) {
+                            return;
+                        }
+                        plan(now.plusMillis(1200 + random.nextInt(3000)), "holdem-act", () -> {
+                            var current = holdem.turn(betId, botId);
+                            if (current.isEmpty()) return "SKIPPED";
+                            HoldemBot.Move move = HoldemBot.move(current.get(), random);
+                            return act(botId, jwt -> holdem.act(jwt, betId, move.action(), move.amount(), key())
+                                    .name());
+                        });
+                    });
+                }, array(world.botIds));
+    }
+
     private record Game(String id, String league, String status, Integer homeScore, Integer awayScore, Integer period) {}
 
     private void planProposal(World world, Member member, String what, Instant now) {
@@ -406,9 +459,17 @@ public class DemoBots {
                     || (table.jackblackAccess().equals("hosts") && member.host());
             if (canDeal && random.nextDouble() < 0.15) {
                 var rules = JackblackBot.rules(random);
-                long ante = forFun ? 100 : Math.min(wager, 200);
+                long ante = forFun ? 0 : Math.min(wager, 200);
                 return act(bot.id(), jwt -> jackblack.propose(jwt, member.table(), rules, ante, 60, forFun, key())
                         .outcome().name());
+            }
+            // Now and then a bot proposes Hold'em, where the table lets it.
+            boolean canHoldem = table.holdemAccess().equals("everyone")
+                    || (table.holdemAccess().equals("hosts") && member.host());
+            if (canHoldem && random.nextDouble() < 0.08) {
+                long bigBlind = forFun ? 0 : Math.max(10, Math.min(wager, 100));
+                return act(bot.id(), jwt -> holdem.propose(jwt, member.table(), HoldemBot.rules(random), bigBlind,
+                        90, forFun, key()).outcome().name());
             }
             int window = 90 + random.nextInt(511);
             // Only the modes this bot likes (all when its profile names none) that the table allows.

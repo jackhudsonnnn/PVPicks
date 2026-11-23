@@ -5,10 +5,6 @@
       "label": "Hype"
     },
     {
-      "id": "money",
-      "label": "Money"
-    },
-    {
       "id": "pain",
       "label": "Pain"
     },
@@ -89,7 +85,7 @@
       "id": "g7",
       "url": "https://media.tenor.com/e2Abg24uiv4AAAAM/make-it-rain-money-money-make-it-rain.gif",
       "alt": "Make it rain",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "money",
         "rain",
@@ -100,7 +96,7 @@
       "id": "g8",
       "url": "https://media.tenor.com/TSLCnBKrt8oAAAAM/money-show-me-the-money.gif",
       "alt": "Show me the money",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "money",
         "show me"
@@ -110,28 +106,30 @@
       "id": "g9",
       "url": "https://media.tenor.com/hXarrACgFwMAAAAM/pay-me-the-simpsons.gif",
       "alt": "Simpsons: pay me",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "pay me",
         "pay up",
-        "simpsons"
+        "simpsons",
+        "money"
       ]
     },
     {
       "id": "g10",
       "url": "https://media.tenor.com/mPSu1gWReVAAAAAM/pay-me-my-money-payday.gif",
       "alt": "Pay me my money",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "pay me",
-        "pay up"
+        "pay up",
+        "money"
       ]
     },
     {
       "id": "g11",
       "url": "https://media.tenor.com/WLrC9VcfwpgAAAAM/cat-orange-cat.gif",
       "alt": "Cat with money",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "money",
         "cat"
@@ -724,14 +722,15 @@
       "id": "g58",
       "url": "https://media.giphy.com/media/J6TPQrZMSyJSqClqBs/200.webp",
       "alt": "Pi'erre Bourne showing off his chain",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "pierre bourne",
         "pi'erre",
         "chain",
         "drip",
         "flex",
-        "rich"
+        "rich",
+        "money"
       ]
     },
     {
@@ -764,7 +763,7 @@
       "id": "g61",
       "url": "https://media.giphy.com/media/UiBmJv6Hh6FfW/100.webp",
       "alt": "Vince McMahon throwing money",
-      "category": "money",
+      "category": "hype",
       "tags": [
         "vince mcmahon",
         "wwe",
@@ -1012,6 +1011,225 @@
         "shocked",
         "what",
         "nba"
+      ]
+    },
+    {
+      "id": "g80",
+      "url": "https://media.giphy.com/media/124Q7jtnpRb5MQ/giphy.gif",
+      "alt": "Friday: Daaaamn!",
+      "category": "react",
+      "tags": [
+        "damn",
+        "friday",
+        "smokey",
+        "wow"
+      ]
+    },
+    {
+      "id": "g81",
+      "url": "https://media.giphy.com/media/3og0IHyZMxZNkNOWT6/giphy.gif",
+      "alt": "Jon Snow facing the charge alone",
+      "category": "pain",
+      "tags": [
+        "game of thrones",
+        "jon snow",
+        "doomed",
+        "outnumbered"
+      ]
+    },
+    {
+      "id": "g82",
+      "url": "https://media.giphy.com/media/3oriNSH0Ddh93oO7PW/giphy.gif",
+      "alt": "Kirk Cousins: You like that!?",
+      "category": "hype",
+      "tags": [
+        "you like that",
+        "kirk cousins",
+        "cousins",
+        "nfl"
+      ]
+    },
+    {
+      "id": "g83",
+      "url": "https://media.giphy.com/media/BFYLNwlsSNtcc/giphy.gif",
+      "alt": "Goodfellas: Ray Liotta laughing",
+      "category": "react",
+      "tags": [
+        "laugh",
+        "lol",
+        "goodfellas",
+        "funny"
+      ]
+    },
+    {
+      "id": "g84",
+      "url": "https://media.giphy.com/media/D63HGAzG15LQrjBPRE/giphy.gif",
+      "alt": "IShowSpeed thinking",
+      "category": "react",
+      "tags": [
+        "thinking",
+        "hmm",
+        "speed",
+        "ishowspeed"
+      ]
+    },
+    {
+      "id": "g85",
+      "url": "https://media.giphy.com/media/Medb9pfBaqi6kEBvYx/giphy.gif",
+      "alt": "Fighter's cold stare",
+      "category": "react",
+      "tags": [
+        "stare",
+        "unbothered",
+        "ufc",
+        "serious"
+      ]
+    },
+    {
+      "id": "g86",
+      "url": "https://media.giphy.com/media/R7m04yMaGWVeE/giphy.gif",
+      "alt": "Will Smith down in the rain",
+      "category": "pain",
+      "tags": [
+        "will smith",
+        "rain",
+        "why",
+        "despair"
+      ]
+    },
+    {
+      "id": "g87",
+      "url": "https://media.giphy.com/media/RUciiUqoEqWaM3dBGP/giphy.gif",
+      "alt": "Shocked, hand over mouth",
+      "category": "react",
+      "tags": [
+        "shocked",
+        "omg",
+        "no way",
+        "gasp"
+      ]
+    },
+    {
+      "id": "g88",
+      "url": "https://media.giphy.com/media/To2rk3f7b0Q5FyqsG0/giphy.gif",
+      "alt": "Joe Rogan cageside: no way",
+      "category": "react",
+      "tags": [
+        "rogan",
+        "ufc",
+        "no way",
+        "shocked"
+      ]
+    },
+    {
+      "id": "g89",
+      "url": "https://media.giphy.com/media/UCSIkkFXSeg3hugqGf/giphy.gif",
+      "alt": "Interstellar: crying in the helmet",
+      "category": "pain",
+      "tags": [
+        "crying",
+        "interstellar",
+        "sad",
+        "tears"
+      ]
+    },
+    {
+      "id": "g90",
+      "url": "https://media.giphy.com/media/jVYAYqdL2dmM85aPKs/giphy.gif",
+      "alt": "The Rock's entrance",
+      "category": "hype",
+      "tags": [
+        "the rock",
+        "rock",
+        "entrance",
+        "its time"
+      ]
+    },
+    {
+      "id": "g91",
+      "url": "https://media.giphy.com/media/ktcUyw6mBlMVa/giphy.gif",
+      "alt": "Ron Swanson throwing it all away",
+      "category": "pain",
+      "tags": [
+        "parks and rec",
+        "ron swanson",
+        "done",
+        "throw away"
+      ]
+    },
+    {
+      "id": "g92",
+      "url": "https://media.giphy.com/media/lxxOGaDRk4f7R5TkBd/giphy.gif",
+      "alt": "IShowSpeed in disbelief",
+      "category": "react",
+      "tags": [
+        "speed",
+        "ishowspeed",
+        "disbelief",
+        "shocked"
+      ]
+    },
+    {
+      "id": "g93",
+      "url": "https://media.giphy.com/media/ncmi20meZyhgFKEDVX/giphy.gif",
+      "alt": "Daniel Cormier checking his phone, happy",
+      "category": "hype",
+      "tags": [
+        "cormier",
+        "phone",
+        "winning",
+        "happy",
+        "money"
+      ]
+    },
+    {
+      "id": "g94",
+      "url": "https://media.giphy.com/media/unFLKoAV3TkXe/giphy.gif",
+      "alt": "Jesse Pinkman sipping water",
+      "category": "react",
+      "tags": [
+        "breaking bad",
+        "jesse",
+        "sip",
+        "nervous",
+        "waiting"
+      ]
+    },
+    {
+      "id": "g95",
+      "url": "https://media.giphy.com/media/v9G3NGByE9x16/giphy.gif",
+      "alt": "Ice Cube unimpressed",
+      "category": "roast",
+      "tags": [
+        "ice cube",
+        "friday",
+        "unimpressed",
+        "really"
+      ]
+    },
+    {
+      "id": "g96",
+      "url": "https://media.giphy.com/media/xQSP5G2f3aOJTU16ml/giphy.gif",
+      "alt": "McCaffrey running through the snow",
+      "category": "hype",
+      "tags": [
+        "mccaffrey",
+        "49ers",
+        "niners",
+        "snow",
+        "run"
+      ]
+    },
+    {
+      "id": "g97",
+      "url": "https://media.giphy.com/media/zzVzPE3BNuKZ4QzKed/giphy.gif",
+      "alt": "Logan Paul shocked",
+      "category": "react",
+      "tags": [
+        "logan paul",
+        "shocked",
+        "what",
+        "no way"
       ]
     }
   ]

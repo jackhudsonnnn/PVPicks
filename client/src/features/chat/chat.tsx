@@ -139,6 +139,7 @@ export function TableChat({
         <ScrollContainer
           ref={scroller}
           isVisible={false}
+          keepPosition={false}
           className={cn(
             "space-y-3 px-4 py-4 [overflow-anchor:none]",
             fill ? "min-h-0 flex-1" : "max-h-[60vh]",
@@ -211,6 +212,7 @@ export function TableChat({
       </div>
       {!readOnly && (
         <Composer
+          userId={user.id}
           canText={!disabled.includes("text")}
           canGif={!disabled.includes("gifs")}
           canPoll={table.pollsEnabled && !disabled.includes("polls")}

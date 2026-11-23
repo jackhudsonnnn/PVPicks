@@ -8,7 +8,7 @@ import {
   worstCase,
   type JackblackRules,
 } from "@/features/bets/jackblack";
-import { Section, Stepper } from "./form-parts";
+import { RangeSlider, Section, Stepper } from "./form-parts";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -23,7 +23,8 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 }
 
 /**
- * Jackblack's own rules, laid out like every proposal's Game and Setup sections. The ante and the join window are
+ * Jackblack's own rules, laid out like every proposal's Game and Setup sections; how the mode works is in its
+ * info view (`ModeInfo`), not here. The ante and the join window are
  * the sheet's shared wager slider and window tabs, under these. Every number is held inside its minimum and
  * maximum.
  */
@@ -39,11 +40,6 @@ export function JackblackSetup({
   return (
     <>
       <Section label="Game">
-        <p className="text-sm text-muted-foreground">
-          Everyone who joins deals once per rotation, in a random order, and banks that round
-          against the rest. Choices are made together: new cards come out once everyone has chosen
-          or the timer runs out, so nobody sees anyone's card before deciding.
-        </p>
         <Row label="Blackjack pays">
           <SegmentedTabs<JackblackRules["blackjackPays"]>
             size="sm"
@@ -71,57 +67,57 @@ export function JackblackSetup({
             aria-label="Doubling"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Row label="Decks" hint={`${RULE_LIMITS.decks.min}–${RULE_LIMITS.decks.max}`}>
-            <Stepper
-              value={rules.decks}
-              step={1}
-              min={RULE_LIMITS.decks.min}
-              max={RULE_LIMITS.decks.max}
-              label="Decks"
-              onChange={(v) => set("decks", v)}
-            />
-          </Row>
-          <Row
-            label="Max splits"
-            hint={`${RULE_LIMITS.maxSplits.min}–${RULE_LIMITS.maxSplits.max}`}
-          >
-            <Stepper
-              value={rules.maxSplits}
-              step={1}
-              min={RULE_LIMITS.maxSplits.min}
-              max={RULE_LIMITS.maxSplits.max}
-              label="Max splits"
-              onChange={(v) => set("maxSplits", v)}
-            />
-          </Row>
-        </div>
       </Section>
 
       <Section label="Setup">
-        <div className="grid grid-cols-2 gap-3">
-          <Row label="Rotations" hint="1–3">
-            <Stepper
-              value={rules.rotations}
-              step={1}
-              min={RULE_LIMITS.rotations.min}
-              max={RULE_LIMITS.rotations.max}
-              label="Rotations"
-              onChange={(v) => set("rotations", v)}
-            />
-          </Row>
-          <Row label="Decision timer" hint="10–60s">
-            <Stepper
-              value={rules.decisionSec}
-              step={5}
-              min={RULE_LIMITS.decisionSec.min}
-              max={RULE_LIMITS.decisionSec.max}
-              label="Decision timer"
-              format={(v) => `${v}s`}
-              onChange={(v) => set("decisionSec", v)}
-            />
-          </Row>
-        </div>
+        <Row
+          label="Players"
+          hint={`${PLAYER_LIMITS.min}–${PLAYER_LIMITS.max}, the dealer included`}
+        >
+          <RangeSlider
+            low={rules.minPlayers}
+            high={rules.maxPlayers}
+            min={PLAYER_LIMITS.min}
+            max={PLAYER_LIMITS.max}
+            label="Players"
+            unit="players"
+            onChange={(minPlayers, maxPlayers) => onChange({ ...rules, minPlayers, maxPlayers })}
+          />
+        </Row>
+        <Row label="Rotations" hint={`${RULE_LIMITS.rotations.min}–${RULE_LIMITS.rotations.max}`}>
+          <Stepper
+            value={rules.rotations}
+            step={1}
+            min={RULE_LIMITS.rotations.min}
+            max={RULE_LIMITS.rotations.max}
+            label="Rotations"
+            onChange={(v) => set("rotations", v)}
+          />
+        </Row>
+        <Row
+          label="Decision timer"
+          hint={`${RULE_LIMITS.decisionSec.min}–${RULE_LIMITS.decisionSec.max}s`}
+        >
+          <Stepper
+            value={rules.decisionSec}
+            step={5}
+            min={RULE_LIMITS.decisionSec.min}
+            max={RULE_LIMITS.decisionSec.max}
+            label="Decision timer"
+            format={(v) => `${v}s`}
+            onChange={(v) => set("decisionSec", v)}
+          />
+        </Row>
+        <Row label="Max splits" hint={`${RULE_LIMITS.maxSplits.min}–${RULE_LIMITS.maxSplits.max}`}>
+          <Stepper
+            value={rules.maxSplits}
+            step={1}
+            min={RULE_LIMITS.maxSplits.min}
+            max={RULE_LIMITS.maxSplits.max}
+            label="Max splits"
+            onChange={(v) => set("maxSplits", v)}
+          />
+        </Row>
       </Section>
     </>
   );
@@ -139,14 +135,20 @@ export function JackblackWorstCase({
     <p className="text-xs text-muted-foreground">
       Worst case per player:{" "}
       <span className="font-semibold text-foreground">
-        {formatCents(worstCase(rules, anteCents, PLAYER_LIMITS.min))}
+        {formatCents(worstCase(rules, anteCents, rules.minPlayers))}
       </span>{" "}
-      with 2 players, up to{" "}
-      <span className="font-semibold text-foreground">
-        {formatCents(worstCase(rules, anteCents, PLAYER_LIMITS.max))}
-      </span>{" "}
-      with 7 (every hand split, doubled and lost). It's held against each player's points limit
-      while the game is on.
+      with {rules.minPlayers} players
+      {rules.maxPlayers > rules.minPlayers && (
+        <>
+          , up to{" "}
+          <span className="font-semibold text-foreground">
+            {formatCents(worstCase(rules, anteCents, rules.maxPlayers))}
+          </span>{" "}
+          with {rules.maxPlayers}
+        </>
+      )}{" "}
+      (every hand split, doubled and lost). It's held against each player's points limit while the
+      game is on.
     </p>
   );
 }

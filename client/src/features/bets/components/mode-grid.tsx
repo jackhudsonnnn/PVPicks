@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Table } from "@/features/tables";
 import { MODES, type ModeDef } from "@/features/bets/modes";
-import { jackblackBlock, u2pickBlock } from "@/features/bets/ticket-model";
+import { holdemBlock, jackblackBlock, u2pickBlock } from "@/features/bets/ticket-model";
 
 const LEAGUE_BADGES = [
   { id: "nfl", label: "NFL", className: "border-primary/30 bg-primary/10 text-primary" },
@@ -39,7 +39,13 @@ export function ModeGrid({
         const available = availability?.get(m.id) ?? false;
         const modeBlock =
           block ??
-          (m.custom ? u2pickBlock(table) : m.dealer ? jackblackBlock(table, userId) : null);
+          (m.custom
+            ? u2pickBlock(table)
+            : m.cardGame === "jackblack"
+              ? jackblackBlock(table, userId)
+              : m.cardGame === "holdem"
+                ? holdemBlock(table, userId)
+                : null);
         const off = !available || !!modeBlock;
         return (
           <Button
@@ -53,7 +59,7 @@ export function ModeGrid({
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <Icon className="size-5" />
               </span>
-              {!m.custom && !m.dealer && (
+              {!m.custom && !m.cardGame && (
                 <span className="flex flex-wrap justify-end gap-1">
                   {LEAGUE_BADGES.map((l) => (
                     <span

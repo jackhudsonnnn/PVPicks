@@ -67,6 +67,8 @@ public class JackblackService {
     private final BetProposalWriter proposals;
     private final BetResolutionWriter resolutions;
     private final SecureRandom random = new SecureRandom();
+    /** Where each round's shoe comes from: its secret's shuffle (tests stack it). */
+    private volatile JackblackGame.Shoes shoes = JackblackGame.FROM_SECRETS;
 
     JackblackService(JdbcTemplate jdbc, ObjectMapper json, MutationAuthentication authentication,
             IdempotencyGuard idempotency, DebtQuery debt, Outbox outbox, BetProposalWriter proposals,
@@ -81,6 +83,11 @@ public class JackblackService {
         this.resolutions = resolutions;
     }
 
+    /** Tests only: deal every round from {@code shoes}; null goes back to the secrets' shuffles. */
+    public void dealFrom(JackblackGame.Shoes shoes) {
+        this.shoes = shoes == null ? JackblackGame.FROM_SECRETS : shoes;
+    }
+
     // ----- Propose -----
 
     /** The proposer joins their own ticket, so their worst case against one other player has to fit. */
@@ -88,7 +95,7 @@ public class JackblackService {
     public BetProposalWriter.Result propose(Jwt jwt, UUID tableId, JackblackRules rules, long anteCents,
             int durationSec, boolean forFun, String key) {
         String config = write(rules.toMap());
-        long risk = forFun ? 0 : rules.worstCase(anteCents, JackblackRules.MIN_PLAYERS);
+        long risk = forFun ? 0 : rules.worstCase(anteCents, rules.minPlayers());
         BetProposalWriter.Result result = proposals.create(jwt, tableId, key, PROPOSE,
                 tableId + "|" + anteCents + "|" + durationSec + "|" + forFun + "|" + config,
                 BetProposalWriter.Gate.JACKBLACK,
@@ -97,7 +104,7 @@ public class JackblackService {
         if (result.outcome() == BetProposalWriter.Outcome.CREATED) {
             UUID userId = UUID.fromString(jwt.getSubject());
             jdbc.update("INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)", result.betId(), userId);
-            jdbc.update("INSERT INTO jackblack_players (bet_id, user_id, risk_cents) VALUES (?, ?, ?)",
+            jdbc.update("INSERT INTO card_players (bet_id, user_id, risk_cents) VALUES (?, ?, ?)",
                     result.betId(), userId, risk);
         }
         return result;
@@ -140,20 +147,29 @@ public class JackblackService {
 
         List<UUID> players = players(betId);
         boolean in = players.contains(userId);
+        // No joining or leaving in the last seconds before the deal (owner decision, 2026-11-22).
+        if (joining != in) {
+            try {
+                BetPickService.requireBeforeLateEntry(jdbc, betId);
+            } catch (BetPickService.LateEntry late) {
+                throw new Refused("The table's closed to joining and leaving "
+                        + BetPickService.LATE_ENTRY_SECONDS + " seconds before the deal.");
+            }
+        }
         int changed = 0;
         if (!joining && in) {
             if (bet.proposerId().equals(userId)) throw new Refused("You proposed this one.");
-            changed = jdbc.update("DELETE FROM jackblack_players WHERE bet_id = ? AND user_id = ?", betId, userId);
+            changed = jdbc.update("DELETE FROM card_players WHERE bet_id = ? AND user_id = ?", betId, userId);
             reprice(bet, players.size() - 1);
         } else if (joining && !in) {
-            if (players.size() >= JackblackRules.MAX_PLAYERS) throw new Refused("The game is full.");
+            if (players.size() >= bet.rules().maxPlayers()) throw new Refused("The game is full.");
             long risk = bet.forFun() ? 0 : bet.rules().worstCase(bet.anteCents(), players.size() + 1);
             if (!debt.canRiskForLockedUser(userId, risk, bet.forFun())) throw new DebtCapExceeded();
             jdbc.update("""
                     INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?)
                     ON CONFLICT (bet_id, user_id) DO NOTHING
                     """, betId, userId);
-            changed = jdbc.update("INSERT INTO jackblack_players (bet_id, user_id, risk_cents) VALUES (?, ?, ?)",
+            changed = jdbc.update("INSERT INTO card_players (bet_id, user_id, risk_cents) VALUES (?, ?, ?)",
                     betId, userId, risk);
             reprice(bet, players.size() + 1);
         }
@@ -165,7 +181,7 @@ public class JackblackService {
     /** Everyone's worst case for {@code count} players (re-checked against their limits at the deal). */
     private void reprice(Bet bet, int count) {
         long risk = bet.forFun() ? 0 : bet.rules().worstCase(bet.anteCents(), Math.max(count, 2));
-        jdbc.update("UPDATE jackblack_players SET risk_cents = ? WHERE bet_id = ?", risk, bet.id());
+        jdbc.update("UPDATE card_players SET risk_cents = ? WHERE bet_id = ?", risk, bet.id());
     }
 
     // ----- Deal -----
@@ -173,12 +189,6 @@ public class JackblackService {
     /** Deals once the join window has closed. Returns false when it wasn't due or is already dealt. */
     @Transactional
     public boolean deal(UUID betId) {
-        return deal(betId, JackblackGame.shuffled(random));
-    }
-
-    /** Deals from the given shoes (tests stack them). */
-    @Transactional
-    public boolean deal(UUID betId, JackblackGame.Shoes shoes) {
         List<UUID> joined = players(betId);
         Bet bet = lockGame(betId, joined);
         if (bet == null || !bet.status().equals("ACTIVE") || bet.open()) return false;
@@ -198,7 +208,7 @@ public class JackblackService {
         // which lowers it for the rest.
         if (!bet.forFun()) {
             boolean dropped = true;
-            while (dropped && players.size() >= JackblackRules.MIN_PLAYERS) {
+            while (dropped && players.size() >= rules.minPlayers()) {
                 dropped = false;
                 long risk = rules.worstCase(bet.anteCents(), players.size());
                 for (int i = players.size() - 1; i >= 0; i--) {
@@ -210,7 +220,7 @@ public class JackblackService {
                 }
             }
         }
-        if (players.size() >= JackblackRules.MIN_PLAYERS) reprice(bet, players.size());
+        if (players.size() >= rules.minPlayers()) reprice(bet, players.size());
         if (jdbc.update("""
                 UPDATE bets SET status = 'PENDING', locked_at = clock_timestamp(), version = version + 1
                 WHERE id = ? AND status = 'ACTIVE'
@@ -218,19 +228,19 @@ public class JackblackService {
             throw new IllegalStateException("Jackblack bet changed while dealing");
         }
         outbox.append(OutboxEvent.BET_LOCKED, betId, Map.of("tableId", bet.tableId(), "betId", betId));
-        if (players.size() < JackblackRules.MIN_PLAYERS) {
+        if (players.size() < rules.minPlayers()) {
             resolutions.apply(lockedBet(bet), null, NOT_ENOUGH, null, false);
             return true;
         }
         JackblackGame game = JackblackGame.start(rules, players, bet.anteCents(), random, shoes, now());
-        jdbc.update("INSERT INTO jackblack_games (bet_id, state, next_deadline) VALUES (?, ?::jsonb, ?)",
+        jdbc.update("INSERT INTO card_games (bet_id, state, next_deadline) VALUES (?, ?::jsonb, ?)",
                 betId, write(game), deadline(game));
         save(bet, game);
         return true;
     }
 
     private void drop(UUID betId, UUID userId) {
-        jdbc.update("DELETE FROM jackblack_players WHERE bet_id = ? AND user_id = ?", betId, userId);
+        jdbc.update("DELETE FROM card_players WHERE bet_id = ? AND user_id = ?", betId, userId);
     }
 
     // ----- Decisions -----
@@ -238,11 +248,6 @@ public class JackblackService {
     /** {@code hit}, {@code stand}, {@code double} or {@code split} for a player; {@code deal} for the round's dealer. */
     @Transactional
     public Outcome act(Jwt jwt, UUID betId, String action, String key) {
-        return act(jwt, betId, action, key, JackblackGame.shuffled(random));
-    }
-
-    @Transactional
-    public Outcome act(Jwt jwt, UUID betId, String action, String key, JackblackGame.Shoes shoes) {
         if (!IdempotencyGuard.validKey(key)) throw new IllegalArgumentException("Invalid idempotency key");
         UUID userId = UUID.fromString(jwt.getSubject());
         List<UUID> players = players(betId);
@@ -277,7 +282,8 @@ public class JackblackService {
                 game.choose(rules, userId, JackblackGame.Action.valueOf(action.toUpperCase(Locale.ROOT)), shoes,
                         now);
             }
-        } catch (IllegalStateException refused) {
+        } catch (JackblackGame.NotAllowed refused) {
+            // Only the rules' own refusals reach the player; any other failure stays a server error.
             throw new Refused(refused.getMessage());
         }
         save(bet, game);
@@ -291,7 +297,7 @@ public class JackblackService {
         Bet bet = lockGame(betId, players(betId));
         if (bet == null || !bet.status().equals("PENDING")) return false;
         JackblackGame game = load(betId);
-        if (game == null || !game.timeout(bet.rules(), JackblackGame.shuffled(random), now())) return false;
+        if (game == null || !game.timeout(bet.rules(), shoes, now())) return false;
         save(bet, game);
         return true;
     }
@@ -327,8 +333,11 @@ public class JackblackService {
     }
 
     /**
-     * What {@code viewer} may see: no shoe, the dealer's hole card only once it's turned over, and nobody's choice
-     * for this step (only whether they've made it) except the viewer's own.
+     * What {@code viewer} may see (domain rules, "Jackblack", "Who sees what"): no shoe, the dealer's hole card only
+     * once it's turned over, and nobody's choice for this step (only whether they've made it) except the viewer's
+     * own. In a live round a player sees only their own seat's cards and the dealer's; the round's dealer sees every
+     * seat. Other seats come with just who's there and whether they're still deciding. Each round's shuffle
+     * commitment is shown from the deal; its secret (deck count and seed) only once the game is over.
      */
     Map<String, Object> view(UUID betId, UUID viewer) {
         JackblackGame game = load(betId);
@@ -340,20 +349,42 @@ public class JackblackService {
         }
         JackblackRules rules = rules(betId);
         view.put("phase", game.phase);
-        view.put("round", Math.min(game.round + 1, game.rounds));
+        boolean pause = JackblackGame.RESULTS.equals(game.phase);
+        // During the pause between rounds the finished round is the one shown (its results are in history).
+        view.put("round", pause ? game.round : Math.min(game.round + 1, game.rounds));
         view.put("rounds", game.rounds);
         view.put("order", game.order);
-        if (!JackblackGame.DONE.equals(game.phase)) {
+        if (pause) {
+            view.put("deadline", Instant.ofEpochMilli(game.deadline).toString());
+        } else if (!JackblackGame.DONE.equals(game.phase)) {
             view.put("dealerId", game.dealerId());
             view.put("dealer", game.revealed ? game.dealer : List.of(game.dealer.getFirst(), "??"));
             if (game.revealed) view.put("dealerTotal", JackblackGame.total(game.dealer));
             if (game.deadline > 0) view.put("deadline", Instant.ofEpochMilli(game.deadline).toString());
             String move = game.dealerMove();
             if (move != null) view.put("dealerMove", move);
+            boolean dealing = game.dealerId().equals(viewer);
             List<Map<String, Object>> seats = new ArrayList<>();
-            for (JackblackGame.Seat seat : game.seats) seats.add(seat(rules, game, seat, viewer));
+            for (JackblackGame.Seat seat : game.seats) {
+                seats.add(dealing || seat.userId.equals(viewer)
+                        ? seat(rules, game, seat, viewer)
+                        : hiddenSeat(game, seat));
+            }
             view.put("seats", seats);
         }
+        boolean over = JackblackGame.DONE.equals(game.phase);
+        List<Map<String, Object>> shuffles = new ArrayList<>();
+        for (CardShuffle.Secret secret : game.secrets) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("round", secret.round);
+            s.put("commitment", secret.commitment());
+            if (over) {
+                s.put("decks", secret.decks);
+                s.put("seed", secret.seed);
+            }
+            shuffles.add(s);
+        }
+        view.put("shuffles", shuffles);
         view.put("totals", game.totals);
         List<Map<String, Object>> history = new ArrayList<>();
         for (JackblackGame.Round round : game.history) {
@@ -369,6 +400,16 @@ public class JackblackService {
             history.add(r);
         }
         view.put("history", history);
+        return view;
+    }
+
+    /** Another player's seat in a live round: who's there and whether they're still choosing, never their cards. */
+    private static Map<String, Object> hiddenSeat(JackblackGame game, JackblackGame.Seat seat) {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("userId", seat.userId);
+        if (JackblackGame.PLAY.equals(game.phase) && JackblackGame.current(seat) != null) {
+            view.put("deciding", seat.pending == null);
+        }
         return view;
     }
 
@@ -409,7 +450,7 @@ public class JackblackService {
     // ----- Internals -----
 
     private void save(Bet bet, JackblackGame game) {
-        jdbc.update("UPDATE jackblack_games SET state = ?::jsonb, next_deadline = ? WHERE bet_id = ?",
+        jdbc.update("UPDATE card_games SET state = ?::jsonb, next_deadline = ? WHERE bet_id = ?",
                 write(game), deadline(game), bet.id());
         jdbc.update("UPDATE bets SET version = version + 1 WHERE id = ?", bet.id());
         changed(bet.tableId(), bet.id());
@@ -433,7 +474,7 @@ public class JackblackService {
                         """, UUID.randomUUID(), bet.tableId(), bet.id(), entry.getKey(), entry.getValue());
             }
         }
-        jdbc.update("UPDATE jackblack_games SET next_deadline = NULL WHERE bet_id = ?", bet.id());
+        jdbc.update("UPDATE card_games SET next_deadline = NULL WHERE bet_id = ?", bet.id());
         outbox.append(OutboxEvent.BET_RESOLVED, bet.id(), Map.of("tableId", bet.tableId(), "betId", bet.id()));
     }
 
@@ -461,14 +502,14 @@ public class JackblackService {
                         rs.getObject("proposer_id", UUID.class), rs.getString("status"), rs.getBoolean("is_4fun"),
                         rs.getLong("wager_cents"), read(rs.getString("config")), rs.getBoolean("open")), betId);
         if (bets.isEmpty()) return null;
-        jdbc.queryForList("SELECT bet_id FROM jackblack_games WHERE bet_id = ? FOR UPDATE", UUID.class, betId);
+        jdbc.queryForList("SELECT bet_id FROM card_games WHERE bet_id = ? FOR UPDATE", UUID.class, betId);
         return bets.getFirst();
     }
 
     /** Players in joining order. */
     List<UUID> players(UUID betId) {
         return jdbc.queryForList("""
-                SELECT user_id FROM jackblack_players WHERE bet_id = ? ORDER BY joined_at, user_id
+                SELECT user_id FROM card_players WHERE bet_id = ? ORDER BY joined_at, user_id
                 """, UUID.class, betId);
     }
 
@@ -478,7 +519,7 @@ public class JackblackService {
     }
 
     private JackblackGame load(UUID betId) {
-        List<String> states = jdbc.queryForList("SELECT state::text FROM jackblack_games WHERE bet_id = ?",
+        List<String> states = jdbc.queryForList("SELECT state::text FROM card_games WHERE bet_id = ?",
                 String.class, betId);
         if (states.isEmpty()) return null;
         try {
@@ -493,7 +534,7 @@ public class JackblackService {
     }
 
     private void changed(UUID tableId, UUID betId) {
-        outbox.append(OutboxEvent.BET_JACKBLACK_CHANGED, betId, Map.of("tableId", tableId, "betId", betId));
+        outbox.append(OutboxEvent.BET_CARD_GAME_CHANGED, betId, Map.of("tableId", tableId, "betId", betId));
     }
 
     private long now() {

@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import { Minus, Plus } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 /** Labeled block inside the proposal sheet. */
@@ -18,8 +16,8 @@ export function Section({ label, children }: { label: string; children: ReactNod
 }
 
 /**
- * − value + control for lines and counts; `format` renders the value. `jumps` adds a row of bigger steps under it
- * (e.g. [10, 100] gives −100 −10 +10 +100), so a 220-point total isn't hundreds of taps.
+ * − value + control for small counts (Jackblack's rules); `format` renders the value, and each button shows its step
+ * under it. Lines, targets and wagers use `ValueSlider` instead.
  */
 export function Stepper({
   value,
@@ -28,7 +26,6 @@ export function Stepper({
   max,
   format = String,
   label,
-  jumps,
   onChange,
 }: {
   value: number;
@@ -36,155 +33,221 @@ export function Stepper({
   min?: number | undefined;
   max?: number | undefined;
   format?: (v: number) => string;
-  /** Names the value for screen readers, e.g. "Total points line". */
+  /** Names the value for screen readers, e.g. "Max splits". */
   label?: string;
-  jumps?: readonly number[];
   onChange: (v: number) => void;
 }) {
   const clamp = (v: number) =>
     Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, v));
-  const steps = jumps
-    ? [...jumps]
-        .reverse()
-        .map((j) => -j)
-        .concat(jumps)
-    : [];
+  // Formats the step like the value ("5s"), without the sign a line adds.
+  const stepLabel = format(step).replace(/^\+/, "");
   return (
-    <div className="space-y-1.5">
-      <div className="flex h-10 items-center rounded-md border bg-surface">
-        <button
-          type="button"
-          className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-          onClick={() => onChange(clamp(value - step))}
-          aria-label="Decrease"
-        >
-          <Minus className="size-4" />
-        </button>
-        <span
-          className="flex-1 text-center scoreboard text-lg text-foreground"
-          aria-label={label}
-          aria-live="polite"
-        >
-          {format(value)}
-        </span>
-        <button
-          type="button"
-          className="flex h-full w-10 items-center justify-center text-muted-foreground hover:text-foreground"
-          onClick={() => onChange(clamp(value + step))}
-          aria-label="Increase"
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
-      {steps.length > 0 && (
-        <div
-          className="grid gap-1.5"
-          style={{ gridTemplateColumns: `repeat(${steps.length}, 1fr)` }}
-        >
-          {steps.map((j) => {
-            const next = clamp(value + j);
-            return (
-              <button
-                key={j}
-                type="button"
-                disabled={next === value}
-                onClick={() => onChange(next)}
-                aria-label={`${j > 0 ? "Add" : "Subtract"} ${Math.abs(j)}`}
-                className="rounded-md border bg-background py-1.5 font-mono text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-40 disabled:hover:border-border"
-              >
-                {j > 0 ? `+${j}` : `−${Math.abs(j)}`}
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div className="flex items-stretch rounded-md border bg-surface">
+      <StepButton
+        label="Decrease"
+        step={stepLabel}
+        disabled={clamp(value - step) === value}
+        onClick={() => onChange(clamp(value - step))}
+      >
+        <Minus className="size-4" />
+      </StepButton>
+      <span
+        className="flex flex-1 items-center justify-center scoreboard text-lg text-foreground"
+        aria-label={label}
+        aria-live="polite"
+      >
+        {format(value)}
+      </span>
+      <StepButton
+        label="Increase"
+        step={stepLabel}
+        disabled={clamp(value + step) === value}
+        onClick={() => onChange(clamp(value + step))}
+      >
+        <Plus className="size-4" />
+      </StepButton>
     </div>
   );
 }
 
-/** The 4fun switch at the top of every proposal's wager section. */
-export function FunToggle({
-  checked,
-  onChange,
+function StepButton({
+  label,
+  step,
+  disabled,
+  onClick,
+  children,
 }: {
-  checked: boolean;
-  onChange: (on: boolean) => void;
+  label: string;
+  step: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border bg-surface p-3">
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold">4fun</span>
-        <span className="block text-xs text-muted-foreground">
-          No points at stake and nothing tracked. Just bragging rights.
-        </span>
-      </span>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label="4fun bet" />
-    </div>
-  );
-}
-
-/** The box wagers sit in; faded and inert for a 4fun bet. */
-export function WagerBox({ off, children }: { off: boolean; children: ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "space-y-4 rounded-xl border bg-surface p-3 transition-opacity",
-        off && "pointer-events-none opacity-40",
-      )}
-      aria-disabled={off || undefined}
+    <button
+      type="button"
+      className="flex w-12 flex-col items-center justify-center gap-0.5 py-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
     >
       {children}
-    </div>
+      <span className="font-mono text-[10px] leading-none" aria-hidden="true">
+        {step}
+      </span>
+    </button>
   );
 }
 
-/** A points amount on a slider: the value large, the slider under it, its range below. */
-export function WagerSlider({
-  label,
+/**
+ * A number on a slider, the same widget for wagers, lines and targets: the value large and green at the top left
+ * (`note` can follow it, like the wager's "(4fun)"), the slider, and under it one row: "Min x" and −step on the
+ * left, +step and "Max y" on the right, all tappable. `sliderMax` caps the range below `max` where real values sit
+ * low (a player's 25 points on a 0–999 slider would be a sliver); Max, + and the slider all stop there.
+ */
+export function ValueSlider({
   value,
   min,
   max,
-  step = 10,
-  disabled,
+  sliderMax,
+  step,
+  format = String,
+  label,
+  sliderLabel,
+  note,
   onChange,
 }: {
-  /** Names it on screen ("Minimum") and for screen readers; a lone wager needs none on screen. */
-  label?: string;
   value: number;
   min: number;
   max: number;
-  step?: number;
-  disabled?: boolean;
-  onChange: (cents: number) => void;
+  sliderMax?: number | undefined;
+  step: number;
+  format?: (v: number) => string;
+  /** Names the value for screen readers, e.g. "Total points line". */
+  label?: string;
+  /** Names the slider; defaults to "<label> slider". */
+  sliderLabel?: string;
+  note?: ReactNode;
+  onChange: (v: number) => void;
 }) {
+  // The shown Max is the ceiling for everything (a value already above it, say from a starting line, stays).
+  const top = Math.max(Math.min(sliderMax ?? max, max), value);
+  const clamp = (v: number) => Math.min(top, Math.max(min, v));
+  const stepLabel = format(step).replace(/^\+/, "");
+  const edge =
+    "rounded-md px-1.5 py-1 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground";
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        {label && (
-          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            {label}
+    <div className="space-y-2.5 rounded-xl border bg-surface p-3">
+      <p
+        className="scoreboard text-3xl leading-none text-primary"
+        aria-label={label}
+        aria-live="polite"
+      >
+        {format(value)}
+        {note && (
+          <span className="ml-1.5 font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {note}
           </span>
         )}
-        <span
-          className={cn("scoreboard text-3xl leading-none text-primary", !label && "mr-auto")}
-          aria-live="polite"
-        >
-          {formatCents(value)}
-        </span>
-      </div>
+      </p>
       <Slider
         value={[value]}
         min={min}
-        max={max}
+        max={top}
         step={step}
-        disabled={!!disabled}
-        thumbLabel={label ? `${label} in points` : "Wager in points"}
-        onValueChange={([v]) => v !== undefined && onChange(v)}
+        thumbLabel={sliderLabel ?? `${label ?? "Value"} slider`}
+        onValueChange={([v]) => v !== undefined && onChange(clamp(v))}
       />
-      <p className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        <span>Min {formatCents(min)}</span>
-        <span>Max {formatCents(max)}</span>
+      <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            className={edge}
+            disabled={value === min}
+            onClick={() => onChange(min)}
+            aria-label={`${label ? `${label} minimum` : "Minimum"}, ${format(min)}`}
+          >
+            Min {format(min)}
+          </button>
+          <button
+            type="button"
+            className={cn(edge, "font-bold")}
+            disabled={clamp(value - step) === value}
+            onClick={() => onChange(clamp(value - step))}
+            aria-label={label ? `Decrease ${label}` : "Decrease"}
+          >
+            −{stepLabel}
+          </button>
+        </span>
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            className={cn(edge, "font-bold")}
+            disabled={clamp(value + step) === value}
+            onClick={() => onChange(clamp(value + step))}
+            aria-label={label ? `Increase ${label}` : "Increase"}
+          >
+            +{stepLabel}
+          </button>
+          <button
+            type="button"
+            className={edge}
+            disabled={value === top}
+            onClick={() => onChange(top)}
+            aria-label={`${label ? `${label} maximum` : "Maximum"}, ${format(top)}`}
+          >
+            Max {format(top)}
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A range on one slider, two thumbs (e.g. how many players a game takes): the range large and green at the top left
+ * like `ValueSlider`, the slider, and the two ends under it. The thumbs can meet but not cross.
+ */
+export function RangeSlider({
+  low,
+  high,
+  min,
+  max,
+  label,
+  unit,
+  onChange,
+}: {
+  low: number;
+  high: number;
+  min: number;
+  max: number;
+  /** Names the range for screen readers, e.g. "Players". */
+  label: string;
+  /** After the numbers, e.g. "players". */
+  unit: string;
+  onChange: (low: number, high: number) => void;
+}) {
+  return (
+    <div className="space-y-2.5 rounded-xl border bg-surface p-3">
+      <p className="scoreboard text-3xl leading-none text-primary" aria-live="polite">
+        {low === high ? low : `${low}–${high}`}
+        <span className="ml-1.5 font-mono text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {unit}
+        </span>
       </p>
+      <Slider
+        value={[low, high]}
+        min={min}
+        max={max}
+        step={1}
+        minStepsBetweenThumbs={0}
+        thumbLabel={[`Fewest ${label.toLowerCase()}`, `Most ${label.toLowerCase()}`]}
+        onValueChange={([a, b]) => a !== undefined && b !== undefined && onChange(a, b)}
+      />
+      <div className="flex justify-between font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>Min {min}</span>
+        <span>Max {max}</span>
+      </div>
     </div>
   );
 }

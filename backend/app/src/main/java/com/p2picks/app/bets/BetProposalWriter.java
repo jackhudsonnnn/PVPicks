@@ -30,7 +30,7 @@ public class BetProposalWriter {
     public record Result(Outcome outcome, UUID betId) {}
 
     /** Which table switch, if any, the mode answers to beyond "hosts only bets". */
-    enum Gate { NONE, U2PICK, JACKBLACK }
+    enum Gate { NONE, U2PICK, JACKBLACK, HOLDEM }
 
     /**
      * A validated bet to insert. {@code lockBy} is the latest moment picks may lock (a game's start); the deadline
@@ -92,10 +92,11 @@ public class BetProposalWriter {
             return failure(Outcome.FORBIDDEN);
         }
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled, jackblack_access FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, jackblack_access, holdem_access FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
                 """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"),
-                        rs.getBoolean("u2pick_enabled"), rs.getString("jackblack_access")), tableId);
+                        rs.getBoolean("u2pick_enabled"), rs.getString("jackblack_access"),
+                        rs.getString("holdem_access")), tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return failure(Outcome.NOT_FOUND);
@@ -124,6 +125,8 @@ public class BetProposalWriter {
             case U2PICK -> !settings.u2pickEnabled();
             case JACKBLACK -> settings.jackblackAccess().equals("off")
                     || (settings.jackblackAccess().equals("hosts") && !host);
+            case HOLDEM -> settings.holdemAccess().equals("off")
+                    || (settings.holdemAccess().equals("hosts") && !host);
         };
         if (gated || (settings.hostsOnlyBets() && !host)) {
             idempotency.discardNewClaim(actor, key);
@@ -166,7 +169,8 @@ public class BetProposalWriter {
         return new Result(outcome, null);
     }
 
-    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess) {}
+    private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, String jackblackAccess,
+            String holdemAccess) {}
 
     private record Member(String role, boolean canBet) {}
 }

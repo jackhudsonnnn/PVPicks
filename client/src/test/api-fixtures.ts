@@ -16,9 +16,9 @@ export const table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
-  subscribedTo: [],
   disabledPermissions: {},
 };
 export const bet = {
@@ -78,6 +78,7 @@ export const modeAvailability = new Map<string, boolean>([
   ["king_of_the_hill", true],
   ["scorcerer", true],
   ["jackblack", true],
+  ["holdem", true],
 ]);
 
 /** A whole table as `GET /tables` lists it for `viewerId`: a summary with a member preview, never every member. */

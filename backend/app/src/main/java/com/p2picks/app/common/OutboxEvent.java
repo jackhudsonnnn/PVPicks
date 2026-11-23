@@ -30,8 +30,8 @@ public enum OutboxEvent {
     BET_PICK_COUNT_CHANGED("bet", "bet.pick_count.changed.v1"),
     BET_LOCKED("bet", "bet.locked.v1"),
     BET_RESOLVED("bet", "bet.resolved.v1"),
-    /** A Jackblack game moved on: someone joined, chose, dealt or timed out (domain rules, "Jackblack"). */
-    BET_JACKBLACK_CHANGED("bet", "bet.jackblack.changed.v1"),
+    /** A card game (Jackblack, Hold'em) moved on: someone joined, chose, bet, dealt or timed out (domain rules). */
+    BET_CARD_GAME_CHANGED("bet", "bet.card_game.changed.v1"),
 
     SETTLEMENT_CREATED("settlement", "settlement.created.v1"),
     SETTLEMENT_LINE_CHANGED("settlement_line", "settlement.line.changed.v1"),

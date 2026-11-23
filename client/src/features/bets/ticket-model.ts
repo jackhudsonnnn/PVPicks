@@ -60,8 +60,10 @@ export function myResultCents(bet: Bet, userId: string): number | null {
 }
 
 /** The line under an active ticket's choices, from the viewer's point of view. */
-export function activeHint(bet: Bet, canBet: boolean, wager: string) {
+export function activeHint(bet: Bet, canBet: boolean, wager: string, late = false) {
   if (!canBet) return "A host turned off betting for you at this table.";
+  if (late && !bet.myPick)
+    return "Too late to get in: picks close to newcomers 10 seconds before lock.";
   const stake = bet.forFun
     ? "4fun: no points at stake."
     : `${wager} pts goes in the pot when picks lock.`;
@@ -76,6 +78,14 @@ export function proposeBlock(table: Table, userId: string): string | null {
     return "A host turned off betting for you at this table.";
   if (table.hostsOnlyBets && !table.hostIds.includes(userId))
     return "Only hosts can start bets at this table.";
+  return null;
+}
+
+/** Why you can't propose Hold'em at this table, or null (hosts choose: hosts only, everyone, or off). */
+export function holdemBlock(table: Table, userId: string): string | null {
+  if (table.holdemAccess === "off") return "A host turned off Hold'em at this table.";
+  if (table.holdemAccess === "hosts" && !table.hostIds.includes(userId))
+    return "Only hosts can propose Hold'em at this table.";
   return null;
 }
 

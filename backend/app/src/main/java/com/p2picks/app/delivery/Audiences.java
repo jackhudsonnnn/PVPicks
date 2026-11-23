@@ -20,6 +20,9 @@ interface Audiences {
     /** Members snapshotted when the table was deleted. */
     Set<UUID> archiveMembers(UUID tableId);
 
+    /** Players in a bet (its participants, and a Jackblack game's players) who are still members of its table. */
+    Set<UUID> betPlayers(UUID betId);
+
     /** People who share a current table or a receipt with the user, excluding blocks in either direction. */
     Set<UUID> profileAudience(UUID userId);
 }

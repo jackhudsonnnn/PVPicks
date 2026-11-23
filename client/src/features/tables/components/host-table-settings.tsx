@@ -1,6 +1,6 @@
 /** The Host panel's table name and icon, switches, Quick Picks and deletion. */
 import { useEffect, useState } from "react";
-import { Check, Copy, Radio, RefreshCw, Spade, Trash2, Zap } from "lucide-react";
+import { Check, Club, Copy, Radio, RefreshCw, Spade, Trash2, Zap } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { SettingRow, SettingsSection } from "@/components/settings";
 import { TABLE_EMOJIS } from "@/features/tables/emojis";
 import { cn } from "@/lib/utils";
-import type { JackblackAccess } from "@/features/tables/api";
+import type { HoldemAccess, JackblackAccess } from "@/features/tables/api";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { tableNameProblem } from "@/features/tables/rules";
 import { JACKBLACK_ACCESS, PanelProps, SWITCHES, busy, hasOpenBets } from "./host-shared";
@@ -68,6 +68,22 @@ export function TableDetailsSection({ table, tableActions }: PanelProps) {
           value={table.jackblackAccess}
           onChange={(access) =>
             tableActions.start({ kind: "settings", tableId: table.id, jackblackAccess: access })
+          }
+        />
+      </SettingRow>
+      <SettingRow
+        icon={Club}
+        label="Who can propose Hold'em"
+        description="No-limit poker, one hand each with the button going round."
+      >
+        <SegmentedTabs<HoldemAccess>
+          size="sm"
+          className="mt-3"
+          ariaLabel="Who can propose Hold'em"
+          tabs={JACKBLACK_ACCESS.map((a) => ({ id: a.id, label: a.label, disabled }))}
+          value={table.holdemAccess}
+          onChange={(access) =>
+            tableActions.start({ kind: "settings", tableId: table.id, holdemAccess: access })
           }
         />
       </SettingRow>

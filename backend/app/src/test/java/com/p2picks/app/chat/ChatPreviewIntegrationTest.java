@@ -123,7 +123,10 @@ class ChatPreviewIntegrationTest extends IntegrationTestSupport {
         JsonNode catalog = json.readTree(mvc.perform(get("/gifs").cookie(session)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("GifCatalog").validate(catalog)).isEmpty();
-        assertThat(catalog.path("gifs").size()).isEqualTo(79);
+        assertThat(catalog.path("gifs").size()).isEqualTo(97);
+        // Money merged into Hype (owner decision, 2026-11-23), leaving room for the picker's Starred tab.
+        assertThat(catalog.path("categories")).extracting(c -> c.path("id").asText())
+                .containsExactly("hype", "pain", "react", "roast");
         assertThat(catalog.path("gifs").get(0).path("id").asText()).isEqualTo("g1");
 
         UUID bet = insertDebtBet(table, viewer, friend, "PENDING", false, false, false, 100, 0);

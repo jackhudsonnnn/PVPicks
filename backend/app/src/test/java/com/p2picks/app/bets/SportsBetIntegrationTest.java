@@ -11,6 +11,7 @@ import com.p2picks.app.IntegrationTestSupport;
 import com.p2picks.app.OpenApiSchemas;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.Test;
@@ -164,15 +165,20 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void spreadsPushOrWashOnCancellationAndHostsCanOverrideBeforeLock() throws Exception {
+    void spreadsEndInAHalfAndWashOnCancellationAndHostsCanOverrideBeforeLock() throws Exception {
         seed("sq", Instant.now().plusSeconds(3600));
         Cookie hostSession = loginAs("sqh");
         Cookie aliceSession = loginAs("sqa");
         Csrf csrf = csrf();
+        // Lines end in .5 so they can't push: a whole number (or a quarter) is refused.
+        for (String whole : List.of("-3", "-3.0", "4", "-3.25")) {
+            mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession, csrf, proposal("give_and_take", whole)))
+                    .andExpect(status().isBadRequest());
+        }
         JsonNode bet = json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession, csrf,
-                proposal("give_and_take", "-3"))).andExpect(status().isCreated()).andReturn().getResponse()
+                proposal("give_and_take", "-3.5"))).andExpect(status().isCreated()).andReturn().getResponse()
                 .getContentAsString());
-        assertThat(bet.path("choices").toString()).isEqualTo("[\"BOS -3\",\"NYK +3\"]");
+        assertThat(bet.path("choices").toString()).isEqualTo("[\"BOS -3.5\",\"NYK +3.5\"]");
         UUID spread = UUID.fromString(bet.path("id").asText());
 
         // A host can wash a bet still taking picks: it locks, then washes.
@@ -293,6 +299,11 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         points("NBA-pm2", 31, Instant.now());
         assertThat(resolutions.resolve(hill, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
         assertThat(state(hill)).isEqualTo("SETTLED:Ben Baker");
+        // Once it's called, its numbers stop: Details shows them as they were then, marked closed.
+        JsonNode hillAtResult = json.readTree(mvc.perform(get("/bets/" + hill + "/live").cookie(aliceSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(hillAtResult.path("closed").asBoolean()).isTrue();
+        assertThat(hillAtResult.path("rows").get(1).path("current").asInt()).isEqualTo(31);
 
         // Either Or settles after Final plus the grace period.
         UUID either = propose(aliceSession, csrf, "either_or",
@@ -310,6 +321,12 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         assertThat(eitherLive.path("rows").get(0).path("target").isNull()).as("Either Or has no line").isTrue();
         assertThat(resolutions.resolve(either, Instant.now())).isEqualTo(SportsResolutionService.Outcome.RESOLVED);
         assertThat(state(either)).isEqualTo("SETTLED:Ann Archer");
+        // Ann's 40 and the final score came after King of the Hill was called: its numbers didn't move.
+        JsonNode hillLater = json.readTree(mvc.perform(get("/bets/" + hill + "/live").cookie(aliceSession))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(hillLater).isEqualTo(hillAtResult);
+        assertThat(hillLater.path("rows").get(0).path("current").asInt()).isNotEqualTo(40);
+        assertThat(eitherLive.path("closed").asBoolean()).isFalse();
     }
 
     @Test
@@ -333,7 +350,7 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         Csrf csrf = csrf();
 
         JsonNode rejected = json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession, csrf,
-                proposal("total_disaster", "118"))).andExpect(status().isConflict()).andReturn().getResponse()
+                proposal("total_disaster", "117.5"))).andExpect(status().isConflict()).andReturn().getResponse()
                 .getContentAsString());
         assertThat(rejected.path("code").asText()).isEqualTo("invalid_terms");
         UUID betId = UUID.fromString(json.readTree(mvc.perform(send(post("/tables/" + table + "/bets"), aliceSession,

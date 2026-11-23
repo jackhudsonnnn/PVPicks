@@ -5,6 +5,7 @@ export { ArchivedTable } from "./components/archives";
 export { HomePage } from "./components/home";
 export { SidebarTables } from "./components/sidebar-tables";
 export { TablePage } from "./components/table-page";
+export { myBalanceKey, useMyBalance } from "./my-balance";
 export { useNewcomer } from "./newcomer";
 export { useTableNames } from "./table-names";
 export type { TableName } from "./table-names";

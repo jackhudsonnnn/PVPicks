@@ -1,7 +1,6 @@
 import { motion, useReducedMotionConfig } from "motion/react";
 import { Button } from "@/components/ui/button";
 import type { BetActions } from "./bet-controls";
-import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { cardFace, type JackblackChoice, type JackblackSeat } from "@/features/bets/jackblack";
 
@@ -57,45 +56,40 @@ export function Card({
   );
 }
 
-/** Joining (or leaving) while the join window is open. The proposer is in already. */
+/**
+ * Joining (or leaving) while the join window is open: one button, so the controls bar keeps its height (why you
+ * can't, and what joining holds against your limit, are in the status line and Details). Nothing for the proposer,
+ * who's in already.
+ */
 export function JoinControls({
   joined,
   proposer,
   full,
+  late,
   disabled,
-  worstCaseCents,
-  forFun,
   onJoin,
   onLeave,
 }: {
   joined: boolean;
   proposer: boolean;
   full: boolean;
+  /** The last seconds before the deal: nobody joins or leaves. */
+  late: boolean;
   disabled: boolean;
-  worstCaseCents: number;
-  forFun: boolean;
   onJoin: () => void;
   onLeave: () => void;
 }) {
-  if (proposer) return null;
-  if (full && !joined) return <p className="text-xs text-ticket-muted">The game is full.</p>;
+  if (proposer || late || (full && !joined)) return null;
   return (
-    <div className="space-y-1.5">
-      <Button
-        size="sm"
-        variant={joined ? "outline" : "default"}
-        className="w-full"
-        disabled={disabled}
-        onClick={joined ? onLeave : onJoin}
-      >
-        {joined ? "Leave the game" : "Join the game"}
-      </Button>
-      {!forFun && !joined && (
-        <p className="text-center font-mono text-[10px] uppercase tracking-wider text-ticket-muted">
-          Holds up to {formatCents(worstCaseCents)} pts of your limit
-        </p>
-      )}
-    </div>
+    <Button
+      size="sm"
+      variant={joined ? "outline" : "default"}
+      className={cn("h-9 w-full", joined && FELT_OUTLINE)}
+      disabled={disabled}
+      onClick={joined ? onLeave : onJoin}
+    >
+      {joined ? "Leave the game" : "Join the game"}
+    </Button>
   );
 }
 
@@ -123,28 +117,24 @@ export function PlayControls({
   const allowed = (move: JackblackChoice) =>
     move === "double" ? !!seat.canDouble : move === "split" ? !!seat.canSplit : true;
   return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-4 gap-2">
-        {(Object.keys(CHOICE_LABEL) as JackblackChoice[]).map((move) => (
-          <Button
-            key={move}
-            size="sm"
-            variant={chosen === move || (!chosen && move === "hit") ? "default" : "outline"}
-            disabled={disabled || !!chosen || !allowed(move)}
-            onClick={() => onMove(move)}
-          >
-            {CHOICE_LABEL[move]}
-          </Button>
-        ))}
-      </div>
-      {chosen && (
-        <p className="text-center text-xs text-ticket-muted">
-          {CHOICE_LABEL[chosen]} it is. Waiting for the others…
-        </p>
-      )}
+    <div className="grid h-9 grid-cols-4 gap-2">
+      {(Object.keys(CHOICE_LABEL) as JackblackChoice[]).map((move) => (
+        <Button
+          key={move}
+          size="sm"
+          variant={chosen === move || (!chosen && move === "hit") ? "default" : "outline"}
+          className={cn("h-9", !(chosen === move || (!chosen && move === "hit")) && FELT_OUTLINE)}
+          disabled={disabled || !!chosen || !allowed(move)}
+          onClick={() => onMove(move)}
+        >
+          {CHOICE_LABEL[move]}
+        </Button>
+      ))}
     </div>
   );
 }
+
+export const CHOICE_NAMES = CHOICE_LABEL;
 
 const DEALER_LABEL = { flip: "Flip", hit: "Hit", stand: "Stand" } as const;
 
@@ -159,10 +149,13 @@ export function DealerButton({
   onTap: () => void;
 }) {
   return (
-    <Button size="sm" className="w-full" disabled={disabled} onClick={onTap}>
+    <Button size="sm" className="h-9 w-full" disabled={disabled} onClick={onTap}>
       {DEALER_LABEL[move]}
     </Button>
   );
 }
+
+/** Outline buttons on the green felt: see-through instead of the page background. */
+const FELT_OUTLINE = "border-white/25 bg-black/20 text-white hover:bg-black/35 hover:text-white";
 
 export type StartBetAction = BetActions["start"];

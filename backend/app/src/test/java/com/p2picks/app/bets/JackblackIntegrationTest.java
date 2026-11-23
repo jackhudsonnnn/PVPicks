@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -101,13 +102,31 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         Deque<List<String>> queue = new ArrayDeque<>();
         for (String shoe : shoes) queue.add(List.of(shoe.split(" ")));
         Random random = new Random(1);
-        return decks -> queue.isEmpty() ? JackblackGame.shuffledShoe(decks, random) : queue.poll();
+        return secret -> queue.isEmpty() ? CardShuffle.cards(secret, 0) : queue.poll();
     }
 
-    /** Closes the join window and deals. */
+    /** Ends the pause after a round now instead of in a few seconds, so the next round deals. */
+    private void skipPause(UUID bet) throws Exception {
+        String state = jdbc.queryForObject("SELECT state::text FROM card_games WHERE bet_id = ?", String.class,
+                bet);
+        JackblackGame game = json.readValue(state, JackblackGame.class);
+        assertThat(game.phase).isEqualTo(JackblackGame.RESULTS);
+        game.deadline = 1;
+        jdbc.update("UPDATE card_games SET state = ?::jsonb WHERE bet_id = ?", json.writeValueAsString(game),
+                bet);
+        assertThat(jackblack.expire(bet)).isTrue();
+    }
+
+    /** Closes the join window and deals; this game's rounds come from {@code shoes}. */
     private void deal(UUID bet, JackblackGame.Shoes shoes) {
+        jackblack.dealFrom(shoes);
         jdbc.update("UPDATE bets SET locks_at = clock_timestamp() - interval '1 second' WHERE id = ?", bet);
-        assertThat(jackblack.deal(bet, shoes)).isTrue();
+        assertThat(jackblack.deal(bet)).isTrue();
+    }
+
+    @AfterEach
+    void shuffleAgain() {
+        jackblack.dealFrom(null);
     }
 
     private Map<UUID, Long> ledger(UUID bet) {
@@ -129,11 +148,13 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         Player pat = player("pat");
         Player ann = player("ann");
         UUID table = table(pat, ann);
-        UUID bet = proposed(propose(pat, table, Map.of("decks", 2)));
+        // The deck count isn't the proposer's: it's drawn, hidden, for every round.
+        assertThat(propose(pat, table, Map.of("decks", 2)).getStatus()).isEqualTo(400);
+        UUID bet = proposed(propose(pat, table, Map.of("rotations", 1)));
         JsonNode proposedBet = json.readTree(mvc.perform(get("/bets/{id}", bet).cookie(ann.session()))
                 .andReturn().getResponse().getContentAsString());
         assertThat(proposedBet.path("modeId").asText()).isEqualTo("jackblack");
-        assertThat(proposedBet.path("config").path("decks").asInt()).isEqualTo(2);
+        assertThat(proposedBet.path("config").has("decks")).isFalse();
 
         // The proposer is in already and can't leave; Ann joins (twice is fine); it's played, not picked.
         assertThat(send(delete("/bets/{id}/jackblack/seat", bet), pat, null).getStatus()).isEqualTo(409);
@@ -145,7 +166,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(waiting.path("players")).extracting(JsonNode::asText)
                 .containsExactly(pat.id().toString(), ann.id().toString());
         // Two players, ante 1.00, doubling and one split: (4.00 + 4.00) × 1 × 1 rotation.
-        assertThat(jdbc.queryForList("SELECT risk_cents FROM jackblack_players WHERE bet_id = ?", Long.class, bet))
+        assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
                 .containsOnly(800L);
 
         // Round 1: the seat's 19 against the dealer's 17. Round 2: 20 against 20.
@@ -165,6 +186,15 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(act(dealer, bet, "deal").getStatus()).isEqualTo(204);
         assertThat(game(seat, bet).path("dealerMove").asText()).isEqualTo("stand");
         assertThat(act(dealer, bet, "deal").getStatus()).isEqualTo(204);
+
+        // A short pause shows how round 1 went: the round's number, no seats, nobody can move.
+        JsonNode pause = game(seat, bet);
+        assertThat(pause.path("phase").asText()).isEqualTo("results");
+        assertThat(pause.path("round").asInt()).isEqualTo(1);
+        assertThat(pause.has("seats")).isFalse();
+        assertThat(pause.path("history")).hasSize(1);
+        assertThat(act(seat, bet, "stand").getStatus()).isEqualTo(409);
+        skipPause(bet);
 
         // Round 2: the other player deals.
         JsonNode second = game(seat, bet);
@@ -203,7 +233,8 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         JsonNode oneSeat = seenByTwo.path("seats").get(0);
         assertThat(oneSeat.path("deciding").asBoolean()).isFalse();
         assertThat(oneSeat.has("choice")).isFalse();
-        assertThat(oneSeat.path("hands").get(0).path("cards")).hasSize(2);
+        // Another player's cards are never sent to a seat (only the dealer sees every seat).
+        assertThat(oneSeat.has("hands")).isFalse();
         assertThat(game(one, bet).path("seats").get(0).path("choice").asText()).isEqualTo("hit");
         assertThat(game(dealer, bet).path("seats").get(0).has("choice")).isFalse();
         assertThat(act(one, bet, "stand").getStatus()).isEqualTo(409);
@@ -225,17 +256,17 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         join(ann, bet);
         deal(bet, stacked("TS 7H 9D TC"));
         assertThat(jackblack.expire(bet)).isFalse();
-        String state = jdbc.queryForObject("SELECT state::text FROM jackblack_games WHERE bet_id = ?", String.class,
+        String state = jdbc.queryForObject("SELECT state::text FROM card_games WHERE bet_id = ?", String.class,
                 bet);
         JackblackGame game = json.readValue(state, JackblackGame.class);
         game.deadline = 1;
-        jdbc.update("UPDATE jackblack_games SET state = ?::jsonb WHERE bet_id = ?", json.writeValueAsString(game),
+        jdbc.update("UPDATE card_games SET state = ?::jsonb WHERE bet_id = ?", json.writeValueAsString(game),
                 bet);
         assertThat(jackblack.expire(bet)).isTrue();
         JsonNode after = game(pat, bet);
         assertThat(after.path("phase").asText()).isEqualTo("dealer");
         assertThat(after.path("seats").get(0).path("hands").get(0).path("done").asBoolean()).isTrue();
-        assertThat(jdbc.queryForObject("SELECT next_deadline IS NOT NULL FROM jackblack_games WHERE bet_id = ?",
+        assertThat(jdbc.queryForObject("SELECT next_deadline IS NOT NULL FROM card_games WHERE bet_id = ?",
                 Boolean.class, bet)).isTrue();
     }
 
@@ -246,6 +277,24 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         UUID bet = proposed(propose(pat, table, Map.of()));
         deal(bet, stacked());
         assertThat(jdbc.queryForMap("SELECT status, wash_reason FROM bets WHERE id = ?", bet))
+                .containsEntry("status", "WASHED").containsEntry("wash_reason", JackblackService.NOT_ENOUGH);
+    }
+
+    @Test
+    void theProposersPlayerRangeCapsJoinsAndWashesAShortGame() throws Exception {
+        Player pat = player("pat"), ann = player("ann"), bob = player("bob");
+        UUID table = table(pat, ann, bob);
+        assertThat(propose(pat, table, Map.of("minPlayers", 3, "maxPlayers", 2)).getStatus()).isEqualTo(400);
+        assertThat(propose(pat, table, Map.of("minPlayers", 1)).getStatus()).isEqualTo(400);
+        // Two at most: the proposer and one more.
+        UUID capped = proposed(propose(pat, table, Map.of("maxPlayers", 2)));
+        assertThat(join(ann, capped)).isEqualTo(204);
+        assertThat(join(bob, capped)).isEqualTo(409);
+        // Three at least: two at the deal washes.
+        UUID needsThree = proposed(propose(pat, table, Map.of("minPlayers", 3)));
+        assertThat(join(ann, needsThree)).isEqualTo(204);
+        deal(needsThree, stacked());
+        assertThat(jdbc.queryForMap("SELECT status, wash_reason FROM bets WHERE id = ?", needsThree))
                 .containsEntry("status", "WASHED").containsEntry("wash_reason", JackblackService.NOT_ENOUGH);
     }
 
@@ -265,14 +314,14 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         MockHttpServletResponse refused = send(put("/bets/{id}/jackblack/seat", bet), cat, null);
         assertThat(refused.getStatus()).isEqualTo(409);
         assertThat(refused.getContentAsString()).contains("debt_cap_exceeded");
-        assertThat(jdbc.queryForList("SELECT risk_cents FROM jackblack_players WHERE bet_id = ?", Long.class, bet))
+        assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
                 .containsOnly(1600L);
 
         // At the deal Ann can't cover three players, so she's dropped and the rest play two-handed.
         deal(bet, stacked());
-        assertThat(jdbc.queryForList("SELECT user_id FROM jackblack_players WHERE bet_id = ?", UUID.class, bet))
+        assertThat(jdbc.queryForList("SELECT user_id FROM card_players WHERE bet_id = ?", UUID.class, bet))
                 .containsExactlyInAnyOrder(pat.id(), bob.id());
-        assertThat(jdbc.queryForList("SELECT risk_cents FROM jackblack_players WHERE bet_id = ?", Long.class, bet))
+        assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
                 .containsOnly(800L);
         assertThat(game(pat, bet).path("order")).hasSize(2);
     }
@@ -293,7 +342,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
                 .getStatus()).isEqualTo(400);
         assertThat(send(patch("/tables/{id}/settings", table), ann, Map.of("jackblackAccess", "everyone"))
                 .getStatus()).isEqualTo(403);
-        assertThat(propose(host, table, Map.of("decks", 9)).getStatus()).isEqualTo(400);
+        assertThat(propose(host, table, Map.of("rotations", 9)).getStatus()).isEqualTo(400);
     }
 
     @Test
@@ -306,5 +355,106 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(full.getContentAsString()).contains("debt_cap_exceeded");
         // No doubling or splits: (1.00 + 1.50 for a natural) = 2.50 fits 5.00.
         proposed(propose(pat, table, Map.of("doubling", false, "maxSplits", 0)));
+    }
+
+    @Test
+    void aFourFunGameHasNoAnteAndPlaysForZero() throws Exception {
+        Player pat = player("pat");
+        Player bob = player("bob");
+        UUID table = table(pat, bob);
+        // The slider's 0 is 4fun; a 4fun game with an ante, or a real one without, is refused.
+        assertThat(send(post("/tables/{id}/bets", table), pat, Map.of("modeId", "jackblack", "wagerCents", 100,
+                "durationSec", 30, "forFun", true, "rules", Map.of())).getStatus()).isEqualTo(400);
+        assertThat(send(post("/tables/{id}/bets", table), pat, Map.of("modeId", "jackblack", "wagerCents", 0,
+                "durationSec", 30, "forFun", false, "rules", Map.of())).getStatus()).isEqualTo(400);
+        UUID bet = proposed(send(post("/tables/{id}/bets", table), pat, Map.of("modeId", "jackblack",
+                "wagerCents", 0, "durationSec", 30, "forFun", true, "rules", Map.of("rotations", 1))));
+        assertThat(join(bob, bet)).isEqualTo(204);
+        assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
+                .containsOnly(0L);
+        // Round 1: the seat's 19 against the dealer's 17. Round 2: 20 against 20.
+        deal(bet, stacked("TS 7H 9D TC", "TH QS KD JC"));
+        JsonNode dealt = game(pat, bet);
+        assertThat(dealt.path("phase").asText()).isNotEqualTo("waiting");
+        dealt.path("totals").forEach(total -> assertThat(total.asLong()).isZero());
+    }
+
+    @Test
+    void eachPlayerSeesOnlyTheirSeatAndTheShoeIsRevealedForAuditOnlyAtTheEnd() throws Exception {
+        Player pat = player("pat");
+        Player ann = player("ann");
+        Player bob = player("bob");
+        Player cat = player("cat");
+        UUID table = table(pat, ann, bob, cat);
+        UUID bet = proposed(propose(pat, table, Map.of("rotations", 1)));
+        assertThat(join(ann, bet)).isEqualTo(204);
+        assertThat(join(bob, bet)).isEqualTo(204);
+        deal(bet, null);
+        Map<UUID, Player> byId = Map.of(pat.id(), pat, ann.id(), ann, bob.id(), bob);
+
+        JsonNode asCat = game(cat, bet);
+        if (asCat.path("phase").asText().equals("play")) {
+            UUID dealerId = UUID.fromString(asCat.path("dealerId").asText());
+            // A member who isn't playing sees who's seated and the dealer's up card, never a seat's cards.
+            asCat.path("seats").forEach(s -> assertThat(s.has("hands")).isFalse());
+            // The dealer sees every seat; a player sees only their own.
+            game(byId.get(dealerId), bet).path("seats").forEach(s -> assertThat(s.has("hands")).isTrue());
+            for (Player player : List.of(pat, ann, bob)) {
+                if (player.id().equals(dealerId)) continue;
+                game(player, bet).path("seats").forEach(s -> assertThat(s.has("hands"))
+                        .isEqualTo(s.path("userId").asText().equals(player.id().toString())));
+            }
+        }
+        // Each round's commitment is shown from the deal; its deck count and seed are not.
+        assertThat(asCat.path("shuffles")).hasSize(3);
+        asCat.path("shuffles").forEach(s -> {
+            assertThat(s.path("commitment").asText()).hasSize(64);
+            assertThat(s.has("seed")).isFalse();
+            assertThat(s.has("decks")).isFalse();
+        });
+
+        // Everyone stands and every dealer plays out, round after round.
+        for (int step = 0; step < 100; step++) {
+            JsonNode now = game(cat, bet);
+            if (now.path("phase").asText().equals("done")) break;
+            if (now.path("phase").asText().equals("results")) {
+                skipPause(bet);
+                continue;
+            }
+            for (Player player : List.of(pat, ann, bob)) {
+                act(player, bet, "stand");
+                act(player, bet, "deal");
+            }
+        }
+        JsonNode done = game(cat, bet);
+        assertThat(done.path("phase").asText()).isEqualTo("done");
+        for (JsonNode shuffle : done.path("shuffles")) {
+            CardShuffle.Secret secret = new CardShuffle.Secret(shuffle.path("round").asInt(),
+                    shuffle.path("decks").asInt(), shuffle.path("seed").asText());
+            assertThat(secret.decks).isBetween(1, 8);
+            // The revealed secret matches what was committed, and the round's cards are the top of its shoe.
+            assertThat(secret.commitment()).isEqualTo(shuffle.path("commitment").asText());
+            JsonNode round = done.path("history").get(secret.round - 1);
+            List<String> dealt = new java.util.ArrayList<>();
+            round.path("dealer").forEach(c -> dealt.add(c.asText()));
+            round.path("seats").forEach(s -> s.path("hands").forEach(h -> h.path("cards")
+                    .forEach(c -> dealt.add(c.asText()))));
+            List<String> top = new java.util.ArrayList<>(CardShuffle.cards(secret, 0).subList(0, dealt.size()));
+            java.util.Collections.sort(dealt);
+            java.util.Collections.sort(top);
+            assertThat(dealt).isEqualTo(top);
+        }
+    }
+
+    @Test
+    void theShuffleIsFixedBySeedAndSpreadsEveryCard() {
+        CardShuffle.Secret secret = new CardShuffle.Secret(1, 2, "00".repeat(32));
+        List<String> shoe = CardShuffle.cards(secret, 0);
+        assertThat(shoe).hasSize(104).isEqualTo(CardShuffle.cards(secret, 0));
+        assertThat(new java.util.HashSet<>(shoe)).hasSize(52);
+        assertThat(shoe).isNotEqualTo(CardShuffle.cards(secret, 1));
+        // Pinned so the client's audit, which replays this shuffle, can check it gets the same cards.
+        assertThat(shoe.subList(0, 6)).isEqualTo(List.of("5D", "8D", "QS", "7H", "KH", "AH"));
+        assertThat(secret.commitment()).isEqualTo("791e338ebc7be61ca9e96400bb0e3a463e937598712287692cf8cfa5434f7728");
     }
 }

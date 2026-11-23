@@ -146,6 +146,9 @@ class TableMembershipIntegrationTest extends IntegrationTestSupport {
         assertThat(memberGet.getResponse().getHeader("Cache-Control")).isEqualTo("no-store");
         JsonNode memberTable = json.readTree(memberGet.getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("Table").validate(memberTable)).isEmpty();
+        // Other tables' ids and the Quick Pick code are for hosts only.
+        assertThat(memberTable.has("subscribedTo")).isFalse();
+        assertThat(memberTable.has("quickPickCode")).isFalse();
         assertThat(memberTable.has("quickPickCode")).isFalse();
         assertThat(memberTable.path("disabledPermissions").path(member.toString()).toString())
                 .isEqualTo("[\"text\",\"react\"]");

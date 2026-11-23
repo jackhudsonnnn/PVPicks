@@ -8,6 +8,7 @@ import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
 import { backendErrorMessage } from "@/lib/api-client";
 import { getTable, type Table, listTableBalances } from "@/features/tables/api";
+import { BalanceDialog } from "./balance-dialog";
 import {
   listTableBets,
   ProposeBetSheet,
@@ -16,6 +17,7 @@ import {
   proposeBlock,
   useBet,
   useHasTickets,
+  BetDetailsDialog,
 } from "@/features/bets";
 import type { User } from "@/features/people";
 import { ActionStatus } from "@/components/action-status";
@@ -102,6 +104,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const [openId, setOpenId] = useState<string | null>(null);
   const [proposing, setProposing] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [balanceId, setBalanceId] = useState<string | null>(null);
   // A ticket's player avatars link here with ?tab=peers, even from this page's own ticket dialog.
   useEffect(() => {
     if (requestedTab !== "peers") return;
@@ -182,7 +185,8 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
   const opened = useBet(user.id, table.id, openId, bets.data, expire);
-  const { seated } = arrangeSeats(table.memberIds, user.id, focused);
+  const { seated, fromBet } = arrangeSeats(table.memberIds, user.id, focused);
+  const [othersOpen, setOthersOpen] = useState(false);
   const tabs = TABS.filter((t) => (t.id === "host" ? hosting : t.id === "about" ? !hosting : true));
   const sideTabs = tabs.filter((t) => t.id !== "table");
   // Falls back to chat if your host role changes while its tab is open.
@@ -278,7 +282,8 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
             balances={balances.data}
             onFocus={setFocusId}
             onOpenBet={openBet}
-            onOpenPeers={() => chooseTab("peers")}
+            // With a ticket's players around the felt, "+n" opens that ticket's Details (everyone in it).
+            onOpenOthers={() => (fromBet && focused ? setOthersOpen(true) : chooseTab("peers"))}
             onSelectUser={setProfileId}
             onPropose={block ? undefined : () => setProposing(true)}
             user={user}
@@ -307,6 +312,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
               balances={balances}
               seatedIds={seated}
               onSelectUser={setProfileId}
+              onSelectBalance={setBalanceId}
               className="flex-1"
               user={user}
               expire={expire}
@@ -372,6 +378,26 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
           setProfileId(null);
           clearSearch();
         }}
+      />
+      {focused && (
+        <BetDetailsDialog
+          bet={focused}
+          table={table}
+          user={user}
+          expire={expire}
+          peopleKey={peopleKey}
+          open={othersOpen}
+          onOpenChange={setOthersOpen}
+        />
+      )}
+      <BalanceDialog
+        tableId={table.id}
+        memberId={balanceId}
+        betsKey={betsKey}
+        onOpenChange={(open) => !open && setBalanceId(null)}
+        user={user}
+        expire={expire}
+        peopleKey={peopleKey}
       />
       <TomatoLayer tableId={table.id} user={user} expire={expire} peopleKey={peopleKey} />
       <Dialog open={!!opened} onOpenChange={(open) => !open && setOpenId(null)}>

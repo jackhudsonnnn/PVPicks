@@ -40,12 +40,22 @@ const locked: Bet = {
 
 describe("seating", () => {
   it("seats everyone while a bet is open for picks, you at the bottom", () => {
-    expect(arrangeSeats([a, me, b], me, active)).toEqual({ seated: [me, a, b], rail: [] });
-    expect(arrangeSeats([a, me, b], me, undefined)).toEqual({ seated: [me, a, b], rail: [] });
+    expect(arrangeSeats([a, me, b], me, active)).toEqual({
+      seated: [me, a, b],
+      rail: [],
+      fromBet: false,
+    });
+    expect(arrangeSeats([a, me, b], me, undefined)).toEqual({
+      seated: [me, a, b],
+      rail: [],
+      fromBet: false,
+    });
   });
 
   it("seats only the people in a locked bet, keeping table order", () => {
     expect(arrangeSeats([a, b, me, c], me, locked).seated).toEqual([me, b, c]);
+    // Everyone around the felt is in the locked ticket, so "+n" opens its Details.
+    expect(arrangeSeats([a, b, me, c], me, locked).fromBet).toBe(true);
     expect(arrangeSeats([a, b, c], a, locked).seated).toEqual([b, c]);
   });
 

@@ -16,14 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class TableSettingsService {
     enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
-    /** {@code jackblackAccess}: who may propose Jackblack, {@code hosts}, {@code everyone} or {@code off}. */
-    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled, String jackblackAccess) {
+    /**
+     * {@code jackblackAccess} and {@code holdemAccess}: who may propose that card game, {@code hosts}, {@code everyone}
+     * or {@code off}.
+     */
+    record Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled, String jackblackAccess,
+            String holdemAccess) {
         Changes(Boolean hostsOnlyBets, Boolean u2pickEnabled, Boolean pollsEnabled) {
-            this(hostsOnlyBets, u2pickEnabled, pollsEnabled, null);
+            this(hostsOnlyBets, u2pickEnabled, pollsEnabled, null, null);
         }
     }
     private record Settings(boolean hostsOnlyBets, boolean u2pickEnabled, boolean pollsEnabled,
-            String jackblackAccess) {}
+            String jackblackAccess, String holdemAccess) {}
 
     private final JdbcTemplate jdbc;
     private final MutationAuthentication authentication;
@@ -46,10 +50,11 @@ class TableSettingsService {
         if (!authentication.lockActive(jwt)) return Outcome.UNAUTHORIZED;
         authentication.requireUnexpired(jwt);
         List<Settings> tables = jdbc.query("""
-                SELECT hosts_only_bets, u2pick_enabled, polls_enabled, jackblack_access FROM tables
+                SELECT hosts_only_bets, u2pick_enabled, polls_enabled, jackblack_access, holdem_access FROM tables
                 WHERE id = ? AND archived_at IS NULL FOR UPDATE
                 """, (rs, row) -> new Settings(rs.getBoolean("hosts_only_bets"), rs.getBoolean("u2pick_enabled"),
-                rs.getBoolean("polls_enabled"), rs.getString("jackblack_access")), tableId);
+                rs.getBoolean("polls_enabled"), rs.getString("jackblack_access"), rs.getString("holdem_access")),
+                tableId);
         if (tables.isEmpty()) {
             authentication.requireUnexpired(jwt);
             return Outcome.NOT_FOUND;
@@ -63,7 +68,8 @@ class TableSettingsService {
 
         IdempotencyGuard.Claim claim = idempotency.claim(userId, key, "table.settings.update.v1",
                 tableId + "|" + changes.hostsOnlyBets() + "|" + changes.u2pickEnabled() + "|" + changes.pollsEnabled()
-                        + (changes.jackblackAccess() == null ? "" : "|" + changes.jackblackAccess()),
+                        + (changes.jackblackAccess() == null ? "" : "|" + changes.jackblackAccess())
+                        + (changes.holdemAccess() == null ? "" : "|holdem:" + changes.holdemAccess()),
                 IdempotencyGuard.SuccessStatus.OK);
         authentication.requireUnexpired(jwt);
         if (claim == IdempotencyGuard.Claim.CONFLICT) return Outcome.CONFLICT;
@@ -78,14 +84,23 @@ class TableSettingsService {
                 && changes.pollsEnabled() != current.pollsEnabled();
         boolean jackblackChanged = changes.jackblackAccess() != null
                 && !changes.jackblackAccess().equals(current.jackblackAccess());
-        if (hostsChanged || u2pickChanged || pollsChanged || jackblackChanged) {
+        boolean holdemChanged = changes.holdemAccess() != null
+                && !changes.holdemAccess().equals(current.holdemAccess());
+        if (hostsChanged || u2pickChanged || pollsChanged || jackblackChanged || holdemChanged) {
             jdbc.update("""
                     UPDATE tables SET hosts_only_bets = COALESCE(?, hosts_only_bets),
                         u2pick_enabled = COALESCE(?, u2pick_enabled), polls_enabled = COALESCE(?, polls_enabled),
-                        jackblack_access = COALESCE(?, jackblack_access)
+                        jackblack_access = COALESCE(?, jackblack_access), holdem_access = COALESCE(?, holdem_access)
                     WHERE id = ?
                     """, changes.hostsOnlyBets(), changes.u2pickEnabled(), changes.pollsEnabled(),
-                    changes.jackblackAccess(), tableId);
+                    changes.jackblackAccess(), changes.holdemAccess(), tableId);
+            if (holdemChanged) {
+                chatMessages.system(tableId, switch (changes.holdemAccess()) {
+                    case "hosts" -> "Only hosts can propose Hold'em";
+                    case "off" -> "Hold'em turned off";
+                    default -> "Anyone can propose Hold'em";
+                });
+            }
             if (jackblackChanged) {
                 chatMessages.system(tableId, switch (changes.jackblackAccess()) {
                     case "hosts" -> "Only hosts can propose Jackblack";

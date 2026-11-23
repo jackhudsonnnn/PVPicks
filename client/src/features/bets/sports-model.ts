@@ -22,10 +22,15 @@ export const LINE_LIMITS: Record<ScoreMode, { min: number; max: number }> = {
   give_and_take: { min: -99.5, max: 99.5 },
 };
 
-/** Moves a line by a step, kept to half points and within the mode's limits. */
+/** Keeps a line on a .5 (so it can never push), within `min` and `max`, which also end in .5. */
+export function halfLine(line: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.floor(line) + 0.5));
+}
+
+/** Moves a score mode's line by a step, kept on a .5 and within the mode's limits. */
 export function stepLine(mode: ScoreMode, line: number, step: number) {
   const { min, max } = LINE_LIMITS[mode];
-  return Math.min(max, Math.max(min, Math.round((line + step) * 2) / 2));
+  return halfLine(line + step, min, max);
 }
 
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -42,9 +47,6 @@ export function scoreTerms(mode: ScoreMode, line: number, home: string, away: st
         choices: [`${home} ${signed(line)}`, `${away} ${signed(-line || 0)}`],
       };
 }
-
-/** Whole-number lines can push, which washes the bet. */
-export const canPush = (line: number) => Number.isInteger(line);
 
 /** Games that can take new bets: not yet Final, canceled or postponed. Live games first, then by start time. */
 export function proposableGames(games: TickerGame[] | null | undefined) {

@@ -1,17 +1,14 @@
-/** The chat input: text, a GIF picker that sends on tap, and the poll button. */
+/** The chat input: text, the GIF picker (a modal that sends on tap), and the poll button. */
 import { useState } from "react";
-import { MessageSquareOff, Search, SendHorizontal } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MessageSquareOff, SendHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollContainer } from "@/components/scroll-container";
-import { SegmentedTabs } from "@/components/segmented-tabs";
-import { searchGifs, useGifs } from "./gifs";
 import { textProblem } from "./model";
-import { LoadingList } from "@/components/loading";
 import { PollDialog } from "./poll-dialog";
+import { GifDialog } from "./gif-dialog";
 
 export function Composer({
+  userId,
   canText,
   canGif,
   canPoll,
@@ -20,6 +17,8 @@ export function Composer({
   send,
   startPoll,
 }: {
+  /** Whose starred GIFs the picker shows. */
+  userId: string;
   canText: boolean;
   canGif: boolean;
   /** Whether the table has polls on and you have the poll permission. */
@@ -65,7 +64,11 @@ export function Composer({
       )}
       <form onSubmit={submit} className="flex items-center gap-2">
         {canGif && (
-          <GifPicker disabled={blocked} onPick={(gifId) => send({ kind: "gif", gifId })} />
+          <GifDialog
+            userId={userId}
+            disabled={blocked}
+            onPick={(gifId) => send({ kind: "gif", gifId })}
+          />
         )}
         {canPoll && <PollDialog disabled={blocked} onCreate={startPoll} />}
         <Input
@@ -87,98 +90,5 @@ export function Composer({
         </Button>
       </form>
     </div>
-  );
-}
-
-/** "GIF" button next to the input; picking one sends it straight away. */
-function GifPicker({ disabled, onPick }: { disabled: boolean; onPick: (gifId: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const catalog = useGifs();
-  const [picked, setCategory] = useState<string | null>(null);
-  const category = picked ?? catalog.data?.categories[0]?.id ?? "";
-  const results = catalog.data ? searchGifs(catalog.data, search, category) : [];
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="Choose a GIF"
-          disabled={disabled}
-          className="flex h-11 shrink-0 items-center rounded-md border bg-surface px-2.5 font-mono text-[11px] font-black tracking-wider text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-50"
-        >
-          GIF
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        className="w-[min(22rem,calc(100vw-1.5rem))] space-y-2 bg-sidebar p-2 outline-none"
-        // Focus the panel, not the search box: a focused input opens the phone keyboard over the GIFs.
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          (event.currentTarget as HTMLElement | null)?.focus();
-        }}
-      >
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search GIFs"
-            className="h-10 bg-surface pl-9"
-            aria-label="Search GIFs"
-          />
-        </div>
-        {!search.trim() && (
-          <SegmentedTabs
-            size="sm"
-            ariaLabel="GIF category"
-            tabs={catalog.data?.categories ?? []}
-            value={category}
-            onChange={setCategory}
-            className="bg-surface p-1"
-          />
-        )}
-        <ScrollContainer
-          isVisible={false}
-          className="grid h-64 auto-rows-max grid-cols-2 content-start gap-1.5"
-        >
-          {catalog.isPending ? (
-            <LoadingList label="Loading GIFs" rows={3} rowClassName="h-24" className="col-span-2" />
-          ) : catalog.isError ? (
-            <p role="alert" className="col-span-2 py-10 text-center text-sm">
-              GIFs are unavailable right now.
-            </p>
-          ) : (
-            results.length === 0 && (
-              <p className="col-span-2 py-10 text-center text-sm text-muted-foreground">
-                No GIFs for “{search}”.
-              </p>
-            )
-          )}
-          {results.map((gif) => (
-            <button
-              key={gif.id}
-              type="button"
-              aria-label={`Send GIF: ${gif.alt}`}
-              onClick={() => {
-                onPick(gif.id);
-                setOpen(false);
-                setSearch("");
-              }}
-              className="overflow-hidden rounded-lg bg-muted ring-primary transition hover:ring-2"
-            >
-              <img
-                src={gif.url}
-                alt=""
-                loading="lazy"
-                className="aspect-square w-full object-cover"
-              />
-            </button>
-          ))}
-        </ScrollContainer>
-      </PopoverContent>
-    </Popover>
   );
 }

@@ -6,6 +6,7 @@ import com.p2picks.shared.kernel.Money;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,10 +19,12 @@ class BetResolutionWriter {
 
     private final JdbcTemplate jdbc;
     private final Outbox outbox;
+    private final ObjectProvider<BetLiveStats> liveStats;
 
-    BetResolutionWriter(JdbcTemplate jdbc, Outbox outbox) {
+    BetResolutionWriter(JdbcTemplate jdbc, Outbox outbox, ObjectProvider<BetLiveStats> liveStats) {
         this.jdbc = jdbc;
         this.outbox = outbox;
+        this.liveStats = liveStats;
     }
 
     // The caller must authorize the outcome and lock all affected users, the table and the bet.
@@ -74,6 +77,8 @@ class BetResolutionWriter {
                   AND (status = 'PENDING' OR (? AND status IN ('SETTLED', 'WASHED') AND points_settled_at IS NULL))
                 """, status, calledBy, winningChoice, washReason, bet.id(), bet.tableId(), correction);
         if (updated != 1) throw new IllegalStateException("Bet changed during resolution");
+        // A sports ticket's tracked stats stop here: Details shows them as they were when it was called.
+        liveStats.ifAvailable(stats -> stats.captureResult(bet.id()));
         Map<UUID, Long> changes = new java.util.LinkedHashMap<>();
         deltas.forEach((user, money) -> changes.put(user, money.cents()));
         posted.forEach((user, total) -> changes.merge(user, -total, Math::addExact));

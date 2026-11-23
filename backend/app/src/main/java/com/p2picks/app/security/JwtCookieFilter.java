@@ -20,10 +20,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class JwtCookieFilter extends OncePerRequestFilter {
     private final JwtDecoder decoder;
     private final AuthenticationEntryPoint unauthorized;
+    private final SessionCookies sessionCookies;
 
-    JwtCookieFilter(JwtDecoder decoder, AuthenticationEntryPoint unauthorized) {
+    JwtCookieFilter(JwtDecoder decoder, AuthenticationEntryPoint unauthorized, SessionCookies sessionCookies) {
         this.decoder = decoder;
         this.unauthorized = unauthorized;
+        this.sessionCookies = sessionCookies;
     }
 
     @Override
@@ -34,7 +36,7 @@ final class JwtCookieFilter extends OncePerRequestFilter {
         // Ways in don't need the old session, and a stale one (e.g. after the demo reset wiped sessions) mustn't
         // block them: sign-in replaces it. The dev endpoints (dev only) work without a session.
         if (path.equals("/auth/login") || path.equals("/auth/code") || path.equals("/auth/csrf")
-                || path.equals("/actuator/health")
+                || path.equals("/actuator/health") || path.equals("/config")
                 || path.startsWith("/dev/")) {
             chain.doFilter(request, response);
             return;
@@ -52,6 +54,9 @@ final class JwtCookieFilter extends OncePerRequestFilter {
                 Jwt jwt = decoder.decode(tokens.getFirst());
                 SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
             } catch (JwtException exception) {
+                // A dead session (expired, revoked, or wiped by a reset) is dropped from the browser, so the next
+                // request is plainly signed out instead of failing the same way again.
+                response.addHeader("Set-Cookie", sessionCookies.cleared());
                 unauthorized.commence(request, response, new InsufficientAuthenticationException("Invalid session", exception));
                 return;
             }

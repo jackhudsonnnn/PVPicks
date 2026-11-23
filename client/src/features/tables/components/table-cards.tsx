@@ -121,6 +121,8 @@ function TableCardList({ user, expire, actions }: Props & { actions?: InviteActi
           ref={scroller}
           isHorizontal="mobile"
           isVisible={false}
+          // Centers the first table and offsets requests itself (useKeepTablesInView).
+          keepPosition={false}
           aria-label={requestPages.shown.length ? "Your tables and requests" : "Your tables"}
           className="snap-x snap-mandatory gap-3 py-1 md:scrollbar-thin lg:h-[27rem] lg:snap-none lg:gap-2 lg:rounded-2xl lg:border lg:p-2"
         >

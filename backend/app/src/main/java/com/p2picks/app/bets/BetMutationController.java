@@ -41,11 +41,13 @@ class BetMutationController {
     private final BetReadController reads;
 
     private final JackblackService jackblack;
+    private final HoldemService holdem;
 
     BetMutationController(U2PickProposalService proposals, SportsProposalService sportsProposals,
             BetPickService picks, U2PickResolutionService resolutions, HostOverrideService overrides,
-            BetReadController reads, JackblackService jackblack) {
+            BetReadController reads, JackblackService jackblack, HoldemService holdem) {
         this.jackblack = jackblack;
+        this.holdem = holdem;
         this.overrides = overrides;
         this.proposals = proposals;
         this.sportsProposals = sportsProposals;
@@ -63,6 +65,9 @@ class BetMutationController {
         }
         if (input.path("modeId").asText("").equals(JackblackService.MODE)) {
             return proposeJackblack(jwt, tableId, key, input);
+        }
+        if (input.path("modeId").asText("").equals(HoldemService.MODE)) {
+            return proposeHoldem(jwt, tableId, key, input);
         }
         U2PickProposalService.Proposal proposal;
         try {
@@ -144,7 +149,10 @@ class BetMutationController {
             }
             ante = input.path("wagerCents").longValue();
             window = input.path("durationSec").intValue();
-            if (ante < 10 || ante > 1000) throw new IllegalArgumentException("the ante must be 0.10 to 10.00");
+            // A 4fun game has no ante (the slider's 0); totals stay at 0 (domain rules, "Jackblack").
+            if (input.path("forFun").booleanValue() ? ante != 0 : ante < 10 || ante > 1000) {
+                throw new IllegalArgumentException("the ante must be 0.10 to 10.00, or 0 for a 4fun game");
+            }
             if (window < 30 || window > 600) throw new IllegalArgumentException("the join window must be 30s to 10m");
             rules = JackblackRules.parse(input.get("rules"));
         } catch (IllegalArgumentException exception) {
@@ -157,6 +165,43 @@ class BetMutationController {
         } catch (BetProposalWriter.DebtCapExceeded exception) {
             return error(409, "debt_cap_exceeded",
                     "Your points limit can't cover this game's worst case. Lower the ante, or the rules' risk.");
+        } catch (MutationAuthentication.ExpiredSession exception) {
+            return unauthorized();
+        }
+    }
+
+    /**
+     * Hold'em: {@code {modeId, rules, wagerCents, durationSec, forFun}}; the wager is the big blind (0 for a 4fun game,
+     * which plays with chips worth nothing) and the duration is the join window (domain rules, "Hold'em").
+     */
+    private ResponseEntity<?> proposeHoldem(Jwt jwt, UUID tableId, String key, JsonNode input) {
+        HoldemRules rules;
+        long bigBlind;
+        int window;
+        try {
+            if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "wagerCents", "durationSec",
+                    "forFun")) || !input.path("forFun").isBoolean()
+                    || !input.path("wagerCents").isIntegralNumber() || !input.path("wagerCents").canConvertToLong()
+                    || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()) {
+                throw new IllegalArgumentException("Invalid proposal");
+            }
+            bigBlind = input.path("wagerCents").longValue();
+            window = input.path("durationSec").intValue();
+            if (input.path("forFun").booleanValue() ? bigBlind != 0 : bigBlind < 10 || bigBlind > 1000) {
+                throw new IllegalArgumentException("the big blind must be 0.10 to 10.00, or 0 for a 4fun game");
+            }
+            if (window < 30 || window > 600) throw new IllegalArgumentException("the join window must be 30s to 10m");
+            rules = HoldemRules.parse(input.get("rules"));
+        } catch (IllegalArgumentException exception) {
+            return error(400, "bad_request", "Invalid Hold'em proposal: " + exception.getMessage() + ".");
+        }
+        try {
+            var result = holdem.propose(jwt, tableId, rules, bigBlind, window, input.path("forFun").booleanValue(),
+                    key);
+            return created(jwt, result.outcome().name(), result.betId());
+        } catch (BetProposalWriter.DebtCapExceeded exception) {
+            return error(409, "debt_cap_exceeded",
+                    "Your points limit can't cover two buy-ins (200 big blinds). Lower the big blind.");
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }
@@ -264,6 +309,9 @@ class BetMutationController {
             };
         } catch (BetPickService.InvalidChoice exception) {
             return error(400, "invalid_choice", "The choice does not match the bet.");
+        } catch (BetPickService.LateEntry exception) {
+            return error(409, "late_entry", "Picks close to newcomers " + BetPickService.LATE_ENTRY_SECONDS
+                    + " seconds before lock. If you're already in, you can still change your pick.");
         } catch (BetPickService.Closed exception) {
             return error(409, "bet_closed", "The pick window has closed.");
         } catch (BetPickService.DebtCapExceeded exception) {

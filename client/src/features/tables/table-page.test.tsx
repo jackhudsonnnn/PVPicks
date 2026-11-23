@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProfile } from "@/features/people/api";
 import {
   type Table,
+  getMemberBalance,
   listTomatoes,
   rotateQuickPickCode,
   searchTableMembers,
@@ -15,6 +16,7 @@ import {
 import { TableChat } from "@/features/chat/chat";
 import { HostPanel } from "@/features/tables/components/host-panel";
 import { PeersPanel } from "@/features/tables/components/peers";
+import { BalanceDialog } from "@/features/tables/components/balance-dialog";
 import { ProfileDialog } from "@/features/social/profile";
 import { TomatoLayer } from "@/features/tables/components/tomatoes";
 import { useBetActions } from "@/features/bets/actions";
@@ -51,6 +53,7 @@ vi.mock("./api", async (importOriginal) => ({
   throwTomato: vi.fn(),
   setQuickPicksEnabled: vi.fn(),
   rotateQuickPickCode: vi.fn(),
+  getMemberBalance: vi.fn(),
 }));
 const feeds = vi.hoisted(() => new Map<string, (event: Invalidation) => void>());
 vi.mock("@/features/bets/api", async (importOriginal) => ({
@@ -77,10 +80,10 @@ const table: Table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: true,
   quickPickSharing: true,
   quickPickCode: "K4R7QX",
-  subscribedTo: [],
   disabledPermissions: {},
 };
 const expire = vi.fn();
@@ -306,6 +309,7 @@ describe("quick picks", () => {
         balances={{ data: [], error: null }}
         seatedIds={[]}
         onSelectUser={() => {}}
+        onSelectBalance={() => {}}
         user={me}
         expire={expire}
         peopleKey={peopleKey}
@@ -319,5 +323,99 @@ describe("quick picks", () => {
     expect(searchTableMembers).toHaveBeenCalledWith(table.id, "crowd7", null, expect.anything());
     fireEvent.change(screen.getByLabelText("Search members"), { target: { value: "no spaces" } });
     expect(await screen.findByText(/up to 15 letters/)).toBeInTheDocument();
+  });
+
+  it("opens a peer's profile from their name and their balance's what-if from the balance", async () => {
+    vi.mocked(getProfile).mockImplementation(async (id) => ({
+      id,
+      username: id === friend ? "friend" : "me",
+      hue: 1,
+    }));
+    const onSelectUser = vi.fn();
+    const onSelectBalance = vi.fn();
+    wrap(
+      <PeersPanel
+        table={table}
+        balances={{
+          data: [
+            { userId: me.id, balanceCents: 0n, unsettledCents: 0n },
+            { userId: friend, balanceCents: -250n, unsettledCents: 50n },
+          ],
+          error: null,
+        }}
+        seatedIds={[]}
+        onSelectUser={onSelectUser}
+        onSelectBalance={onSelectBalance}
+        user={me}
+        expire={expire}
+        peopleKey={peopleKey}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "friend's profile" }));
+    expect(onSelectUser).toHaveBeenCalledWith(friend);
+    fireEvent.click(screen.getByRole("button", { name: "friend's balance, -2.50 points" }));
+    expect(onSelectBalance).toHaveBeenCalledWith(friend);
+    expect(onSelectUser).toHaveBeenCalledTimes(1);
+    // One balance: no Settle/True split.
+    expect(screen.queryByText("True")).not.toBeInTheDocument();
+  });
+
+  it("adds each checked ticket's win to the balance, with all win and all lose", async () => {
+    vi.mocked(getProfile).mockResolvedValue({ id: friend, username: "friend", hue: 1 });
+    vi.mocked(getMemberBalance).mockResolvedValue({
+      userId: friend,
+      balanceCents: -950n,
+      unsettledCents: 150n,
+      tickets: [
+        {
+          betId: "123e4567-e89b-42d3-a456-426614174020",
+          mode: "u2pick",
+          question: "Rain today?",
+          choice: "Yes",
+          loseCents: -300n,
+          winCents: 450n,
+        },
+        {
+          betId: "123e4567-e89b-42d3-a456-426614174021",
+          mode: "jackblack",
+          question: "Jackblack",
+          loseCents: -800n,
+          winCents: 800n,
+        },
+      ],
+    });
+    wrap(
+      <BalanceDialog
+        tableId={table.id}
+        memberId={friend}
+        betsKey={["backend-tables", me.id, table.id, "bets"]}
+        onOpenChange={() => {}}
+        user={me}
+        expire={expire}
+        peopleKey={peopleKey}
+      />,
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(await dialog.findByText("Rain today?")).toBeInTheDocument();
+    expect(getMemberBalance).toHaveBeenCalledWith(table.id, friend, expect.anything());
+    expect(dialog.getByText("Win?")).toBeInTheDocument();
+    // Nothing checked: the what-if is the balance, every ticket at its loss.
+    expect(dialog.getAllByText("-9.50")).toHaveLength(2);
+    expect(dialog.getByText("Worst case")).toBeInTheDocument();
+
+    fireEvent.click(dialog.getByLabelText("Rain today?: wins"));
+    expect(dialog.getByText("-9.50")).toBeInTheDocument();
+    expect(dialog.getByText("-2.00")).toBeInTheDocument();
+    expect(dialog.getByText("+4.50")).toBeInTheDocument();
+
+    fireEvent.click(dialog.getByRole("button", { name: "All win" }));
+    expect(dialog.getByText("If all win")).toBeInTheDocument();
+    expect(dialog.getByText("+14.00")).toBeInTheDocument();
+    expect(dialog.getByText("Best case")).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "All win" })).toBeDisabled();
+
+    fireEvent.click(dialog.getByRole("button", { name: "All lose" }));
+    expect(dialog.getAllByText("-9.50")).toHaveLength(2);
+    expect(dialog.getByRole("button", { name: "All lose" })).toBeDisabled();
   });
 });

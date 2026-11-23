@@ -6,7 +6,7 @@ import { HOME_TICKETS } from "@/lib/use-media-query";
 import { App } from "@/app/app";
 import { getChatUnread, getChatWindow, listLatestMessages } from "@/features/chat/api";
 import { listInvites } from "@/features/social/api";
-import { listTableBalances, getTable, listTables } from "@/features/tables/api";
+import { listTableBalances, getMyBalance, getTable, listTables } from "@/features/tables/api";
 import { getGamePlayers, getTicker, type TickerGame } from "@/features/sports/api";
 import { currentUser } from "@/features/auth/api";
 import { getBetLiveStats, listModes, listMyBets, listTableBets, type Bet } from "./api";
@@ -30,6 +30,7 @@ vi.mock("@/features/tables/api", async (importOriginal) => ({
   getTable: vi.fn(),
   listTables: vi.fn(),
   listTableBalances: vi.fn(),
+  getMyBalance: vi.fn(),
 }));
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
@@ -75,9 +76,9 @@ const table = {
   u2pickEnabled: true,
   pollsEnabled: true,
   jackblackAccess: "everyone" as const,
+  holdemAccess: "everyone" as const,
   quickPicksEnabled: false,
   quickPickSharing: false,
-  subscribedTo: [],
   disabledPermissions: {},
 };
 const bet: Bet = {
@@ -149,6 +150,7 @@ beforeEach(() => {
   vi.mocked(listTableBets).mockResolvedValue([bet]);
   vi.mocked(listTables).mockResolvedValue([summaryOf(table, user.id)]);
   vi.mocked(listTableBalances).mockResolvedValue([]);
+  vi.mocked(getMyBalance).mockResolvedValue(0n);
   vi.mocked(getChatUnread).mockResolvedValue({ firstUnreadMessageId: null, unreadCount: 0 });
   vi.mocked(getChatWindow).mockResolvedValue({ items: [], previousCursor: null, nextCursor: null });
   vi.mocked(getTicker).mockResolvedValue([liveGame]);
@@ -183,6 +185,22 @@ async function openTab(name: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("U2Pick betting", () => {
+  it("opens a mode's info from the (i) beside its name, in place of the setup", async () => {
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "Bet" }));
+    fireEvent.click(screen.getByRole("button", { name: /U2Pick/ }));
+    // The setup has no long explanations; they're behind the (i).
+    expect(screen.queryByText(/Sending a bet doesn't place your pick/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "How U2Pick works" }));
+    expect(screen.getByText("How it works")).toBeInTheDocument();
+    expect(screen.getByText("Who's late")).toBeInTheDocument();
+    expect(screen.getByText(/Sending a bet doesn't place your pick/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Bet question")).not.toBeInTheDocument();
+    // Back returns to the setup as it was.
+    fireEvent.click(screen.getAllByRole("button", { name: "Back to setup" })[0]!);
+    expect(screen.getByLabelText("Bet question")).toBeInTheDocument();
+  });
+
   it("shows play-by-play modes as coming soon and sends a U2Pick from the preview", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(JSON.stringify(bet)));
     renderApp();
@@ -347,8 +365,8 @@ describe("U2Pick betting", () => {
           ...bet,
           modeId: "total_disaster",
           gameId: liveGame.id,
-          question: "NYK + BOS combined: over or under 225?",
-          choices: ["Over 225", "Under 225"],
+          question: "NYK + BOS combined: over or under 225.5?",
+          choices: ["Over 225.5", "Under 225.5"],
         }),
       ),
     );
@@ -359,11 +377,12 @@ describe("U2Pick betting", () => {
       await screen.findByRole("radio", { name: /NYK.*BOS/, checked: true }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Total points line")).toHaveTextContent("224.5");
-    fireEvent.click(screen.getByRole("button", { name: "Increase" }));
-    expect(screen.getByText(/whole-number line/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Increase Total points line" }));
+    expect(screen.getByLabelText("Total points line")).toHaveTextContent("225.5");
+    expect(screen.queryByText(/whole-number line/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Overtime counts" }));
     fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
-    expect(await screen.findByText("NYK + BOS combined: over or under 225?")).toBeInTheDocument();
+    expect(await screen.findByText("NYK + BOS combined: over or under 225.5?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Send · 1.00 pts/ }));
     await waitFor(() =>
       expect(mutationRequest).toHaveBeenCalledWith(
@@ -373,7 +392,7 @@ describe("U2Pick betting", () => {
         {
           modeId: "total_disaster",
           gameId: liveGame.id,
-          config: { line: 225 },
+          config: { line: 225.5 },
           includesOvertime: false,
           wagerCents: 100,
           durationSec: PICK_WINDOW_DEFAULT,
@@ -392,6 +411,7 @@ describe("U2Pick betting", () => {
       clock: "Q3 5:12",
       away: { abbreviation: "BUF", score: 17 },
       home: { abbreviation: "NE", score: 21 },
+      closed: false,
       rows: [
         {
           label: "Drake Maye passing yards",
@@ -428,6 +448,49 @@ describe("U2Pick betting", () => {
     expect(getBetLiveStats).toHaveBeenCalledWith(locked.id, expect.anything());
   });
 
+  it("shows a called bet's stats as its Result, frozen when it was called", async () => {
+    vi.mocked(getBetLiveStats).mockResolvedValue({
+      gameId: liveGame.id,
+      league: "NFL",
+      status: "LIVE",
+      period: 4,
+      clock: "Q4 2:10",
+      away: { abbreviation: "BUF", score: 24 },
+      home: { abbreviation: "NE", score: 21 },
+      closed: true,
+      rows: [
+        {
+          label: "Drake Maye passing yards",
+          detail: "QB · NE",
+          proposed: 112,
+          locked: 140,
+          current: 251,
+          target: 250.5,
+          targetLabel: "Line",
+        },
+      ],
+    });
+    vi.mocked(listTableBets).mockResolvedValue([
+      {
+        // The header follows the server's closed flag (set once the bet is called).
+        ...locked,
+        modeId: "prop_hunt",
+        gameId: liveGame.id,
+        question: "Who wins?",
+        choices: ["Over 250.5", "Under 250.5"],
+        picks: [{ userId: user.id, choice: "Over 250.5" }],
+      },
+    ]);
+    renderApp();
+    const ticket = await openTicket();
+    fireEvent.click(ticket.getByRole("button", { name: /Details/ }));
+    const details = within(await screen.findByRole("dialog", { name: "Who wins?" }));
+    expect(await details.findByRole("heading", { name: /^Result/ })).toBeInTheDocument();
+    expect(details.queryByText("Live stats")).not.toBeInTheDocument();
+    expect(details.getByLabelText("Result: 251")).toBeInTheDocument();
+    expect(details.getByText(/BUF 24 @ NE 21 · at Q4 2:10/)).toBeInTheDocument();
+  });
+
   it("lets a host override a locked sports bet; it waits on the game otherwise", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 204 }));
     vi.mocked(listTableBets).mockResolvedValue([
@@ -458,11 +521,14 @@ describe("U2Pick betting", () => {
     );
   });
 
-  it("sends a 4fun bet with no wager", async () => {
+  it("sends a 4fun bet when the wager slider is at 0", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(JSON.stringify(bet)));
     renderApp();
     await startU2Pick("For fun?");
-    fireEvent.click(screen.getByRole("switch", { name: "4fun bet" }));
+    expect(screen.queryByRole("switch", { name: "4fun bet" })).not.toBeInTheDocument();
+    const slider = screen.getByRole("slider", { name: "Wager in points" });
+    fireEvent.keyDown(slider, { key: "Home" });
+    expect(screen.getByText("(4fun)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Preview ticket" }));
     fireEvent.click(await screen.findByRole("button", { name: /Send · 4fun/ }));
     await waitFor(() =>

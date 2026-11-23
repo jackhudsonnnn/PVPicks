@@ -315,7 +315,7 @@ paths:
       operationId: getMyDebt
       summary: Get current debt in integer cents
       description: >-
-        Sum negative table True balances and negative open person settle-up
+        Sum negative table balances and negative open person settle-up
         nets; positive balances do not offset debt elsewhere. Current
         non-archived memberships contribute unsettled non-4fun results minus
         pending picked wagers. Open receipts include archived tables, and a
@@ -338,6 +338,32 @@ paths:
                     minimum: 0
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /me/balance:
+    get:
+      operationId: getMyBalance
+      summary: Your balance across every table plus open settle-ups
+      description: >-
+        The sum of balanceCents over your current, non-archived tables plus the
+        net of your open (unpaid) settle-up receipts. A host settle moves points
+        from a table into receipts, so it leaves this unchanged. One database
+        snapshot.
+      responses:
+        '200':
+          description: Your balance.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [balanceCents]
+                properties:
+                  balanceCents:
+                    type: integer
+                    format: int64
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /me/debt-cap:
     get:
       operationId: getMyDebtCap
@@ -446,6 +472,7 @@ paths:
               oneOf:
                 - $ref: '#/components/schemas/BetProposal'
                 - $ref: '#/components/schemas/JackblackProposal'
+                - $ref: '#/components/schemas/HoldemProposal'
       responses:
         '201':
           description: Bet created.
@@ -601,13 +628,15 @@ paths:
       - $ref: '#/components/parameters/TableId'
     get:
       operationId: listTableBalances
-      summary: Each current member's points at the table
+      summary: Each current member's balance at the table
       description: >-
-        settleCents is what the next points settlement would move: the
-        member's ledger deltas from resolved bets whose points are not yet
-        settled. trueCents also subtracts their wagers in Pending (locked)
-        non-4fun pots, the worst case. Active picks are never counted. Members
-        can already read every input through bet reads. Requires current
+        balanceCents is the member's balance: ledger deltas from resolved bets
+        whose points are not yet settled, minus their points in play (wagers in
+        Pending, locked, non-4fun pots and each Jackblack game's worst case),
+        so it assumes they lose everything still in play. unsettledCents is
+        only the resolved part, what the next host settle moves; pending bets
+        never enter a settle. Active picks are never counted. Members can
+        already read every input through bet reads. Requires current
         membership of a non-archived table.
       responses:
         '200':
@@ -618,6 +647,42 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TableBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tables/{tableId}/members/{userId}/balance:
+    parameters:
+      - $ref: '#/components/parameters/TableId'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getMemberBalance
+      summary: One member's balance with each ticket they have in play
+      description: >-
+        For the Peers tab's what-if view. Each ticket in play (Pending,
+        non-4fun pots the member picked in, and Jackblack games they play) has
+        loseCents, what it adds to the balance if it loses (already counted in
+        balanceCents), and winCents, what it adds if it wins: the payout if the
+        member's pick wins, from the resolution calculator, or a Jackblack
+        game's best case. balanceCents is unsettledCents plus every loseCents.
+        Oldest lock first. Requires current membership of a non-archived table;
+        the member must be a current member too.
+      responses:
+        '200':
+          description: The member's balance and tickets in play.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberBalance'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -794,6 +859,124 @@ paths:
                 action:
                   type: string
                   enum: [hit, stand, double, split, deal]
+      responses:
+        '204':
+          description: Done.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/holdem:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    get:
+      operationId: getHoldemGame
+      summary: A Hold'em game as table members see it
+      description: >-
+        Who's in while the join window is open, then the game. Stacks, bets,
+        the board and whose turn it is are public; hole cards are only your
+        own (me.hole) until a showdown, where everyone still in shows (no
+        mucking: the audit reveals every hand after the game anyway). The deck is never sent.
+        Once the game is over every hand's hole cards and every shuffle
+        secret are revealed (the audit).
+      responses:
+        '200':
+          description: The game.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldemGame'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bets/{betId}/holdem/seat:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    put:
+      operationId: joinHoldem
+      summary: Join a Hold'em game
+      description: >-
+        While the join window is open (not in its last 10 seconds), up to 9
+        players. Both buy-ins (200 big blinds) must fit your points limit;
+        it's checked again at the deal.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Joined (or already in).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: leaveHoldem
+      summary: Leave a Hold'em game before the deal
+      description: The proposer can't leave their own game.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Left (or wasn't in).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /bets/{betId}/holdem/actions:
+    parameters:
+      - $ref: '#/components/parameters/BetId'
+    post:
+      operationId: playHoldem
+      summary: Make a move in a Hold'em game
+      description: >-
+        On your turn: fold, check, call, all_in, or raise with amount (the
+        raise-to total for this street, at least the current bet plus the
+        last full raise, unless it's all in). Between hands: rebuy or pass
+        on your one rebuy, offered right after your first bust. While you're
+        in the hand and it isn't your turn: a pre-move, check_fold (check if
+        you can, otherwise fold) or call_any (check or call whatever the bet
+        is), played the moment the action reaches you, or no_pre_move to
+        clear it; it lasts one decision. A tap after the turn
+        timer ran out is ignored (the timeout applies instead: check if you
+        can, otherwise fold). Not allowed right now: 409 holdem_refused with
+        the reason.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [fold, check, call, raise, all_in, rebuy, pass, check_fold, call_any, no_pre_move]
+                amount:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: Only with raise.
       responses:
         '204':
           description: Done.
@@ -1132,6 +1315,8 @@ paths:
                     doesn't close existing polls; they keep taking votes.
                 jackblackAccess:
                   $ref: '#/components/schemas/JackblackAccess'
+                holdemAccess:
+                  $ref: '#/components/schemas/HoldemAccess'
       responses:
         '200':
           description: Updated table.
@@ -2399,6 +2584,61 @@ paths:
                 $ref: '#/components/schemas/GifCatalog'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /me/gif-favorites:
+    get:
+      operationId: listGifFavorites
+      summary: Your starred GIFs, newest first
+      description: >-
+        GIF ids from the library you've starred; the picker shows them in its
+        Starred tab. Stars for GIFs no longer in the library are left out.
+      responses:
+        '200':
+          description: Your stars.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [gifIds]
+                properties:
+                  gifIds:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/gif-favorites/{gifId}:
+    parameters:
+      - name: gifId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: starGif
+      summary: Star a GIF
+      description: >-
+        Adds a library GIF to your stars (doing it again changes nothing). At
+        most 100 stars: 409 favorites_full past that.
+      responses:
+        '204':
+          description: Starred.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: unstarGif
+      summary: Unstar a GIF
+      responses:
+        '204':
+          description: Unstarred (or wasn't starred).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /me/chat/latest:
     get:
       operationId: listLatestChatMessages
@@ -4546,17 +4786,56 @@ components:
     TableBalance:
       type: object
       additionalProperties: false
-      required: [userId, settleCents, trueCents]
+      required: [userId, balanceCents, unsettledCents]
       properties:
         userId:
           type: string
           format: uuid
-        settleCents:
+        balanceCents:
           type: integer
           format: int64
-        trueCents:
+        unsettledCents:
           type: integer
           format: int64
+    MemberBalance:
+      type: object
+      additionalProperties: false
+      required: [userId, balanceCents, unsettledCents, tickets]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        balanceCents:
+          type: integer
+          format: int64
+        unsettledCents:
+          type: integer
+          format: int64
+        tickets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [betId, mode, question, loseCents, winCents]
+            properties:
+              betId:
+                type: string
+                format: uuid
+              mode:
+                type: string
+              question:
+                type: string
+              choice:
+                type: string
+                description: The member's pick; absent for a Jackblack game.
+              loseCents:
+                type: integer
+                format: int64
+                maximum: 0
+              winCents:
+                type: integer
+                format: int64
+                minimum: 0
     SettlementGroup:
       type: object
       additionalProperties: false
@@ -4922,8 +5201,13 @@ components:
     BetLiveStats:
       type: object
       additionalProperties: false
-      required: [gameId, league, status, period, clock, away, home, rows]
+      required: [gameId, league, status, period, clock, away, home, rows, closed]
       properties:
+        closed:
+          type: boolean
+          description: >-
+            The bet is resolved or washed: current, the score, status, period
+            and clock are as they were when it was called, and stop changing.
         gameId:
           type: string
         league:
@@ -4960,6 +5244,7 @@ components:
                 description: When picks locked; null before lock.
               current:
                 type: [integer, 'null']
+                description: Now, or once the bet is closed, when it was called.
               target:
                 type: [number, 'null']
                 description: The line or target this number is measured against, if the mode has one.
@@ -5018,7 +5303,7 @@ components:
     Table:
       type: object
       additionalProperties: false
-      required: [id, name, emoji, memberIds, hostIds, hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, quickPicksEnabled, quickPickSharing, subscribedTo, disabledPermissions]
+      required: [id, name, emoji, memberIds, hostIds, hostsOnlyBets, u2pickEnabled, pollsEnabled, jackblackAccess, holdemAccess, quickPicksEnabled, quickPickSharing, disabledPermissions]
       properties:
         id:
           type: string
@@ -5049,6 +5334,8 @@ components:
           description: Whether members can start new chat polls.
         jackblackAccess:
           $ref: '#/components/schemas/JackblackAccess'
+        holdemAccess:
+          $ref: '#/components/schemas/HoldemAccess'
         quickPickCode:
           description: Present only for current table hosts.
           $ref: '#/components/schemas/QuickPickCode'
@@ -5057,6 +5344,7 @@ components:
         quickPickSharing:
           type: boolean
         subscribedTo:
+          description: Source tables this table copies Quick Picks from. Present only for current table hosts.
           type: array
           items:
             type: string
@@ -5172,28 +5460,32 @@ components:
               includesOvertime: false
     BetMode:
       type: string
-      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick, jackblack]
+      enum: [either_or, king_of_the_hill, choose_their_fate, scorcerer, total_disaster, give_and_take, prop_hunt, u2pick, jackblack, holdem]
     JackblackAccess:
       type: string
       enum: [hosts, everyone, off]
       description: Who may propose Jackblack at the table; hosts set it.
-    JackblackProposal:
+    HoldemAccess:
+      type: string
+      enum: [hosts, everyone, off]
+      description: Who may propose Hold'em at the table; hosts set it.
+    HoldemProposal:
       type: object
       additionalProperties: false
       required: [modeId, wagerCents, durationSec, forFun]
       description: >-
-        Everyone who joins deals once per rotation, in a random order, and
-        banks that round against the rest. wagerCents is the ante per hand
-        (kept for a 4Fun game, where nothing is paid); durationSec is the
-        join window. Rules left out take their defaults (shown). The
-        proposer joins their own game, so their worst case against one other
-        player must fit their points limit.
+        No-limit Texas hold'em over 1 to 3 full cycles (rotations; a hand per
+        player each time round).
+        wagerCents is the big blind (the small blind is half; the buy-in is
+        100 big blinds; one rebuy), or 0 for a 4fun game, which plays with
+        chips worth nothing. durationSec is the join window. Both buy-ins
+        must fit the proposer's points limit.
       properties:
         modeId:
-          const: jackblack
+          const: holdem
         wagerCents:
           type: integer
-          minimum: 10
+          minimum: 0
           maximum: 1000
         durationSec:
           type: integer
@@ -5205,12 +5497,167 @@ components:
           type: object
           additionalProperties: false
           properties:
-            decks: {type: integer, minimum: 1, maximum: 8, default: 6}
+            rotations: {type: integer, minimum: 1, maximum: 3, default: 1}
+            decisionSec: {type: integer, minimum: 10, maximum: 60, default: 30}
+            minPlayers:
+              type: integer
+              minimum: 2
+              maximum: 9
+              default: 2
+              description: Fewer players than this at the deal washes the game.
+            maxPlayers:
+              type: integer
+              minimum: 2
+              maximum: 9
+              default: 9
+              description: Joins stop here; at least minPlayers.
+    HoldemHand:
+      type: object
+      required: [number, buttonId, smallBlindId, bigBlindId, board, showdown, pots, shown, handNames, atShowdown, deltas]
+      properties:
+        number: {type: integer, minimum: 1}
+        buttonId: {type: string, format: uuid}
+        smallBlindId: {type: string, format: uuid}
+        bigBlindId: {type: string, format: uuid}
+        board: {type: array, items: {type: string}}
+        showdown: {type: boolean}
+        pots:
+          type: array
+          items:
+            type: object
+            required: [amount, winners]
+            properties:
+              amount: {type: integer, format: int64}
+              winners: {type: array, items: {type: string, format: uuid}}
+              handName: {type: string}
+        shown:
+          type: object
+          description: Hole cards shown at a showdown (everyone still in), by user id.
+          additionalProperties: {type: array, items: {type: string}}
+        handNames:
+          type: object
+          additionalProperties: {type: string}
+        atShowdown: {type: array, items: {type: string, format: uuid}}
+        deltas:
+          type: object
+          description: Each player's stack change over the hand, by user id.
+          additionalProperties: {type: integer, format: int64}
+        holes:
+          type: object
+          description: Everyone's hole cards; only once the game is over.
+          additionalProperties: {type: array, items: {type: string}}
+    HoldemGame:
+      type: object
+      required: [phase]
+      properties:
+        phase:
+          type: string
+          enum: [waiting, play, results, done]
+        players: {type: array, items: {type: string, format: uuid}}
+        hand: {type: integer}
+        hands: {type: integer}
+        order: {type: array, items: {type: string, format: uuid}}
+        bigBlindCents: {type: integer, format: int64}
+        smallBlindCents: {type: integer, format: int64}
+        buyInCents: {type: integer, format: int64}
+        stacks: {type: object, additionalProperties: {type: integer, format: int64}}
+        buyIns: {type: object, additionalProperties: {type: integer}}
+        out: {type: array, items: {type: string, format: uuid}}
+        deadline: {type: string, format: date-time}
+        buttonId: {type: string, format: uuid}
+        smallBlindId: {type: string, format: uuid}
+        bigBlindId: {type: string, format: uuid}
+        street: {type: string, enum: [preflop, flop, turn, river]}
+        board: {type: array, items: {type: string}}
+        pot: {type: integer, format: int64}
+        currentBet: {type: integer, format: int64}
+        toActId: {type: string, format: uuid}
+        seats:
+          type: array
+          items:
+            type: object
+            required: [userId, committed, contributed, folded, allIn]
+            properties:
+              userId: {type: string, format: uuid}
+              committed: {type: integer, format: int64}
+              contributed: {type: integer, format: int64}
+              folded: {type: boolean}
+              allIn: {type: boolean}
+        me:
+          type: object
+          description: Your own hole cards, and on your turn what you may do.
+          properties:
+            hole: {type: array, items: {type: string}}
+            handName:
+              type: string
+              description: Your best hand with the board so far, once the flop is out.
+            preMove:
+              type: string
+              enum: [check_fold, call_any]
+              description: The pre-move you've armed (only you see it).
+            toCall: {type: integer, format: int64}
+            canRaise: {type: boolean}
+            minRaiseTo: {type: integer, format: int64}
+            maxRaiseTo: {type: integer, format: int64}
+        rebuyOffered: {type: array, items: {type: string, format: uuid}}
+        totals: {type: object, additionalProperties: {type: integer, format: int64}}
+        history: {type: array, items: {$ref: '#/components/schemas/HoldemHand'}}
+        shuffles:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [round, commitment]
+            properties:
+              round: {type: integer, minimum: 1}
+              commitment: {type: string, pattern: '^[0-9a-f]{64}$'}
+              decks: {type: integer, minimum: 1, maximum: 8}
+              seed: {type: string, pattern: '^[0-9a-f]{64}$'}
+    JackblackProposal:
+      type: object
+      additionalProperties: false
+      required: [modeId, wagerCents, durationSec, forFun]
+      description: >-
+        Everyone who joins deals once per rotation, in a random order, and
+        banks that round against the rest. wagerCents is the ante per hand,
+        or 0 for a 4fun game (hands still win, lose or push; totals stay at
+        0); durationSec is the join window. Rules left out take their defaults (shown). The
+        proposer joins their own game, so their worst case against one other
+        player must fit their points limit.
+      properties:
+        modeId:
+          const: jackblack
+        wagerCents:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        durationSec:
+          type: integer
+          minimum: 30
+          maximum: 600
+        forFun:
+          type: boolean
+        rules:
+          type: object
+          additionalProperties: false
+          properties:
             rotations: {type: integer, minimum: 1, maximum: 3, default: 1}
             doubling: {type: boolean, default: true}
             maxSplits: {type: integer, minimum: 0, maximum: 3, default: 1}
             blackjackPays: {type: string, enum: ['3:2', '6:5'], default: '3:2'}
             decisionSec: {type: integer, minimum: 10, maximum: 60, default: 30}
+            minPlayers:
+              type: integer
+              minimum: 2
+              maximum: 7
+              default: 2
+              description: Fewer players than this at the deal (the dealer included) washes the game.
+            maxPlayers:
+              type: integer
+              minimum: 2
+              maximum: 7
+              default: 7
+              description: Joins stop here; at least minPlayers.
     JackblackHand:
       type: object
       required: [cards, total, soft, stakeCents, doubled, done, current]
@@ -5240,7 +5687,11 @@ components:
           type: integer
     JackblackSeat:
       type: object
-      required: [userId, hands]
+      description: >-
+        In a live round, hands are sent only for the viewer's own seat, or for
+        every seat when the viewer is the round's dealer; other seats carry just
+        userId and deciding. Finished rounds (history) carry every seat's hands.
+      required: [userId]
       properties:
         userId:
           type: string
@@ -5269,7 +5720,7 @@ components:
       properties:
         phase:
           type: string
-          enum: [waiting, play, dealer, done]
+          enum: [waiting, play, dealer, results, done]
         players:
           type: array
           description: While waiting, who has joined, in joining order.
@@ -5313,6 +5764,23 @@ components:
           description: Each player's running result in cents, by user id.
           additionalProperties:
             type: integer
+        shuffles:
+          type: array
+          description: >-
+            Each round's shoe commitment, from the deal: the SHA-256 hex of
+            "cards-v1|<round>|<decks>|<seed>". Once the game is done, each
+            also carries its deck count (1-8, drawn at random) and seed, so the
+            commitment and the shuffle (see domain rules, "Shuffle audit") can be
+            checked against the cards dealt.
+          items:
+            type: object
+            additionalProperties: false
+            required: [round, commitment]
+            properties:
+              round: {type: integer, minimum: 1}
+              commitment: {type: string, pattern: '^[0-9a-f]{64}$'}
+              decks: {type: integer, minimum: 1, maximum: 8}
+              seed: {type: string, pattern: '^[0-9a-f]{64}$'}
         history:
           type: array
           items:
@@ -5364,6 +5832,21 @@ components:
           description: When picks locked.
           additionalProperties:
             type: integer
+        result:
+          type: object
+          description: When the bet was resolved or washed (its numbers stop there).
+          additionalProperties:
+            type: integer
+        resultGame:
+          type: object
+          additionalProperties: false
+          description: The game's status, period, clock and score when the bet was called.
+          properties:
+            status: {type: string}
+            period: {type: [integer, 'null']}
+            clock: {type: [string, 'null']}
+            awayScore: {type: [integer, 'null']}
+            homeScore: {type: [integer, 'null']}
     Bet:
       type: object
       additionalProperties: false
@@ -5450,12 +5933,6 @@ components:
           type: string
         washReason:
           type: string
-        sourceBetId:
-          type: string
-          format: uuid
-        sourceTableId:
-          type: string
-          format: uuid
         overridden:
           type: boolean
         deltasCents:

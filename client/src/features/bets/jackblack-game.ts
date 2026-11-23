@@ -46,9 +46,10 @@ export function handLabel(hand: JackblackHand, split: boolean) {
   return hand.soft && hand.total < 21 ? `soft ${hand.total}` : String(hand.total);
 }
 
-/** Every hand of a seat, " / " between splits. */
+/** Every hand of a seat, " / " between splits; empty for a seat whose cards you can't see. */
 export function seatTotals(seat: JackblackSeat) {
-  return seat.hands.map((h) => handLabel(h, seat.hands.length > 1)).join(" / ");
+  const hands = seat.hands ?? [];
+  return hands.map((h) => handLabel(h, hands.length > 1)).join(" / ");
 }
 
 export type SeatChip = { label: string; tone: "pick" | "pass" | "win" | "loss" | "washed" };
@@ -62,8 +63,9 @@ function result(cents: number): SeatChip {
 
 /**
  * What each player's chip on the felt says about a Jackblack game: "In" while the join window is open; during a
- * round "Dealing" (with the dealer's total once turned) for the round's dealer, and each seat's total; at the end,
- * each player's result. Null for anyone not in it.
+ * round "Dealing" (with the dealer's total once turned) for the round's dealer, your own total (every seat's when
+ * you're dealing), and for seats you can't see only "Deciding", "Ready" or "Playing"; at the end, each player's
+ * result. Null for anyone not in it.
  */
 export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
   const live = !!bet && (bet.status === "ACTIVE" || bet.status === "PENDING");
@@ -79,6 +81,14 @@ export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
       return data.players?.includes(userId) ? { label: "In", tone: "pick" } : null;
     if (!data.order?.includes(userId)) return null;
     if (data.phase === "done") return result(data.totals?.[userId] ?? 0);
+    if (data.phase === "results") {
+      // The pause after a round: how each player did in it.
+      const last = data.history?.at(-1);
+      if (!last) return null;
+      if (userId === last.dealerId) return result(last.dealerDeltaCents);
+      const sat = last.seats.find((s) => s.userId === userId);
+      return sat ? result(sat.deltaCents ?? 0) : null;
+    }
     if (userId === data.dealerId)
       return {
         label:
@@ -89,6 +99,11 @@ export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
       };
     const seat = data.seats?.find((s) => s.userId === userId);
     if (!seat) return null;
+    if (!seat.hands)
+      return {
+        label: seat.deciding === true ? "Deciding" : seat.deciding === false ? "Ready" : "Playing",
+        tone: "pick",
+      };
     const totals = seatTotals(seat);
     return {
       label: totals,
