@@ -196,9 +196,11 @@ keys. To try it on this Mac before the domain exists, set
   disposable (see the root `AGENTS.md`), so resetting it is fine; any future shared or
   production database needs backups and approval first. Flyway does not
   baseline an existing nonempty schema.
-- The schema is one baseline, `V1__baseline.sql` (V1–V47 squashed before the
-  MVP, 2026-11-23, when every database was wiped). Changes from here are new
-  migrations, `V2__…` onward; never edit a migration a database has applied.
+- The schema is one file, `V1__baseline.sql` (V1–V47 squashed 2026-11-23).
+  Until the MVP it's edited in place (owner decision, 2026-11-24): a schema
+  change goes into V1, and every database (dev, LAN) is wiped and recreated,
+  with no migrations or compatibility code. From the MVP on, changes are new
+  migrations (`V2__…`) and applied ones are never edited.
 - The database role needs permission to install the `citext` extension.
 - The U2Pick lock worker is on by default in the dev profile: it scans at
   startup and then five seconds after each scan, locking overdue U2Pick bets

@@ -412,7 +412,7 @@ class SchemaIntegrationTest extends IntegrationTestSupport {
         assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET revision = -1 WHERE id = ?", line))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET status = 'sent' WHERE id = ?", line))
-                .as("sent, disputed and forgive_asked are gone (V38)").isInstanceOf(DataIntegrityViolationException.class);
+                .as("a receipt is only unpaid or paid").isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("UPDATE settlement_lines SET status = 'paid' WHERE id = ?", line))
                 .as("a closed receipt names the settle that closed it").isInstanceOf(DataIntegrityViolationException.class);
         UUID settle = UUID.randomUUID();

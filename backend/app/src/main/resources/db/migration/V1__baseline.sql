@@ -1,4 +1,5 @@
--- P2Picks schema baseline (squashed 2026-11-23 from V1–V47; data was wiped, no history kept).
+-- P2Picks schema baseline. Until the MVP it is edited in place (owner decision, 2026-11-24): every database is wiped
+-- when it changes, with no upgrade path. Squashed 2026-11-23 from V1–V47.
 -- Tables appear in the order their features arrived, each with its constraints, indexes and triggers.
 
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
@@ -296,6 +297,7 @@ CREATE TABLE bets (
     version bigint DEFAULT 0 NOT NULL,
     overridden_by uuid,
     overridden_at timestamp with time zone,
+    rematch_of uuid,
     CONSTRAINT bets_baseline_check CHECK (((baseline IS NULL) OR (jsonb_typeof(baseline) = 'object'::text))),
     CONSTRAINT bets_choices_check CHECK (((jsonb_typeof(choices) = 'array'::text) AND (jsonb_array_length(choices) >= 2))),
     CONSTRAINT bets_config_check CHECK ((jsonb_typeof(config) = 'object'::text)),
@@ -319,13 +321,16 @@ CREATE TABLE bets (
     CONSTRAINT bets_overridden_by_fkey FOREIGN KEY (overridden_by) REFERENCES users(id),
     CONSTRAINT bets_proposer_id_fkey FOREIGN KEY (proposer_id) REFERENCES users(id),
     CONSTRAINT bets_source_fk FOREIGN KEY (source_bet_id, source_table_id) REFERENCES bets(id, table_id) MATCH FULL,
-    CONSTRAINT bets_table_id_fkey FOREIGN KEY (table_id) REFERENCES tables(id)
+    CONSTRAINT bets_table_id_fkey FOREIGN KEY (table_id) REFERENCES tables(id),
+    CONSTRAINT bets_rematch_of_fkey FOREIGN KEY (rematch_of) REFERENCES bets(id)
 );
 CREATE INDEX bets_due_to_lock_idx ON bets USING btree (locks_at, id) WHERE (status = 'ACTIVE'::text);
 CREATE UNIQUE INDEX bets_one_copy_per_source_and_table ON bets USING btree (table_id, source_bet_id) WHERE (source_bet_id IS NOT NULL);
 CREATE INDEX bets_proposer_idx ON bets USING btree (proposer_id, created_at DESC, id DESC);
 CREATE INDEX bets_table_created_idx ON bets USING btree (table_id, created_at DESC);
 CREATE INDEX bets_table_status_idx ON bets USING btree (table_id, status);
+-- "Run it back": a finished card game has at most one rematch.
+CREATE UNIQUE INDEX bets_one_rematch ON bets USING btree (rematch_of) WHERE (rematch_of IS NOT NULL);
 
 -- bet_participants
 CREATE TABLE bet_participants (
@@ -771,6 +776,19 @@ CREATE TABLE player_game_stats (
     CONSTRAINT player_game_stats_pkey PRIMARY KEY (game_id, player_id),
     CONSTRAINT player_game_stats_game_id_fkey FOREIGN KEY (game_id) REFERENCES games(id),
     CONSTRAINT player_game_stats_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id)
+);
+
+-- player_season_averages: each player's per-game averages this season, by stat key, for the picker before kickoff.
+CREATE TABLE player_season_averages (
+    player_id text NOT NULL,
+    season integer NOT NULL,
+    games integer NOT NULL,
+    averages jsonb NOT NULL,
+    refreshed_at timestamp with time zone NOT NULL,
+    CONSTRAINT player_season_averages_averages_check CHECK ((jsonb_typeof(averages) = 'object'::text)),
+    CONSTRAINT player_season_averages_games_check CHECK ((games >= 0)),
+    CONSTRAINT player_season_averages_pkey PRIMARY KEY (player_id),
+    CONSTRAINT player_season_averages_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 );
 
 -- player_stat_snapshots

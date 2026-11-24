@@ -73,7 +73,7 @@ with a game in the next day whose averages are missing or a day old:
 `/nfl/v1/season_stats` (All-Star; totals divided by games played) or
 `/nba/v1/season_averages/general` (it may need a higher plan: a 401 or 403
 switches NBA averages off until restart, and the picker ranks by position
-alone). They're stored in `player_season_averages` (V3) in the modes' stat
+alone). They're stored in `player_season_averages` in the modes' stat
 keys and returned as `averages` on `GET /games/{id}/players`. Players the
 provider has nothing for are marked checked, so they aren't asked for again
 that day. Dev games have no averages. In code: `sports/SeasonAverage`,
