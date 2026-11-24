@@ -116,7 +116,7 @@ backend (serving these docs at `/docs/`) and the client. Run
   retry-fingerprint key (`infra/compose/.env.idempotency`). It keeps existing
   files. They're git-ignored and owner-only: never share or commit them.
 - There are no dev passwords. An empty database gets the demo world on
-  startup (about 200 demo users plus newbie, intermediate, pro and admin), and
+  startup (250 demo users (200 regulars and the 50-person crowd) plus newbie, intermediate, pro and admin), and
   the sign-in page signs you in as anyone you pick. **Reset data** on the Dev
   page wipes app data (sports data stays) and reseeds it. See
   [Demo world](/demo-data). The demo exists only in the dev profile (`pvpicks.demo.enabled`
@@ -213,7 +213,10 @@ keys. To try it on this Mac before the domain exists, set
 - The sports feed calls BallDontLie only when `PVPICKS_BALLDONTLIE_API_KEY` is
   set (keep it in the ignored `infra/compose/.env` or the shell, never in
   source). It polls every `PVPICKS_SPORTS_POLL_INTERVAL` (default `PT60S`, one
-  request per league); keep that within your plan's rate limit. With
+  request per league); keep that within your plan's rate limit. Live scores
+  count as available only while every league has polled successfully within
+  `PVPICKS_SPORTS_FRESHNESS` (default `PT3M`); after that the ticker and game
+  pickers say scores are unavailable. With
   `PVPICKS_SPORTS_RECORDING_DIR` set (Compose sets it), every raw response is
   saved as its own file in the git-ignored `recordings/sports/`, as
   `<league>/<New York date>/<UTC timestamp>_<endpoint>.json`. Names sort in

@@ -22,7 +22,7 @@ export const STATUSES: Record<Bet["status"], StatusInfo> = {
     label: "Active",
     hint: "Timer running, you can still change your pick.",
     explainer:
-      "The ticket is open with a countdown. Tap a choice to join, and change or clear your pick until time runs out. Picks stay hidden.",
+      "The ticket is open with a countdown. Tap a choice to join, and change or clear your pick until time runs out. Everyone sees who's in; which side they picked stays hidden.",
   },
   PENDING: {
     id: "pending",
@@ -43,7 +43,7 @@ export const STATUSES: Record<Bet["status"], StatusInfo> = {
     label: "Washed",
     hint: "No contest, everyone got their points back.",
     explainer:
-      "Everyone picked the same side, nobody picked the winner, or the outcome wasn't one of the choices. Points go back.",
+      "Called off, so no points move: nobody picked, everyone took the same side, nobody picked the winner, a tie or push, a canceled game, or too few players for a card game.",
   },
 };
 

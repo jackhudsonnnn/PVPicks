@@ -53,7 +53,7 @@ certificate profile; Tailscale would make every guest install an app.
   `~/.secrets/cloudflare.ini`. The Mac never has to be reachable from the
   internet. Certbot keeps its state in `~/.p2picks-letsencrypt`; the two
   files Caddy needs, `fullchain.pem` and `privkey.pem`, are copied into
-  `infra/caddy/certs/` (git-ignored). It lasts 90 days; renewing is one
+  `infra/caddy/certs/` (git-ignored; `PVPICKS_LAN_CERT_DIR` in `.env.lan` points Caddy at another folder). It lasts 90 days; renewing is one
   command (README).
 - Caddy (`infra/caddy/Caddyfile`) serves that certificate, redirects HTTP to
   HTTPS and adds HSTS, `nosniff`, `X-Frame-Options: DENY` and

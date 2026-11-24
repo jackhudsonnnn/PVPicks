@@ -50,7 +50,7 @@ destinations.
   successfully within the freshness window (default three minutes).
   `ticker.changed` on `/user/queue/ticker` invalidates it. Responses are
   cached in Redis for up to five seconds between feed changes. The ticker contains
-  no bet activity. `GET /games` remains unimplemented.
+  no bet activity.
   Feed freshness and partial-feed handling still require review.
 - Dev `GET`/`PUT /tables/{id}/last-read` supplies filtered unread count and
   first unread message ID and advances only to a currently visible message.
