@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -64,10 +65,15 @@ class BetMutationController {
             return proposeSports(jwt, tableId, key, input);
         }
         if (input.path("modeId").asText("").equals(JackblackService.MODE)) {
-            return proposeJackblack(jwt, tableId, key, input);
+            return proposeCardGame(jwt, input, "Jackblack", "ante", JackblackRules::parse,
+                    (rules, ante, window, forFun) -> jackblack.propose(jwt, tableId, rules, ante, window, forFun, key),
+                    "Your points limit can't cover this game's worst case. Lower the ante, or the rules' risk.");
         }
         if (input.path("modeId").asText("").equals(HoldemService.MODE)) {
-            return proposeHoldem(jwt, tableId, key, input);
+            return proposeCardGame(jwt, input, "Hold'em", "big blind", HoldemRules::parse,
+                    (rules, bigBlind, window, forFun) -> holdem.propose(jwt, tableId, rules, bigBlind, window, forFun,
+                            key),
+                    "Your points limit can't cover two buy-ins (200 big blinds). Lower the big blind.");
         }
         U2PickProposalService.Proposal proposal;
         try {
@@ -132,52 +138,23 @@ class BetMutationController {
         }
     }
 
-    /**
-     * Jackblack: {@code {modeId, rules, wagerCents, durationSec, forFun}}; the wager is the ante (kept for a 4Fun game
-     * too, where nothing is paid) and the duration is the join window (domain rules, "Jackblack").
-     */
-    private ResponseEntity<?> proposeJackblack(Jwt jwt, UUID tableId, String key, JsonNode input) {
-        JackblackRules rules;
-        long ante;
-        int window;
-        try {
-            if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "wagerCents", "durationSec",
-                    "forFun")) || !input.path("forFun").isBoolean()
-                    || !input.path("wagerCents").isIntegralNumber() || !input.path("wagerCents").canConvertToLong()
-                    || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()) {
-                throw new IllegalArgumentException("Invalid proposal");
-            }
-            ante = input.path("wagerCents").longValue();
-            window = input.path("durationSec").intValue();
-            // A 4fun game has no ante (the slider's 0); totals stay at 0 (domain rules, "Jackblack").
-            if (input.path("forFun").booleanValue() ? ante != 0 : ante < 10 || ante > 1000) {
-                throw new IllegalArgumentException("the ante must be 0.10 to 10.00, or 0 for a 4fun game");
-            }
-            if (window < 30 || window > 600) throw new IllegalArgumentException("the join window must be 30s to 10m");
-            rules = JackblackRules.parse(input.get("rules"));
-        } catch (IllegalArgumentException exception) {
-            return error(400, "bad_request", "Invalid Jackblack proposal: " + exception.getMessage() + ".");
-        }
-        try {
-            var result = jackblack.propose(jwt, tableId, rules, ante, window, input.path("forFun").booleanValue(),
-                    key);
-            return created(jwt, result.outcome().name(), result.betId());
-        } catch (BetProposalWriter.DebtCapExceeded exception) {
-            return error(409, "debt_cap_exceeded",
-                    "Your points limit can't cover this game's worst case. Lower the ante, or the rules' risk.");
-        } catch (MutationAuthentication.ExpiredSession exception) {
-            return unauthorized();
-        }
+    /** One card game's proposal: parsed terms in, the new bet out. */
+    @FunctionalInterface
+    private interface CardProposer<R> {
+        BetProposalWriter.Result propose(R rules, long wagerCents, int windowSec, boolean forFun);
     }
 
     /**
-     * Hold'em: {@code {modeId, rules, wagerCents, durationSec, forFun}}; the wager is the big blind (0 for a 4fun game,
-     * which plays with chips worth nothing) and the duration is the join window (domain rules, "Hold'em").
+     * A card game (Jackblack, Hold'em): {@code {modeId, rules, wagerCents, durationSec, forFun}}. The wager is the
+     * ante or big blind, 0.10–10.00, or 0 for a 4fun game; the duration is the join window, 30 s to 10 min (domain
+     * rules, "Jackblack" and "Hold'em"). {@code name} labels the 400; {@code debtCap} explains a 409 to the proposer.
      */
-    private ResponseEntity<?> proposeHoldem(Jwt jwt, UUID tableId, String key, JsonNode input) {
-        HoldemRules rules;
-        long bigBlind;
+    private <R> ResponseEntity<?> proposeCardGame(Jwt jwt, JsonNode input, String name, String wagerName,
+            Function<JsonNode, R> parseRules, CardProposer<R> proposer, String debtCap) {
+        R rules;
+        long wager;
         int window;
+        boolean forFun;
         try {
             if (!input.isObject() || !onlyFields(input, Set.of("modeId", "rules", "wagerCents", "durationSec",
                     "forFun")) || !input.path("forFun").isBoolean()
@@ -185,23 +162,22 @@ class BetMutationController {
                     || !input.path("durationSec").isIntegralNumber() || !input.path("durationSec").canConvertToInt()) {
                 throw new IllegalArgumentException("Invalid proposal");
             }
-            bigBlind = input.path("wagerCents").longValue();
+            wager = input.path("wagerCents").longValue();
             window = input.path("durationSec").intValue();
-            if (input.path("forFun").booleanValue() ? bigBlind != 0 : bigBlind < 10 || bigBlind > 1000) {
-                throw new IllegalArgumentException("the big blind must be 0.10 to 10.00, or 0 for a 4fun game");
+            forFun = input.path("forFun").booleanValue();
+            if (forFun ? wager != 0 : wager < 10 || wager > 1000) {
+                throw new IllegalArgumentException("the " + wagerName + " must be 0.10 to 10.00, or 0 for a 4fun game");
             }
             if (window < 30 || window > 600) throw new IllegalArgumentException("the join window must be 30s to 10m");
-            rules = HoldemRules.parse(input.get("rules"));
+            rules = parseRules.apply(input.get("rules"));
         } catch (IllegalArgumentException exception) {
-            return error(400, "bad_request", "Invalid Hold'em proposal: " + exception.getMessage() + ".");
+            return error(400, "bad_request", "Invalid " + name + " proposal: " + exception.getMessage() + ".");
         }
         try {
-            var result = holdem.propose(jwt, tableId, rules, bigBlind, window, input.path("forFun").booleanValue(),
-                    key);
+            var result = proposer.propose(rules, wager, window, forFun);
             return created(jwt, result.outcome().name(), result.betId());
         } catch (BetProposalWriter.DebtCapExceeded exception) {
-            return error(409, "debt_cap_exceeded",
-                    "Your points limit can't cover two buy-ins (200 big blinds). Lower the big blind.");
+            return error(409, "debt_cap_exceeded", debtCap);
         } catch (MutationAuthentication.ExpiredSession exception) {
             return unauthorized();
         }
