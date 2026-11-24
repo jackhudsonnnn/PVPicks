@@ -19,8 +19,7 @@ import {
   type HoldemPreMove,
 } from "@/features/bets/holdem";
 import { useHoldemGame } from "@/features/bets/holdem-game";
-import { BetDetailsDialog } from "./bet-details";
-import { ResendButton } from "./resend-button";
+import { TicketByline } from "./ticket-byline";
 import type { BetActions } from "./bet-controls";
 import { TicketFooter } from "./ticket-footer";
 import { ValueSlider } from "./form-parts";
@@ -592,17 +591,12 @@ export function HoldemTicket({
         status={status}
         joinLeft={left}
         progress={`Hand ${hand} / ${hands}`}
-        details={
-          <span className="flex items-center">
-            {!preview && <ResendButton bet={bet} tableId={table.id} />}
-            <BetDetailsDialog bet={bet} table={table} {...people} disabled={preview} />
-          </span>
-        }
       />
 
       <div className="perforation mx-4" />
 
       <div className="space-y-4 px-4 pb-4 pt-4">
+        <TicketByline bet={bet} table={table} {...people} preview={preview} />
         {preview ? (
           <p className="text-sm text-ticket-muted">
             No-limit Texas hold'em: the button moving round, 100 big blinds to buy in and one rebuy.

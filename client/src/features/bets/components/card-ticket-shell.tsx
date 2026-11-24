@@ -19,7 +19,6 @@ export function CardTicketHeader({
   status,
   joinLeft,
   progress,
-  details,
 }: {
   icon: ReactNode;
   name: string;
@@ -28,8 +27,6 @@ export function CardTicketHeader({
   joinLeft: number;
   /** "Round 2 / 7", "Hand 0 / 4". */
   progress: string;
-  /** The Details button. */
-  details: ReactNode;
 }) {
   return (
     <header className="flex min-h-19 items-center gap-3 py-3 pl-4 pr-10">
@@ -49,12 +46,9 @@ export function CardTicketHeader({
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-ticket-muted">
-            {progress}
-          </p>
-          {details}
-        </div>
+        <p className="mt-1 font-mono text-[11px] font-bold uppercase tracking-wider text-ticket-muted">
+          {progress}
+        </p>
       </div>
     </header>
   );

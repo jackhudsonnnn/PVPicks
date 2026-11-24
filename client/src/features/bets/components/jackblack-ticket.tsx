@@ -1,8 +1,7 @@
 import { secondsUntil, signed } from "@/features/bets/cards";
 import { Spade } from "lucide-react";
 import { TicketFooter } from "./ticket-footer";
-import { BetDetailsDialog } from "./bet-details";
-import { ResendButton } from "./resend-button";
+import { TicketByline } from "./ticket-byline";
 import type { BetActions } from "./bet-controls";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -399,17 +398,12 @@ export function JackblackTicket({
         status={status}
         joinLeft={left}
         progress={`Round ${round} / ${rounds}`}
-        details={
-          <span className="flex items-center">
-            {!preview && <ResendButton bet={bet} tableId={table.id} />}
-            <BetDetailsDialog bet={bet} table={table} {...people} disabled={preview} />
-          </span>
-        }
       />
 
       <div className="perforation mx-4" />
 
       <div className="space-y-4 px-4 pb-4 pt-4">
+        <TicketByline bet={bet} table={table} {...people} preview={preview} />
         {preview ? (
           <p className="text-sm text-ticket-muted">
             Everyone who joins deals once per rotation, in a random order, and banks that round

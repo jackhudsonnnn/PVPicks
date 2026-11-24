@@ -215,7 +215,7 @@ earlier prototype (git tag `prototype-ui`).
   audit in `details-parts.tsx`) that keeps the
   card the same height from the join window to the final standings. Under the
   title is the game's progress ("Round 2 / 7", "Hand 3 / 9"; 0 and a total from
-  who's in while the join window is open), with Details beside it. The felt has
+  who's in while the join window is open), and, under the perforation like every ticket, the byline: Proposed by, then Resend (once it's finished) and Details (`ticket-byline.tsx`). The felt has
   four fixed regions in every phase: the table (the shoe and the dealer's hand;
   the deck, board and pot), a row of people that scrolls sideways (who's in;
   your seat, or every seat when you deal, and in Hold'em your hand then every

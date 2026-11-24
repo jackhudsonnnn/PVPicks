@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { Check, EyeOff, Lock, ShieldAlert, Trophy, Undo2 } from "lucide-react";
 import {
   AlertDialog,
@@ -18,9 +17,8 @@ import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
 import { canBetAt, type Table, type TableSummary } from "@/features/tables";
-import { type User, PersonAvatar, usePerson } from "@/features/people";
-import { BetDetailsDialog } from "./bet-details";
-import { ResendButton } from "./resend-button";
+import { type User, usePerson } from "@/features/people";
+import { TicketByline } from "./ticket-byline";
 import type { BetActions } from "./bet-controls";
 import { useNow } from "@/lib/use-now";
 import { useTicker, tickerStatus } from "@/features/sports";
@@ -142,53 +140,15 @@ function PickTicket({
         <h3 className="break-words font-display text-2xl font-bold leading-tight">
           {bet.question}
         </h3>
-        <div className="-mt-2 flex items-start justify-between gap-2">
-          <div className="min-w-0 space-y-1.5 text-xs text-ticket-muted">
-            <p className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0">Proposed by</span>
-              {preview ? (
-                <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ticket-foreground">
-                  <PersonAvatar
-                    id={bet.proposerId}
-                    size="xs"
-                    user={user}
-                    expire={expire}
-                    queryKey={peopleKey}
-                  />
-                  <span className="truncate">{proposer?.name ?? "…"}</span>
-                </span>
-              ) : (
-                <Link
-                  to="/tables/$tableId"
-                  params={{ tableId: table.id }}
-                  search={{ profile: bet.proposerId }}
-                  aria-label={`${proposer?.name ?? "Proposer"}'s profile`}
-                  className="flex min-w-0 items-center gap-1.5 font-semibold text-ticket-foreground hover:underline"
-                >
-                  <PersonAvatar
-                    id={bet.proposerId}
-                    size="xs"
-                    user={user}
-                    expire={expire}
-                    queryKey={peopleKey}
-                  />
-                  <span className="truncate">{proposer?.name ?? "…"}</span>
-                </Link>
-              )}
-            </p>
-          </div>
-
-          <span className="flex items-center">
-            {!preview && <ResendButton bet={bet} tableId={table.id} />}
-            <BetDetailsDialog
-              bet={bet}
-              table={table}
-              user={user}
-              expire={expire}
-              peopleKey={peopleKey}
-              disabled={preview}
-            />
-          </span>
+        <div className="-mt-2">
+          <TicketByline
+            bet={bet}
+            table={table}
+            user={user}
+            expire={expire}
+            peopleKey={peopleKey}
+            preview={preview}
+          />
         </div>
         {bet.forFun && (
           <div className="-mt-2 flex flex-wrap gap-1.5">
