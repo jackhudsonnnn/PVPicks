@@ -23,7 +23,8 @@ import {
 } from "./dashboard-api";
 import { ago } from "./format";
 import { GameInspector, type SportsPanel } from "./sports-inspector";
-import { Hint, LIVE_MS, StatusChip, periodName } from "./sports-parts";
+import { Hint, StatusChip } from "./sports-parts";
+import { LIVE_MS, periodName } from "./format";
 
 export type { SportsPanel };
 

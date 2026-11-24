@@ -22,7 +22,8 @@ import { modeName, stamp } from "./format";
 import { JsonTree } from "./json-tree";
 import { Chip } from "./players";
 import { Fact, PANEL } from "./panel";
-import { Hint, LIVE_MS, StatusChip, periodName } from "./sports-parts";
+import { Hint, StatusChip } from "./sports-parts";
+import { LIVE_MS, periodName } from "./format";
 
 export type SportsPanel = "score" | "timeline" | "players" | "json";
 

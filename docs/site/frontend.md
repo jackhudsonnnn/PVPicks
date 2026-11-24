@@ -177,7 +177,9 @@ earlier prototype (git tag `prototype-ui`).
   worked Examples (their own settings and results) and Good to know
   (`bets/components/mode-info.tsx`, content in `bets/mode-info.ts`). The
   Guide's Game modes cards open the same info in a dialog (`ModeInfoButton`).
-- **Betting:** "+ Bet" opens the proposal sheet: pick a mode (every mode but
+- **Betting:** "+ Bet" opens the proposal sheet (`propose-sheet.tsx`; a
+  sports bet's state lives in `use-sports-draft.ts` and its form in
+  `sports-setup.tsx`): pick a mode (every mode but
   Choose Their Fate, which shows as coming soon), set up a U2Pick, set up a
   Jackblack game (its rules, each held to its minimum and maximum; no preview
   step), or pick one

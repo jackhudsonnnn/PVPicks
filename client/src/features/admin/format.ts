@@ -76,3 +76,14 @@ export const stamp = (iso: string | number | Date) =>
 const MODE_NAMES = new Map<string, string>(MODES.map((mode) => [mode.id, mode.name]));
 
 export const modeName = (mode: string) => MODE_NAMES.get(mode) ?? mode;
+
+/** Live games refresh this often; everything else on demand. */
+export const LIVE_MS = 5000;
+
+export function periodName(league: string, period: number | null) {
+  if (period === null) return "";
+  const regulation = 4;
+  return period > regulation
+    ? `OT${period - regulation > 1 ? period - regulation : ""}`
+    : `Q${period}`;
+}
