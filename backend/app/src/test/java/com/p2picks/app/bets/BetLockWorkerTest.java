@@ -89,7 +89,7 @@ class BetLockWorkerTest {
                 broken)).isEqualTo("WASHED:" + BetLockService.NOBODY_PICKED);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id = ?", Integer.class, broken)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, broken))
-                .isEqualTo(1);
+                .isZero();
         jdbc.update("UPDATE bets SET mode = 'u2pick', game_id = NULL WHERE id = ?", sports);
         worker.poll();
         UUID race = bet(table, host, "u2pick", "1 minute");

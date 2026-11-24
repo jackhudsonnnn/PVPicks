@@ -533,7 +533,6 @@ export function HoldemTicket({
   const controls = !game ? null : status === "active" && canBet && left > 0 ? (
     <JoinControls
       joined={joined}
-      proposer={bet.proposerId === user.id}
       full={players.length >= rules.maxPlayers}
       disabled={blocked}
       onJoin={() => actions?.start({ kind: "holdem-join", tableId: table.id, betId: bet.id })}

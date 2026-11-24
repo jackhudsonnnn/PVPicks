@@ -169,12 +169,13 @@ export function BetDetailsDialog({
   );
   if (disabled && !controlled) return trigger;
 
+  // Who's in, from the start; their sides only after lock (yours always).
   const rows = bet.picks
-    ? [
-        ...bet.picks.map((p) => ({ id: p.userId, pick: p.choice })),
-        ...(bet.noGuessUserIds ?? []).map((id) => ({ id, pick: "No guess" })),
-      ]
-    : null;
+    ? bet.picks.map((p) => ({ id: p.userId, pick: p.choice }))
+    : bet.participantIds.map((id) => ({
+        id,
+        pick: id === user.id ? (bet.myPick ?? "No guess") : "In",
+      }));
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -227,8 +228,8 @@ export function BetDetailsDialog({
           ) : bet.modeId === "holdem" ? (
             <HoldemPlayers {...props} />
           ) : (
-            <FactSection title={rows ? `Players (${rows.length})` : `Picks (${bet.pickCount})`}>
-              {rows ? (
+            <FactSection title={`Players (${rows.length})`}>
+              {rows.length > 0 || bet.picks ? (
                 rows.length === 0 ? (
                   <p className="py-1.5 text-sm text-muted-foreground">Nobody joined.</p>
                 ) : (
@@ -262,10 +263,7 @@ export function BetDetailsDialog({
                   })
                 )
               ) : (
-                <p className="py-1.5 text-sm text-muted-foreground">
-                  {bet.myPick ? `Your pick: ${bet.myPick}. ` : ""}Other picks stay private until
-                  lock.
-                </p>
+                <p className="py-1.5 text-sm text-muted-foreground">Nobody's in yet.</p>
               )}
             </FactSection>
           )}

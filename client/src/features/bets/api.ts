@@ -43,7 +43,11 @@ const betSchema = z
     overriddenBy: uuid.optional(),
     overriddenAt: z.string().datetime({ offset: true }).optional(),
     picks: z.array(z.object({ userId: uuid, choice: z.string() })).optional(),
-    noGuessUserIds: z.array(uuid).optional(),
+    /**
+     * Everyone in, in joining order, in every status (owner decision, 2026-11-24): who's in is public, which side
+     * they picked isn't until lock. No guess (a cleared pick) counts while it's open and is out once it locks.
+     */
+    participantIds: z.array(uuid),
     calledBy: uuid.optional(),
     winningChoice: z.string().optional(),
     washReason: z.string().optional(),
@@ -54,7 +58,6 @@ const betSchema = z
       bet.myParticipation === "picked" ? !bet.myPick || bet.pickCount < 1 : bet.myPick !== null;
     const privateFieldsPresent =
       bet.picks !== undefined ||
-      bet.noGuessUserIds !== undefined ||
       bet.calledBy !== undefined ||
       bet.winningChoice !== undefined ||
       bet.washReason !== undefined ||
@@ -62,7 +65,7 @@ const betSchema = z
     if (
       invalidParticipation ||
       (bet.status === "ACTIVE" && privateFieldsPresent) ||
-      (bet.status !== "ACTIVE" && (bet.picks === undefined || bet.noGuessUserIds === undefined))
+      (bet.status !== "ACTIVE" && bet.picks === undefined)
     ) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid bet projection" });
     }

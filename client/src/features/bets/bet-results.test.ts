@@ -21,8 +21,8 @@ const locked: Bet = {
   myParticipation: "not_joined",
   viewerCanCall: false,
   viewerCanOverride: false,
+  participantIds: [],
   picks: [],
-  noGuessUserIds: [],
 };
 
 describe("awaitingPointsSettlement", () => {

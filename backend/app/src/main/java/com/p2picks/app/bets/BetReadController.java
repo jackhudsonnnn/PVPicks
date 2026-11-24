@@ -232,7 +232,12 @@ class BetReadController {
                         'myParticipation', CASE WHEN own.choice IS NOT NULL THEN 'picked'
                             WHEN EXISTS (SELECT 1 FROM bet_participants bp
                                          WHERE bp.bet_id = b.id AND bp.user_id = viewer.id) THEN 'no_guess'
-                            ELSE 'not_joined' END
+                            ELSE 'not_joined' END,
+                        -- Who's in is public from the start; which side each picked stays private until lock
+                        -- (owner decision, 2026-11-24).
+                        'participantIds', (SELECT COALESCE(jsonb_agg(bp.user_id ORDER BY bp.participation_order),
+                                                           '[]'::jsonb)
+                            FROM bet_participants bp WHERE bp.bet_id = b.id)
                     ) || jsonb_strip_nulls(jsonb_build_object(
                         'gameId', b.game_id, 'baseline', b.baseline,
                         'includesOvertime', b.includes_overtime, 'settledBy', b.settler_rule,
@@ -246,12 +251,7 @@ class BetReadController {
                                 jsonb_build_object('userId', bp.user_id, 'choice', p.choice)
                                 ORDER BY bp.participation_order), '[]'::jsonb)
                                 FROM bet_participants bp JOIN picks p
-                                  ON p.bet_id = bp.bet_id AND p.user_id = bp.user_id WHERE bp.bet_id = b.id),
-                            'noGuessUserIds', (SELECT COALESCE(jsonb_agg(bp.user_id ORDER BY bp.participation_order),
-                                                               '[]'::jsonb)
-                                FROM bet_participants bp LEFT JOIN picks p
-                                  ON p.bet_id = bp.bet_id AND p.user_id = bp.user_id
-                                WHERE bp.bet_id = b.id AND p.user_id IS NULL)
+                                  ON p.bet_id = bp.bet_id AND p.user_id = bp.user_id WHERE bp.bet_id = b.id)
                         ) || jsonb_strip_nulls(jsonb_build_object(
                             'lockedAt', b.locked_at))
                     END ||

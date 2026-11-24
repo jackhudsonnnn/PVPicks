@@ -116,6 +116,12 @@ public class BetLockService {
                 throw new IllegalStateException("Locked pick disappeared");
             }
         }
+        // No guess only exists while a bet is open: whoever has no pick at lock (they cleared it, or it was dropped
+        // above) is out of the bet, its counts and their tickets (owner decision, 2026-11-24).
+        jdbc.update("""
+                DELETE FROM bet_participants bp WHERE bp.bet_id = ?
+                  AND NOT EXISTS (SELECT 1 FROM picks p WHERE p.bet_id = bp.bet_id AND p.user_id = bp.user_id)
+                """, betId);
         if (jdbc.update("""
                 UPDATE bets SET status = 'PENDING', locked_at = clock_timestamp(), version = version + 1
                 WHERE id = ? AND status = 'ACTIVE'

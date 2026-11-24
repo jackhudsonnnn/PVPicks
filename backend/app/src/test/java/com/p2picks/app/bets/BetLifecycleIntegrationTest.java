@@ -101,7 +101,6 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
         for (JsonNode bet : bets) {
             assertThat(OpenApiSchemas.load("Bet").validate(bet)).isEmpty();
             assertThat(bet.has("picks")).isFalse();
-            assertThat(bet.has("noGuessUserIds")).isFalse();
             assertThat(bet.has("calledBy")).isFalse();
             assertThat(bet.has("winningChoice")).isFalse();
             assertThat(bet.path("myParticipation").asText()).isEqualTo("picked");
@@ -113,6 +112,9 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
         assertThat(hostActive.path("myParticipation").asText()).isEqualTo("no_guess");
         assertThat(hostActive.path("myPick").isNull()).isTrue();
         assertThat(hostActive.path("pickCount").asInt()).isEqualTo(2);
+        // Everyone sees who's in while it's open, No guess included, but not which side anyone picked.
+        assertThat(hostActive.path("participantIds")).extracting(JsonNode::asText).contains(host.toString());
+        assertThat(hostActive.path("participantIds").size()).isEqualTo(3);
 
         jdbc.update("""
                 UPDATE bets SET status = 'PENDING', locked_at = now() WHERE id IN (?, ?)
@@ -121,8 +123,6 @@ class BetLifecycleIntegrationTest extends IntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("Bet").validate(locked)).isEmpty();
         assertThat(locked.path("picks").size()).isEqualTo(2);
-        assertThat(locked.path("noGuessUserIds").size()).isEqualTo(1);
-        assertThat(locked.path("noGuessUserIds").get(0).asText()).isEqualTo(host.toString());
         assertThat(locked.has("winningChoice")).isFalse();
         assertThat(locked.has("remainderRule")).isFalse();
         JsonNode lockedSports = json.readTree(mvc.perform(get("/bets/" + sportsBet).cookie(hostSession))

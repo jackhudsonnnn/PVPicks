@@ -104,6 +104,7 @@ const bet: Bet = {
   myParticipation: "not_joined",
   viewerCanCall: false,
   viewerCanOverride: false,
+  participantIds: [],
 };
 
 const locked: Bet = {
@@ -112,7 +113,6 @@ const locked: Bet = {
   settledBy: "hosts",
   pickCount: 1,
   picks: [{ userId: user.id, choice: "Yes" }],
-  noGuessUserIds: [],
 };
 
 function renderApp() {

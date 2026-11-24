@@ -156,8 +156,15 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(proposedBet.path("modeId").asText()).isEqualTo("jackblack");
         assertThat(proposedBet.path("config").has("decks")).isFalse();
 
-        // The proposer is in already and can't leave; Ann joins (twice is fine); it's played, not picked.
-        assertThat(send(delete("/bets/{id}/jackblack/seat", bet), pat, null).getStatus()).isEqualTo(409);
+        // The proposer is in already but may leave like anyone; leaving takes them out completely (it's not one of
+        // their bets any more), and everyone can see who's in. Ann joins (twice is fine); it's played, not picked.
+        assertThat(proposedBet.path("participantIds")).extracting(JsonNode::asText).containsExactly(pat.id().toString());
+        assertThat(send(delete("/bets/{id}/jackblack/seat", bet), pat, null).getStatus()).isEqualTo(204);
+        JsonNode left = json.readTree(mvc.perform(get("/bets/{id}", bet).cookie(pat.session()))
+                .andReturn().getResponse().getContentAsString());
+        assertThat(left.path("myParticipation").asText()).isEqualTo("not_joined");
+        assertThat(left.path("participantIds")).isEmpty();
+        assertThat(join(pat, bet)).isEqualTo(204);
         assertThat(join(ann, bet)).isEqualTo(204);
         assertThat(join(ann, bet)).isEqualTo(204);
         assertThat(send(put("/bets/{id}/pick", bet), ann, Map.of("choice", "Up")).getStatus()).isEqualTo(400);

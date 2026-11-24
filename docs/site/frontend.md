@@ -114,8 +114,10 @@ earlier prototype (git tag `prototype-ui`).
   buttons, each asking to confirm. A host can only add people who follow them, and each person's
   invite preferences decide whether they join right away or get an
   invitation.
-- **Table page:** a card-room felt with members seated around it (each
-  showing their pick in the focused bet) and the open bets fanned as cards in
+- **Table page:** a card-room felt with the focused bet's players seated
+  around it, from the moment they join (you sit only if you're in; with no
+  bet, everyone at the table), each showing "In" while it's open (your own
+  pick for you) and their pick once it locks and the open bets fanned as cards in
   the middle; tap the front card to open its ticket. With more people than
   seats, the last seat is "+N others": it opens the focused ticket's Details
   when the felt shows that ticket's players, otherwise a list of who didn't

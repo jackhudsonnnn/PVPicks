@@ -27,6 +27,8 @@ const active: Bet = {
   myParticipation: "picked",
   viewerCanCall: false,
   viewerCanOverride: false,
+  // You picked, b picked, c cleared their pick (No guess).
+  participantIds: [me, b, c],
 };
 const locked: Bet = {
   ...active,
@@ -35,16 +37,19 @@ const locked: Bet = {
     { userId: me, choice: "Yes" },
     { userId: b, choice: "No" },
   ],
-  noGuessUserIds: [c],
+  // c's No guess is out of the bet once it locks.
+  participantIds: [me, b],
 };
 
 describe("seating", () => {
-  it("seats everyone while a bet is open for picks, you at the bottom", () => {
-    expect(arrangeSeats([a, me, b], me, active)).toEqual({
-      seated: [me, a, b],
+  it("seats who's in an open bet (you only if you've joined), and everyone with no bet", () => {
+    expect(arrangeSeats([a, me, b, c], me, active)).toEqual({
+      seated: [me, b, c],
       rail: [],
-      fromBet: false,
+      fromBet: true,
     });
+    // Not in it: you don't sit at the felt.
+    expect(arrangeSeats([a, me, b], me, { ...active, participantIds: [b] }).seated).toEqual([b]);
     expect(arrangeSeats([a, me, b], me, undefined)).toEqual({
       seated: [me, a, b],
       rail: [],
@@ -52,11 +57,11 @@ describe("seating", () => {
     });
   });
 
-  it("seats only the people in a locked bet, keeping table order", () => {
-    expect(arrangeSeats([a, b, me, c], me, locked).seated).toEqual([me, b, c]);
+  it("seats only the people in a locked bet, in joining order", () => {
+    expect(arrangeSeats([a, b, me, c], me, locked).seated).toEqual([me, b]);
     // Everyone around the felt is in the locked ticket, so "+n" opens its Details.
     expect(arrangeSeats([a, b, me, c], me, locked).fromBet).toBe(true);
-    expect(arrangeSeats([a, b, c], a, locked).seated).toEqual([b, c]);
+    expect(arrangeSeats([a, b, c], a, locked).seated).toEqual([b]);
   });
 
   it("moves overflow to an 'others' spot", () => {
@@ -74,9 +79,10 @@ describe("seating", () => {
 });
 
 describe("seat chips", () => {
-  it("shows only your own pick while Active", () => {
+  it("shows your own pick while Active, and everyone else in as just In", () => {
     expect(seatStatus(active, me, me)).toEqual({ label: "Yes", tone: "pick" });
-    expect(seatStatus(active, b, me)).toBeNull();
+    expect(seatStatus(active, b, me)).toEqual({ label: "In", tone: "pass" });
+    expect(seatStatus(active, a, me)).toBeNull();
     expect(seatStatus({ ...active, myPick: null, myParticipation: "no_guess" }, me, me)).toEqual({
       label: "No guess",
       tone: "pass",
@@ -85,7 +91,7 @@ describe("seat chips", () => {
 
   it("shows everyone's pick once locked", () => {
     expect(seatStatus(locked, b, me)).toEqual({ label: "No", tone: "pick" });
-    expect(seatStatus(locked, c, me)).toEqual({ label: "No guess", tone: "pass" });
+    expect(seatStatus(locked, c, me)).toBeNull();
     expect(seatStatus(locked, a, me)).toBeNull();
   });
 

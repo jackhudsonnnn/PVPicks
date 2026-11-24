@@ -5850,7 +5850,7 @@ components:
     Bet:
       type: object
       additionalProperties: false
-      required: [id, tableId, proposerId, modeId, config, question, choices, wagerCents, forFun, status, locksAt, myPick, myParticipation, pickCount, pointsSettled, viewerCanCall, viewerCanOverride]
+      required: [id, tableId, proposerId, modeId, config, question, choices, wagerCents, forFun, status, locksAt, myPick, myParticipation, participantIds, pickCount, pointsSettled, viewerCanCall, viewerCanOverride]
       properties:
         viewerCanCall:
           type: boolean
@@ -5965,10 +5965,12 @@ components:
                 format: uuid
               choice:
                 type: string
-        noGuessUserIds:
+        participantIds:
           description: >-
-            Participants with no guess, omitted while ACTIVE. No guess does
-            not place the participant in the pot.
+            Everyone in the bet, in joining order, in every status: pickers,
+            No guess participants while it's open (who cleared a pick; they're
+            out of the bet once it locks) and a card game's players. Which
+            side each picked stays private until lock.
           $ref: '#/components/schemas/UuidList'
       allOf:
         - if:
@@ -5995,12 +5997,10 @@ components:
           then:
             properties:
               picks: false
-              noGuessUserIds: false
           else:
-            required: [picks, noGuessUserIds]
+            required: [picks]
             properties:
               picks: true
-              noGuessUserIds: true
         - if:
             properties:
               status:

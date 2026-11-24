@@ -20,7 +20,7 @@ class BetContractTest {
     }
 
     @Test
-    void activeBetAllowsOnlyTheCallersPick() {
+    void activeBetShowsWhosInButOnlyTheCallersPick() {
         ObjectNode bet = bet("ACTIVE");
         bet.put("myPick", "Home");
         bet.put("myParticipation", "picked");
@@ -32,11 +32,9 @@ class BetContractTest {
                 .put("choice", "Away");
         assertThat(betSchema.validate(bet)).isNotEmpty();
         bet.remove("picks");
+        // Who's in is public while it's open; which side they picked isn't.
         bet.putArray("participantIds").add("30aa2f85-cd90-41b7-859b-9a7a54280ae5");
-        assertThat(betSchema.validate(bet)).isNotEmpty();
-        bet.remove("participantIds");
-        bet.putArray("noGuessUserIds").add("30aa2f85-cd90-41b7-859b-9a7a54280ae5");
-        assertThat(betSchema.validate(bet)).isNotEmpty();
+        assertThat(betSchema.validate(bet)).isEmpty();
     }
 
     @Test
@@ -66,9 +64,8 @@ class BetContractTest {
                 .put("userId", "30aa2f85-cd90-41b7-859b-9a7a54280ae5")
                 .put("choice", "Away");
         bet.put("pickCount", 1);
-        bet.putArray("noGuessUserIds").add("f95c6d6a-394a-4b2d-b072-a29ed48cfd99");
         assertThat(betSchema.validate(bet)).isEmpty();
-        bet.remove("noGuessUserIds");
+        bet.remove("picks");
         assertThat(betSchema.validate(bet)).isNotEmpty();
     }
 
@@ -161,10 +158,8 @@ class BetContractTest {
         bet.put("pointsSettled", false);
         bet.put("pickCount", 0);
         bet.put("myParticipation", "not_joined");
-        if (!status.equals("ACTIVE")) {
-            bet.putArray("picks");
-            bet.putArray("noGuessUserIds");
-        }
+        bet.putArray("participantIds");
+        if (!status.equals("ACTIVE")) bet.putArray("picks");
         bet.put("locksAt", "2026-11-11T12:00:00Z");
         bet.putNull("myPick");
         return bet;

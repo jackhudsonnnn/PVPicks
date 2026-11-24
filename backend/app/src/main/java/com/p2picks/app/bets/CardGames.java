@@ -113,8 +113,8 @@ class CardGames {
     }
 
     /**
-     * Joins or leaves a game while its join window is open, within the proposer's player range; the proposer can't
-     * leave. Everyone's held risk is repriced for the new count, and a joiner's has to fit their points limit.
+     * Joins or leaves a game while its join window is open, within the proposer's player range; anyone may leave,
+     * the proposer included (the game deals for whoever's in). Everyone's held risk is repriced for the new count, and a joiner's has to fit their points limit.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     Outcome seat(String mode, Jwt jwt, UUID betId, boolean joining, String key, Risk risk) {
@@ -144,8 +144,7 @@ class CardGames {
         boolean in = players.contains(userId);
         int changed = 0;
         if (!joining && in) {
-            if (bet.proposerId().equals(userId)) throw new Refused("You proposed this one.");
-            changed = jdbc.update("DELETE FROM card_players WHERE bet_id = ? AND user_id = ?", betId, userId);
+            changed = drop(betId, userId);
             reprice(bet, risk, players.size() - 1);
         } else if (joining && !in) {
             if (players.size() >= bet.config().path("maxPlayers").asInt()) throw new Refused("The game is full.");
@@ -385,8 +384,14 @@ class CardGames {
         jdbc.update("UPDATE card_players SET risk_cents = ? WHERE bet_id = ?", cents, bet.id());
     }
 
-    private void drop(UUID betId, UUID userId) {
-        jdbc.update("DELETE FROM card_players WHERE bet_id = ? AND user_id = ?", betId, userId);
+    /**
+     * Takes a player out of a game before the deal, completely: a card game you left (or were dropped from at the
+     * deal) isn't one of your bets (owner decision, 2026-11-24). Returns the seats removed.
+     */
+    private int drop(UUID betId, UUID userId) {
+        int removed = jdbc.update("DELETE FROM card_players WHERE bet_id = ? AND user_id = ?", betId, userId);
+        jdbc.update("DELETE FROM bet_participants WHERE bet_id = ? AND user_id = ?", betId, userId);
+        return removed;
     }
 
     private void changed(UUID tableId, UUID betId) {

@@ -5,9 +5,9 @@ import { STATUSES, type Bet } from "@/features/bets";
 const SEAT_CAP = 8;
 
 /**
- * Who sits at the felt. While the focused bet is Active nobody's participation is public yet, so everyone sits;
- * once it locks, only the people in it (pickers and No guess; for Jackblack, its players). You take the bottom seat when you're seated; the
- * rest keep table order.
+ * Who sits at the felt: with a bet focused, the people in it (owner decision, 2026-11-24: who's in is public from the
+ * start), so you sit only if you've joined; with none, everyone at the table. You take the bottom seat when you're
+ * seated; the rest keep joining order (table order with no bet).
  */
 export function arrangeSeats(
   memberIds: string[],
@@ -15,15 +15,10 @@ export function arrangeSeats(
   focused: Bet | undefined,
   cap = SEAT_CAP,
 ) {
-  const inBet =
-    // A finished card game (Jackblack, Hold'em) stays on the felt a little while; keep its players seated.
-    (focused?.status === "PENDING" ||
-      (!!focused && isCardGame(focused.modeId) && focused.status !== "ACTIVE")) &&
-    focused.picks &&
-    focused.noGuessUserIds
-      ? new Set([...focused.picks.map((pick) => pick.userId), ...focused.noGuessUserIds])
-      : null;
-  const eligible = inBet ? memberIds.filter((id) => inBet.has(id)) : memberIds;
+  const inBet = focused ? new Set(focused.participantIds) : null;
+  const eligible = inBet
+    ? focused!.participantIds.filter((id) => memberIds.includes(id))
+    : memberIds;
   const others = eligible.filter((id) => id !== me);
   const all = eligible.includes(me) ? [me, ...others] : others;
   // `fromBet`: everyone seated (and on the rail) is in the focused ticket, not just at the table.
@@ -49,15 +44,17 @@ export function seatStatus(
   me: string,
 ): { label: string; tone: SeatTone } | null {
   if (!bet) return null;
-  if (isCardGame(bet.modeId)) return cardGameSeat(bet, userId, me);
+  if (isCardGame(bet.modeId)) return cardGameSeat(bet, userId);
   if (bet.status === "ACTIVE") {
-    if (userId !== me) return null;
-    if (bet.myParticipation === "picked") return { label: bet.myPick!, tone: "pick" };
-    return bet.myParticipation === "no_guess" ? { label: "No guess", tone: "pass" } : null;
+    // Your own pick; everyone else is just "In" (their side stays private until lock).
+    if (userId === me && bet.myParticipation === "picked")
+      return { label: bet.myPick!, tone: "pick" };
+    if (userId === me && bet.myParticipation === "no_guess")
+      return { label: "No guess", tone: "pass" };
+    return bet.participantIds.includes(userId) ? { label: "In", tone: "pass" } : null;
   }
   const pick = bet.picks?.find((p) => p.userId === userId);
-  if (!pick)
-    return bet.noGuessUserIds?.includes(userId) ? { label: "No guess", tone: "pass" } : null;
+  if (!pick) return null;
   if (bet.status === "PENDING") return { label: pick.choice, tone: "pick" };
   if (bet.status === "WASHED") return { label: STATUSES.WASHED.label, tone: "washed" };
   if (bet.forFun)
@@ -74,18 +71,11 @@ export function seatStatus(
 const isCardGame = (modeId: Bet["modeId"]) => modeId === "jackblack" || modeId === "holdem";
 
 /**
- * The card games have no picks: their players are the bet's participants, which the server lists as No guess. (The
- * felt shows the live game's chips from the game itself; this is the fallback.)
+ * The card games have no picks: their players are the bet's participants. (The felt shows the live game's chips from
+ * the game itself; this is the fallback.)
  */
-function cardGameSeat(
-  bet: Bet,
-  userId: string,
-  me: string,
-): { label: string; tone: SeatTone } | null {
-  const playing =
-    bet.status === "ACTIVE"
-      ? userId === me && bet.myParticipation !== "not_joined"
-      : !!bet.noGuessUserIds?.includes(userId);
+function cardGameSeat(bet: Bet, userId: string): { label: string; tone: SeatTone } | null {
+  const playing = bet.participantIds.includes(userId);
   if (!playing) return null;
   if (bet.status === "ACTIVE") return { label: "In", tone: "pick" };
   if (bet.status === "PENDING") return { label: "Playing", tone: "pick" };

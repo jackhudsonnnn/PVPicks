@@ -154,6 +154,7 @@ const bet: Bet = {
   myParticipation: "picked",
   viewerCanCall: false,
   viewerCanOverride: false,
+  participantIds: [user.id],
 };
 
 function renderApp() {
@@ -391,9 +392,10 @@ describe("backend app", () => {
     expect(ticket.getByText("1.25")).toBeInTheDocument();
     expect(ticket.queryByText(/\d+ · \d+%/)).not.toBeInTheDocument();
     fireEvent.click(ticket.getByRole("button", { name: "Details" }));
-    expect(
-      await screen.findByText(/Your pick: Yes\. Other picks stay private/),
-    ).toBeInTheDocument();
+    // Who's in is public; which side anyone else picked isn't until lock.
+    const details = within(await screen.findByRole("dialog"));
+    expect(await details.findByText("Players (1)")).toBeInTheDocument();
+    expect(details.getByText("Yes")).toBeInTheDocument();
     expect(getProfile).not.toHaveBeenCalled();
   });
 
@@ -405,7 +407,7 @@ describe("backend app", () => {
         { userId: user.id, choice: "Yes" },
         { userId: "123e4567-e89b-42d3-a456-426614174004", choice: "No" },
       ],
-      noGuessUserIds: ["123e4567-e89b-42d3-a456-426614174003"],
+      participantIds: [user.id, "123e4567-e89b-42d3-a456-426614174004"],
       winningChoice: "Yes",
       deltasCents: { [user.id]: 125, "123e4567-e89b-42d3-a456-426614174004": -125 },
     };
@@ -418,7 +420,7 @@ describe("backend app", () => {
       nextCursor: null,
     }));
     vi.mocked(getProfile).mockImplementation(async (id) =>
-      id.endsWith("003")
+      id.endsWith("004")
         ? { id, displayName: "Deleted user", deleted: true }
         : { id, username: "otherplayer", hue: 3 },
     );
@@ -431,13 +433,12 @@ describe("backend app", () => {
     expect(listMyBets).toHaveBeenCalledWith({ status: "SETTLED" }, expect.any(AbortSignal));
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     const dialog = await screen.findByRole("dialog");
-    expect(await within(dialog).findByText("otherplayer")).toBeInTheDocument();
     expect(await within(dialog).findByText("Deleted user")).toBeInTheDocument();
-    expect(within(dialog).getByText("No guess")).toBeInTheDocument();
+    expect(within(dialog).getByText("No")).toBeInTheDocument();
     expect(within(dialog).getByText("-1.25")).toBeInTheDocument();
     expect(within(dialog).getByText("Points settled")).toBeInTheDocument();
     expect(within(dialog).getAllByText("Not yet")).toHaveLength(1);
-    expect(getProfile).toHaveBeenCalledTimes(2);
+    expect(getProfile).toHaveBeenCalledTimes(1);
   });
 
   it("shows a profile lookup error and retries without hiding the bet", async () => {
@@ -447,7 +448,6 @@ describe("backend app", () => {
       status: "PENDING",
       proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
-      noGuessUserIds: [],
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -480,7 +480,6 @@ describe("backend app", () => {
       status: "PENDING",
       proposerId: "123e4567-e89b-42d3-a456-426614174003",
       picks: [{ userId: "123e4567-e89b-42d3-a456-426614174003", choice: "No" }],
-      noGuessUserIds: [],
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -501,7 +500,6 @@ describe("backend app", () => {
       status: "PENDING",
       proposerId: memberId,
       picks: [{ userId: memberId, choice: "No" }],
-      noGuessUserIds: [],
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);
@@ -561,7 +559,6 @@ describe("backend app", () => {
       ...bet,
       status: "PENDING",
       picks: [{ userId: memberId, choice: "No" }],
-      noGuessUserIds: [],
     };
     route.pathname = `/tables/${table.id}`;
     vi.mocked(currentUser).mockResolvedValue(user);

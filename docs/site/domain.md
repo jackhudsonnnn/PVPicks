@@ -29,8 +29,9 @@ means mutual follows, not people you already share a table with.
 - `No guess` is not a wager; a sports choice named `Pass` is a real choice.
 - A bet is Active while accepting picks, Pending after lock, then Settled or
   Washed. Proposal does not automatically join.
-- Active views must not expose other users' individual choices or
-  participation; the caller may see their own and aggregate counts. Admin
+- Who's in a bet is public from the start (owner decision, 2026-11-24);
+  Active views must not expose other users' individual choices, only the
+  caller's own and aggregate counts. Admin
   accounts cannot use player APIs or participate in bets.
 - Winners split the losers' pot; cents that don't divide go one each to
   winners at random. Every mode is fair to everyone in it: no information

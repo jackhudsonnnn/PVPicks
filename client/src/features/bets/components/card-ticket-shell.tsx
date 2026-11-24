@@ -319,25 +319,23 @@ export function Card({
 
 /**
  * Joining (or leaving) while the join window is open: one button, so the controls bar keeps its height (why you
- * can't, and what joining holds against your limit, are in the status line and Details). Nothing for the proposer,
- * who's in already.
+ * can't, and what joining holds against your limit, are in the status line and Details). Anyone in can leave before
+ * the deal, the proposer included.
  */
 export function JoinControls({
   joined,
-  proposer,
   full,
   disabled,
   onJoin,
   onLeave,
 }: {
   joined: boolean;
-  proposer: boolean;
   full: boolean;
   disabled: boolean;
   onJoin: () => void;
   onLeave: () => void;
 }) {
-  if (proposer || (full && !joined)) return null;
+  if (full && !joined) return null;
   return (
     <Button
       size="sm"

@@ -55,7 +55,7 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void betLockSnapshotsAndRechecksEligibilityWithoutLosingParticipation() {
+    void betLockRechecksEligibilityAndDropsEveryoneLeftWithoutAPick() {
         UUID host = UUID.randomUUID();
         UUID exact = UUID.randomUUID();
         UUID over = UUID.randomUUID();
@@ -80,16 +80,18 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
         jdbc.update("INSERT INTO debt_caps (user_id, cap_cents) VALUES (?, 100), (?, 99)", exact, over);
         UUID bet = insertDebtBet(table, exact, host, "ACTIVE", false, true, false, 100, 0);
         jdbc.update("""
-                INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?), (?, ?)
-                """, bet, over, bet, frozen, bet, limited);
+                INSERT INTO bet_participants (bet_id, user_id) VALUES (?, ?), (?, ?), (?, ?), (?, ?)
+                """, bet, over, bet, frozen, bet, limited, bet, host);
         jdbc.update("""
                 INSERT INTO picks (bet_id, user_id, choice) VALUES (?, ?, 'No'), (?, ?, 'No'), (?, ?, 'No')
                 """, bet, over, bet, frozen, bet, limited);
         assertThat(betLocks.lock(bet)).isEqualTo(BetLockService.Outcome.LOCKED);
         assertThat(jdbc.queryForList("SELECT user_id FROM picks WHERE bet_id = ?", UUID.class, bet))
                 .containsExactly(exact);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id = ?", Integer.class, bet))
-                .isEqualTo(4);
+        // The host's No guess and the dropped picks are out of the bet once it locks (owner decision, 2026-11-24):
+        // they don't count, and it isn't one of their pending tickets.
+        assertThat(jdbc.queryForList("SELECT user_id FROM bet_participants WHERE bet_id = ?", UUID.class, bet))
+                .containsExactly(exact);
         assertThat(betLocks.lock(bet)).isEqualTo(BetLockService.Outcome.ALREADY_LOCKED);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM outbox WHERE aggregate_id = ? AND event_type = 'bet.locked.v1'
@@ -149,8 +151,9 @@ class BetLockIntegrationTest extends IntegrationTestSupport {
             assertThat(two.get(10, TimeUnit.SECONDS)).isEqualTo(BetLockService.Outcome.LOCKED);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM picks WHERE bet_id IN (?, ?) AND user_id = ?",
                     Integer.class, first, second, player)).isEqualTo(1);
+            // The lock that dropped their pick (over the cap) took them out of that bet too.
             assertThat(jdbc.queryForObject("SELECT count(*) FROM bet_participants WHERE bet_id IN (?, ?) AND user_id = ?",
-                    Integer.class, first, second, player)).isEqualTo(2);
+                    Integer.class, first, second, player)).isEqualTo(1);
         } finally {
             start.countDown();
             executor.shutdownNow();

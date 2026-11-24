@@ -38,6 +38,7 @@ export const bet = {
   pickCount: 1,
   myPick: "Yes",
   myParticipation: "picked",
+  participantIds: [user.id],
   viewerCanCall: false,
   viewerCanOverride: false,
 };

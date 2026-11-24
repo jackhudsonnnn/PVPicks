@@ -38,12 +38,6 @@ export function choiceTallies(bet: Bet): ChoiceTally[] | null {
   });
 }
 
-/** Everyone who joined: pickers first, then No guess, in the server's participation order. */
-export function participantIds(bet: Bet): string[] | null {
-  if (!bet.picks || !bet.noGuessUserIds) return null;
-  return [...bet.picks.map((pick) => pick.userId), ...bet.noGuessUserIds];
-}
-
 /** Points in the pot: one wager per person with a pick. Only known after lock. */
 export function potCents(bet: Bet): number | null {
   if (!bet.picks) return null;

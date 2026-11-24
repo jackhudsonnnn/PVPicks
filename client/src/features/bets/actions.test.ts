@@ -21,6 +21,7 @@ const bet = {
   pickCount: 0,
   myPick: null,
   myParticipation: "not_joined",
+  participantIds: [],
   viewerCanCall: false,
   viewerCanOverride: false,
 };

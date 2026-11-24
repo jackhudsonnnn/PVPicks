@@ -33,6 +33,7 @@ export interface ModeInfo {
 const PICK_NOTES = [
   "Sending a bet doesn't place your pick: you pick on the ticket like everyone else.",
   "Winners split the losers' stakes evenly. If every pick is on one side, or nobody picks, it washes and no points move.",
+  "Everyone can see who's in from the start; which side they picked stays hidden until lock. Clearing your pick leaves you in as No guess until lock, when you're out.",
 ];
 
 const SPORTS_NOTES = [
@@ -43,7 +44,7 @@ const SPORTS_NOTES = [
 ];
 
 const CARD_NOTES = [
-  "You're in your own game as soon as you open the table; others join from the ticket during the join window.",
+  "You're in your own game as soon as you open the table; others join from the ticket during the join window, and anyone (you included) can leave before the deal.",
   "Every shuffle is fixed and fingerprinted before the deal and revealed for checking once the game is over (ticket Details).",
   "A wager of 0 is a 4fun game: same play, no points.",
 ];

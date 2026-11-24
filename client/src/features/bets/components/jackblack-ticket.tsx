@@ -365,7 +365,6 @@ export function JackblackTicket({
     !game || preview ? null : status === "active" && canBet && left > 0 ? (
       <JoinControls
         joined={joined}
-        proposer={bet.proposerId === user.id}
         full={players.length >= rules.maxPlayers}
         disabled={blocked}
         onJoin={() => start({ kind: "jackblack-join", tableId: table.id, betId: bet.id })}

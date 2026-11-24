@@ -6,7 +6,6 @@ import {
   choiceTallies,
   formatClock,
   myResultCents,
-  participantIds,
   potCents,
   proposeBlock,
   u2pickBlock,
@@ -37,6 +36,7 @@ const active: Bet = {
   myParticipation: "picked",
   viewerCanCall: false,
   viewerCanOverride: false,
+  participantIds: [],
 };
 
 const locked: Bet = {
@@ -47,7 +47,7 @@ const locked: Bet = {
     { userId: a, choice: "Yes" },
     { userId: b, choice: "No" },
   ],
-  noGuessUserIds: ["123e4567-e89b-42d3-a456-426614174003"],
+  participantIds: [me, a, b],
 };
 
 describe("ticket model", () => {
@@ -66,13 +66,12 @@ describe("ticket model", () => {
     expect(secondsLeft(active, Date.parse("2026-11-13T12:05:00Z"))).toBe(0);
   });
 
-  it("keeps picks, pot and participants private until lock", () => {
+  it("keeps picks and the pot private until lock", () => {
     expect(choiceTallies(active)).toBeNull();
     expect(potCents(active)).toBeNull();
-    expect(participantIds(active)).toBeNull();
   });
 
-  it("tallies revealed picks; No guess is not in the pot", () => {
+  it("tallies revealed picks into the pot", () => {
     expect(choiceTallies(locked)).toEqual([
       { choice: "Yes", count: 2, pct: 67 },
       { choice: "No", count: 1, pct: 33 },
@@ -80,7 +79,6 @@ describe("ticket model", () => {
     ]);
     expect(potCents(locked)).toBe(450);
     expect(potCents({ ...locked, forFun: true })).toBe(0);
-    expect(participantIds(locked)).toEqual([me, a, b, "123e4567-e89b-42d3-a456-426614174003"]);
   });
 
   it("shows your result only on a resolved bet you picked", () => {

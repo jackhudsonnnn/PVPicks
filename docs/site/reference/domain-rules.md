@@ -226,15 +226,16 @@ The user chose debt caps as the only spending limit: the prototype's separate
 - **Pick or clear:** authorize the current member and betting permission;
   accept valid choices only while Active and before the server-side deadline.
   Serialize updates per bet, enforce the debt cap and preserve first
-  participation order. Clearing after joining keeps a No guess participant;
-  clearing before joining does not create one. Retry claims and changes must
+  participation order. Clearing after joining keeps a No guess participant
+  while the bet is open; clearing before joining does not create one. Retry claims and changes must
   commit together. The internal transaction emits an aggregate-count
   invalidation only when the count changes; it does not emit another player's
   identity or selection, or signal a selection-only change.
 - **Lock:** serialize with picks, membership and table-setting changes; recheck
   caps and apply the documented over-cap behavior. If a participant is frozen
-  or lacks betting permission at lock, remove their pick and retain their
-  No guess participation. Commit the Pending transition and outbox event
+  or lacks betting permission at lock, remove their pick. Everyone without a
+  pick at lock (No guess, or a removed pick) is then out of the bet: not in
+  its counts, its players or their tickets (owner decision, 2026-11-24). Commit the Pending transition and outbox event
   together. A delayed lock worker must not extend the pick deadline.
   Participant eligibility is evaluated at actual lock processing time, not
   reconstructed at the deadline.
@@ -251,8 +252,9 @@ The user chose debt caps as the only spending limit: the prototype's separate
   backend changes existing overdue bets in the connected database. Sports modes are logged and left Active
   until their feed-specific lifecycle is implemented. A scan is not a
   deadline guarantee; the pick transaction still rejects late changes.
-- **Reads and recovery:** Active views expose only the caller's own state and
-  aggregate counts, never other participants or picks. Admin audit views follow
+- **Reads and recovery:** who's in (`participantIds`) is public in every
+  status (owner decision, 2026-11-24); Active views expose only the caller's
+  own pick and aggregate counts, never anyone else's pick. Admin audit views follow
   the same pre-lock restrictions. After lock, authorized views may reveal
   picks. Failed transactions leave no partial transition; an unavailable
   database must not be interpreted as an empty set of picks.
@@ -613,12 +615,15 @@ reports, strikes, feedback notes and the admin audit log are personal
 moderation data, readable only by admins, and their retention period is not
 decided yet.
 
-Clearing an existing pick keeps that player as a No guess participant outside the
-pot; clearing before joining does not create a participant. Because the backend stores
-No guess as no pick row, participation must be retained separately from picks.
-The draft bet view exposes No guess participant IDs only after lock.
-The caller can always distinguish their own `not_joined`, `no_guess` and
-`picked` states without seeing other Active participants.
+Clearing an existing pick keeps that player in as a No guess participant
+(outside the pot) while the bet is open, shown as joined to everyone; at lock
+they're out of the bet (owner decision, 2026-11-24). Clearing before joining
+does not create a participant. Because the backend stores No guess as no pick
+row, participation is kept separately from picks. Bet reads list everyone in
+(`participantIds`) in every status; the caller can always tell their own
+`not_joined`, `no_guess` and `picked` states. Card games have no No guess:
+leaving before the deal (anyone may, the proposer included) takes you out
+completely.
 Admin audit views must also hide Active participation and picks, including
 user-specific participation-derived counts, until the bet locks. Admin
 accounts cannot use player APIs or participate in bets. The existing schema
@@ -772,7 +777,8 @@ review, and group reads stay private to the pair.
 Owner rule, 2026-11-21: every mode is fair to everyone in it.
 
 - **No information advantage.** Nobody sees anything that bears on their
-  choice before anyone else: picks stay hidden until lock, and where players
+  choice before anyone else: picks stay hidden until lock (who's in is
+  public; which side they took isn't), and where players
   act in turns, choices are made together and revealed together (no
   sequential, visible turns).
 - **No structural edge.** Proposing a bet, dealing or going first gives no
@@ -831,7 +837,8 @@ one game of several rounds:
   player deals once per **rotation**; a game is players × rotations rounds.
 - **Who can propose** is a table setting, `jackblackAccess`: `everyone`
   (default), `hosts` or `off`. "Only hosts start bets" applies too. The
-  proposer is the first player and can't leave their own game.
+  proposer is the first player; like anyone in, they can leave before the
+  deal, which takes them out completely (owner decision, 2026-11-24).
 - **Ante and join window** are the shared wager slider (0.10–10 points a
   hand, or 0 for a 4fun game: hands still win, lose or push, but totals stay
   at 0) and the shared window
@@ -942,8 +949,8 @@ like Jackblack:
 - **Who can propose** is a table setting, `holdemAccess`: `everyone`
   (default), `hosts` or `off`; "Only hosts start bets" applies too. Players
   join during the join window, within the proposer's players range (2–9 on one
-  slider, default 2–9; fewer than its minimum at the deal washes the game); the
-  proposer can't leave.
+  slider, default 2–9; fewer than its minimum at the deal washes the game);
+  anyone, the proposer included, can leave before the deal.
 - **Betting.** No-limit, in turn: fold, check, call, raise (at least the
   current bet plus the last full raise) or all in. An all-in for less than a
   full raise doesn't reopen raising to players who already acted (they may
