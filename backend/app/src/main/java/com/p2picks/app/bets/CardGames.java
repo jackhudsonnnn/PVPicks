@@ -113,9 +113,8 @@ class CardGames {
     }
 
     /**
-     * Joins or leaves a game while its join window is open (not in its last seconds, owner decision 2026-11-22),
-     * within the proposer's player range; the proposer can't leave. Everyone's held risk is repriced for the new
-     * count, and a joiner's has to fit their points limit.
+     * Joins or leaves a game while its join window is open, within the proposer's player range; the proposer can't
+     * leave. Everyone's held risk is repriced for the new count, and a joiner's has to fit their points limit.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     Outcome seat(String mode, Jwt jwt, UUID betId, boolean joining, String key, Risk risk) {
@@ -143,14 +142,6 @@ class CardGames {
 
         List<UUID> players = players(betId);
         boolean in = players.contains(userId);
-        if (joining != in) {
-            try {
-                BetPickService.requireBeforeLateEntry(jdbc, betId);
-            } catch (BetPickService.LateEntry late) {
-                throw new Refused("The table's closed to joining and leaving "
-                        + BetPickService.LATE_ENTRY_SECONDS + " seconds before the deal.");
-            }
-        }
         int changed = 0;
         if (!joining && in) {
             if (bet.proposerId().equals(userId)) throw new Refused("You proposed this one.");

@@ -9,7 +9,6 @@ import type { Bet } from "@/features/bets/api";
 import { canBetAt, type Table, type TableSummary } from "@/features/tables";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { formatClock, secondsLeft, ticketStatus } from "@/features/bets/ticket-model";
-import { LATE_ENTRY_SEC } from "@/features/bets/wager";
 import {
   STREET_LABEL,
   holdemPlayers,
@@ -21,6 +20,7 @@ import {
 } from "@/features/bets/holdem";
 import { useHoldemGame } from "@/features/bets/holdem-game";
 import { BetDetailsDialog } from "./bet-details";
+import { ResendButton } from "./resend-button";
 import type { BetActions } from "./bet-controls";
 import { TicketFooter } from "./ticket-footer";
 import { ValueSlider } from "./form-parts";
@@ -448,11 +448,8 @@ function statusLine(
   if (game.phase === "waiting") {
     const clock = formatClock(Math.max(0, join.left));
     if (join.joined)
-      return join.left <= LATE_ENTRY_SEC
-        ? "You're in. Dealing soon."
-        : `You're in · deal in ${clock}`;
+      return join.left > 0 ? `You're in · deal in ${clock}` : "You're in. Dealing now.";
     if (!join.canBet) return "You can't bet at this table.";
-    if (join.left <= LATE_ENTRY_SEC) return "Joining's closed for the deal.";
     if (join.full) return "The game is full.";
     return `Not in · join within ${clock}`;
   }
@@ -539,7 +536,6 @@ export function HoldemTicket({
       joined={joined}
       proposer={bet.proposerId === user.id}
       full={players.length >= rules.maxPlayers}
-      late={left <= LATE_ENTRY_SEC}
       disabled={blocked}
       onJoin={() => actions?.start({ kind: "holdem-join", tableId: table.id, betId: bet.id })}
       onLeave={() => actions?.start({ kind: "holdem-leave", tableId: table.id, betId: bet.id })}
@@ -596,7 +592,12 @@ export function HoldemTicket({
         status={status}
         joinLeft={left}
         progress={`Hand ${hand} / ${hands}`}
-        details={<BetDetailsDialog bet={bet} table={table} {...people} disabled={preview} />}
+        details={
+          <span className="flex items-center">
+            {!preview && <ResendButton bet={bet} tableId={table.id} />}
+            <BetDetailsDialog bet={bet} table={table} {...people} disabled={preview} />
+          </span>
+        }
       />
 
       <div className="perforation mx-4" />

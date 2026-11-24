@@ -19,14 +19,6 @@ public class BetPickService {
     public enum Outcome { UPDATED, REPLAYED, CONFLICT, UNAUTHORIZED, FORBIDDEN, NOT_FOUND }
 
     static class Closed extends RuntimeException {}
-    /** A first pick (or a Jackblack join or leave) in the last {@link #LATE_ENTRY_SECONDS} before lock. */
-    static class LateEntry extends RuntimeException {}
-
-    /**
-     * No new entries this close to lock (owner decision, 2026-11-22): nobody joins after watching the counts settle.
-     * Anyone already in may still change or clear their pick until lock.
-     */
-    static final int LATE_ENTRY_SECONDS = 10;
     static class InvalidChoice extends RuntimeException {}
     static class DebtCapExceeded extends RuntimeException {}
 
@@ -107,7 +99,6 @@ public class BetPickService {
 
         List<String> previous = jdbc.query("SELECT choice FROM picks WHERE bet_id = ? AND user_id = ?",
                 (rs, row) -> rs.getString("choice"), betId, userId);
-        if (previous.isEmpty() && choice != null) requireBeforeLateEntry(betId);
         int changed;
         if (choice == null) {
             changed = jdbc.update("DELETE FROM picks WHERE bet_id = ? AND user_id = ?", betId, userId);
@@ -132,18 +123,6 @@ public class BetPickService {
         }
         authentication.requireUnexpired(jwt);
         return Outcome.UPDATED;
-    }
-
-    /** Throws when a new entry is too close to lock; shared with Jackblack's join and leave. */
-    static void requireBeforeLateEntry(org.springframework.jdbc.core.JdbcTemplate jdbc, UUID betId) {
-        Boolean early = jdbc.queryForObject("""
-                SELECT locks_at - make_interval(secs => ?) > clock_timestamp() FROM bets WHERE id = ?
-                """, Boolean.class, LATE_ENTRY_SECONDS, betId);
-        if (!Boolean.TRUE.equals(early)) throw new LateEntry();
-    }
-
-    private void requireBeforeLateEntry(UUID betId) {
-        requireBeforeLateEntry(jdbc, betId);
     }
 
     private void requireBeforeDeadline(UUID betId) {

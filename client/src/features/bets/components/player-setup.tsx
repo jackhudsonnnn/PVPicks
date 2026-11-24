@@ -1,14 +1,18 @@
+import { useEffect } from "react";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { LoadingList } from "@/components/loading";
-import { byPosition, type GamePlayer, type GamePlayers } from "@/features/sports";
-import { halfLine, playerCount, type PlayerMode } from "@/features/bets/sports-model";
+import { forStat, type GamePlayer, type GamePlayers } from "@/features/sports";
+import { halfLine, playerCount, startingLine, type PlayerMode } from "@/features/bets/sports-model";
 import { Section, ValueSlider } from "./form-parts";
 
 /**
@@ -34,6 +38,19 @@ export function PlayerSetup({
   line: number;
   onLine: (line: number) => void;
 }) {
+  // The lowest line or target that isn't already reached: just above the chosen players' current numbers. It
+  // follows them as the game goes on (the roster refreshes), so a bet that would wash at lock can't be proposed.
+  const chosen = playerIds.flatMap((id) => roster?.players.find((p) => p.id === id) ?? []);
+  const floor =
+    mode === "either_or" || !stat || chosen.length === 0
+      ? null
+      : startingLine(
+          mode,
+          chosen.map((p) => p.stats[stat] ?? 0),
+        );
+  useEffect(() => {
+    if (floor !== null && line < floor) onLine(floor);
+  }, [floor, line, onLine]);
   if (!roster) return <LoadingList label="Loading players" rows={3} rowClassName="h-10" />;
   if (roster.players.length === 0)
     return (
@@ -44,6 +61,17 @@ export function PlayerSetup({
   const statLabel = roster.stats.find((s) => s.key === stat)?.label ?? "";
   const slots = Array.from({ length: playerCount(mode) }, (_, i) => i);
   const current = (player: GamePlayer) => (stat ? (player.stats[stat] ?? 0) : 0);
+  // The stat's positions first, by value; everyone else under a divider (sports/roster-order).
+  const ordered = forStat(roster.players, stat ?? "");
+  // A player chosen in another slot isn't offered again.
+  const free = (slot: number) => (p: GamePlayer) =>
+    !playerIds.includes(p.id) || playerIds[slot] === p.id;
+  const item = (p: GamePlayer) => (
+    <SelectItem key={p.id} value={p.id}>
+      {p.position ? `${p.position} · ` : ""}
+      {p.name} · {p.team ?? "?"} · {current(p)} {statLabel.toLowerCase()}
+    </SelectItem>
+  );
 
   function choose(slot: number, id: string) {
     const next = [...playerIds];
@@ -74,14 +102,16 @@ export function PlayerSetup({
               <SelectValue placeholder="Choose a player" />
             </SelectTrigger>
             <SelectContent>
-              {byPosition(roster.players)
-                .filter((p) => !playerIds.includes(p.id) || playerIds[slot] === p.id)
-                .map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.position ? `${p.position} · ` : ""}
-                    {p.name} · {p.team ?? "?"} · {current(p)} {statLabel.toLowerCase()}
-                  </SelectItem>
-                ))}
+              {ordered.main.filter(free(slot)).map(item)}
+              {ordered.others.some(free(slot)) && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Other players</SelectLabel>
+                    {ordered.others.filter(free(slot)).map(item)}
+                  </SelectGroup>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -93,18 +123,22 @@ export function PlayerSetup({
             value={line}
             // A Prop Hunt line ends in .5 (never a push); a target is a whole number. Both move by 1.
             step={1}
-            min={mode === "prop_hunt" ? 0.5 : 1}
+            min={floor ?? (mode === "prop_hunt" ? 0.5 : 1)}
             max={mode === "prop_hunt" ? 999.5 : 999}
             label={mode === "prop_hunt" ? "Stat line" : "Target"}
             // Room for any game: yards run into the hundreds (passing record 554); counting stats stay under 100.
             sliderMax={(stat?.includes("yards") ? 600 : 100) - (mode === "prop_hunt" ? 0.5 : 0)}
-            onChange={(v) => onLine(mode === "prop_hunt" ? halfLine(v, 0.5, 999.5) : v)}
+            onChange={(v) =>
+              onLine(Math.max(floor ?? 0, mode === "prop_hunt" ? halfLine(v, 0.5, 999.5) : v))
+            }
           />
-          <span className="font-normal">
-            {mode === "prop_hunt"
-              ? "It has to start above the player's number; if they pass it before picks lock, the bet washes."
-              : "It has to start above both players' numbers; if either reaches it before picks lock, the bet washes. If neither gets there, Neither wins."}
-          </span>
+          {chosen.length > 0 && stat && (
+            <span className="font-normal">
+              Now: {chosen.map((p) => `${p.name} ${p.stats[stat] ?? 0}`).join(" · ")}{" "}
+              {statLabel.toLowerCase()}. The {mode === "prop_hunt" ? "line" : "target"} starts above
+              that.
+            </span>
+          )}
         </div>
       )}
     </Section>

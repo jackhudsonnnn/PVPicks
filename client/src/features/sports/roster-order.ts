@@ -62,3 +62,39 @@ export function byPosition(players: readonly GamePlayer[]): GamePlayer[] {
       a.name.localeCompare(b.name),
   );
 }
+
+const RB = ["RB", "HB", "FB"];
+
+/**
+ * The positions that rack up each NFL stat, most relevant first (owner decision, 2026-11-24). NBA stats have no entry:
+ * every position plays every stat, so they're ordered by value alone.
+ */
+const STAT_POSITIONS: Record<string, string[][]> = {
+  passing_yards: [["QB"], RB, ["WR"], ["TE"]],
+  rushing_yards: [RB, ["QB"], ["WR"], ["TE"]],
+  receiving_yards: [["WR"], ["TE"], RB],
+  receptions: [["WR"], ["TE"], RB],
+  touchdowns: [RB, ["WR"], ["TE"], ["QB"]],
+};
+
+/**
+ * Players for a stat's picker: `main` is the stat's positions in order of relevance, each by its current value
+ * (highest first), so mid-game the likeliest picks lead (both quarterbacks for passing yards); `others` is everyone
+ * else by value, shown under a divider. Ties keep the roster order (position, team, name).
+ */
+export function forStat(players: readonly GamePlayer[], stat: string) {
+  const value = (p: GamePlayer) => p.stats[stat] ?? 0;
+  const groups = STAT_POSITIONS[stat];
+  const byValue = (list: GamePlayer[]) =>
+    list
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => value(b.p) - value(a.p) || a.i - b.i)
+      .map(({ p }) => p);
+  const roster = byPosition(players);
+  if (!groups) return { main: byValue(roster), others: [] as GamePlayer[] };
+  const group = (p: GamePlayer) =>
+    groups.findIndex((codes) => codes.includes((p.position ?? "").toUpperCase()));
+  const main = groups.flatMap((_, g) => byValue(roster.filter((p) => group(p) === g)));
+  const others = byValue(roster.filter((p) => group(p) === -1));
+  return { main, others };
+}

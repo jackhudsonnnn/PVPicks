@@ -272,6 +272,9 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         points("NBA-pm1", 25, Instant.now().minusSeconds(60));
         locks.lock(prop);
         assertThat(state(prop)).isEqualTo("WASHED:" + PlayerLockRules.LINE_REACHED);
+        // Resending it on the same terms is a new proposal, checked the same way: he's past 24.5 now.
+        propose(aliceSession, csrf, "prop_hunt", "{\"line\":24.5,\"stat\":\"points\",\"players\":[\"NBA-pm1\"]}",
+                409);
         // Live stats in ticket Details: the player's number when proposed, at lock and now, against the line.
         JsonNode live = json.readTree(mvc.perform(get("/bets/" + prop + "/live").cookie(aliceSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());

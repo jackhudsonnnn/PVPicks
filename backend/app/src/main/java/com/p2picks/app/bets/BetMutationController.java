@@ -309,9 +309,6 @@ class BetMutationController {
             };
         } catch (BetPickService.InvalidChoice exception) {
             return error(400, "invalid_choice", "The choice does not match the bet.");
-        } catch (BetPickService.LateEntry exception) {
-            return error(409, "late_entry", "Picks close to newcomers " + BetPickService.LATE_ENTRY_SECONDS
-                    + " seconds before lock. If you're already in, you can still change your pick.");
         } catch (BetPickService.Closed exception) {
             return error(409, "bet_closed", "The pick window has closed.");
         } catch (BetPickService.DebtCapExceeded exception) {

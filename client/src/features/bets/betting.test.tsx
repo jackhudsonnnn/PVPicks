@@ -14,12 +14,15 @@ import { modeAvailability, summaryOf } from "@/test/api-fixtures";
 import { mutationRequest } from "@/lib/api-client";
 import { PICK_WINDOW_DEFAULT } from "./wager";
 
-const route = vi.hoisted(() => ({ pathname: "/" }));
+const route = vi.hoisted(() => ({ pathname: "/", search: {} as Record<string, string> }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
   useNavigate: () => () => Promise.resolve(),
-  useRouterState: ({ select }: { select: (state: { location: { pathname: string } }) => string }) =>
-    select({ location: route }),
+  useRouterState: ({
+    select,
+  }: {
+    select: (state: { location: { pathname: string; search: Record<string, string> } }) => unknown;
+  }) => select({ location: route }),
 }));
 vi.mock("@/features/auth/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/auth/api")>()),
@@ -145,6 +148,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.resetAllMocks();
   route.pathname = `/tables/${table.id}`;
+  route.search = {};
   vi.mocked(currentUser).mockResolvedValue(user);
   vi.mocked(getTable).mockResolvedValue(table);
   vi.mocked(listTableBets).mockResolvedValue([bet]);
@@ -185,6 +189,22 @@ async function openTab(name: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("U2Pick betting", () => {
+  it("resends a finished bet: the proposal sheet opens filled in with its terms", async () => {
+    const settled: Bet = {
+      ...locked,
+      status: "SETTLED",
+      question: "Will Sam be late?",
+      choices: ["Yes", "No", "Maybe"],
+      winningChoice: "Yes",
+      settledBy: "anyone",
+    };
+    vi.mocked(listTableBets).mockResolvedValue([settled]);
+    route.search = { resend: settled.id };
+    renderApp();
+    expect(await screen.findByLabelText("Bet question")).toHaveValue("Will Sam be late?");
+    expect(screen.getByDisplayValue("Maybe")).toBeInTheDocument();
+  });
+
   it("opens a mode's info from the (i) beside its name, in place of the setup", async () => {
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: "Bet" }));

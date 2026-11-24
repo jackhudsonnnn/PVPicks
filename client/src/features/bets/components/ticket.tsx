@@ -20,6 +20,7 @@ import type { Bet } from "@/features/bets/api";
 import { canBetAt, type Table, type TableSummary } from "@/features/tables";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { BetDetailsDialog } from "./bet-details";
+import { ResendButton } from "./resend-button";
 import type { BetActions } from "./bet-controls";
 import { useNow } from "@/lib/use-now";
 import { useTicker, tickerStatus } from "@/features/sports";
@@ -33,7 +34,6 @@ import {
   secondsLeft,
   ticketStatus,
 } from "@/features/bets/ticket-model";
-import { LATE_ENTRY_SEC } from "@/features/bets/wager";
 import { OutcomeMenu, SettlerLabel, SettlerWho } from "./outcome-menu";
 import { JackblackTicket } from "./jackblack-ticket";
 import { HoldemTicket } from "./holdem-ticket";
@@ -85,8 +85,7 @@ function PickTicket({
   const canBet = canBetAt(table, user.id);
   const blocked = !actions || actions.busy || !!actions.pending || !!actions.storageError;
   // In the last seconds only someone already in can change their pick (the server enforces it too).
-  const late = status === "active" && left <= LATE_ENTRY_SEC && !bet.myPick;
-  const canPick = status === "active" && canBet && left > 0 && !blocked && !late;
+  const canPick = status === "active" && canBet && left > 0 && !blocked;
   const proposer = usePerson(bet.proposerId, user, expire, peopleKey);
   const ticker = useTicker(user.id);
   const game = bet.gameId ? ticker.data?.find((g) => g.id === bet.gameId) : undefined;
@@ -179,14 +178,17 @@ function PickTicket({
             </p>
           </div>
 
-          <BetDetailsDialog
-            bet={bet}
-            table={table}
-            user={user}
-            expire={expire}
-            peopleKey={peopleKey}
-            disabled={preview}
-          />
+          <span className="flex items-center">
+            {!preview && <ResendButton bet={bet} tableId={table.id} />}
+            <BetDetailsDialog
+              bet={bet}
+              table={table}
+              user={user}
+              expire={expire}
+              peopleKey={peopleKey}
+              disabled={preview}
+            />
+          </span>
         </div>
         {bet.forFun && (
           <div className="-mt-2 flex flex-wrap gap-1.5">
@@ -255,7 +257,7 @@ function PickTicket({
           <div className="flex items-center justify-between gap-3">
             <p className="flex min-w-0 items-center gap-2 text-xs text-ticket-muted">
               <EyeOff className="size-3.5 shrink-0" />
-              {activeHint(bet, canBet, wager, late)}
+              {activeHint(bet, canBet, wager)}
             </p>
             {canOverride && (
               <OutcomeMenu

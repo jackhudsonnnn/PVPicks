@@ -332,7 +332,6 @@ export function JoinControls({
   joined,
   proposer,
   full,
-  late,
   disabled,
   onJoin,
   onLeave,
@@ -340,13 +339,11 @@ export function JoinControls({
   joined: boolean;
   proposer: boolean;
   full: boolean;
-  /** The last seconds before the deal: nobody joins or leaves. */
-  late: boolean;
   disabled: boolean;
   onJoin: () => void;
   onLeave: () => void;
 }) {
-  if (proposer || late || (full && !joined)) return null;
+  if (proposer || (full && !joined)) return null;
   return (
     <Button
       size="sm"

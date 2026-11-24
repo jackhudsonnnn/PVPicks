@@ -20,11 +20,17 @@ export const Route = createFileRoute("/tables/$tableId")({
     ],
   }),
   // ?tab=peers opens the Peers (members) tab, e.g. from a ticket's player avatars; ?profile=<user id> opens that
-  // person's profile, e.g. from a ticket's proposer.
-  validateSearch: (search: Record<string, unknown>): { tab?: "peers"; profile?: string } => ({
+  // person's profile, e.g. from a ticket's proposer; ?resend=<bet id> opens the proposal sheet filled in with that
+  // finished bet's terms.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab?: "peers"; profile?: string; resend?: string } => ({
     ...(search["tab"] === "peers" ? { tab: "peers" as const } : {}),
     ...(typeof search["profile"] === "string" && UUID.test(search["profile"])
       ? { profile: search["profile"] }
+      : {}),
+    ...(typeof search["resend"] === "string" && UUID.test(search["resend"])
+      ? { resend: search["resend"] }
       : {}),
   }),
   // The root renders App for every path; this route only provides the path and page metadata.

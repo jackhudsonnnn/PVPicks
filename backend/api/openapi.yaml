@@ -903,7 +903,7 @@ paths:
       operationId: joinHoldem
       summary: Join a Hold'em game
       description: >-
-        While the join window is open (not in its last 10 seconds), up to 9
+        While the join window is open, up to 9
         players. Both buy-ins (200 big blinds) must fit your points limit;
         it's checked again at the deal.
       parameters:

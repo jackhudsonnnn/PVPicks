@@ -60,10 +60,8 @@ export function myResultCents(bet: Bet, userId: string): number | null {
 }
 
 /** The line under an active ticket's choices, from the viewer's point of view. */
-export function activeHint(bet: Bet, canBet: boolean, wager: string, late = false) {
+export function activeHint(bet: Bet, canBet: boolean, wager: string) {
   if (!canBet) return "A host turned off betting for you at this table.";
-  if (late && !bet.myPick)
-    return "Too late to get in: picks close to newcomers 10 seconds before lock.";
   const stake = bet.forFun
     ? "4fun: no points at stake."
     : `${wager} pts goes in the pot when picks lock.`;

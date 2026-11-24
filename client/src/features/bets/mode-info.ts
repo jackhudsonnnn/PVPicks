@@ -32,7 +32,6 @@ export interface ModeInfo {
 
 const PICK_NOTES = [
   "Sending a bet doesn't place your pick: you pick on the ticket like everyone else.",
-  "Nobody can make a first pick in the last 10 seconds before lock; changing a pick is still fine.",
   "Winners split the losers' stakes evenly. If every pick is on one side, or nobody picks, it washes and no points move.",
 ];
 
@@ -44,7 +43,7 @@ const SPORTS_NOTES = [
 ];
 
 const CARD_NOTES = [
-  "You're in your own game as soon as you open the table; others join from the ticket during the join window (not in its last 10 seconds).",
+  "You're in your own game as soon as you open the table; others join from the ticket during the join window.",
   "Every shuffle is fixed and fingerprinted before the deal and revealed for checking once the game is over (ticket Details).",
   "A wager of 0 is a 4fun game: same play, no points.",
 ];

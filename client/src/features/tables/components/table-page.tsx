@@ -96,10 +96,13 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const peopleKey = userKey(user.id, "people");
   const betsKey = userKey(user.id, table.id, "bets");
   const search = useRouterState({
-    select: (state) => state.location.search as { tab?: string; profile?: string } | undefined,
+    select: (state) =>
+      state.location.search as { tab?: string; profile?: string; resend?: string } | undefined,
   });
   const requestedTab = search?.tab;
   const requestedProfile = search?.profile;
+  // "Resend" on a finished ticket (here, on Home or on Tickets) links here with ?resend=<betId>.
+  const requestedResend = search?.resend ?? null;
   const [tab, setTab] = useState<TabId>(requestedTab === "peers" ? "peers" : "table");
   const [focusId, setFocusId] = useState<string | undefined>();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -120,7 +123,7 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   }, [requestedProfile]);
   // Switching tabs or closing the profile yourself drops the search, so the same link works again next time.
   const clearSearch = () => {
-    if (requestedTab || requestedProfile)
+    if (requestedTab || requestedProfile || requestedResend)
       void navigate({ to: "/tables/$tableId", params: { tableId: table.id }, replace: true });
   };
   const chooseTab = (next: TabId) => {
@@ -186,6 +189,12 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
   const opened = useBet(user.id, table.id, openId, bets.data, expire);
+  const resending = useBet(user.id, table.id, requestedResend, bets.data, expire);
+  useEffect(() => {
+    if (!resending) return;
+    setOpenId(null);
+    setProposing(true);
+  }, [resending]);
   // "+N others" on the felt: the focused ticket's Details when the felt shows its players, else who didn't fit.
   const { rail, fromBet } = arrangeSeats(table.memberIds, user.id, focused);
   const [othersOpen, setOthersOpen] = useState(false);
@@ -359,7 +368,11 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
 
       <ProposeBetSheet
         open={proposing}
-        onOpenChange={setProposing}
+        onOpenChange={(next) => {
+          setProposing(next);
+          if (!next) clearSearch();
+        }}
+        from={resending}
         table={table}
         user={user}
         expire={expire}

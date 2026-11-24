@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Eye, Info, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,11 +15,22 @@ import { Section, ValueSlider } from "./form-parts";
 import { U2PickEditor } from "./u2pick-editor";
 import { JackblackSetup, JackblackWorstCase } from "./jackblack-setup";
 import { HoldemSetup, HoldemWorstCase } from "./holdem-setup";
-import { DEFAULT_HOLDEM_RULES, holdemRulesProblem, type HoldemRules } from "@/features/bets/holdem";
-import { DEFAULT_RULES, rulesProblem, type JackblackRules } from "@/features/bets/jackblack";
-import { type ModeDef, useModeAvailability } from "@/features/bets/modes";
+import {
+  DEFAULT_HOLDEM_RULES,
+  holdemRulesFromConfig,
+  holdemRulesProblem,
+  type HoldemRules,
+} from "@/features/bets/holdem";
+import {
+  DEFAULT_RULES,
+  rulesFromConfig,
+  rulesProblem,
+  type JackblackRules,
+} from "@/features/bets/jackblack";
+import { MODES, type ModeDef, useModeAvailability } from "@/features/bets/modes";
 import { ModeGrid } from "./mode-grid";
 import { ModeInfo } from "./mode-info";
+import { GameNow } from "./game-now";
 import type { SettlerRule } from "@/features/bets/types";
 import { cleanOptions, customBetProblem } from "@/features/bets/u2pick";
 import {
@@ -74,7 +85,10 @@ export function ProposeBetSheet({
   expire,
   peopleKey,
   actions,
+  from,
 }: {
+  /** Resend: a finished bet whose terms fill the form (the proposer can change them before sending). */
+  from?: Bet | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   table: Table;
@@ -109,6 +123,54 @@ export function ProposeBetSheet({
   const leagues: TickerGame["league"][] = ["NBA", "NFL"];
   const games = proposableGames(ticker.data).filter((g) => leagues.includes(g.league));
   const game = games.find((g) => g.id === gameId);
+  // A resent bet's game that can't take new bets any more (it's over or postponed).
+  const lostGame = gameId !== null && ticker.data !== undefined && !game;
+
+  // Resend: fill the form with a finished bet's terms once the sheet opens with it.
+  useEffect(() => {
+    if (!open || !from) return;
+    const def = MODES.find((m) => m.id === from.modeId);
+    if (!def) return;
+    setMode(def);
+    setAbout(false);
+    setPreviewing(false);
+    setWager(from.forFun ? 0 : from.wagerCents);
+    const window = (Date.parse(from.locksAt) - Date.parse(from.createdAt)) / 1000;
+    setTimer(
+      PICK_WINDOWS.reduce((best, w) =>
+        Math.abs(w.sec - window) < Math.abs(best.sec - window) ? w : best,
+      ).sec,
+    );
+    if (def.custom) {
+      setQuestion(from.question);
+      setOptions(from.choices);
+      setSettledBy(from.settledBy ?? "hosts");
+    }
+    if (def.cardGame === "jackblack") setRules(rulesFromConfig(from.config));
+    if (def.cardGame === "holdem") setHoldemRules(holdemRulesFromConfig(from.config));
+    if (isSportsMode(def.id) && from.gameId) {
+      setGameId(from.gameId);
+      setOvertime(from.includesOvertime ?? true);
+      const config = from.config;
+      setStat(typeof config["stat"] === "string" ? config["stat"] : null);
+      setPlayerIds(Array.isArray(config["players"]) ? config["players"] : []);
+      if (config["line"] !== undefined) setLine(Number(config["line"]));
+    }
+    // Only when a new bet is handed over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, from?.id]);
+  useEffect(() => {
+    if (from?.gameId && game && game.id === from.gameId) setLeague(game.league);
+  }, [from?.gameId, game]);
+  // A live game's total line starts above the combined score (the server refuses one it has already passed) and
+  // follows the score up while you set it.
+  const totalFloor =
+    scoreMode === "total_disaster" && game?.status === "LIVE"
+      ? (game.away.score ?? 0) + (game.home.score ?? 0) + 0.5
+      : null;
+  useEffect(() => {
+    if (totalFloor !== null && line < totalFloor) setLine(totalFloor);
+  }, [totalFloor, line]);
   const roster = useGamePlayers(user.id, playerMode ? (game?.id ?? null) : null);
   const statKey = stat ?? roster.data?.stats[0]?.key ?? null;
   const picked = playerIds
@@ -407,6 +469,17 @@ export function ProposeBetSheet({
                 peopleKey={peopleKey}
                 className="max-w-none"
               />
+              {sportsMode && game && (
+                <GameNow
+                  game={game}
+                  mode={sportsMode}
+                  players={playerIds.flatMap(
+                    (id) => roster.data?.players.find((p) => p.id === id) ?? [],
+                  )}
+                  stat={playerMode ? statKey : null}
+                  statLabel={roster.data?.stats.find((s) => s.key === statKey)?.label ?? ""}
+                />
+              )}
               <BetFacts
                 bet={previewBet}
                 table={table}
@@ -439,6 +512,12 @@ export function ProposeBetSheet({
                       value={league}
                       onChange={pickLeague}
                     />
+                    {lostGame && (
+                      <p className="text-sm text-loss">
+                        That game can't take new bets any more (it's over or postponed). Pick
+                        another.
+                      </p>
+                    )}
                     {ticker.data === null ? (
                       <p className="text-sm text-muted-foreground">
                         Live scores are unavailable, so games can't be picked right now.
@@ -515,7 +594,11 @@ export function ProposeBetSheet({
                           value={line}
                           // Lines end in .5 (never a push), so they move a whole point at a time.
                           step={1}
-                          min={LINE_LIMITS[scoreMode].min}
+                          min={
+                            scoreMode === "total_disaster" && totalFloor !== null
+                              ? totalFloor
+                              : LINE_LIMITS[scoreMode].min
+                          }
                           max={LINE_LIMITS[scoreMode].max}
                           label={
                             scoreMode === "total_disaster"
@@ -527,8 +610,15 @@ export function ProposeBetSheet({
                           }
                           // Totals run into the hundreds; 399.5 covers any game. Spreads stay under 100.
                           sliderMax={scoreMode === "total_disaster" ? 399.5 : undefined}
-                          onChange={(v) => setLine(stepLine(scoreMode, v, 0))}
+                          onChange={(v) =>
+                            setLine(Math.max(totalFloor ?? -Infinity, stepLine(scoreMode, v, 0)))
+                          }
                         />
+                        {totalFloor !== null && (
+                          <span className="font-normal">
+                            Now: {totalFloor - 0.5} combined. The line starts above that.
+                          </span>
+                        )}
                       </div>
                     </Section>
                   )}

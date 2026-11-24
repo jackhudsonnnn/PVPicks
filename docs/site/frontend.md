@@ -181,14 +181,25 @@ earlier prototype (git tag `prototype-ui`).
   step), or pick one
   of today's games and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
-  their position and current number, sorted by position) and the line or target, which starts just above them
-  (player modes, `bets/components/player-setup.tsx`); and whether overtime
-  counts. Lines end in .5 and targets are whole numbers; both step by
+  their position and current number: the stat's positions first, most
+  relevant first, each by its current value, then everyone else under an
+  "Other players" divider; NBA stats by value alone; `sports/roster-order.ts`
+  `forStat`) and the line or target (player modes,
+  `bets/components/player-setup.tsx`); and whether overtime counts. A line or
+  target can't be set at or below what's already happened (the slider's Min
+  is just above the players' current numbers, or a live game's combined score
+  for a total), and it follows them up while you set it, so nothing proposed
+  washes at lock for being already decided; a "Now:" line shows the numbers. Lines end in .5 and targets are whole numbers; both step by
   one (the step shows under − and +), in the shared slider widget
   (`ValueSlider`: the value large, the slider, then Min, −step, +step and Max,
   all tappable). Its Max is the ceiling: 399.5 for totals, about 600 for yard
   stats and 100 for other player stats. Then the wager (a slider, 0 to 10.00 in 0.10 steps; 0 reads "(4fun)" and sends a 4fun bet) and
-  the pick window, preview the ticket, send. Jackblack's form uses the same
+  the pick window, preview the ticket (sports bets add **Right now**: the
+  score and clock and the numbers the bet follows, `game-now.tsx`), send.
+  **Resend** on a resolved or washed ticket (`resend-button.tsx`) opens its
+  table's proposal sheet filled in with the same terms (`?resend=<bet id>`);
+  anyone who may propose there can, and it's checked like any new bet, so a
+  game that's over or a line that's been passed is refused with the reason. Jackblack's form uses the same
   layout: its Game and Setup sections (`jackblack-setup.tsx`), then the same
   wager slider as the ante (with each player's worst case under it) and the
   same window tabs as the join window. On a

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GamePlayer } from "./api";
-import { byPosition } from "./roster-order";
+import { byPosition, forStat } from "./roster-order";
 
 const player = (name: string, position: string | null, team = "BOS"): GamePlayer => ({
   id: name,
@@ -50,5 +50,56 @@ describe("byPosition", () => {
       "Mystery",
       "Nobody",
     ]);
+  });
+});
+
+describe("forStat", () => {
+  const withStat = (name: string, position: string, value: number, stat = "passing_yards") => ({
+    ...player(name, position),
+    stats: { [stat]: value },
+  });
+
+  it("leads with the stat's positions in order, each by value, and puts everyone else after", () => {
+    const { main, others } = forStat(
+      [
+        withStat("Backup QB", "QB", 0),
+        withStat("Josh Allen", "QB", 212),
+        withStat("Drake Maye", "QB", 248),
+        withStat("Trick WR", "WR", 20),
+        withStat("Kicker", "K", 0),
+        withStat("Halfback", "RB", 0),
+      ],
+      "passing_yards",
+    );
+    expect(main.map((p) => p.name)).toEqual([
+      "Drake Maye",
+      "Josh Allen",
+      "Backup QB",
+      "Halfback",
+      "Trick WR",
+    ]);
+    expect(others.map((p) => p.name)).toEqual(["Kicker"]);
+  });
+
+  it("puts running backs first for rushing yards, then quarterbacks", () => {
+    const { main } = forStat(
+      [
+        withStat("QB", "QB", 40, "rushing_yards"),
+        withStat("RB2", "RB", 12, "rushing_yards"),
+        withStat("RB1", "HB", 70, "rushing_yards"),
+        withStat("WR", "WR", 9, "rushing_yards"),
+      ],
+      "rushing_yards",
+    );
+    expect(main.map((p) => p.name)).toEqual(["RB1", "RB2", "QB", "WR"]);
+  });
+
+  it("orders NBA stats by value alone", () => {
+    const { main, others } = forStat(
+      [withStat("C", "C", 8, "points"), withStat("PG", "PG", 31, "points")],
+      "points",
+    );
+    expect(main.map((p) => p.name)).toEqual(["PG", "C"]);
+    expect(others).toEqual([]);
   });
 });
