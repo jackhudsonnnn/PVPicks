@@ -63,7 +63,7 @@ import {
   playerTerms,
   proposableGames,
   scoreTerms,
-  startingLine,
+  suggestedLine,
   stepLine,
   type PlayerMode,
   type ScoreMode,
@@ -235,22 +235,20 @@ export function ProposeBetSheet({
     }
   }
 
-  /** New players or a new stat: move the line or target just above them when it no longer is. */
+  /**
+   * New players or a new stat: start the line or target at their season average (before kickoff, when everyone is on
+   * 0), and never at or below what they've already done.
+   */
   function choosePlayers(ids: string[], nextStat = statKey) {
     setPlayerIds(ids);
-    if (!playerMode || !nextStat) return;
-    const current = ids
-      .map((id) => roster.data?.players.find((p) => p.id === id)?.stats[nextStat] ?? 0)
-      .filter((v) => v !== undefined);
-    if (
-      playerProblem(
+    if (!playerMode || playerMode === "either_or" || !nextStat || ids.length === 0) return;
+    const chosen = ids.flatMap((id) => roster.data?.players.find((p) => p.id === id) ?? []);
+    setLine(
+      suggestedLine(
         playerMode,
-        current.map((v) => ({ stat: v })),
-        line,
-      )?.startsWith("The ")
-    )
-      setLine(startingLine(playerMode, current));
-    else if (playerMode !== "either_or" && line === 0) setLine(startingLine(playerMode, current));
+        chosen.map((p) => ({ current: p.stats[nextStat] ?? 0, average: p.averages?.[nextStat] })),
+      ),
+    );
   }
 
   const previewBet: Bet = useMemo(() => {

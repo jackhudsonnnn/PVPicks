@@ -80,15 +80,16 @@ const STAT_POSITIONS: Record<string, string[][]> = {
 /**
  * Players for a stat's picker: `main` is the stat's positions in order of relevance, each by its current value
  * (highest first), so mid-game the likeliest picks lead (both quarterbacks for passing yards); `others` is everyone
- * else by value, shown under a divider. Ties keep the roster order (position, team, name).
+ * else by value, shown under a divider. Ties (everyone on 0 before kickoff) go by season average, then roster order.
  */
 export function forStat(players: readonly GamePlayer[], stat: string) {
   const value = (p: GamePlayer) => p.stats[stat] ?? 0;
+  const average = (p: GamePlayer) => p.averages?.[stat] ?? 0;
   const groups = STAT_POSITIONS[stat];
   const byValue = (list: GamePlayer[]) =>
     list
       .map((p, i) => ({ p, i }))
-      .sort((a, b) => value(b.p) - value(a.p) || a.i - b.i)
+      .sort((a, b) => value(b.p) - value(a.p) || average(b.p) - average(a.p) || a.i - b.i)
       .map(({ p }) => p);
   const roster = byPosition(players);
   if (!groups) return { main: byValue(roster), others: [] as GamePlayer[] };

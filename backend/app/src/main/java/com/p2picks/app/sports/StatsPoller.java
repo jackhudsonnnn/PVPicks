@@ -19,8 +19,9 @@ import org.springframework.stereotype.Component;
  * Keeps player stats and the active-player list current (ADR 0005), one provider request per run so the run interval
  * is the request budget. Live games come first, each turn going to the game that has waited longest; finished games
  * (within six hours of their start) refresh every 15 minutes so late corrections land. With nothing to do for games,
- * the turn refreshes the next page of a league's active players, at most once a day. A rate-limited request pauses
- * everything for a minute. Responses are also recorded when feed recording is on.
+ * the turn refreshes the next page of a league's active players, at most once a day, and with nothing else either, the
+ * season averages of up to 100 players on teams playing in the next day (each refreshed about daily; a league whose
+ * plan lacks them is skipped until restart). A rate-limited request pauses everything for a minute. Responses are also recorded when feed recording is on.
  */
 @Component
 class StatsPoller {
@@ -37,6 +38,8 @@ class StatsPoller {
     /** While games are live and a refresh is due, every this-many-th request goes to it, so it can't starve. */
     static final int PLAYER_SHARE = 4;
     private static final Duration RATE_LIMIT_PAUSE = Duration.ofMinutes(1);
+    static final Duration AVERAGES_REFRESH = Duration.ofHours(24);
+    private static final java.time.ZoneId SEASON_ZONE = java.time.ZoneId.of("America/New_York");
 
     private final JdbcTemplate jdbc;
     private final BallDontLieFeed feed;
@@ -48,6 +51,8 @@ class StatsPoller {
     /** A league's active-list refresh in progress: where it started and the next page. */
     private final Map<League, Refresh> refreshing = new EnumMap<>(League.class);
     private Instant pausedUntil = Instant.MIN;
+    /** Leagues whose plan doesn't include season averages (found out once, then left alone until restart). */
+    private final java.util.Set<League> averagesNotInPlan = java.util.EnumSet.noneOf(League.class);
     private long runs;
 
     StatsPoller(JdbcTemplate jdbc, BallDontLieFeed feed, StatsSync sync, Clock clock,
@@ -73,8 +78,8 @@ class StatsPoller {
             boolean playersTurn = ++runs % PLAYER_SHARE == 0 && playersDue(now);
             if (!games.isEmpty() && !playersTurn) {
                 fetchGames(games, now);
-            } else {
-                refreshPlayers(now);
+            } else if (!refreshPlayers(now)) {
+                refreshAverages(now);
             }
         } catch (GameFeed.FeedUnavailable exception) {
             if (exception.rateLimited()) pausedUntil = now.plus(RATE_LIMIT_PAUSE);
@@ -103,7 +108,8 @@ class StatsPoller {
         return last == null || !last.plus(interval).isAfter(now);
     }
 
-    private void refreshPlayers(Instant now) throws GameFeed.FeedUnavailable {
+    /** One page of a league's active players, if a refresh is due. Returns whether it made a request. */
+    private boolean refreshPlayers(Instant now) throws GameFeed.FeedUnavailable {
         for (League league : League.values()) {
             Refresh refresh = refreshing.get(league);
             if (refresh == null) {
@@ -115,6 +121,41 @@ class StatsPoller {
             sync.recordActivePlayers(league, page.players(), refresh.startedAt(), now, finished);
             if (finished) refreshing.remove(league);
             else refreshing.put(league, new Refresh(refresh.startedAt(), page.nextCursor()));
+            return true;
+        }
+        return false;
+    }
+
+    private record Due(String id, String providerId) {}
+
+    /** Season averages for up to 100 players with a game in the next day whose averages are missing or a day old. */
+    private void refreshAverages(Instant now) throws GameFeed.FeedUnavailable {
+        for (League league : League.values()) {
+            if (averagesNotInPlan.contains(league)) continue;
+            List<Due> due = jdbc.query("""
+                    SELECT DISTINCT p.id, p.provider_id FROM players p
+                    JOIN games g ON g.league = p.league
+                     AND p.team_abbreviation IN (g.home_abbreviation, g.away_abbreviation)
+                    LEFT JOIN player_season_averages a ON a.player_id = p.id
+                    WHERE p.league = ? AND p.active AND g.status IN ('SCHEDULED', 'LIVE')
+                      AND g.provider_id NOT LIKE 'DEV-%' AND g.starts_at < ?
+                      AND (a.player_id IS NULL OR a.refreshed_at < ?)
+                    ORDER BY p.id LIMIT 100
+                    """, (rs, row) -> new Due(rs.getString("id"), rs.getString("provider_id")), league.name(),
+                    java.sql.Timestamp.from(now.plus(Duration.ofDays(1))),
+                    java.sql.Timestamp.from(now.minus(AVERAGES_REFRESH)));
+            if (due.isEmpty()) continue;
+            int season = SeasonAverage.seasonOf(java.time.LocalDate.ofInstant(now, SEASON_ZONE));
+            List<SeasonAverage> averages;
+            try {
+                averages = feed.seasonAverages(league, season, due.stream().map(Due::providerId).toList());
+            } catch (GameFeed.FeedUnavailable exception) {
+                if (!exception.notInPlan()) throw exception;
+                averagesNotInPlan.add(league);
+                log.info("{} season averages aren't in this plan; the picker ranks by position alone", league);
+                return;
+            }
+            sync.recordSeasonAverages(league, season, averages, due.stream().map(Due::id).toList(), now);
             return;
         }
     }

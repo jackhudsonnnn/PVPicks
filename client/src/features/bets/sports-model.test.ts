@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  suggestedLine,
   playerNames,
   playerProblem,
   playerTerms,
@@ -103,5 +104,20 @@ describe("player modes", () => {
     expect(playerProblem("prop_hunt", [{ stat: 25 }], 24.5)).toMatch(/above the player/);
     expect(playerProblem("king_of_the_hill", [{ stat: 10 }, { stat: 30 }], 30)).toMatch(/both/);
     expect(playerProblem("prop_hunt", [{ stat: 20 }], 24.5)).toBeNull();
+  });
+});
+
+describe("suggested lines", () => {
+  it("starts at the season average before kickoff, never below what's happened", () => {
+    expect(suggestedLine("prop_hunt", [{ current: 0, average: 245.3 }])).toBe(245.5);
+    // Past their average already: just above what they have.
+    expect(suggestedLine("prop_hunt", [{ current: 260, average: 245.3 }])).toBe(260.5);
+    expect(suggestedLine("prop_hunt", [{ current: 12, average: undefined }])).toBe(12.5);
+    expect(
+      suggestedLine("king_of_the_hill", [
+        { current: 0, average: 71.6 },
+        { current: 0, average: 58 },
+      ]),
+    ).toBe(72);
   });
 });

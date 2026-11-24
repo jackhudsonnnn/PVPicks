@@ -184,11 +184,12 @@ earlier prototype (git tag `prototype-ui`).
   of today's games and set the terms: the line
   (score modes); the stat, one or two players from that game (listed with
   their position and current number: the stat's positions first, most
-  relevant first, each by its current value, then everyone else under an
-  "Other players" divider; NBA stats by value alone; `sports/roster-order.ts`
-  `forStat`) and the line or target (player modes,
+  relevant first, each by its current value (ties, as before kickoff, by season average),
+  then everyone else under an "Other players" divider; NBA stats by value
+  alone; `sports/roster-order.ts` `forStat`; each shows its season average
+  when there is one) and the line or target (player modes,
   `bets/components/player-setup.tsx`); and whether overtime counts. A line or
-  target can't be set at or below what's already happened (the slider's Min
+  target starts at the season average (`suggestedLine`) and can't be set at or below what's already happened (the slider's Min
   is just above the players' current numbers, or a live game's combined score
   for a total), and it follows them up while you set it, so nothing proposed
   washes at lock for being already decided; a "Now:" line shows the numbers. Lines end in .5 and targets are whole numbers; both step by

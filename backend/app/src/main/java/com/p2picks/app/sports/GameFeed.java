@@ -14,14 +14,26 @@ public interface GameFeed {
     /** The feed could not be read; it must never be treated as "no games". */
     class FeedUnavailable extends Exception {
         private final boolean rateLimited;
+        /** The provider's HTTP status, or 0 when it didn't answer. */
+        private final int status;
 
         public FeedUnavailable(String message, boolean rateLimited, Throwable cause) {
+            this(message, rateLimited, cause, 0);
+        }
+
+        public FeedUnavailable(String message, boolean rateLimited, Throwable cause, int status) {
             super(message, cause);
             this.rateLimited = rateLimited;
+            this.status = status;
         }
 
         public boolean rateLimited() {
             return rateLimited;
+        }
+
+        /** The plan doesn't include this endpoint (401 or 403). */
+        public boolean notInPlan() {
+            return status == 401 || status == 403;
         }
     }
 }

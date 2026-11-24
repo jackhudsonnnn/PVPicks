@@ -29,7 +29,10 @@ class GamePlayersController {
         if (game.isEmpty()) return ApiErrors.error(404, "not_found", "Game not found.");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("stats", StatLine.STATS.get(game.get().league()));
-        body.put("players", players.players(gameId).stream().map(player -> {
+        var roster = players.players(gameId);
+        // Before kickoff every number is 0: season averages rank the picker and suggest a line.
+        var averages = players.seasonAverages(roster.stream().map(PlayerStatsLookup.GamePlayer::id).toList());
+        body.put("players", roster.stream().map(player -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", player.id());
             row.put("name", player.name());
@@ -37,6 +40,7 @@ class GamePlayersController {
             row.put("team", player.team());
             row.put("played", player.played());
             row.put("stats", player.stats());
+            if (averages.containsKey(player.id())) row.put("averages", averages.get(player.id()));
             return row;
         }).toList());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);

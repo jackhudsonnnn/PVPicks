@@ -3010,6 +3010,14 @@ paths:
                         stats:
                           type: object
                           additionalProperties: {type: integer}
+                        averages:
+                          type: object
+                          description: >-
+                            This season's per-game averages by stat key, when
+                            the provider has them (one decimal). Before
+                            kickoff, when every stat is 0, they rank the
+                            picker and suggest a line.
+                          additionalProperties: {type: number}
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

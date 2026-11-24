@@ -144,6 +144,24 @@ export function startingLine(mode: PlayerMode, current: number[]) {
   return mode === "prop_hunt" ? top + 0.5 : top + 1;
 }
 
+/**
+ * A starting line or target for the chosen players: their season average when there is one (Prop Hunt as a .5 line,
+ * King Of The Hill the higher of the two), never below what they've already done.
+ */
+export function suggestedLine(
+  mode: PlayerMode,
+  players: { current: number; average: number | undefined }[],
+) {
+  const floor = startingLine(
+    mode,
+    players.map((p) => p.current),
+  );
+  const averages = players.flatMap((p) => (p.average === undefined ? [] : [p.average]));
+  if (averages.length === 0) return floor;
+  const top = Math.max(...averages);
+  return Math.max(floor, mode === "prop_hunt" ? Math.floor(top) + 0.5 : Math.round(top));
+}
+
 /** Why a player-mode proposal can't be sent yet, or null. Mirrors the server's checks. */
 export function playerProblem(mode: PlayerMode, players: { stat: number }[], line: number) {
   if (players.length < playerCount(mode))

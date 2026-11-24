@@ -70,6 +70,7 @@ export function PlayerSetup({
     <SelectItem key={p.id} value={p.id}>
       {p.position ? `${p.position} · ` : ""}
       {p.name} · {p.team ?? "?"} · {current(p)} {statLabel.toLowerCase()}
+      {stat && p.averages?.[stat] !== undefined ? ` · avg ${p.averages[stat]}` : ""}
     </SelectItem>
   );
 

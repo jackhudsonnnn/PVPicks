@@ -58,6 +58,8 @@ const gamePlayerSchema = z.object({
   team: z.string().nullable(),
   played: z.boolean(),
   stats: z.record(z.string(), z.number().int()),
+  /** This season's per-game averages by stat key, when the provider has them. */
+  averages: z.record(z.string(), z.number()).optional(),
 });
 const gamePlayersSchema = z.object({
   stats: z.array(z.object({ key: z.string().min(1), label: z.string().min(1) })),

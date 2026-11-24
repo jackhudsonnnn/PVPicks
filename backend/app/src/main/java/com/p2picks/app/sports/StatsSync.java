@@ -72,6 +72,34 @@ public class StatsSync {
         return at.isEmpty() || at.getFirst() == null ? null : at.getFirst().toInstant();
     }
 
+    /**
+     * Stores season averages for known players (by provider id; unknown ones are skipped), and marks the other
+     * {@code checked} players (our ids) as checked too, keeping what they had, so they aren't asked for again today.
+     */
+    public void recordSeasonAverages(League league, int season, List<SeasonAverage> averages, List<String> checked,
+            Instant now) {
+        for (String id : checked) {
+            jdbc.update("""
+                    INSERT INTO player_season_averages (player_id, season, games, averages, refreshed_at)
+                    VALUES (?, ?, 0, '{}'::jsonb, ?)
+                    ON CONFLICT (player_id) DO UPDATE SET refreshed_at = EXCLUDED.refreshed_at
+                    """, id, season, Timestamp.from(now));
+        }
+        for (SeasonAverage average : averages) {
+            try {
+                jdbc.update("""
+                        INSERT INTO player_season_averages (player_id, season, games, averages, refreshed_at)
+                        SELECT id, ?, ?, ?::jsonb, ? FROM players WHERE league = ? AND provider_id = ?
+                        ON CONFLICT (player_id) DO UPDATE SET season = EXCLUDED.season, games = EXCLUDED.games,
+                            averages = EXCLUDED.averages, refreshed_at = EXCLUDED.refreshed_at
+                        """, season, average.games(), json.writeValueAsString(average.averages()), Timestamp.from(now),
+                        league.name(), average.providerId());
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+    }
+
     private void upsertPlayer(FeedPlayer player, Instant now, boolean fromActiveList) {
         jdbc.update("""
                 INSERT INTO players (id, league, provider_id, first_name, last_name, position, team_abbreviation,

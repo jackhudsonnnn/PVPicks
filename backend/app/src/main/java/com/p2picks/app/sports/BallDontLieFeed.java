@@ -134,6 +134,27 @@ class BallDontLieFeed implements GameFeed {
         return new PlayerPage(players, next.isMissingNode() || next.isNull() ? null : next.asText());
     }
 
+    /**
+     * This season's per-game averages for up to 100 players in one request (NFL season stats; NBA season averages,
+     * which may need a higher plan: a 401 or 403 says so). Rows that can't be read are skipped.
+     */
+    List<SeasonAverage> seasonAverages(League league, int season, List<String> providerIds) throws FeedUnavailable {
+        if (!configured()) throw new FeedUnavailable("No BallDontLie API key is configured", false, null);
+        UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
+                .path(league == League.NBA ? "/nba/v1/season_averages/general" : "/nfl/v1/season_stats")
+                .queryParam("season", season)
+                .queryParam("per_page", 100);
+        if (league == League.NBA) uri.queryParam("season_type", "regular").queryParam("type", "base");
+        for (String id : providerIds) uri.queryParam("player_ids[]", id);
+        JsonNode body = get(league, "season_averages", uri);
+        List<SeasonAverage> averages = new ArrayList<>();
+        for (JsonNode row : body.path("data")) {
+            SeasonAverage average = league == League.NBA ? SeasonAverage.nba(row) : SeasonAverage.nfl(row);
+            if (average != null) averages.add(average);
+        }
+        return averages;
+    }
+
     private JsonNode get(League league, String endpoint, UriComponentsBuilder uri) throws FeedUnavailable {
         var target = uri.encode().build().toUri();
         try {
@@ -142,7 +163,7 @@ class BallDontLieFeed implements GameFeed {
             return json.readTree(body == null ? "{}" : body);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
-            throw new FeedUnavailable("BallDontLie returned HTTP " + status, status == 429, exception);
+            throw new FeedUnavailable("BallDontLie returned HTTP " + status, status == 429, exception, status);
         } catch (RestClientException | java.io.IOException exception) {
             throw new FeedUnavailable("BallDontLie could not be read", false, exception);
         }

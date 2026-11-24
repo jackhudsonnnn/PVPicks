@@ -102,4 +102,16 @@ describe("forStat", () => {
     expect(main.map((p) => p.name)).toEqual(["PG", "C"]);
     expect(others).toEqual([]);
   });
+
+  it("ranks by season average when everyone is on 0 before kickoff", () => {
+    const { main } = forStat(
+      [
+        { ...withStat("Backup", "QB", 0), averages: { passing_yards: 88.1 } },
+        { ...withStat("Josh Allen", "QB", 0), averages: { passing_yards: 245.3 } },
+        withStat("No average", "QB", 0),
+      ],
+      "passing_yards",
+    );
+    expect(main.map((p) => p.name)).toEqual(["Josh Allen", "Backup", "No average"]);
+  });
 });

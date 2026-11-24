@@ -76,6 +76,25 @@ public class PlayerStatsLookup {
                 stats(rs.getString("stats"))), gameId);
     }
 
+    /** Per-game season averages by stat key, for the players that have any (missing players have none). */
+    public Map<String, Map<String, Double>> seasonAverages(List<String> playerIds) {
+        if (playerIds.isEmpty()) return Map.of();
+        Map<String, Map<String, Double>> averages = new java.util.HashMap<>();
+        String ids = "{" + String.join(",", playerIds) + "}";
+        jdbc.query("""
+                SELECT player_id, averages::text AS averages FROM player_season_averages
+                WHERE player_id = ANY (?::text[]) AND games > 0
+                """, rs -> {
+                    try {
+                        averages.put(rs.getString("player_id"), json.readValue(rs.getString("averages"),
+                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Double>>() {}));
+                    } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                }, ids);
+        return averages;
+    }
+
     /** One player's current line in a game, if they're pickable for it. */
     public Optional<GamePlayer> player(String gameId, String playerId) {
         return players(gameId).stream().filter(player -> player.id().equals(playerId)).findFirst();

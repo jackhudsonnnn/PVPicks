@@ -257,9 +257,17 @@ class SportsBetIntegrationTest extends IntegrationTestSupport {
         Cookie aliceSession = loginAs("pma");
         Csrf csrf = csrf();
 
+        // A season average (stored by the stats poller) comes back with the player, for the picker's ranking.
+        jdbc.update("""
+                INSERT INTO player_season_averages (player_id, season, games, averages, refreshed_at)
+                VALUES ('NBA-pm1', 2026, 12, '{"points": 22.5}'::jsonb, now())
+                """);
         JsonNode roster = json.readTree(mvc.perform(get("/games/" + gameId + "/players").cookie(aliceSession))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(roster.path("players").size()).isEqualTo(2);
+        JsonNode ann = roster.path("players").get(0).path("id").asText().equals("NBA-pm1")
+                ? roster.path("players").get(0) : roster.path("players").get(1);
+        assertThat(ann.path("averages").path("points").asDouble()).isEqualTo(22.5);
         assertThat(roster.path("stats").get(0).path("key").asText()).isEqualTo("points");
 
         // Prop Hunt: the line must start above the player's number; crossing it before lock washes.
