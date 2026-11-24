@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { type User, PersonAvatar, usePerson } from "@/features/people";
 import { cardFace } from "@/features/bets/cards";
+import { useNow } from "@/lib/use-now";
 import { formatClock, type ticketStatus } from "@/features/bets/ticket-model";
 import { StatusBadge } from "./status-badge";
 
@@ -345,6 +346,42 @@ export function JoinControls({
       onClick={joined ? onLeave : onJoin}
     >
       {joined ? "Leave the game" : "Join the game"}
+    </Button>
+  );
+}
+
+/**
+ * "Run it back" in a finished card game's controls bar (owner decision, 2026-11-24): the first tap starts the same game
+ * again with a 30-second join window; once it's running, others tap to join it. Gone once the rematch is dealt.
+ */
+export function RunItBack({
+  rematch,
+  canBet,
+  disabled,
+  onRun,
+}: {
+  rematch: { status: string; locksAt: string; joined: boolean } | undefined;
+  canBet: boolean;
+  disabled: boolean;
+  onRun: () => void;
+}) {
+  const now = useNow(rematch?.status === "ACTIVE");
+  if (!canBet || (rematch && rematch.status !== "ACTIVE")) return null;
+  const left = rematch ? Math.max(0, Math.ceil((Date.parse(rematch.locksAt) - now) / 1000)) : 0;
+  const label = !rematch
+    ? "Run it back"
+    : rematch.joined
+      ? `You're in the rematch · ${formatClock(left)}`
+      : `Join the rematch · ${formatClock(left)}`;
+  return (
+    <Button
+      size="sm"
+      variant={rematch?.joined ? "outline" : "default"}
+      className={cn("h-9 w-full", rematch?.joined && FELT_OUTLINE)}
+      disabled={disabled || rematch?.joined || (left === 0 && !!rematch)}
+      onClick={onRun}
+    >
+      {label}
     </Button>
   );
 }

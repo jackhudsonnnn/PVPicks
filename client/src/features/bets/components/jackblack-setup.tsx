@@ -71,16 +71,6 @@ export function JackblackSetup({
             onChange={(minPlayers, maxPlayers) => onChange({ ...rules, minPlayers, maxPlayers })}
           />
         </Field>
-        <Field label="Rotations" hint={`${RULE_LIMITS.rotations.min}–${RULE_LIMITS.rotations.max}`}>
-          <Stepper
-            value={rules.rotations}
-            step={1}
-            min={RULE_LIMITS.rotations.min}
-            max={RULE_LIMITS.rotations.max}
-            label="Rotations"
-            onChange={(v) => set("rotations", v)}
-          />
-        </Field>
         <Field
           label="Decision timer"
           hint={`${RULE_LIMITS.decisionSec.min}–${RULE_LIMITS.decisionSec.max}s`}

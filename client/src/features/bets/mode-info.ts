@@ -286,7 +286,7 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
   },
   jackblack: {
     how: [
-      "Each player deals once per rotation, and every hand plays against that round's dealer, not a pot.",
+      'Each player deals once, and every hand plays against that round\'s dealer, not a pot. "Run it back" at the end starts another game.',
       "Everyone still playing chooses hit, stand, double or split at the same time, so nobody sees anyone's cards before deciding. If the decision timer runs out, no choice means stand.",
       "Each round gets a fresh shoe of 1 to 8 decks, its size drawn at random and kept hidden until the game is over.",
     ],
@@ -298,8 +298,8 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
     ],
     examples: [
       {
-        title: "Three players, one rotation",
-        setup: ["3 players", "1 rotation (3 rounds)", "Ante 1.00"],
+        title: "Three players",
+        setup: ["3 players (3 rounds)", "Ante 1.00"],
         story:
           "Round 1, Ann deals: Ben stands on 20 against her 19, Cal busts. Ann pays Ben 1.00 and takes Cal's 1.00, then Ben and Cal each deal a round.",
         result:
@@ -322,7 +322,7 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
   },
   holdem: {
     how: [
-      "Each rotation is one hand per player; the small blind is half the big blind. Stacks carry from hand to hand, and a player who busts can rebuy once in the whole game, right then (15 seconds to decide).",
+      'One hand per player, the button moving one seat a hand; the small blind is half the big blind. Stacks carry from hand to hand, and a player who busts can rebuy once in the game, right then (15 seconds to decide). "Run it back" at the end starts another game.',
       "Everyone still in at a showdown shows their cards.",
     ],
     notes: [
@@ -333,7 +333,7 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
     ],
     examples: [
       {
-        title: "Four players, one rotation",
+        title: "Four players",
         setup: ["4 players", "Big blind 1.00", "Buy-in 100.00", "4 hands"],
         story:
           "Ann wins two big pots and finishes with 160.00; Ben ends on 90.00, Cal on 80.00, Dee on 70.00.",

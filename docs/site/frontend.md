@@ -229,7 +229,7 @@ earlier prototype (git tag `prototype-ui`).
   act sliding into view; between rounds or hands everyone's result; at the end
   the standings), one status line, and a controls bar (Join / Leave, Hit /
   Stand / Double / Split, the dealer's button, Fold / Check or Call / Raise,
-  the rebuy), empty when there's nothing to press. Whoever's decision clock is
+  the rebuy; once it's finished, Run it back, then Join the rematch or You're in the rematch with its countdown, `RunItBack`), empty when there's nothing to press. Whoever's decision clock is
   running has a ring round their avatar that drains (red in the last quarter;
   `TimerRing`). Hold'em names your best hand under your cards once the flop is
   out (`me.handName` from the server), offers pre-moves while it isn't your

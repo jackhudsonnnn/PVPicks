@@ -82,9 +82,7 @@ export function HoldemFacts({
 
       <FactSection title="Rules">
         <FactRow label="Game">No-limit Texas hold'em</FactRow>
-        <FactRow label="Hands">
-          One each per rotation ({rules.rotations}); the button moves one seat a hand
-        </FactRow>
+        <FactRow label="Hands">One each; the button moves one seat a hand</FactRow>
         <FactRow label="Rebuy">Once a game, right after busting (15s to decide)</FactRow>
         <FactRow label="Showdown">Everyone still in shows</FactRow>
         <FactRow label="Turn timer">{rules.decisionSec}s, then check if you can, else fold</FactRow>

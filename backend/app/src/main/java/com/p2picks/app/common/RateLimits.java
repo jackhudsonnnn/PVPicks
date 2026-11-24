@@ -44,6 +44,7 @@ public class RateLimits implements WebMvcConfigurer {
             // A hand can take many hits and splits; a decision timer runs out first.
             new Rule("bets.jackblack.act", Set.of("POST"), "/bets/*/jackblack/actions", 60, MINUTE),
             new Rule("bets.holdem.seat", Set.of("PUT", "DELETE"), "/bets/*/holdem/seat", 30, MINUTE),
+            new Rule("bets.rematch", Set.of("POST"), "/bets/*/rematch", 10, MINUTE),
             new Rule("bets.holdem.act", Set.of("POST"), "/bets/*/holdem/actions", 120, MINUTE),
             new Rule("users.search", Set.of("GET"), "/users", 30, MINUTE),
             new Rule("social.follow", Set.of("POST", "DELETE"), "/follows/*", 30, MINUTE),

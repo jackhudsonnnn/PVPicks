@@ -34,6 +34,7 @@ import {
   PlayerName,
   Tile,
   TimerRing,
+  RunItBack,
 } from "./card-ticket-shell";
 
 /** Cards in the ticket come out of the shoe at the felt's top left. */
@@ -350,8 +351,8 @@ export function JackblackTicket({
     game?.phase === "results" ? game.history?.at(-1)?.dealerId : (game?.dealerId ?? undefined);
   const dealer = usePerson(dealerId ?? bet.proposerId, user, expire, peopleKey);
   const dealerName = dealerId === user.id ? "You" : (dealer?.name ?? "…");
-  // Rounds: everyone deals once per rotation (counted from who's in until the deal).
-  const rounds = game?.rounds ?? Math.max(1, players.length) * rules.rotations;
+  // Rounds: everyone deals once (counted from who's in until the deal).
+  const rounds = game?.rounds ?? Math.max(1, players.length);
   const round =
     !game || game.phase === "waiting" || status === "washed"
       ? 0
@@ -362,7 +363,14 @@ export function JackblackTicket({
   const canBet = canBetAt(table, user.id);
 
   const controls =
-    !game || preview ? null : status === "active" && canBet && left > 0 ? (
+    !game || preview ? null : status === "resolved" || status === "washed" ? (
+      <RunItBack
+        rematch={bet.rematch}
+        canBet={canBet}
+        disabled={blocked}
+        onRun={() => start({ kind: "rematch", tableId: table.id, betId: bet.id })}
+      />
+    ) : status === "active" && canBet && left > 0 ? (
       <JoinControls
         joined={joined}
         full={players.length >= rules.maxPlayers}
@@ -405,9 +413,8 @@ export function JackblackTicket({
         <TicketByline bet={bet} table={table} {...people} preview={preview} />
         {preview ? (
           <p className="text-sm text-ticket-muted">
-            Everyone who joins deals once per rotation, in a random order, and banks that round
-            against the rest. Choices are made together: new cards come out once everyone has
-            chosen.
+            Everyone who joins deals once, in a random order, and banks that round against the rest.
+            Choices are made together: new cards come out once everyone has chosen.
           </p>
         ) : !game ? (
           <Felt

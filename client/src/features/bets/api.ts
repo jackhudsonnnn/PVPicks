@@ -48,6 +48,15 @@ const betSchema = z
      * they picked isn't until lock. No guess (a cleared pick) counts while it's open and is out once it locks.
      */
     participantIds: z.array(uuid),
+    /** A finished card game's "Run it back", once someone started it. */
+    rematch: z
+      .object({
+        id: uuid,
+        status: z.enum(["ACTIVE", "PENDING", "SETTLED", "WASHED"]),
+        locksAt: z.string().datetime({ offset: true }),
+        joined: z.boolean(),
+      })
+      .optional(),
     calledBy: uuid.optional(),
     winningChoice: z.string().optional(),
     washReason: z.string().optional(),

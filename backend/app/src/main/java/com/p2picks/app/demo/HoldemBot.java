@@ -53,10 +53,9 @@ final class HoldemBot {
         return new Move("fold", 0);
     }
 
-    /** Rules for a bot's own game: mostly once round with the default timer. */
+    /** Rules for a bot's own game: mostly the default timer. */
     static HoldemRules rules(Random random) {
-        return new HoldemRules(random.nextDouble() < 0.8 ? 1 : 2,
-                random.nextDouble() < 0.7 ? HoldemRules.defaults().decisionSec() : 20,
+        return new HoldemRules(random.nextDouble() < 0.7 ? HoldemRules.defaults().decisionSec() : 20,
                 HoldemRules.defaults().minPlayers(), HoldemRules.defaults().maxPlayers());
     }
 }

@@ -239,6 +239,11 @@ class BetReadController {
                                                            '[]'::jsonb)
                             FROM bet_participants bp WHERE bp.bet_id = b.id)
                     ) || jsonb_strip_nulls(jsonb_build_object(
+                        -- A finished card game's "Run it back": its rematch, if someone started one.
+                        'rematch', (SELECT jsonb_build_object('id', r.id, 'status', r.status, 'locksAt', r.locks_at,
+                                        'joined', EXISTS (SELECT 1 FROM card_players cp
+                                                          WHERE cp.bet_id = r.id AND cp.user_id = viewer.id))
+                            FROM bets r WHERE r.rematch_of = b.id),
                         'gameId', b.game_id, 'baseline', b.baseline,
                         'includesOvertime', b.includes_overtime, 'settledBy', b.settler_rule,
                         'sourceBetId', b.source_bet_id, 'sourceTableId', b.source_table_id,

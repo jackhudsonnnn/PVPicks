@@ -69,7 +69,7 @@ class HoldemIntegrationTest extends IntegrationTestSupport {
     private MockHttpServletResponse propose(Player proposer, UUID table, long bigBlind, boolean forFun)
             throws Exception {
         return send(post("/tables/{id}/bets", table), proposer, Map.of("modeId", "holdem", "wagerCents", bigBlind,
-                "durationSec", 30, "forFun", forFun, "rules", Map.of("rotations", 1, "decisionSec", 20)));
+                "durationSec", 30, "forFun", forFun, "rules", Map.of("decisionSec", 20)));
     }
 
     private UUID proposed(MockHttpServletResponse response) throws Exception {

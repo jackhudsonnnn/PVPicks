@@ -71,9 +71,7 @@ export function JackblackFacts({
       </FactSection>
 
       <FactSection title="Rules">
-        <FactRow label="Dealing">
-          Everyone deals {rules.rotations === 1 ? "once" : `${rules.rotations} times`}, random order
-        </FactRow>
+        <FactRow label="Dealing">Everyone deals once, random order</FactRow>
         <FactRow label="Shoe">Fresh every round, 1–8 decks at random, hidden</FactRow>
         <FactRow label="Blackjack pays">{rules.blackjackPays}</FactRow>
         <FactRow label="Dealer">Draws to 17, stands on soft 17</FactRow>

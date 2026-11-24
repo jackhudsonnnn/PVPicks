@@ -834,7 +834,8 @@ one game of several rounds:
 - **Everyone deals.** The players' order is shuffled at the deal; each round
   the next player in it is the **dealer** and banks that round against
   everyone else (each seat's hand is against the dealer, not a pot). Each
-  player deals once per **rotation**; a game is players × rotations rounds.
+  player deals once: a game is as many rounds as players (owner decision,
+  2026-11-24: no rotations setting; "Run it back" plays another).
 - **Who can propose** is a table setting, `jackblackAccess`: `everyone`
   (default), `hosts` or `off`. "Only hosts start bets" applies too. The
   proposer is the first player; like anyone in, they can leave before the
@@ -850,7 +851,6 @@ one game of several rounds:
 
   | Rule | Range | Default |
   |---|---|---|
-  | Rotations | 1–3 | 1 |
   | Doubling | on/off (any two cards, after splits too) | on |
   | Max splits | 0–3 | 1 |
   | Blackjack pays | 3:2 or 6:5 | 3:2 |
@@ -883,7 +883,7 @@ one game of several rounds:
   held as pending while the game is on: every round they sit, a hand split
   to the max and doubled and lost; every round they deal, every other seat
   winning the most a seat can (that worst case, or a natural). That is
-  (hand worst case + dealer's worst per seat) × (players − 1) × rotations.
+  (hand worst case + dealer's worst per seat) × (players − 1).
   It's checked when someone joins (and when proposing, for two players), and
   again at the deal for the final count: anyone who can no longer cover it is
   dropped, latest joiner first, which lowers it for the rest.
@@ -932,13 +932,25 @@ move frame and the payout; tables `card_games` and `card_players`). Tests: `Jack
 zero-sum and inside the worst case), `JackblackIntegrationTest`; client
 `features/bets/jackblack.ts` and its test.
 
+## Run it back
+
+Owner decision, 2026-11-24. A finished Jackblack or Hold'em game (resolved or
+washed) offers **Run it back**: the first tap proposes the same game again,
+same rules and stakes, with a 30-second join window and the tapper in it
+(`POST /bets/{id}/rematch`, which needs the same proposal permission and
+points limit as proposing). Later taps join that one rematch, so a game has at
+most one (`bets.rematch_of`, unique). It deals like any game: with fewer than
+its minimum players when the window closes, it's called off. The finished
+game's reads carry `rematch` (its id, status, join deadline and whether you're
+in). In code: `bets/CardGameRematch`; test `JackblackIntegrationTest`.
+
 ## Hold'em
 
 Owner decisions, 2026-11-22. No-limit Texas hold'em, played on its ticket
 like Jackblack:
 
-- **Rotations.** A game is 1 to 3 full cycles (the proposer's choice,
-  default 1): one hand per player at the deal each time round. Seating is
+- **One cycle.** A game is one hand per player at the deal (owner decision,
+  2026-11-24: no rotations setting; "Run it back" plays another). Seating is
   shuffled at the deal; the button starts on the first seat and moves one seat
   (to the next player still in) each hand. Heads-up the button is the small
   blind and acts first before the flop only; otherwise the two after the
@@ -970,7 +982,7 @@ like Jackblack:
   decision, 2026-11-23). Folded hands are never shown during the game. A
   finished hand stays up for 5 seconds before the next deal.
 - **Rebuy.** Stacks carry from hand to hand. A player who busts gets one
-  rebuy for the whole game (whatever the rotations), offered only right after that first bust: the
+  rebuy for the whole game, offered only right after that first bust: the
   next hand waits up to 15 seconds for the answer, and letting it pass (or
   busting again) sits them out for the rest. No rebuy after the last hand.
 - **Result.** Each player's final stack minus what they bought in for; the

@@ -10,8 +10,8 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * One Hold'em game, the pure rules with no storage (domain rules, "Hold'em"): no-limit Texas hold'em over full
- * cycles (rotations), a hand for each player each time round, with the button moving one seat a hand. Stacks carry from hand to hand; a player who
+ * One Hold'em game, the pure rules with no storage (domain rules, "Hold'em"): no-limit Texas hold'em over one
+ * full cycle, a hand for each player, with the button moving one seat a hand. Stacks carry from hand to hand; a player who
  * busts can take one rebuy, right then. A player's result is their final stack minus what they bought in for, so the
  * game is zero-sum. Public fields so the state is stored as JSON; chips are cents of the wager (or play chips in a
  * 4fun game).
@@ -136,7 +136,7 @@ final class HoldemGame implements CardGames.State {
         game.buyIn = HoldemRules.buyIn(bigBlind);
         game.order = new ArrayList<>(players);
         Collections.shuffle(game.order, random);
-        game.hands = game.order.size() * rules.rotations();
+        game.hands = game.order.size();
         for (UUID player : game.order) {
             game.stacks.put(player, game.buyIn);
             game.buyIns.put(player, 1);

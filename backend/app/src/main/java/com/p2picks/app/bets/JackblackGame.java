@@ -9,7 +9,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * One Jackblack ticket (domain rules, "Jackblack"): every player deals once per rotation, in a random order, and the
+ * One Jackblack ticket (domain rules, "Jackblack"): every player deals once, in a random order, and the
  * round's dealer banks it against everyone else. Pure state: the service loads it from the round's JSON, applies a
  * decision, a dealer tap or a timeout, and saves it. Cards are two-character codes: rank {@code A23456789TJQK} then
  * suit {@code SHDC}. Deadlines are epoch milliseconds.
@@ -92,7 +92,7 @@ final class JackblackGame implements CardGames.State {
         game.ante = ante;
         game.order = new ArrayList<>(players);
         Collections.shuffle(game.order, random);
-        game.rounds = game.order.size() * rules.rotations();
+        game.rounds = game.order.size();
         for (UUID player : game.order) game.totals.put(player, 0L);
         // Every round's shoe is fixed now (a random deck count and seed), so its commitment can be shown up front.
         for (int r = 1; r <= game.rounds; r++) game.secrets.add(CardShuffle.draw(r, random));

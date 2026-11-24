@@ -37,6 +37,7 @@ import {
   PlayerName,
   Tile,
   TimerRing,
+  RunItBack,
 } from "./card-ticket-shell";
 
 /** The deck and the five board cards: face down before the flop, then three, four and five turned over. */
@@ -505,7 +506,7 @@ export function HoldemTicket({
   const players = game ? holdemPlayers(game) : [];
   const joined = players.includes(user.id);
   const rules = holdemRulesFromConfig(bet.config);
-  const hands = game?.hands ?? Math.max(1, players.length) * rules.rotations;
+  const hands = game?.hands ?? Math.max(1, players.length);
   const hand =
     !game || game.phase === "waiting" || status === "washed"
       ? 0
@@ -530,7 +531,14 @@ export function HoldemTicket({
       ...(amount === undefined ? {} : { amount }),
     });
 
-  const controls = !game ? null : status === "active" && canBet && left > 0 ? (
+  const controls = !game ? null : status === "resolved" || status === "washed" ? (
+    <RunItBack
+      rematch={bet.rematch}
+      canBet={canBet}
+      disabled={blocked}
+      onRun={() => actions?.start({ kind: "rematch", tableId: table.id, betId: bet.id })}
+    />
+  ) : status === "active" && canBet && left > 0 ? (
     <JoinControls
       joined={joined}
       full={players.length >= rules.maxPlayers}

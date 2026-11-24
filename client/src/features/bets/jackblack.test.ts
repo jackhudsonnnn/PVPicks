@@ -28,7 +28,6 @@ const hand = (cards: string[], current = false) => ({
 describe("jackblack rules", () => {
   it("keeps every number inside its minimum and maximum", () => {
     expect(rulesProblem(DEFAULT_RULES)).toBeNull();
-    expect(rulesProblem({ ...DEFAULT_RULES, rotations: 4 })).toMatch(/rotations/);
     expect(rulesProblem({ ...DEFAULT_RULES, maxSplits: 4 })).toMatch(/splits/);
     expect(rulesProblem({ ...DEFAULT_RULES, decisionSec: 5 })).toMatch(/decision/);
   });
@@ -36,7 +35,6 @@ describe("jackblack rules", () => {
   it("matches the server's worst case", () => {
     // Doubling and one split: 4.00 a hand sitting, 4.00 a seat dealing, one other player.
     expect(worstCase(DEFAULT_RULES, 100, 2)).toBe(800);
-    expect(worstCase({ ...DEFAULT_RULES, rotations: 2 }, 100, 3)).toBe(3200);
     // No doubling or splits: a natural (1.50) is the most a dealer pays a seat.
     expect(worstCase({ ...DEFAULT_RULES, doubling: false, maxSplits: 0 }, 100, 2)).toBe(250);
     expect(
@@ -47,7 +45,6 @@ describe("jackblack rules", () => {
   it("reads rules back from a bet's config", () => {
     expect(
       rulesFromConfig({
-        rotations: 3,
         doubling: "no",
         maxSplits: 0,
         blackjackPays: "6:5",
@@ -56,7 +53,6 @@ describe("jackblack rules", () => {
         maxPlayers: 5,
       }),
     ).toEqual({
-      rotations: 3,
       doubling: false,
       maxSplits: 0,
       blackjackPays: "6:5",

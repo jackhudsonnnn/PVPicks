@@ -62,18 +62,18 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
   touchdown or field goal, NBA 3 or 2). They settle from the feed (most 20
   minutes after Final, King Of The Hill and Scorcerer as soon as it's
   decided), and hosts can wash or set a result until points are settled.
-- Jackblack (replaced Blackjack): everyone who joins deals once per rotation,
+- Jackblack (replaced Blackjack): everyone who joins deals once,
   in a random order, and banks that round against the rest. Choices are made
   in lockstep (new cards come out once everyone has chosen or the timer runs
   out), the round's dealer flips, hits and stands with one button, and each
   player's worst case is held against their points limit. Hosts choose who
   can propose it. It's played on the ticket; the felt shows each player's
   total and result (see the domain rules, "Jackblack").
-- Hold'em: no-limit Texas hold'em over 1–3 rotations (a hand per player each
-  time round), 100 big blinds to buy in, one rebuy per game, a turn timer,
+- Hold'em: no-limit Texas hold'em, one hand per player, 100 big blinds to buy in, one rebuy per game, a turn timer,
   server-side pre-moves, and a shuffle audit revealed once the game is over.
   The proposer sets the players range; hosts choose who can propose it (see
-  the domain rules, "Hold'em").
+  the domain rules, "Hold'em"). A finished card game offers "Run it back":
+  the same game again with a 30-second join window.
 - Payouts: winners split the losers' pot and leftover cents go to winners at
   random. Every mode follows the fairness rule (domain rules, "Fairness").
 - Wash triggers at lock (nobody picked, everyone on one option, a line or

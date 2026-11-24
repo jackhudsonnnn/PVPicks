@@ -9,7 +9,6 @@ import { idSchema, read, request } from "@/lib/api-client";
  */
 
 export interface HoldemRules {
-  rotations: number;
   decisionSec: number;
   /** Fewer at the deal washes; joins stop at the most. */
   minPlayers: number;
@@ -17,13 +16,11 @@ export interface HoldemRules {
 }
 
 export const HOLDEM_LIMITS = {
-  rotations: { min: 1, max: 3 },
   decisionSec: { min: 10, max: 60 },
   players: { min: 2, max: 9 },
 } as const;
 
 export const DEFAULT_HOLDEM_RULES: HoldemRules = {
-  rotations: 1,
   decisionSec: 30,
   minPlayers: 2,
   maxPlayers: 9,
@@ -35,7 +32,6 @@ const MAX_BUY_INS = 2;
 
 export function holdemRulesProblem(rules: HoldemRules): string | null {
   const within = (v: number, { min, max }: { min: number; max: number }) => v >= min && v <= max;
-  if (!within(rules.rotations, HOLDEM_LIMITS.rotations)) return "Play 1 to 3 rotations.";
   if (!within(rules.decisionSec, HOLDEM_LIMITS.decisionSec))
     return "The decision timer is 10 to 60 seconds.";
   const { min, max } = HOLDEM_LIMITS.players;
@@ -50,7 +46,6 @@ export const holdemWorstCase = (bigBlindCents: number) =>
 
 export function holdemRulesFromConfig(config: Record<string, unknown>): HoldemRules {
   return {
-    rotations: Number(config["rotations"] ?? DEFAULT_HOLDEM_RULES.rotations),
     decisionSec: Number(config["decisionSec"] ?? DEFAULT_HOLDEM_RULES.decisionSec),
     minPlayers: Number(config["minPlayers"] ?? DEFAULT_HOLDEM_RULES.minPlayers),
     maxPlayers: Number(config["maxPlayers"] ?? DEFAULT_HOLDEM_RULES.maxPlayers),

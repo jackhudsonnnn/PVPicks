@@ -29,8 +29,7 @@ final class JackblackBot {
     /** Rules for a bot's own game: mostly the defaults, with the odd variation. */
     static JackblackRules rules(Random random) {
         JackblackRules d = JackblackRules.defaults();
-        return new JackblackRules(random.nextDouble() < 0.8 ? 1 : 2,
-                random.nextDouble() < 0.8, random.nextInt(3), random.nextDouble() < 0.8 ? "3:2" : "6:5",
+        return new JackblackRules(random.nextDouble() < 0.8, random.nextInt(3), random.nextDouble() < 0.8 ? "3:2" : "6:5",
                 d.decisionSec(), d.minPlayers(), d.maxPlayers());
     }
 }

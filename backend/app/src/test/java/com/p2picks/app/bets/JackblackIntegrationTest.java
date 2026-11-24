@@ -150,7 +150,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         UUID table = table(pat, ann);
         // The deck count isn't the proposer's: it's drawn, hidden, for every round.
         assertThat(propose(pat, table, Map.of("decks", 2)).getStatus()).isEqualTo(400);
-        UUID bet = proposed(propose(pat, table, Map.of("rotations", 1)));
+        UUID bet = proposed(propose(pat, table, Map.of()));
         JsonNode proposedBet = json.readTree(mvc.perform(get("/bets/{id}", bet).cookie(ann.session()))
                 .andReturn().getResponse().getContentAsString());
         assertThat(proposedBet.path("modeId").asText()).isEqualTo("jackblack");
@@ -172,7 +172,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(waiting.path("phase").asText()).isEqualTo("waiting");
         assertThat(waiting.path("players")).extracting(JsonNode::asText)
                 .containsExactly(pat.id().toString(), ann.id().toString());
-        // Two players, ante 1.00, doubling and one split: (4.00 + 4.00) × 1 × 1 rotation.
+        // Two players, ante 1.00, doubling and one split: (4.00 + 4.00) × 1 other player.
         assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
                 .containsOnly(800L);
 
@@ -288,6 +288,39 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void aFinishedGameRunsBackOnceAndLaterTapsJoinIt() throws Exception {
+        Player pat = player("pat"), ann = player("ann");
+        UUID table = table(pat, ann);
+        UUID bet = proposed(propose(pat, table, Map.of()));
+        // Not over yet: nothing to run back.
+        assertThat(send(post("/bets/{id}/rematch", bet), ann, null).getStatus()).isEqualTo(409);
+        deal(bet, stacked());
+        assertThat(jdbc.queryForObject("SELECT status FROM bets WHERE id = ?", String.class, bet)).isEqualTo("WASHED");
+
+        // Ann runs it back: the same game, a 30-second window, Ann in it.
+        MockHttpServletResponse first = send(post("/bets/{id}/rematch", bet), ann, null);
+        assertThat(first.getStatus()).as(first.getContentAsString()).isEqualTo(201);
+        JsonNode rematch = json.readTree(first.getContentAsString());
+        assertThat(rematch.path("proposerId").asText()).isEqualTo(ann.id().toString());
+        assertThat(rematch.path("participantIds")).extracting(JsonNode::asText).containsExactly(ann.id().toString());
+        assertThat(jdbc.queryForObject("""
+                SELECT extract(epoch FROM locks_at - created_at)::int FROM bets WHERE id = ?
+                """, Integer.class, UUID.fromString(rematch.path("id").asText()))).isEqualTo(30);
+        // Pat's tap joins that one rather than starting another; tapping again changes nothing.
+        MockHttpServletResponse second = send(post("/bets/{id}/rematch", bet), pat, null);
+        assertThat(second.getStatus()).isEqualTo(200);
+        assertThat(json.readTree(second.getContentAsString()).path("id")).isEqualTo(rematch.path("id"));
+        assertThat(send(post("/bets/{id}/rematch", bet), pat, null).getStatus()).isEqualTo(200);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM bets WHERE rematch_of = ?", Integer.class, bet))
+                .isEqualTo(1);
+        // The finished game points at it, and says you're in.
+        JsonNode finished = json.readTree(mvc.perform(get("/bets/{id}", bet).cookie(pat.session()))
+                .andReturn().getResponse().getContentAsString());
+        assertThat(finished.path("rematch").path("id")).isEqualTo(rematch.path("id"));
+        assertThat(finished.path("rematch").path("joined").asBoolean()).isTrue();
+    }
+
+    @Test
     void theProposersPlayerRangeCapsJoinsAndWashesAShortGame() throws Exception {
         Player pat = player("pat"), ann = player("ann"), bob = player("bob");
         UUID table = table(pat, ann, bob);
@@ -349,7 +382,8 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
                 .getStatus()).isEqualTo(400);
         assertThat(send(patch("/tables/{id}/settings", table), ann, Map.of("jackblackAccess", "everyone"))
                 .getStatus()).isEqualTo(403);
-        assertThat(propose(host, table, Map.of("rotations", 9)).getStatus()).isEqualTo(400);
+        // Rotations aren't a rule any more (one each; "Run it back" plays another).
+        assertThat(propose(host, table, Map.of("rotations", 2)).getStatus()).isEqualTo(400);
     }
 
     @Test
@@ -375,7 +409,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         assertThat(send(post("/tables/{id}/bets", table), pat, Map.of("modeId", "jackblack", "wagerCents", 0,
                 "durationSec", 30, "forFun", false, "rules", Map.of())).getStatus()).isEqualTo(400);
         UUID bet = proposed(send(post("/tables/{id}/bets", table), pat, Map.of("modeId", "jackblack",
-                "wagerCents", 0, "durationSec", 30, "forFun", true, "rules", Map.of("rotations", 1))));
+                "wagerCents", 0, "durationSec", 30, "forFun", true, "rules", Map.of())));
         assertThat(join(bob, bet)).isEqualTo(204);
         assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
                 .containsOnly(0L);
@@ -393,7 +427,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         Player bob = player("bob");
         Player cat = player("cat");
         UUID table = table(pat, ann, bob, cat);
-        UUID bet = proposed(propose(pat, table, Map.of("rotations", 1)));
+        UUID bet = proposed(propose(pat, table, Map.of()));
         assertThat(join(ann, bet)).isEqualTo(204);
         assertThat(join(bob, bet)).isEqualTo(204);
         deal(bet, null);

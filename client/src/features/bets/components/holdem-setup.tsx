@@ -34,19 +34,6 @@ export function HoldemSetup({
           />
         </Field>
         <Field
-          label="Rotations"
-          hint={`${HOLDEM_LIMITS.rotations.min}–${HOLDEM_LIMITS.rotations.max}`}
-        >
-          <Stepper
-            value={rules.rotations}
-            step={1}
-            min={HOLDEM_LIMITS.rotations.min}
-            max={HOLDEM_LIMITS.rotations.max}
-            label="Rotations"
-            onChange={(v) => onChange({ ...rules, rotations: v })}
-          />
-        </Field>
-        <Field
           label="Decision timer"
           hint={`${HOLDEM_LIMITS.decisionSec.min}–${HOLDEM_LIMITS.decisionSec.max}s`}
         >

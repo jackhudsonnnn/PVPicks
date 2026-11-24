@@ -133,7 +133,7 @@ class JackblackGameTest {
 
     @Test
     void naturalsPayByTheRulesRoundedDown() {
-        JackblackRules sixFive = new JackblackRules(1, true, 1, "6:5", 30, 2, 7);
+        JackblackRules sixFive = new JackblackRules(true, 1, "6:5", 30, 2, 7);
         JackblackGame game = JackblackGame.start(sixFive, List.of(A, B), 105, new Random(7),
                 stacked(cards("AS 9H KD 9C")), 0);
         // The seat's natural is done at once, and with no live hand left the dealer doesn't play.
@@ -143,7 +143,7 @@ class JackblackGameTest {
 
     @Test
     void splitAndDoubleFollowTheRules() {
-        JackblackRules noSplits = new JackblackRules(1, false, 0, "3:2", 30, 2, 7);
+        JackblackRules noSplits = new JackblackRules(false, 0, "3:2", 30, 2, 7);
         JackblackGame game = JackblackGame.start(noSplits, List.of(A, B), 100, new Random(7),
                 stacked(cards("8S 9H 8D 7C")), 0);
         UUID player = game.seats.getFirst().userId;
@@ -172,8 +172,7 @@ class JackblackGameTest {
         Random random = new Random(42);
         JackblackGame.Action[] actions = JackblackGame.Action.values();
         for (int g = 0; g < 400; g++) {
-            JackblackRules rules = new JackblackRules(1 + random.nextInt(3),
-                    random.nextBoolean(), random.nextInt(4), random.nextBoolean() ? "3:2" : "6:5", 10, 2, 7);
+            JackblackRules rules = new JackblackRules(random.nextBoolean(), random.nextInt(4), random.nextBoolean() ? "3:2" : "6:5", 10, 2, 7);
             int count = 2 + random.nextInt(6);
             List<UUID> players = new ArrayList<>();
             for (int i = 0; i < count; i++) players.add(UUID.randomUUID());
@@ -204,12 +203,12 @@ class JackblackGameTest {
                     }
                 }
             }
-            assertThat(game.history).hasSize(count * rules.rotations());
+            assertThat(game.history).hasSize(count);
             assertThat(game.totals.values().stream().mapToLong(Long::longValue).sum()).isZero();
             long worst = rules.worstCase(ante, count);
             for (long total : game.totals.values()) assertThat(-total).isLessThanOrEqualTo(worst);
             for (UUID player : players) {
-                assertThat(game.history.stream().filter(r -> r.dealerId.equals(player))).hasSize(rules.rotations());
+                assertThat(game.history.stream().filter(r -> r.dealerId.equals(player))).hasSize(1);
             }
         }
     }

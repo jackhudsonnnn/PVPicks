@@ -36,7 +36,6 @@ const sportsProposalSchema = z.object({
   forFun: z.boolean(),
 });
 const jackblackRulesSchema = z.object({
-  rotations: z.number().int().min(1).max(3),
   doubling: z.boolean(),
   maxSplits: z.number().int().min(0).max(3),
   blackjackPays: z.enum(["3:2", "6:5"]),
@@ -83,7 +82,6 @@ const intentSchema = z.discriminatedUnion("kind", [
     kind: z.literal("propose-holdem"),
     tableId: uuid,
     rules: z.object({
-      rotations: z.number().int().min(1).max(3),
       decisionSec: z.number().int().min(10).max(60),
       minPlayers: z.number().int().min(2).max(9),
       maxPlayers: z.number().int().min(2).max(9),
@@ -95,6 +93,8 @@ const intentSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("holdem-join"), tableId: uuid, betId: uuid }),
   z.object({ kind: z.literal("holdem-leave"), tableId: uuid, betId: uuid }),
+  /** "Run it back" on a finished card game: start its rematch, or join the one running. */
+  z.object({ kind: z.literal("rematch"), tableId: uuid, betId: uuid }),
   z.object({
     kind: z.literal("holdem-act"),
     tableId: uuid,
@@ -179,6 +179,8 @@ export async function executeBetAction(userId: string, intent: BetIntent, key: s
       intent.kind === "holdem-join" ? "PUT" : "DELETE",
       key,
     );
+  } else if (intent.kind === "rematch") {
+    await mutationRequest(`/bets/${encodeURIComponent(intent.betId)}/rematch`, "POST", key);
   } else if (intent.kind === "holdem-act") {
     await mutationRequest(
       `/bets/${encodeURIComponent(intent.betId)}/holdem/actions`,

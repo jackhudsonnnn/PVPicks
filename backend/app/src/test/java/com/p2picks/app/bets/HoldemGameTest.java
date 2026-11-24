@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class HoldemGameTest {
-    private static final HoldemRules RULES = new HoldemRules(1, 30, 2, 9);
+    private static final HoldemRules RULES = new HoldemRules(30, 2, 9);
     private static final UUID A = UUID.fromString("00000000-0000-0000-0000-00000000000a");
     private static final UUID B = UUID.fromString("00000000-0000-0000-0000-00000000000b");
     private static final UUID C = UUID.fromString("00000000-0000-0000-0000-00000000000c");
@@ -74,21 +74,6 @@ class HoldemGameTest {
         assertThat(hand.handNames.get(other)).isEqualTo("Pair of kings");
         assertThat(game.stacks.get(button)).isEqualTo(10_100);
         assertThat(hand.deltas).containsEntry(button, 100L).containsEntry(other, -100L);
-    }
-
-    @Test
-    void eachRotationIsAnotherFullCycle() {
-        HoldemGame game = HoldemGame.start(new HoldemRules(2, 30, 2, 9), List.of(A, B, C), 100, new Random(8), DECKS, 0);
-        assertThat(game.hands).isEqualTo(6);
-        long now = 0;
-        while (!HoldemGame.DONE.equals(game.phase)) {
-            if (HoldemGame.RESULTS.equals(game.phase)) game.timeout(RULES, DECKS, game.deadline);
-            else game.act(RULES, game.toActId(), Action.FOLD, 0, DECKS, ++now);
-        }
-        // The button goes round twice.
-        List<UUID> twice = new ArrayList<>(game.order);
-        twice.addAll(game.order);
-        assertThat(game.history).extracting(h -> h.buttonId).containsExactlyElementsOf(twice);
     }
 
     @Test

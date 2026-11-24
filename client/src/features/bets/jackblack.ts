@@ -2,14 +2,13 @@ import { z } from "zod";
 import { idSchema, read, request } from "@/lib/api-client";
 
 /**
- * Jackblack (domain rules, "Jackblack"): everyone who joins deals once per rotation, in a random order, and banks
+ * Jackblack (domain rules, "Jackblack"): everyone who joins deals once, in a random order, and banks
  * that round against the rest. Players choose in lockstep: new cards come out only once everyone still playing has
  * chosen, or the decision timer runs out. The server owns the shoe and every rule; this module mirrors the rule
  * limits for the setup form and reads the game.
  */
 
 export interface JackblackRules {
-  rotations: number;
   doubling: boolean;
   maxSplits: number;
   blackjackPays: "3:2" | "6:5";
@@ -21,7 +20,6 @@ export interface JackblackRules {
 
 /** Each number's minimum and maximum (the server enforces the same). */
 export const RULE_LIMITS = {
-  rotations: { min: 1, max: 3 },
   maxSplits: { min: 0, max: 3 },
   decisionSec: { min: 10, max: 60 },
 } as const;
@@ -30,7 +28,6 @@ export const RULE_LIMITS = {
 export const PLAYER_LIMITS = { min: 2, max: 7 } as const;
 
 export const DEFAULT_RULES: JackblackRules = {
-  rotations: 1,
   doubling: true,
   maxSplits: 1,
   blackjackPays: "3:2",
@@ -42,7 +39,6 @@ export const DEFAULT_RULES: JackblackRules = {
 /** What's wrong with the rules, or null. */
 export function rulesProblem(rules: JackblackRules): string | null {
   const within = (v: number, { min, max }: { min: number; max: number }) => v >= min && v <= max;
-  if (!within(rules.rotations, RULE_LIMITS.rotations)) return "Play 1 to 3 rotations.";
   if (!within(rules.maxSplits, RULE_LIMITS.maxSplits)) return "Allow 0 to 3 splits.";
   if (!within(rules.decisionSec, RULE_LIMITS.decisionSec))
     return "The decision timer is 10 to 60 seconds.";
@@ -69,15 +65,14 @@ export function worstCase(rules: JackblackRules, anteCents: number, players: num
     (anteCents * (rules.blackjackPays === "3:2" ? 3 : 6)) / (rules.blackjackPays === "3:2" ? 2 : 5),
   );
   const dealing = Math.max(handWorstCase(rules, anteCents), natural);
-  return (handWorstCase(rules, anteCents) + dealing) * (players - 1) * rules.rotations;
+  return (handWorstCase(rules, anteCents) + dealing) * (players - 1);
 }
 
 /** Reads rules back from a bet's config (booleans are stored as "yes"/"no"). */
 export function rulesFromConfig(config: Record<string, unknown>): JackblackRules {
-  const num = (key: "rotations" | "maxSplits" | "decisionSec" | "minPlayers" | "maxPlayers") =>
+  const num = (key: "maxSplits" | "decisionSec" | "minPlayers" | "maxPlayers") =>
     Number(config[key] ?? DEFAULT_RULES[key]);
   return {
-    rotations: num("rotations"),
     doubling: config["doubling"] !== "no",
     maxSplits: num("maxSplits"),
     blackjackPays: config["blackjackPays"] === "6:5" ? "6:5" : "3:2",
