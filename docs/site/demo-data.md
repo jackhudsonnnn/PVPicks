@@ -175,7 +175,9 @@ and recorded chunks on the Dev page still work alongside them (see
 In code: `demo/DemoProfile.java` (parameters, defaults, archetypes),
 `demo/DemoRoster.java` (the generated users), `demo/DemoWorld.java` (what a
 reset seeds), `demo/DemoHistory.java` (the past), `demo/DemoGames.java`,
-`demo/DemoBots.java` (the loop) and `demo/BotMind.java` (their decisions).
+`demo/DemoBots.java` (the loop), its planners (`BetBots`, `CardGameBots`,
+`SocialBots`, `SettlingBots`) on one scheduler (`BotKit`), and
+`demo/BotMind.java` (their decisions).
 
 ## Seeded history
 
