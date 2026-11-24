@@ -24,7 +24,7 @@ import { RealtimeProvider, useRealtimeFeed } from "@/lib/realtime";
 import { personalFeed } from "@/lib/realtime-connection";
 import { sessionKey, tablesKey } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
-import { LoadingScreen } from "@/components/loading";
+import { LoadingScreen, Spinner } from "@/components/loading";
 import { toast } from "sonner";
 
 /*
@@ -47,8 +47,23 @@ const ArchivedTable = lazy(() =>
   import("@/features/tables").then((m) => ({ default: m.ArchivedTable })),
 );
 
-function Page({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<LoadingScreen label="Loading" />}>{children}</Suspense>;
+/** A page loading on first use: the whole screen outside the app's frame, or a spinner inside it. */
+function Page({ children, inline = false }: { children: ReactNode; inline?: boolean }) {
+  return (
+    <Suspense
+      fallback={
+        inline ? (
+          <div role="status" aria-label="Loading" className="flex justify-center py-16">
+            <Spinner className="size-6 text-muted-foreground" />
+          </div>
+        ) : (
+          <LoadingScreen label="Loading" />
+        )
+      }
+    >
+      {children}
+    </Suspense>
+  );
 }
 
 export function App() {
@@ -276,7 +291,7 @@ function TableWorkspace({
               pathname === "/" || pathname === "/how-to-play" ? "max-w-6xl" : "max-w-4xl",
             )}
           >
-            <Page>
+            <Page inline>
               {pathname === "/" ? (
                 <HomePage user={user} expire={expire} />
               ) : pathname === "/friends" ? (
