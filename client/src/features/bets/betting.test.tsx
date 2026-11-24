@@ -511,6 +511,46 @@ describe("U2Pick betting", () => {
     expect(details.getByText(/BUF 24 @ NE 21 · at Q4 2:10/)).toBeInTheDocument();
   });
 
+  it("shows a pending sports bet's progress on the ticket itself", async () => {
+    vi.mocked(getBetLiveStats).mockResolvedValue({
+      gameId: liveGame.id,
+      league: "NFL",
+      status: "LIVE",
+      period: 3,
+      clock: "Q3 5:12",
+      away: { abbreviation: "BUF", score: 17 },
+      home: { abbreviation: "NE", score: 21 },
+      closed: false,
+      rows: [
+        {
+          label: "Drake Maye passing yards",
+          detail: "QB · NE",
+          proposed: 112,
+          locked: 140,
+          current: 212,
+          target: 250.5,
+          targetLabel: "Line",
+        },
+      ],
+    });
+    vi.mocked(listTableBets).mockResolvedValue([
+      {
+        ...locked,
+        modeId: "prop_hunt",
+        gameId: liveGame.id,
+        question: "Who wins?",
+        choices: ["Over 250.5", "Under 250.5"],
+        picks: [{ userId: user.id, choice: "Over 250.5" }],
+      },
+    ]);
+    renderApp();
+    const ticket = await openTicket();
+    const now = within(await ticket.findByRole("region", { name: "Right now" }));
+    expect(now.getByText("Drake Maye passing yards")).toBeInTheDocument();
+    expect(now.getByText("212")).toBeInTheDocument();
+    expect(now.getByText("/ 250.5")).toBeInTheDocument();
+  });
+
   it("lets a host override a locked sports bet; it waits on the game otherwise", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(new Response(null, { status: 204 }));
     vi.mocked(listTableBets).mockResolvedValue([

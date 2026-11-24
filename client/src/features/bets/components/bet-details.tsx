@@ -1,6 +1,5 @@
 import { STATUSES } from "@/features/bets/statuses";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,8 @@ import { FactRow, FactSection } from "./details-parts";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { type Bet, getBetLiveStats } from "@/features/bets/api";
+import type { Bet } from "@/features/bets/api";
+import { useBetLiveStats } from "@/features/bets/live-stats";
 import type { TableRef } from "@/features/tables";
 import { type User, PersonAvatar, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
@@ -273,9 +273,6 @@ export function BetDetailsDialog({
   );
 }
 
-/** Refresh while the game is live: stats arrive every few seconds, scores every 15. */
-const LIVE_REFRESH_MS = 15_000;
-
 /**
  * "Live stats", or "Result" once the ticket is resolved or washed (the server freezes the numbers then, and this
  * stops refreshing): what the bet's mode follows (the combined score, the home margin, each player's stat, each team's
@@ -283,13 +280,7 @@ const LIVE_REFRESH_MS = 15_000;
  * only while Details is open, so it fetches on demand.
  */
 function LiveStats({ betId }: { betId: string }) {
-  const live = useQuery({
-    queryKey: ["bet-live", betId],
-    queryFn: ({ signal }) => getBetLiveStats(betId, signal),
-    retry: false,
-    refetchInterval: (query) =>
-      query.state.data?.status === "LIVE" && !query.state.data.closed ? LIVE_REFRESH_MS : false,
-  });
+  const live = useBetLiveStats(betId);
   if (live.isPending || live.isError || live.data.rows.length === 0) return null;
   const { away, home, status, clock, period, closed } = live.data;
   const when =

@@ -19,6 +19,7 @@ import type { Bet } from "@/features/bets/api";
 import { canBetAt, type Table, type TableSummary } from "@/features/tables";
 import { type User, usePerson } from "@/features/people";
 import { TicketByline } from "./ticket-byline";
+import { TicketProgress } from "./ticket-progress";
 import type { BetActions } from "./bet-controls";
 import { useNow } from "@/lib/use-now";
 import { useTicker, tickerStatus } from "@/features/sports";
@@ -140,6 +141,7 @@ function PickTicket({
         <h3 className="break-words font-display text-2xl font-bold leading-tight">
           {bet.question}
         </h3>
+        {!preview && <TicketProgress bet={bet} />}
         <div className="-mt-2">
           <TicketByline
             bet={bet}

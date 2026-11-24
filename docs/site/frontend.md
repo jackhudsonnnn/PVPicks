@@ -198,6 +198,10 @@ earlier prototype (git tag `prototype-ui`).
   stats and 100 for other player stats. Then the wager (a slider, 0 to 10.00 in 0.10 steps; 0 reads "(4fun)" and sends a 4fun bet) and
   the pick window, preview the ticket (sports bets add **Right now**: the
   score and clock and the numbers the bet follows, `game-now.tsx`), send.
+  A pending sports ticket shows its progress above the byline
+  (`ticket-progress.tsx`, the same live stats as Details): a bar toward the
+  line or target, a tug between Either Or's two players, or Give And Take's
+  margin and who's covering.
   **Resend** on a resolved or washed ticket (`resend-button.tsx`) opens its
   table's proposal sheet filled in with the same terms (`?resend=<bet id>`);
   anyone who may propose there can, and it's checked like any new bet, so a
