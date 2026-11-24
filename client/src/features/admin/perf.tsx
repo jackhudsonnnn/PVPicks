@@ -31,6 +31,7 @@ import {
   type PerfWindow,
 } from "./dashboard-api";
 import { ago, bytes, count, duration, ms, percent, stamp } from "./format";
+import { PANEL, Panel, PanelTitle } from "./panel";
 
 /** A route is flagged slow at this p95, and failing at this share of 5xx. */
 const SLOW_P95_MS = 1000;
@@ -153,17 +154,9 @@ function LivePanel({ user }: { user: User }) {
     retry: false,
   });
   return (
-    <section
-      aria-labelledby="live-heading"
-      className="space-y-2 rounded-xl border bg-surface/60 p-4"
-    >
+    <section aria-labelledby="live-heading" className={cn(PANEL, "space-y-2")}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3
-          id="live-heading"
-          className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground"
-        >
-          Live · refreshes every 10 s
-        </h3>
+        <PanelTitle id="live-heading">Live · refreshes every 10 s</PanelTitle>
         {live.data && (
           <p className="font-mono text-[11px] text-muted-foreground">
             {live.data.host ?? "server"} · {live.data.version ?? "dev build"} · Java{" "}
@@ -389,7 +382,7 @@ function WindowCharts({ report }: { report: PerfReport }) {
   const series = report.series.map((point) => point.stats);
   return (
     <div className="grid gap-6 xl:grid-cols-3">
-      <ChartPanel title={`Requests per ${report.stepSeconds / 60} min`}>
+      <Panel title={`Requests per ${report.stepSeconds / 60} min`}>
         <Chart
           kind="stack"
           title="Requests per interval"
@@ -403,8 +396,8 @@ function WindowCharts({ report }: { report: PerfReport }) {
             },
           ]}
         />
-      </ChartPanel>
-      <ChartPanel title="Latency">
+      </Panel>
+      <Panel title="Latency">
         <Chart
           title="Latency percentiles per interval"
           labels={labels}
@@ -415,8 +408,8 @@ function WindowCharts({ report }: { report: PerfReport }) {
             { id: "p99", label: "p99", color: "var(--viz-3)", values: series.map((s) => s.p99) },
           ]}
         />
-      </ChartPanel>
-      <ChartPanel title="Errors">
+      </Panel>
+      <Panel title="Errors">
         <Chart
           kind="stack"
           title="Errors per interval"
@@ -442,19 +435,8 @@ function WindowCharts({ report }: { report: PerfReport }) {
             },
           ]}
         />
-      </ChartPanel>
+      </Panel>
     </div>
-  );
-}
-
-function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="min-w-0 space-y-2 rounded-xl border bg-surface/60 p-4">
-      <h3 className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
-        {title}
-      </h3>
-      {children}
-    </section>
   );
 }
 

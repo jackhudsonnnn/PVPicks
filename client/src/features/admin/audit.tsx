@@ -24,6 +24,7 @@ import { ago, count, modeName, percent, points, signedPoints, stamp } from "./fo
 import { useDebounced } from "@/lib/use-debounced";
 import { NameAvatar, NameTag } from "./avatar";
 import { Chip } from "./players";
+import { FactList, PANEL, Panel, PanelTitle } from "./panel";
 
 const REASONS: Record<AuditReport["reason"], string> = {
   harassment: "Harassment",
@@ -113,28 +114,6 @@ export function UserAuditView({
         <WritingSearch user={user} playerId={playerId} />
       </Panel>
     </article>
-  );
-}
-
-function Panel({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="min-w-0 space-y-3 rounded-xl border bg-surface/60 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
-          {title}
-        </h3>
-        {action}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -367,23 +346,10 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-function Rows({ rows }: { rows: [string, ReactNode][] }) {
-  return (
-    <dl className="divide-y text-sm">
-      {rows.map(([label, value]) => (
-        <div key={label} className="flex items-baseline justify-between gap-3 py-1.5">
-          <dt className="text-muted-foreground">{label}</dt>
-          <dd className="font-mono tabular-nums">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function MoneyList({ audit }: { audit: UserAudit }) {
   const { money } = audit;
   return (
-    <Rows
+    <FactList
       rows={[
         ["Settles", count(money.settles)],
         ["Settled while down", points(money.paidCents)],
@@ -462,7 +428,7 @@ function ModerationSummary({
 function PeopleList({ audit }: { audit: UserAudit }) {
   const { people } = audit;
   return (
-    <Rows
+    <FactList
       rows={[
         ["Friends", people.friends],
         ["Following", people.following],
@@ -650,7 +616,7 @@ function Highlighted({ text, term }: { text: string; term: string }) {
 function AuditedBy({ user, playerId }: { user: User; playerId: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <section className="min-w-0 rounded-xl border bg-surface/60 p-4">
+    <section className={PANEL}>
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2 text-left"
@@ -658,9 +624,7 @@ function AuditedBy({ user, playerId }: { user: User; playerId: string }) {
         aria-controls="audited-by"
         onClick={() => setOpen((current) => !current)}
       >
-        <h3 className="font-mono text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
-          Audited by
-        </h3>
+        <PanelTitle>Audited by</PanelTitle>
         <ChevronDown
           className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")}
         />
