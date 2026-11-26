@@ -9,19 +9,17 @@ import java.util.Set;
  * Hold'em's settings and fixed terms (domain rules, "Hold'em"). The proposer sets the turn timer and the players
  * range; the game is one hand per player, the button going round once (owner decision, 2026-11-24: "Run it back" plays
  * another); the big blind is the bet's wager (the shared slider) and everything else is
- * fixed: no-limit, small blind half the big blind, a buy-in of 100 big blinds, one rebuy a game.
+ * fixed: no-limit, small blind half the big blind, and every hand starts everyone on the same stack of 10 big blinds
+ * (owner decision, 2026-11-26: chips that carried between hands gave some seats an edge).
  */
 public record HoldemRules(int decisionSec, int minPlayers, int maxPlayers) {
     static final int MIN_DECISION_SEC = 10, MAX_DECISION_SEC = 60, DEFAULT_DECISION_SEC = 30;
     /** The range the proposer can set for players at one game (fewer than their minimum at the deal washes). */
     static final int MIN_PLAYERS = 2, MAX_PLAYERS = 9;
-    static final int BUY_IN_BIG_BLINDS = 100;
-    /** Buy-ins anyone can spend in a game: the first and one rebuy. */
-    static final int MAX_BUY_INS = 2;
+    /** Everyone's stack at the start of every hand, in big blinds. */
+    static final int STACK_BIG_BLINDS = 10;
     /** A 4fun game has no points at stake, but poker needs blinds: it plays with chips worth nothing, 1.00 a blind. */
     static final long FUN_BIG_BLIND = 100;
-    /** How long a busted player has to take their one rebuy (owner decision, 2026-11-22). */
-    static final long REBUY_MS = 15_000;
     /** How long a finished hand stays up (who won, shown hands) before the next deal. */
     static final long HAND_PAUSE_MS = 5_000;
     private static final Set<String> FIELDS = Set.of("decisionSec", "minPlayers", "maxPlayers");
@@ -61,12 +59,16 @@ public record HoldemRules(int decisionSec, int minPlayers, int maxPlayers) {
         return forFun ? FUN_BIG_BLIND : wagerCents;
     }
 
-    static long buyIn(long bigBlind) {
-        return Math.multiplyExact(bigBlind, BUY_IN_BIG_BLINDS);
+    /** Everyone's stack at the start of each hand. */
+    static long stack(long bigBlind) {
+        return Math.multiplyExact(bigBlind, STACK_BIG_BLINDS);
     }
 
-    /** The most a player can lose: both buy-ins (held against their points limit while the game is on). */
-    static long worstCase(long wagerCents) {
-        return Math.multiplyExact(buyIn(wagerCents), MAX_BUY_INS);
+    /**
+     * The most a player can lose (held against their points limit while the game is on): their whole stack in every
+     * hand, one hand per player.
+     */
+    static long worstCase(long wagerCents, int players) {
+        return Math.multiplyExact(stack(wagerCents), players);
     }
 }

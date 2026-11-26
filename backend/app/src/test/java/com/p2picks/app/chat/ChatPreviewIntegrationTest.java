@@ -124,7 +124,7 @@ class ChatPreviewIntegrationTest extends IntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString());
         assertThat(OpenApiSchemas.load("GifCatalog").validate(catalog)).isEmpty();
         assertThat(catalog.path("gifs").size()).isEqualTo(97);
-        // Money merged into Hype (owner decision, 2026-11-23), leaving room for the picker's Starred tab.
+        // Money merged into Hype (owner decision, 2026-11-23). Categories now only feed the picker's search.
         assertThat(catalog.path("categories")).extracting(c -> c.path("id").asText())
                 .containsExactly("hype", "pain", "react", "roast");
         assertThat(catalog.path("gifs").get(0).path("id").asText()).isEqualTo("g1");

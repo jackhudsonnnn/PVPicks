@@ -220,7 +220,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void choicesStayHiddenUntilEveryoneHasChosen() throws Exception {
+    void playersTakeTurnsAndEveryoneSeesWhoseTurnItIs() throws Exception {
         Player pat = player("pat");
         Player ann = player("ann");
         Player bob = player("bob");
@@ -234,28 +234,31 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
         Player one = who(dealt.path("seats").get(0).path("userId"), pat, ann, bob);
         Player two = who(dealt.path("seats").get(1).path("userId"), pat, ann, bob);
         Player dealer = who(dealt.path("dealerId"), pat, ann, bob);
+        assertThat(dealt.path("turnId").asText()).isEqualTo(one.id().toString());
 
+        // The second seat waits its turn; only the acting player is told what their hand allows.
+        assertThat(act(two, bet, "hit").getStatus()).isEqualTo(409);
+        assertThat(game(one, bet).path("seats").get(0).has("canDouble")).isTrue();
+        assertThat(game(two, bet).path("seats").get(1).has("canDouble")).isFalse();
+
+        // A hit is dealt at once and everyone sees it, the current hand marked.
         assertThat(act(one, bet, "hit").getStatus()).isEqualTo(204);
         JsonNode seenByTwo = game(two, bet);
-        JsonNode oneSeat = seenByTwo.path("seats").get(0);
-        assertThat(oneSeat.path("deciding").asBoolean()).isFalse();
-        assertThat(oneSeat.has("choice")).isFalse();
-        // Another player's cards are never sent to a seat (only the dealer sees every seat).
-        assertThat(oneSeat.has("hands")).isFalse();
-        assertThat(game(one, bet).path("seats").get(0).path("choice").asText()).isEqualTo("hit");
-        assertThat(game(dealer, bet).path("seats").get(0).has("choice")).isFalse();
-        assertThat(act(one, bet, "stand").getStatus()).isEqualTo(409);
+        assertThat(seenByTwo.path("turnId").asText()).isEqualTo(one.id().toString());
+        JsonNode oneHand = seenByTwo.path("seats").get(0).path("hands").get(0);
+        assertThat(oneHand.path("cards")).extracting(JsonNode::asText).containsExactly("TS", "2C", "5D");
+        assertThat(oneHand.path("current").asBoolean()).isTrue();
+        assertThat(seenByTwo.path("seats").get(1).path("hands").get(0).path("current").asBoolean()).isFalse();
 
+        assertThat(act(one, bet, "stand").getStatus()).isEqualTo(204);
+        assertThat(game(dealer, bet).path("turnId").asText()).isEqualTo(two.id().toString());
         assertThat(act(two, bet, "hit").getStatus()).isEqualTo(204);
-        JsonNode after = game(dealer, bet);
-        assertThat(after.path("seats").get(0).path("hands").get(0).path("cards")).extracting(JsonNode::asText)
-                .containsExactly("TS", "2C", "5D");
-        assertThat(after.path("seats").get(1).path("hands").get(0).path("cards")).extracting(JsonNode::asText)
-                .containsExactly("TH", "3C", "6H");
+        assertThat(game(dealer, bet).path("seats").get(1).path("hands").get(0).path("cards"))
+                .extracting(JsonNode::asText).containsExactly("TH", "3C", "6H");
     }
 
     @Test
-    void aLapsedTimerStandsWhoeverHasntChosen() throws Exception {
+    void aLapsedTimerStandsTheActingHand() throws Exception {
         Player pat = player("pat");
         Player ann = player("ann");
         UUID table = table(pat, ann);
@@ -421,7 +424,7 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void eachPlayerSeesOnlyTheirSeatAndTheShoeIsRevealedForAuditOnlyAtTheEnd() throws Exception {
+    void everySeatIsPublicAndTheShoeIsRevealedForAuditOnlyAtTheEnd() throws Exception {
         Player pat = player("pat");
         Player ann = player("ann");
         Player bob = player("bob");
@@ -435,15 +438,11 @@ class JackblackIntegrationTest extends IntegrationTestSupport {
 
         JsonNode asCat = game(cat, bet);
         if (asCat.path("phase").asText().equals("play")) {
-            UUID dealerId = UUID.fromString(asCat.path("dealerId").asText());
-            // A member who isn't playing sees who's seated and the dealer's up card, never a seat's cards.
-            asCat.path("seats").forEach(s -> assertThat(s.has("hands")).isFalse());
-            // The dealer sees every seat; a player sees only their own.
-            game(byId.get(dealerId), bet).path("seats").forEach(s -> assertThat(s.has("hands")).isTrue());
+            // Everyone, a member who isn't playing included, sees every seat's cards (never the hole card).
+            assertThat(asCat.path("dealer").get(1).asText()).isEqualTo("??");
+            asCat.path("seats").forEach(s -> assertThat(s.has("hands")).isTrue());
             for (Player player : List.of(pat, ann, bob)) {
-                if (player.id().equals(dealerId)) continue;
-                game(player, bet).path("seats").forEach(s -> assertThat(s.has("hands"))
-                        .isEqualTo(s.path("userId").asText().equals(player.id().toString())));
+                game(player, bet).path("seats").forEach(s -> assertThat(s.has("hands")).isTrue());
             }
         }
         // Each round's commitment is shown from the deal; its deck count and seed are not.

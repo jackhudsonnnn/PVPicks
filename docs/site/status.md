@@ -63,13 +63,14 @@ Everything here runs in dev and on LAN, unless marked as one or the other.
   minutes after Final, King Of The Hill and Scorcerer as soon as it's
   decided), and hosts can wash or set a result until points are settled.
 - Jackblack (replaced Blackjack): everyone who joins deals once,
-  in a random order, and banks that round against the rest. Choices are made
-  in lockstep (new cards come out once everyone has chosen or the timer runs
-  out), the round's dealer flips, hits and stands with one button, and each
+  in a random order, and banks that round against the rest. Players act in
+  turn from the dealer's left, as at a casino, each move dealt at once with its
+  own timer; the round's dealer flips, hits and stands with one button, and each
   player's worst case is held against their points limit. Hosts choose who
-  can propose it. It's played on the ticket; the felt shows each player's
-  total and result (see the domain rules, "Jackblack").
-- Hold'em: no-limit Texas hold'em, one hand per player, 100 big blinds to buy in, one rebuy per game, a turn timer,
+  can propose it. It's played on the ticket, every seat's cards face up for
+  everyone; the felt shows each player's total and result (see the domain
+  rules, "Jackblack").
+- Hold'em: no-limit Texas hold'em, one hand per player, everyone on a fresh 10-big-blind stack every hand, a turn timer,
   server-side pre-moves, and a shuffle audit revealed once the game is over.
   The proposer sets the players range; hosts choose who can propose it (see
   the domain rules, "Hold'em"). A finished card game offers "Run it back":

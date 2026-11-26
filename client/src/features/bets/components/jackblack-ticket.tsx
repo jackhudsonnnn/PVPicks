@@ -1,5 +1,6 @@
 import { secondsUntil, signed } from "@/features/bets/cards";
 import { Spade } from "lucide-react";
+import { useActingInView } from "./use-acting-in-view";
 import { TicketFooter } from "./ticket-footer";
 import { TicketByline } from "./ticket-byline";
 import type { BetActions } from "./bet-controls";
@@ -15,11 +16,11 @@ import {
   mySeat,
   playersOf,
   rulesFromConfig,
-  undecided,
+  stillToPlay,
   type JackblackGame,
   type JackblackSeat,
 } from "@/features/bets/jackblack";
-import { CHOICE_NAMES, DealerButton, PlayControls } from "./jackblack-parts";
+import { DealerButton, PlayControls } from "./jackblack-parts";
 import { RESULT, handLabel, useJackblackGame } from "@/features/bets/jackblack-game";
 import {
   Card,
@@ -43,27 +44,32 @@ const SHOE_FROM_SEAT = { x: -48, y: -110 };
 /** Seconds between cards in the opening deal. */
 const DEAL_GAP = 0.14;
 
-/** One seat in a live round: name, whether they've chosen yet (never what), and their hands. */
+/** One seat in a live round: name, whether it's their turn, waiting for it or done, and their hands. */
 function Spot({
   seat,
+  turn,
   order,
   seats,
   timeLeft,
   ...people
 }: People & {
   seat: JackblackSeat;
+  /** It's this seat's turn. */
+  turn: boolean;
   order: number;
   seats: number;
-  /** The share of the decision timer left, while this seat is still choosing. */
+  /** The share of the decision timer left, on this seat's turn. */
   timeLeft: number | null;
 }) {
   const { user, expire, peopleKey } = people;
-  const thinking = seat.deciding === true;
+  const thinking = turn;
+  const waiting = !turn && stillToPlay(seat);
   return (
     <li
+      data-to-act={turn || undefined}
       className={cn(
         "flex min-w-[10rem] shrink-0 snap-start flex-col gap-1 rounded-lg border border-white/10 bg-black/20 p-2",
-        seat.userId === user.id && thinking && "border-primary/70 bg-primary/10",
+        turn && "border-primary/70 bg-primary/10",
       )}
     >
       <div className="flex items-center gap-1.5 text-[11px]">
@@ -89,19 +95,23 @@ function Spot({
         <span className="min-w-0 flex-1 truncate font-semibold text-white">
           <PlayerName id={seat.userId} {...people} />
         </span>
-        {seat.deciding !== undefined && (
-          <span
-            className={cn(
-              "font-mono text-[10px] font-bold uppercase",
-              thinking ? "animate-pulse text-white/70" : "text-win",
-            )}
-          >
-            {thinking ? "Deciding" : "Ready"}
-          </span>
-        )}
+        <span
+          className={cn(
+            "font-mono text-[10px] font-bold uppercase",
+            thinking ? "animate-pulse text-primary" : waiting ? "text-white/50" : "text-white/70",
+          )}
+        >
+          {thinking
+            ? seat.userId === user.id
+              ? "Your turn"
+              : "Playing"
+            : waiting
+              ? "Waiting"
+              : "Done"}
+        </span>
       </div>
       <div className="flex flex-1 items-center gap-1.5">
-        {(seat.hands ?? []).map((h, i) => (
+        {seat.hands.map((h, i) => (
           <div
             key={i}
             className={cn("shrink-0 space-y-1 rounded-md p-1", h.current && "ring-2 ring-primary")}
@@ -114,7 +124,7 @@ function Spot({
                   small
                   from={SHOE_FROM_SEAT}
                   delay={
-                    h.cards.length <= 2 && seat.hands?.length === 1
+                    h.cards.length <= 2 && seat.hands.length === 1
                       ? (c * (seats + 1) + order) * DEAL_GAP
                       : 0
                   }
@@ -122,7 +132,7 @@ function Spot({
               ))}
             </div>
             <p className="font-mono text-[10px] font-bold text-white/80">
-              {handLabel(h, (seat.hands?.length ?? 0) > 1)}
+              {handLabel(h, seat.hands.length > 1)}
               {h.doubled && " · 2×"}
             </p>
           </div>
@@ -134,8 +144,8 @@ function Spot({
 
 /**
  * The people row for each phase, always the same height and scrolling sideways: who's in while the join window is
- * open; in a round the seats you may see (your own, or every seat when you're dealing: the server only ever sends
- * the cards you may see); between rounds how everyone did; at the end the standings.
+ * open; in a round every seat with its cards (public, like a real table; only choices stay hidden until everyone has
+ * chosen); between rounds how everyone did; at the end the standings.
  */
 function PeopleRow({
   game,
@@ -150,6 +160,8 @@ function PeopleRow({
   timeLeft: number | null;
 }) {
   const { user } = people;
+  // Keep whoever's turn it is in view.
+  const row = useActingInView(`${game.round}-${game.turnId}`);
   if (status === "washed") return <FeltNote>{washReason ?? "Washed"}</FeltNote>;
   if (game.phase === "waiting") {
     return (
@@ -185,9 +197,7 @@ function PeopleRow({
       ...round.seats.map((seat) => ({
         id: seat.userId,
         cents: seat.deltaCents ?? 0,
-        label: (seat.hands ?? [])
-          .map((h) => (h.result ? RESULT[h.result] : String(h.total)))
-          .join("/"),
+        label: seat.hands.map((h) => (h.result ? RESULT[h.result] : String(h.total))).join("/"),
       })),
     ];
     return (
@@ -206,25 +216,22 @@ function PeopleRow({
     );
   }
   const seats = game.seats ?? [];
-  const shown = seats
-    .map((seat, order) => ({ seat, order }))
-    .filter(({ seat }) => seat.hands !== undefined);
-  if (shown.length === 0) {
-    return <FeltNote>You're watching: only the players see their own cards.</FeltNote>;
-  }
   return (
-    <FeltRow label={shown.length === 1 ? "Your seat" : "Seats"}>
-      {shown.map(({ seat, order }) => (
-        <Spot
-          key={`${game.round}-${seat.userId}`}
-          seat={seat}
-          order={order}
-          seats={seats.length}
-          timeLeft={timeLeft}
-          {...people}
-        />
-      ))}
-    </FeltRow>
+    <div ref={row} className="h-full">
+      <FeltRow label="Seats">
+        {seats.map((seat, order) => (
+          <Spot
+            key={`${game.round}-${seat.userId}`}
+            seat={seat}
+            turn={game.phase === "play" && game.turnId === seat.userId}
+            order={order}
+            seats={seats.length}
+            timeLeft={timeLeft}
+            {...people}
+          />
+        ))}
+      </FeltRow>
+    </div>
   );
 }
 
@@ -278,6 +285,7 @@ function statusLine(
   user: User,
   now: number,
   join: { left: number; joined: boolean; full: boolean; canBet: boolean },
+  turnName: string,
 ) {
   const left = secondsUntil(game.deadline, now);
   const timer = left !== null ? ` · ${left}s` : "";
@@ -301,12 +309,11 @@ function statusLine(
   const dealing = game.dealerId === user.id;
   if (game.phase === "dealer")
     return dealing ? `Your turn to deal${timer}.` : "The dealer's playing their hand…";
-  const mine = mySeat(game, user.id);
   if (deciding(game, user.id)) return `Your move${timer}.`;
-  if (mine?.choice)
-    return `${CHOICE_NAMES[mine.choice]} it is. Waiting on ${undecided(game)}${timer}.`;
-  if (dealing) return `You're dealing. ${undecided(game)} still deciding${timer}.`;
-  return `${undecided(game)} still deciding${timer}.`;
+  const mine = mySeat(game, user.id);
+  const next = mine && stillToPlay(mine) ? " You're up after." : "";
+  if (dealing) return `You're dealing. ${turnName}'s turn${timer}.`;
+  return `${turnName}'s turn${timer}.${next}`;
 }
 
 /**
@@ -351,6 +358,7 @@ export function JackblackTicket({
     game?.phase === "results" ? game.history?.at(-1)?.dealerId : (game?.dealerId ?? undefined);
   const dealer = usePerson(dealerId ?? bet.proposerId, user, expire, peopleKey);
   const dealerName = dealerId === user.id ? "You" : (dealer?.name ?? "…");
+  const turnPerson = usePerson(game?.turnId ?? bet.proposerId, user, expire, peopleKey);
   // Rounds: everyone deals once (counted from who's in until the deal).
   const rounds = game?.rounds ?? Math.max(1, players.length);
   const round =
@@ -378,10 +386,10 @@ export function JackblackTicket({
         onJoin={() => start({ kind: "jackblack-join", tableId: table.id, betId: bet.id })}
         onLeave={() => start({ kind: "jackblack-leave", tableId: table.id, betId: bet.id })}
       />
-    ) : mine && game.phase === "play" && mine.deciding !== undefined ? (
+    ) : mine && game.phase === "play" && stillToPlay(mine) ? (
       <PlayControls
-        key={`${game.round}-${(mine.hands ?? []).map((h) => h.cards.length).join(".")}`}
         seat={mine}
+        myTurn={deciding(game, user.id)}
         disabled={blocked}
         onMove={(action) =>
           start({ kind: "jackblack-act", tableId: table.id, betId: bet.id, action })
@@ -414,7 +422,7 @@ export function JackblackTicket({
         {preview ? (
           <p className="text-sm text-ticket-muted">
             Everyone who joins deals once, in a random order, and banks that round against the rest.
-            Choices are made together: new cards come out once everyone has chosen.
+            Players act in turn from the dealer's left, as at a casino.
           </p>
         ) : !game ? (
           <Felt
@@ -445,12 +453,18 @@ export function JackblackTicket({
             status={
               status === "washed"
                 ? "Washed: nothing was played."
-                : statusLine(game, user, now, {
-                    left,
-                    joined,
-                    full: players.length >= rules.maxPlayers,
-                    canBet,
-                  })
+                : statusLine(
+                    game,
+                    user,
+                    now,
+                    {
+                      left,
+                      joined,
+                      full: players.length >= rules.maxPlayers,
+                      canBet,
+                    },
+                    turnPerson?.name ?? "…",
+                  )
             }
             controls={controls}
           />

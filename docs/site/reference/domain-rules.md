@@ -534,12 +534,14 @@ or GIF permission. The user delegated the text limit; it is 1–2000 Unicode
 code points after trimming. GIFs come only from the catalog in
 `chat/gifs.json`; its IDs are the accepted ones. IDs are never reused or
 removed, since sent messages look their GIF up by ID. The picker's search
-needs every word to appear in a GIF's caption, tags or category. Categories are
-Hype, Pain, React and Roast (Money merged into Hype, owner decision,
-2026-11-23). Each player can star up to 100 library GIFs (`gif_favorites`;
-`GET /me/gif-favorites`, `PUT`/`DELETE /me/gif-favorites/{gifId}`, which
-set the star so repeating either changes nothing); the picker shows them first
-in a Starred tab. Stars are personal data, deleted with the account.
+covers the whole library (there are no category tabs) and needs every word to
+appear in a GIF's caption, tags or category. Categories are Hype, Pain, React
+and Roast (Money merged into Hype, owner decision, 2026-11-23). Each player can
+have up to 100 favorite library GIFs (`gif_favorites`; `GET /me/gif-favorites`,
+`PUT`/`DELETE /me/gif-favorites/{gifId}`, which set the favorite so repeating
+either changes nothing); a star beside the search shows just your favorites,
+and the search then covers only them. Favorites are personal data, deleted
+with the account.
 A send atomically stores a message, internal outbox event and retry claim.
 Matching retries recheck current access, permission and unchanged message content,
 then return the original 201 message without later reactions. If the message
@@ -790,6 +792,12 @@ Owner rule, 2026-11-21: every mode is fair to everyone in it.
   is in turn, so later players see earlier bets, and position is an edge. It's
   allowed because a game is whole cycles: everyone holds every position
   (button, blinds) equally often, so nobody keeps the edge.
+- **Exception: Jackblack's turns** (owner decision, 2026-11-26: "like going to
+  a casino, except the dealer is rotated"). Players act one at a time from the
+  dealer's left and see earlier players' cards. It's allowed for the same
+  reason: the dealer moves one seat a round and everyone deals once, so each
+  player sits in every position (first to act through last) exactly once a
+  game.
 
 ## Balances
 
@@ -863,13 +871,16 @@ one game of several rounds:
   dealer's second face down. On an ace or ten the dealer peeks: a dealer
   natural ends the round (seat naturals push, the rest lose). A seat's
   natural is done at once.
-- **Lockstep steps** (the fairness rule): everyone with a hand still to play
-  chooses hit, stand, double (one card, stake doubled) or split (equal
-  values, up to the max; split aces get one card each and can't be re-split;
-  a split 21 isn't a natural) for their current hand. Nobody sees anyone's
-  choice, only who is still deciding. Once everyone has chosen, or the
-  decision timer runs out (no choice stands), the new cards are dealt in seat
-  order and shown together. Reaching 21 stands automatically.
+- **Turns, as at a casino** (owner decision, 2026-11-26; replaces lockstep
+  steps, see the fairness rule's exception): starting with the seat after the
+  dealer and going round, one player at a time plays every hand of theirs
+  (splits included) to the end before the next goes: hit, stand, double (one
+  card, stake doubled) or split (equal values, up to the max; split aces get
+  one card each and can't be re-split; a split 21 isn't a natural). Each move
+  is dealt at once and everyone sees it. Each decision has its own timer;
+  running out stands that hand and play moves on. Reaching 21 stands
+  automatically, and a seat whose hands are all done (a natural, say) is
+  skipped.
 - **Dealer's turn**: when no seat has a hand left, the round's dealer taps
   one button that does what the rules require: **Flip**, then **Hit** while
   under 17, then **Stand** (soft 17 stands). A bust pays out by itself; an
@@ -895,15 +906,13 @@ one game of several rounds:
 - Jackblack is never picked: `PUT /bets/{id}/pick` on a Jackblack bet is 400
   `invalid_choice` (joining is the only way in).
 
-**Who sees what (owner decision, 2026-11-22).** To stop counting, nobody sees
-more than the dealer and one seat at a time. During a round a player gets only
-their own seat's cards and the dealer's (hole card once flipped); the round's
-dealer, who makes no choices, sees every seat and swipes across them one at a
-time; members not playing see only the dealer. Other seats come with just who
-is there and whether they're still deciding. The server enforces this in
-`GET /bets/{id}/jackblack`, so it can't be read from the network. Finished
-rounds (history, Details) show every seat: each round's shoe is fresh and of a
-random size, so past cards say nothing about the next.
+**Who sees what (owner decision, 2026-11-25; replaces 2026-11-22's "own seat
+only").** Every seat's cards are face up for everyone, players, the dealer and
+members not playing alike, as at a real table: each round's shoe is fresh and of
+a random size, so seeing them doesn't help counting, and everyone sees the same.
+Whose turn it is is public too (`turnId`). Only the dealer's hole card stays
+hidden until it's turned over. The server enforces this in
+`GET /bets/{id}/jackblack`, so it can't be read from the network.
 
 **Shuffle audit (owner decision, 2026-11-22).** Shared by the card games
 (Jackblack's shoe each round, Hold'em's deck each hand). At the deal the server
@@ -952,12 +961,18 @@ like Jackblack:
 - **One cycle.** A game is one hand per player at the deal (owner decision,
   2026-11-24: no rotations setting; "Run it back" plays another). Seating is
   shuffled at the deal; the button starts on the first seat and moves one seat
-  (to the next player still in) each hand. Heads-up the button is the small
+  each hand, and everyone plays every hand. Heads-up the button is the small
   blind and acts first before the flop only; otherwise the two after the
   button post the blinds and the player after the big blind acts first.
 - **Stakes.** The shared wager slider is the big blind (0.10–10 points; the
   small blind is half), or 0 for a 4fun game, which plays with chips worth
-  nothing (1.00 a big blind). Everyone buys in for 100 big blinds.
+  nothing (1.00 a big blind).
+- **Stacks** (owner decision, 2026-11-26; replaces 100-big-blind buy-ins and
+  the rebuy). Every hand starts everyone on the same stack of 10 big blinds.
+  Chips that carried from hand to hand gave some seats an edge (who you sat
+  after, who could run out first); with a fresh stack each hand nobody busts
+  out, nobody is short-stacked by earlier luck, and each hand is fair on its
+  own.
 - **Who can propose** is a table setting, `holdemAccess`: `everyone`
   (default), `hosts` or `off`; "Only hosts start bets" applies too. Players
   join during the join window, within the proposer's players range (2–9 on one
@@ -981,16 +996,15 @@ like Jackblack:
   since the audit reveals every hand once the game is over anyway (owner
   decision, 2026-11-23). Folded hands are never shown during the game. A
   finished hand stays up for 5 seconds before the next deal.
-- **Rebuy.** Stacks carry from hand to hand. A player who busts gets one
-  rebuy for the whole game, offered only right after that first bust: the
-  next hand waits up to 15 seconds for the answer, and letting it pass (or
-  busting again) sits them out for the rest. No rebuy after the last hand.
-- **Result.** Each player's final stack minus what they bought in for; the
-  ledger gets everyone's total at the end (zero-sum).
-- **Points limit.** Both buy-ins (200 big blinds) are held while the game is
-  on: checked when joining (and proposing) and again at the deal, where anyone
-  who can't cover it is dropped. The balance what-if shows a Hold'em game's
-  best case as every other player's buy-ins.
+- **Result.** What each player won or lost over the hands (each hand's end
+  stack minus the starting stack), shown as it adds up (`totals`); the ledger
+  gets everyone's total at the end (zero-sum).
+- **Points limit.** Losing the whole stack every hand is the worst case:
+  10 big blinds × the number of players (one hand each). It's held while the
+  game is on: checked when proposing (for the fewest players), when joining
+  and again at the deal for the final count, where anyone who can't cover it
+  is dropped. The balance what-if shows a Hold'em game's best case as every
+  other player's worst case.
 - **Who sees what.** Never the deck; only your own hole cards while a hand is
   on. Stacks, bets, the board, the pot and whose turn it is are public, as at
   a real table. Members not playing see everything public and no hole cards.
@@ -1004,7 +1018,8 @@ In code: `bets/HoldemRules`, `bets/HoldemGame` (the pure game),
 `bets/HandEvaluator`, `bets/HoldemService`, `bets/HoldemController`,
 `bets/CardGameWorker`, `bets/CardGames`. Demo bots play it with `demo/HoldemBot`. Tests:
 `HoldemGameTest` (including 500 random games checked zero-sum, no negative
-stacks and nobody down more than two buy-ins), `HandEvaluatorTest`,
+stacks, every hand played and nobody down more than a stack a hand),
+`HandEvaluatorTest`,
 `HoldemIntegrationTest`, `HoldemBotTest`; client `features/bets/holdem.test.tsx`
 and `card-audit.test.ts`.
 

@@ -361,7 +361,7 @@ export function ProposeBetSheet({
                     <JackblackWorstCase rules={rules} anteCents={wager} />
                   )}
                   {mode.cardGame === "holdem" && !forFun && (
-                    <HoldemWorstCase bigBlindCents={wager} />
+                    <HoldemWorstCase rules={holdemRules} bigBlindCents={wager} />
                   )}
                 </div>
               </Section>

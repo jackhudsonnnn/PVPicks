@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Bet } from "@/features/bets/api";
-import { arrangeSeats, openBets, seatPosition, seatStatus } from "./seating";
+import { arrangeSeats, canThrowAt, openBets, seatPosition, seatStatus } from "./seating";
 
 const ids = Array.from(
   { length: 10 },
@@ -118,5 +118,24 @@ describe("seat chips", () => {
     const newer = { ...active, id: "n", createdAt: "2026-11-13T12:05:00Z" };
     const closed = { ...locked, id: "c", status: "SETTLED" as const };
     expect(openBets([active, closed, newer]).map((bet) => bet.id)).toEqual(["n", active.id]);
+  });
+});
+
+describe("canThrowAt", () => {
+  const members = [me, a, b, c];
+
+  it("needs them in the focused ticket", () => {
+    expect(canThrowAt(b, members, me, active, true)).toBe(true);
+    expect(canThrowAt(a, members, me, active, true)).toBe(false);
+  });
+
+  it("allows anyone at the table with no open tickets", () => {
+    expect(canThrowAt(a, members, me, undefined, true)).toBe(true);
+    expect(canThrowAt(ids[9]!, members, me, undefined, true)).toBe(false);
+  });
+
+  it("never at yourself, and only while the felt is on screen", () => {
+    expect(canThrowAt(me, members, me, undefined, true)).toBe(false);
+    expect(canThrowAt(b, members, me, active, false)).toBe(false);
   });
 });

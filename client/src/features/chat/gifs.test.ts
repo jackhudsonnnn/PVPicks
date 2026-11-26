@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchGifs, type GifCatalog } from "./gifs";
+import { favoriteGifs, searchGifs, type GifCatalog } from "./gifs";
 
 const catalog: GifCatalog = {
   categories: [
@@ -19,12 +19,18 @@ const catalog: GifCatalog = {
   ],
 };
 
-const ids = (query: string, category = "pain") =>
-  searchGifs(catalog, query, category).map((g) => g.id);
+const ids = (query: string, gifs = catalog.gifs) =>
+  searchGifs(catalog, query, gifs).map((g) => g.id);
 
 describe("searchGifs", () => {
-  it("shows the category when the search is empty", () => {
-    expect(ids("  ")).toEqual(["a", "c"]);
+  it("shows everything when the search is empty", () => {
+    expect(ids("  ")).toEqual(["a", "b", "c"]);
+  });
+
+  it("searches just your favorites, newest first", () => {
+    const favorites = favoriteGifs(catalog, ["c", "a", "gone"]);
+    expect(ids("", favorites)).toEqual(["c", "a"]);
+    expect(ids("lebron", favorites)).toEqual(["a"]);
   });
 
   it("needs every word to match the caption, tags or category", () => {

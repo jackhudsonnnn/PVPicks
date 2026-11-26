@@ -40,10 +40,9 @@ const play: HoldemGame = {
   order: [user.id, other],
   bigBlindCents: 100,
   smallBlindCents: 50,
-  buyInCents: 10_000,
-  stacks: { [user.id]: 9_950, [other]: 9_900 },
-  buyIns: { [user.id]: 1, [other]: 1 },
-  out: [],
+  stackCents: 1_000,
+  stacks: { [user.id]: 950, [other]: 900 },
+  totals: { [user.id]: 0, [other]: 0 },
   buttonId: user.id,
   smallBlindId: user.id,
   bigBlindId: other,
@@ -56,7 +55,7 @@ const play: HoldemGame = {
     { userId: other, committed: 100, contributed: 100, folded: false, allIn: false },
     { userId: user.id, committed: 50, contributed: 50, folded: false, allIn: false },
   ],
-  me: { hole: ["AS", "KD"], toCall: 50, canRaise: true, minRaiseTo: 200, maxRaiseTo: 10_000 },
+  me: { hole: ["AS", "KD"], toCall: 50, canRaise: true, minRaiseTo: 200, maxRaiseTo: 1_000 },
   history: [],
   shuffles: [{ round: 1, commitment: "a".repeat(64) }],
 };
@@ -89,10 +88,12 @@ beforeEach(() => {
 });
 
 describe("hold'em", () => {
-  it("knows positions and holds both buy-ins against the limit", () => {
+  it("knows positions and holds a whole stack a hand against the limit", () => {
     expect(positionOf(play, user.id)).toBe("BTN · SB");
     expect(positionOf(play, other)).toBe("BB");
-    expect(holdemWorstCase(100)).toBe(20_000);
+    // A 10-big-blind stack lost in each of the players' hands.
+    expect(holdemWorstCase(100, 2)).toBe(2_000);
+    expect(holdemWorstCase(100, 9)).toBe(9_000);
   });
 
   it("shows your cards, the empty board and pot, and your moves on your turn", async () => {
@@ -160,14 +161,13 @@ describe("hold'em", () => {
     expect(start).toHaveBeenLastCalledWith(expect.objectContaining({ action: "no_pre_move" }));
   });
 
-  it("between hands shows everyone's result and hand, and offers the rebuy to whoever busted", async () => {
+  it("between hands shows everyone's result and hand, with nothing to decide (stacks reset)", async () => {
     vi.mocked(getHoldemGame).mockResolvedValue({
       ...play,
       phase: "results",
       toActId: undefined,
       me: { hole: ["AS", "KD"] },
-      rebuyOffered: [user.id],
-      stacks: { [user.id]: 0, [other]: 20_000 },
+      stacks: { [user.id]: 0, [other]: 2_000 },
       history: [
         {
           number: 1,
@@ -176,24 +176,20 @@ describe("hold'em", () => {
           bigBlindId: other,
           board: ["2C", "7D", "9H", "JS", "3D"],
           showdown: true,
-          pots: [{ amount: 20_000, winners: [other], handName: "Pair of nines" }],
+          pots: [{ amount: 2_000, winners: [other], handName: "Pair of nines" }],
           shown: { [other]: ["9S", "9C"] },
           handNames: { [other]: "Three nines" },
           atShowdown: [user.id, other],
-          deltas: { [user.id]: -10_000, [other]: 10_000 },
+          deltas: { [user.id]: -1_000, [other]: 1_000 },
         },
       ],
     } as HoldemGame);
-    const start = ticket();
+    ticket();
     const results = await screen.findByRole("list", { name: "Hand results" });
     expect(within(results).getByText("Three nines")).toBeInTheDocument();
-    expect(within(results).getByText("+100.00")).toBeInTheDocument();
-    expect(
-      screen.getByText("Out of chips. Rebuy for 100.00?", { exact: false }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Rebuy" }));
-    expect(start).toHaveBeenLastCalledWith(expect.objectContaining({ action: "rebuy" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sit out the rest" }));
-    expect(start).toHaveBeenLastCalledWith(expect.objectContaining({ action: "pass" }));
+    expect(within(results).getByText("+10.00")).toBeInTheDocument();
+    // Losing your stack doesn't knock you out: the next hand deals everyone a fresh one.
+    expect(screen.getByText("Hand 1 done.", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Rebuy|Sit out/ })).not.toBeInTheDocument();
   });
 });

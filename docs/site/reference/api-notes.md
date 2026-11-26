@@ -233,9 +233,10 @@ destinations.
   or `split` (your choice this step) or `deal` (the round's dealer's one
   button); a tap after the timer ran out is ignored, and anything the game
   doesn't allow is 409 `jackblack_refused` with the reason. `GET
-  /bets/{id}/jackblack` is the game for table members: no shoe, the hole
-  card is `"??"` until it's turned, and during a step only who is still
-  deciding (your own choice comes back to you). `PUT /bets/{id}/pick` on a
+  /bets/{id}/jackblack` is the game for table members: every seat's cards
+  for everyone and whose turn it is (`turnId`, only that player's moves are
+  accepted, 409 otherwise), no shoe, and the hole card is `"??"` until it's
+  turned. `PUT /bets/{id}/pick` on a
   Jackblack bet is 400.
 
 - `GET /users/{id}/settlements?tableId=&cursor=`: your receipts with one

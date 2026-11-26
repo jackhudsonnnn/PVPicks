@@ -7,6 +7,16 @@ import type { Table } from "@/features/tables";
 export const ticketStatus = (bet: Bet): BetStatus => statusOf(bet.status);
 
 /** Whole seconds until picks lock, never negative. The server locks the bet; the client only counts down. */
+/**
+ * Run it back: the rematch a finished card game's open ticket should move on to, or null. Only one you're in and
+ * that's still open to join, so you follow its join window and deal, while reopening the old game later shows its
+ * results.
+ */
+export function rematchToFollow(bet: Bet | undefined): string | null {
+  const rematch = bet?.rematch;
+  return rematch?.joined && rematch.status === "ACTIVE" ? rematch.id : null;
+}
+
 export function secondsLeft(bet: Bet, nowMs: number) {
   return Math.max(0, Math.ceil((Date.parse(bet.locksAt) - nowMs) / 1000));
 }

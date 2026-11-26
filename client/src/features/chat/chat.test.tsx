@@ -197,7 +197,7 @@ describe("table chat", () => {
     );
   });
 
-  it("picks GIFs in a modal and stars them into a Starred tab", async () => {
+  it("picks GIFs from one search and shows your favorites from the star", async () => {
     const { setGifFavorite } = await import("./api");
     vi.mocked(getChatWindow).mockResolvedValue({
       items: [],
@@ -207,15 +207,27 @@ describe("table chat", () => {
     renderChat();
     fireEvent.click(await screen.findByRole("button", { name: "Choose a GIF" }));
     const dialog = await screen.findByRole("dialog", { name: "Send a GIF" });
-    // Nothing starred yet: the first category shows.
-    fireEvent.click(within(dialog).getByRole("button", { name: "Star Touchdown celebration" }));
+    // No category tabs: the whole library shows, and the search narrows it.
+    expect(within(dialog).queryByRole("tab")).not.toBeInTheDocument();
+    const all = within(dialog).getAllByRole("button", { name: /Send GIF/ }).length;
+    expect(all).toBeGreaterThan(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Favorites" }));
+    expect(within(dialog).getByText(/No favorites yet/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Favorites" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Add Touchdown celebration to favorites" }),
+    );
     await waitFor(() =>
       expect(setGifFavorite).toHaveBeenCalledWith("g1", true, expect.any(String)),
     );
-    fireEvent.click(within(dialog).getByRole("tab", { name: "★ Starred" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Favorites" }));
+    expect(within(dialog).getByRole("button", { name: "Favorites" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(within(dialog).getAllByRole("button", { name: /Send GIF/ })).toHaveLength(1);
     expect(
-      within(dialog).getByRole("button", { name: "Unstar Touchdown celebration" }),
+      within(dialog).getByRole("button", { name: "Remove Touchdown celebration from favorites" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 

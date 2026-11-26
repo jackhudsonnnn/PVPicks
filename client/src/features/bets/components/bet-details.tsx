@@ -14,14 +14,14 @@ import {
 import { ScrollContainer } from "@/components/scroll-container";
 import { MODES } from "@/features/bets/modes";
 import { StatusBadge } from "./status-badge";
-import { FactRow, FactSection } from "./details-parts";
+import { FactRow, FactSection, PlayerAvatar } from "./details-parts";
 import { formatCents } from "@/lib/money";
 import { dateTimeLabel } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Bet } from "@/features/bets/api";
 import { useBetLiveStats } from "@/features/bets/live-stats";
 import type { TableRef } from "@/features/tables";
-import { type User, PersonAvatar, PersonName } from "@/features/people";
+import { type User, PersonName } from "@/features/people";
 import { formatClock, potCents, ticketStatus } from "@/features/bets/ticket-model";
 import { JackblackFacts, JackblackPlayers } from "./jackblack-details";
 import { HoldemFacts, HoldemPlayers } from "./holdem-details";
@@ -237,12 +237,12 @@ export function BetDetailsDialog({
                     const d = bet.deltasCents?.[id];
                     return (
                       <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
-                        <PersonAvatar
+                        <PlayerAvatar
                           id={id}
+                          table={props.table}
                           user={user}
                           expire={expire}
-                          queryKey={peopleKey}
-                          size="xs"
+                          peopleKey={peopleKey}
                         />
                         <span className="min-w-0 flex-1 break-words">
                           <PersonName id={id} user={user} expire={expire} queryKey={peopleKey} />

@@ -42,17 +42,16 @@ export function handLabel(hand: JackblackHand, split: boolean) {
   return hand.soft && hand.total < 21 ? `soft ${hand.total}` : String(hand.total);
 }
 
-/** Every hand of a seat, " / " between splits; empty for a seat whose cards you can't see. */
+/** Every hand of a seat, " / " between splits. */
 function seatTotals(seat: JackblackSeat) {
-  const hands = seat.hands ?? [];
+  const hands = seat.hands;
   return hands.map((h) => handLabel(h, hands.length > 1)).join(" / ");
 }
 
 /**
  * What each player's chip on the felt says about a Jackblack game: "In" while the join window is open; during a
- * round "Dealing" (with the dealer's total once turned) for the round's dealer, your own total (every seat's when
- * you're dealing), and for seats you can't see only "Deciding", "Ready" or "Playing"; at the end, each player's
- * result. Null for anyone not in it.
+ * round "Dealing" (with the dealer's total once turned) for the round's dealer and each seat's total; at the end, each
+ * player's result. Null for anyone not in it.
  */
 export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
   const live = !!bet && (bet.status === "ACTIVE" || bet.status === "PENDING");
@@ -86,11 +85,6 @@ export function useJackblackSeatChips(bet: Bet | undefined, user: User) {
       };
     const seat = data.seats?.find((s) => s.userId === userId);
     if (!seat) return null;
-    if (!seat.hands)
-      return {
-        label: seat.deciding === true ? "Deciding" : seat.deciding === false ? "Ready" : "Playing",
-        tone: "pick",
-      };
     const totals = seatTotals(seat);
     return {
       label: totals,

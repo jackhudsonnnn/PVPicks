@@ -129,9 +129,9 @@ class HoldemIntegrationTest extends IntegrationTestSupport {
         Player cat = player("cat");
         UUID table = table(pat, ann, cat);
         UUID bet = proposed(propose(pat, table, 100, false));
-        // Both buy-ins, 200 big blinds, are held against the points limit.
+        // A 10-big-blind stack lost in every hand, a hand per player (2 at the fewest), is held against the limit.
         assertThat(jdbc.queryForList("SELECT risk_cents FROM card_players WHERE bet_id = ?", Long.class, bet))
-                .containsOnly(20_000L);
+                .containsOnly(2_000L);
         assertThat(send(put("/bets/{id}/holdem/seat", bet), ann, null).getStatus()).isEqualTo(204);
         assertThat(game(cat, bet).path("phase").asText()).isEqualTo("waiting");
 
@@ -207,6 +207,8 @@ class HoldemIntegrationTest extends IntegrationTestSupport {
         // Hand 1: +100 for the aces. Hand 2: the aces player had the button and folded its 50 small blind.
         assertThat(ledger(bet)).isEqualTo(Map.of(big.id(), 50L, button.id(), -50L));
         assertThat(done.path("totals").path(big.id().toString()).asLong()).isEqualTo(50);
+        // Every hand started both on the same 10-big-blind stack.
+        assertThat(done.path("stackCents").asLong()).isEqualTo(1_000);
         // After the game the audit reveals every deck and every hand.
         assertThat(done.path("history").get(1).has("holes")).isTrue();
         for (JsonNode shuffle : done.path("shuffles")) {
@@ -235,13 +237,14 @@ class HoldemIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void theProposersTwoBuyInsMustFitTheirLimit() throws Exception {
+    void theProposersWorstCaseMustFitTheirLimit() throws Exception {
         Player pat = player("pat");
         UUID table = table(pat, player("ann"));
         jdbc.update("INSERT INTO debt_caps (user_id, cap_cents) VALUES (?, 10000)", pat.id());
-        MockHttpServletResponse full = propose(pat, table, 100, false);
+        // A 6.00 big blind: a 60.00 stack in each of two hands is 120.00, over the 100.00 limit.
+        MockHttpServletResponse full = propose(pat, table, 600, false);
         assertThat(full.getStatus()).isEqualTo(409);
         assertThat(full.getContentAsString()).contains("debt_cap_exceeded");
-        proposed(propose(pat, table, 50, false));
+        proposed(propose(pat, table, 400, false));
     }
 }

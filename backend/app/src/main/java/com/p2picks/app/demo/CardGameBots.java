@@ -14,7 +14,7 @@ import com.p2picks.app.demo.BotWorld.Member;
 import com.p2picks.app.demo.BotWorld.OpenBet;
 import com.p2picks.app.demo.BotWorld.World;
 
-/** Bots at the card tables: joining Jackblack and Hold'em games and playing them (choices, the dealer's button, bets and rebuys). */
+/** Bots at the card tables: joining Jackblack and Hold'em games and playing them (moves, the dealer's button and bets). */
 final class CardGameBots extends BotPlanner {
     private final JackblackService jackblack;
     private final HoldemService holdem;
@@ -83,7 +83,7 @@ final class CardGameBots extends BotPlanner {
 
     /**
      * Hold'em: bots join open games at their tables, then play their own turns with {@link HoldemBot}'s strategy a
-     * moment after it's their move, and decide on a rebuy when they bust.
+     * moment after it's their move.
      */
     void planHoldem(World world, Instant now) {
         for (OpenBet bet : openBets(world.tables().keySet(), now)) {
@@ -106,11 +106,6 @@ final class CardGameBots extends BotPlanner {
                 """, rs -> {
                     UUID betId = rs.getObject("bet_id", UUID.class);
                     UUID botId = rs.getObject("user_id", UUID.class);
-                    if (holdem.rebuyOffered(betId, botId) && decided.add("he-rebuy:" + betId + ":" + botId)) {
-                        String choice = random().nextDouble() < 0.7 ? "rebuy" : "pass";
-                        plan(now.plusMillis(2000 + random().nextInt(4000)), "holdem-rebuy",
-                                () -> act(botId, jwt -> holdem.act(jwt, betId, choice, 0, key()).name()));
-                    }
                     holdem.turn(betId, botId).ifPresent(turn -> {
                         // One decision per spot: the same street and bet aren't decided twice.
                         if (!decided.add("he-act:" + betId + ":" + turn.board() + ":" + turn.toCall() + ":"

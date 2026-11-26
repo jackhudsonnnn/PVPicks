@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { formatCents } from "@/lib/money";
-import { Delta, FactRow, FactSection, ShuffleAudit } from "./details-parts";
+import { Delta, FactRow, FactSection, PlayerAvatar, ShuffleAudit } from "./details-parts";
 import type { Bet } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
-import { type User, PersonAvatar, PersonName } from "@/features/people";
+import { type User, PersonName } from "@/features/people";
 import { ticketStatus } from "@/features/bets/ticket-model";
 import { playersOf, rulesFromConfig, worstCase } from "@/features/bets/jackblack";
 import { RESULT, useJackblackGame } from "@/features/bets/jackblack-game";
@@ -102,7 +102,7 @@ export function JackblackFacts({
 }
 
 /** Each round: who dealt, their hand, and every seat's result; then each player's total. */
-export function JackblackPlayers({ bet, user, expire, peopleKey }: Props) {
+export function JackblackPlayers({ bet, table, user, expire, peopleKey }: Props) {
   const status = ticketStatus(bet);
   const game = useJackblackGame(bet, user, status === "active" || status === "pending").data;
   const players = game ? playersOf(game) : [];
@@ -118,7 +118,13 @@ export function JackblackPlayers({ bet, user, expire, peopleKey }: Props) {
         ) : (
           players.map((id) => (
             <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
-              <PersonAvatar id={id} user={user} expire={expire} queryKey={peopleKey} size="xs" />
+              <PlayerAvatar
+                id={id}
+                table={table}
+                user={user}
+                expire={expire}
+                peopleKey={peopleKey}
+              />
               <span className="min-w-0 flex-1 break-words">{name(id)}</span>
               {totals[id] !== undefined && <Delta cents={totals[id]} />}
             </div>
@@ -141,7 +147,7 @@ export function JackblackPlayers({ bet, user, expire, peopleKey }: Props) {
               <span className="min-w-0 flex-1 break-words">
                 {name(seat.userId)}
                 <span className="block text-xs text-muted-foreground">
-                  {(seat.hands ?? [])
+                  {seat.hands
                     .map(
                       (h) => `${h.result ? RESULT[h.result] : h.total}${h.doubled ? " (2×)" : ""}`,
                     )

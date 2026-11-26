@@ -6,7 +6,7 @@ import {
   playersOf,
   rulesFromConfig,
   rulesProblem,
-  undecided,
+  stillToPlay,
   worstCase,
   type JackblackGame,
 } from "./jackblack";
@@ -74,17 +74,21 @@ describe("jackblack game", () => {
     order: [A, B, C],
     dealerId: A,
     dealer: ["9H", "??"],
+    // B plays first (left of the dealer), C waits for their turn.
+    turnId: B,
     seats: [
-      { userId: B, hands: [hand(["TS", "2C"], true)], deciding: false, choice: "hit" },
-      { userId: C, hands: [hand(["TH", "3C"])], deciding: true },
+      { userId: B, hands: [hand(["TS", "2C"], true)] },
+      { userId: C, hands: [hand(["TH", "3C"])] },
     ],
   };
 
-  it("knows who still has to choose, never what anyone chose", () => {
-    expect(deciding(game, B)).toBe(false);
-    expect(deciding(game, C)).toBe(true);
+  it("knows whose turn it is and who still has a hand to play", () => {
+    expect(deciding(game, B)).toBe(true);
+    expect(deciding(game, C)).toBe(false);
     expect(deciding(game, A)).toBe(false);
-    expect(undecided(game)).toBe(1);
+    expect(deciding({ ...game, phase: "dealer" }, B)).toBe(false);
+    expect(stillToPlay(game.seats![1]!)).toBe(true);
+    expect(stillToPlay({ userId: C, hands: [{ ...hand(["TH", "3C"]), done: true }] })).toBe(false);
     expect(playersOf(game)).toEqual([A, B, C]);
     expect(playersOf({ phase: "waiting", players: [A] })).toEqual([A]);
   });

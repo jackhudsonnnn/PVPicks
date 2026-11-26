@@ -3,8 +3,8 @@ import { idSchema, read, request } from "@/lib/api-client";
 
 /**
  * Jackblack (domain rules, "Jackblack"): everyone who joins deals once, in a random order, and banks
- * that round against the rest. Players choose in lockstep: new cards come out only once everyone still playing has
- * chosen, or the decision timer runs out. The server owns the shoe and every rule; this module mirrors the rule
+ * that round against the rest. Players act in turn from the dealer's left, as at a casino, each move dealt at once
+ * (owner decision, 2026-11-26). The server owns the shoe and every rule; this module mirrors the rule
  * limits for the setup form and reads the game.
  */
 
@@ -90,23 +90,16 @@ const handSchema = z.object({
   stakeCents: z.number().int(),
   doubled: z.boolean(),
   done: z.boolean(),
-  /** The hand this step's choice is for (only in a live round). */
+  /** The hand being played right now (on the acting seat only). */
   current: z.boolean(),
   result: z.enum(["win", "blackjack", "push", "lose", "bust"]).optional(),
   deltaCents: z.number().int().optional(),
 });
-const choice = z.enum(["hit", "stand", "double", "split"]);
 const seatSchema = z.object({
   userId: idSchema,
-  /**
-   * In a live round, only your own seat's hands, or every seat's when you're dealing: nobody sees other players'
-   * cards (domain rules, "Jackblack", "Who sees what"). Finished rounds carry every seat's.
-   */
-  hands: z.array(handSchema).optional(),
-  /** During a step: whether this player still has to choose (never what anyone chose). */
-  deciding: z.boolean().optional(),
-  /** Your own choice this step, before the cards come out. */
-  choice: choice.optional(),
+  /** Every seat's hands, live and finished: cards are public (domain rules, "Jackblack", "Who sees what"). */
+  hands: z.array(handSchema),
+  /** On your own turn: what your current hand allows. */
   canDouble: z.boolean().optional(),
   canSplit: z.boolean().optional(),
   /** In a finished round. */
@@ -133,6 +126,8 @@ const gameSchema = z.object({
   dealer: z.array(card).optional(),
   dealerTotal: z.number().int().optional(),
   dealerMove: z.enum(["flip", "hit", "stand"]).optional(),
+  /** While players act: whose turn it is (one seat at a time, from the dealer's left; owner decision, 2026-11-26). */
+  turnId: idSchema.optional(),
   deadline: z.string().datetime({ offset: true }).optional(),
   seats: z.array(seatSchema).optional(),
   totals: z.record(idSchema, z.number().int()).optional(),
@@ -156,7 +151,7 @@ const gameSchema = z.object({
 export type JackblackGame = z.infer<typeof gameSchema>;
 export type JackblackSeat = z.infer<typeof seatSchema>;
 export type JackblackHand = z.infer<typeof handSchema>;
-export type JackblackChoice = z.infer<typeof choice>;
+export type JackblackChoice = "hit" | "stand" | "double" | "split";
 
 export async function getJackblackGame(betId: string, signal?: AbortSignal) {
   return read(
@@ -175,12 +170,12 @@ export function mySeat(game: JackblackGame, userId: string) {
   return game.seats?.find((s) => s.userId === userId);
 }
 
-/** Whether the viewer still has a choice to make this step. */
+/** Whether it's the viewer's turn to play. */
 export function deciding(game: JackblackGame, userId: string) {
-  return game.phase === "play" && mySeat(game, userId)?.deciding === true;
+  return game.phase === "play" && game.turnId === userId;
 }
 
-/** How many seats still have to choose this step. */
-export function undecided(game: JackblackGame) {
-  return game.seats?.filter((s) => s.deciding).length ?? 0;
+/** Whether a seat still has a hand to play this round (its turn is now or still to come). */
+export function stillToPlay(seat: JackblackSeat) {
+  return seat.hands.some((h) => !h.done);
 }

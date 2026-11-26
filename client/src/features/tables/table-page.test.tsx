@@ -98,7 +98,15 @@ function Chat() {
   return <TableChat user={me} table={table} expire={expire} social={social} />;
 }
 
-function Profile({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+function Profile({
+  onOpenChange,
+  onThrown = () => {},
+  canThrow = true,
+}: {
+  onOpenChange: (open: boolean) => void;
+  onThrown?: () => void;
+  canThrow?: boolean;
+}) {
   const social = useSocialActions(me.id, async () => {}, expire);
   return (
     <ProfileDialog
@@ -108,6 +116,8 @@ function Profile({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
       expire={expire}
       peopleKey={peopleKey}
       social={social}
+      canThrow={canThrow}
+      onThrown={onThrown}
       onOpenBet={() => {}}
       onOpenChange={onOpenChange}
     />
@@ -199,15 +209,21 @@ describe("reports", () => {
 });
 
 describe("tomatoes", () => {
-  it("throws a tomato from the profile and closes it", async () => {
+  it("throws a tomato from the profile, then clears the way to the felt", async () => {
     vi.mocked(throwTomato).mockResolvedValue();
-    const onOpenChange = vi.fn();
-    wrap(<Profile onOpenChange={onOpenChange} />);
+    const onThrown = vi.fn();
+    wrap(<Profile onOpenChange={() => {}} onThrown={onThrown} />);
     fireEvent.click(await screen.findByRole("button", { name: "Throw a tomato at friend" }));
     await waitFor(() =>
       expect(throwTomato).toHaveBeenCalledWith(table.id, friend, expect.any(String)),
     );
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(onThrown).toHaveBeenCalled());
+  });
+
+  it("hides Throw when they aren't around the felt you can see", async () => {
+    wrap(<Profile onOpenChange={() => {}} canThrow={false} />);
+    expect(await screen.findByRole("button", { name: "Report" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Throw a tomato/ })).not.toBeInTheDocument();
   });
 
   it("can't throw when a host turned off your reactions", async () => {
@@ -221,6 +237,8 @@ describe("tomatoes", () => {
           expire={expire}
           peopleKey={peopleKey}
           social={social}
+          canThrow
+          onThrown={() => {}}
           onOpenBet={() => {}}
           onOpenChange={() => {}}
         />

@@ -24,14 +24,11 @@ import { InviteDialog } from "./invite-dialog";
 type Props = { user: User; pathname: string; expire: () => void };
 type Tab = "tables" | "requests";
 
-const HEADING =
-  "mt-4 shrink-0 px-5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground";
-
 /**
  * The sidebar's tables and table requests (desktop only; phones answer requests on Home).
  *
- * - Home already shows your tables as cards, so its sidebar has only Requests, and nothing at all without any.
- * - Other pages show your tables, with a My tables / Requests switch while requests are waiting.
+ * Always the same My tables / Requests switch. Home already shows your tables as cards, so there My tables is off
+ * (and the sidebar is empty without requests); Requests is off while none are waiting.
  *
  * Tables go by most recent bet and requests newest first, in the order last fetched (see `byRecentBet`).
  */
@@ -84,24 +81,18 @@ function SidebarLists({ user, pathname, expire }: Props) {
   return (
     // Only the list grows and scrolls; the header above it and the points box below never move.
     <div className="flex min-h-0 flex-1 flex-col">
-      {home ? (
-        <div className={HEADING}>Requests</div>
-      ) : requests.length ? (
-        <div className="mt-4 shrink-0 px-3">
-          <SegmentedTabs<Tab>
-            size="sm"
-            ariaLabel="Tables or requests"
-            tabs={[
-              { id: "tables", label: "My tables" },
-              { id: "requests", label: "Requests" },
-            ]}
-            value={tab}
-            onChange={setChosen}
-          />
-        </div>
-      ) : (
-        <div className={HEADING}>My tables</div>
-      )}
+      <div className="mt-4 shrink-0 px-3">
+        <SegmentedTabs<Tab>
+          size="sm"
+          ariaLabel="Tables or requests"
+          tabs={[
+            { id: "tables", label: "My tables", disabled: home },
+            { id: "requests", label: "Requests", disabled: requests.length === 0 },
+          ]}
+          value={tab}
+          onChange={setChosen}
+        />
+      </div>
       {status}
       <ScrollContainer isVisible={false} className="flex min-h-0 flex-1 flex-col gap-0.5 px-3 py-2">
         <AnimatedList key={tab}>

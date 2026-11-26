@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { type User, PersonAvatar, usePerson } from "@/features/people";
+import type { TableRef } from "@/features/tables";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +25,37 @@ export function FactRow({ label, children }: { label: string; children: ReactNod
       <span className="text-muted-foreground">{label}</span>
       <span className="break-words text-right font-medium">{children}</span>
     </div>
+  );
+}
+
+/**
+ * A player's picture in Details, opening their profile on the table page (where you can also throw a tomato at
+ * them). Like the byline's proposer link, it closes the ticket on the way.
+ */
+export function PlayerAvatar({
+  id,
+  table,
+  user,
+  expire,
+  peopleKey,
+}: {
+  id: string;
+  table: TableRef;
+  user: User;
+  expire: () => void;
+  peopleKey: readonly string[];
+}) {
+  const name = usePerson(id, user, expire, peopleKey)?.name;
+  return (
+    <Link
+      to="/tables/$tableId"
+      params={{ tableId: table.id }}
+      search={{ profile: id }}
+      aria-label={`${name ?? "Player"}'s profile`}
+      className="shrink-0 rounded-full transition-transform hover:scale-110"
+    >
+      <PersonAvatar id={id} user={user} expire={expire} queryKey={peopleKey} size="xs" />
+    </Link>
   );
 }
 

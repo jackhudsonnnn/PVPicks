@@ -13,19 +13,20 @@ const CHOICE_LABEL: Record<JackblackChoice, string> = {
 };
 
 /**
- * Your choice for this step. Nothing is dealt until everyone has chosen (or the timer runs out), so once you've
- * chosen the buttons wait with yours marked.
+ * Your moves for the hand being played. Each is dealt at once; the buttons stay in place, greyed out, while you wait
+ * for your turn, so the ticket never changes shape.
  */
 export function PlayControls({
   seat,
+  myTurn,
   disabled,
   onMove,
 }: {
   seat: JackblackSeat;
+  myTurn: boolean;
   disabled: boolean;
   onMove: (move: JackblackChoice) => void;
 }) {
-  const chosen = seat.choice;
   const allowed = (move: JackblackChoice) =>
     move === "double" ? !!seat.canDouble : move === "split" ? !!seat.canSplit : true;
   return (
@@ -34,9 +35,9 @@ export function PlayControls({
         <Button
           key={move}
           size="sm"
-          variant={chosen === move || (!chosen && move === "hit") ? "default" : "outline"}
-          className={cn("h-9", !(chosen === move || (!chosen && move === "hit")) && FELT_OUTLINE)}
-          disabled={disabled || !!chosen || !allowed(move)}
+          variant={move === "hit" ? "default" : "outline"}
+          className={cn("h-9", move !== "hit" && FELT_OUTLINE)}
+          disabled={disabled || !myTurn || !allowed(move)}
           onClick={() => onMove(move)}
         >
           {CHOICE_LABEL[move]}
@@ -45,8 +46,6 @@ export function PlayControls({
     </div>
   );
 }
-
-export const CHOICE_NAMES = CHOICE_LABEL;
 
 const DEALER_LABEL = { flip: "Flip", hit: "Hit", stand: "Stand" } as const;
 

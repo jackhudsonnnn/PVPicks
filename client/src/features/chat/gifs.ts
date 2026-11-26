@@ -22,24 +22,21 @@ export type { Gif, GifCatalog };
 
 /**
  * Every word of the search has to appear in the GIF's caption, tags or category ("lebron ref" finds LeBron
- * arguing with the ref); an empty search shows the category.
+ * arguing with the ref); an empty search keeps them all. Searches the whole library, or just the given GIFs.
  */
-export function searchGifs(catalog: GifCatalog, query: string, category: string): Gif[] {
+export function searchGifs(catalog: GifCatalog, query: string, gifs: Gif[] = catalog.gifs): Gif[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return catalog.gifs.filter((g) => g.category === category);
+  if (words.length === 0) return gifs;
   const labels = new Map(catalog.categories.map((c) => [c.id, c.label.toLowerCase()]));
-  return catalog.gifs.filter((g) => {
+  return gifs.filter((g) => {
     const text = [g.alt, ...g.tags, labels.get(g.category) ?? ""].join(" ").toLowerCase();
     return words.every((word) => text.includes(word));
   });
 }
 
-/** The picker's own first tab: your starred GIFs. */
-export const STARRED = "starred";
-
 /**
- * Your starred GIFs, newest first, kept with your account. Starring updates the list at once and rolls back if the
- * server refuses (for example at the 100-star cap).
+ * Your favorite GIFs, newest first, kept with your account. Adding or removing one updates the list at once and rolls
+ * back if the server refuses (for example at the 100-favorite cap).
  */
 export function useGifFavorites(userId: string) {
   const queryClient = useQueryClient();
@@ -51,13 +48,13 @@ export function useGifFavorites(userId: string) {
     retry: false,
   });
   const toggle = useMutation({
-    mutationFn: ({ gifId, starred }: { gifId: string; starred: boolean }) =>
-      setGifFavorite(gifId, starred, crypto.randomUUID()),
-    onMutate: ({ gifId, starred }) => {
+    mutationFn: ({ gifId, favorite }: { gifId: string; favorite: boolean }) =>
+      setGifFavorite(gifId, favorite, crypto.randomUUID()),
+    onMutate: ({ gifId, favorite }) => {
       const before = queryClient.getQueryData<string[]>(key) ?? [];
       queryClient.setQueryData<string[]>(
         key,
-        starred
+        favorite
           ? [gifId, ...before.filter((id) => id !== gifId)]
           : before.filter((id) => id !== gifId),
       );
@@ -71,13 +68,13 @@ export function useGifFavorites(userId: string) {
   const ids = favorites.data ?? [];
   return {
     ids,
-    isStarred: (gifId: string) => ids.includes(gifId),
-    toggle: (gifId: string) => toggle.mutate({ gifId, starred: !ids.includes(gifId) }),
+    isFavorite: (gifId: string) => ids.includes(gifId),
+    toggle: (gifId: string) => toggle.mutate({ gifId, favorite: !ids.includes(gifId) }),
   };
 }
 
-/** Your starred GIFs from the library, in the order you starred them (newest first). */
-export function starredGifs(catalog: GifCatalog, ids: string[]): Gif[] {
+/** Your favorite GIFs from the library, in the order you added them (newest first). */
+export function favoriteGifs(catalog: GifCatalog, ids: string[]): Gif[] {
   const byId = new Map(catalog.gifs.map((g) => [g.id, g]));
   return ids.flatMap((id) => {
     const gif = byId.get(id);

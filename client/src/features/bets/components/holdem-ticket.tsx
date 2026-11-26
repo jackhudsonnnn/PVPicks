@@ -1,7 +1,7 @@
 import { secondsUntil, signed } from "@/features/bets/cards";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Club } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useActingInView } from "./use-acting-in-view";
 import { formatCents } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useNow } from "@/lib/use-now";
@@ -28,7 +28,6 @@ import {
   Deck,
   FaceDown,
   Felt,
-  FELT_OUTLINE,
   FeltNote,
   FeltRow,
   JoinControls,
@@ -154,20 +153,8 @@ function PeopleRow({
   timeLeft: number | null;
 }) {
   const { user } = people;
-  const row = useRef<HTMLDivElement>(null);
   // Keep whoever's to act in view.
-  useEffect(() => {
-    const box = row.current;
-    const tile = box?.querySelector<HTMLElement>("[data-to-act]");
-    if (!box || !tile) return;
-    const left = tile.offsetLeft - box.offsetLeft;
-    const list = box.firstElementChild as HTMLElement | null;
-    if (list?.scrollTo)
-      list.scrollTo({
-        left: left - list.clientWidth / 2 + tile.clientWidth / 2,
-        behavior: "smooth",
-      });
-  }, [game.toActId, game.hand]);
+  const row = useActingInView(`${game.hand}-${game.toActId}`);
 
   if (status === "washed") return <FeltNote>{washReason ?? "Washed"}</FeltNote>;
   if (game.phase === "waiting") {
@@ -286,21 +273,17 @@ function statusLine(
       ? "You came out even."
       : `You ${mine > 0 ? "won" : "lost"} ${formatCents(Math.abs(mine))}.`;
   }
-  if (game.phase === "results") {
-    if (game.rebuyOffered?.includes(user.id))
-      return `Out of chips. Rebuy for ${formatCents(game.buyInCents ?? 0)}?${timer}`;
+  if (game.phase === "results")
     return `Hand ${game.hand} done.${left !== null ? ` Next deal in ${left}s.` : ""}`;
-  }
   const street = game.street ? STREET_LABEL[game.street] : "";
   if (game.toActId === user.id) return `${street} · your move${timer}`;
-  if (game.out?.includes(user.id)) return "You're out of this game.";
   return `${street} · ${toActName} to act${timer}`;
 }
 
 /**
  * A Hold'em bet as a ticket. The felt keeps the same regions in every phase (owner decisions, 2026-11-23): the deck,
  * board and pot; a row of people that scrolls sideways (who's in, your cards and every seat, the hand's results,
- * the standings); one status line; and your buttons (join or leave, fold / check or call / raise, the rebuy). The
+ * the standings); one status line; and your buttons (join or leave, fold / check or call / raise, pre-moves). The
  * raise amount opens over the felt. Rules, the deck audit and every hand are in Details.
  */
 export function HoldemTicket({
@@ -372,21 +355,6 @@ export function HoldemTicket({
       onJoin={() => actions?.start({ kind: "holdem-join", tableId: table.id, betId: bet.id })}
       onLeave={() => actions?.start({ kind: "holdem-leave", tableId: table.id, betId: bet.id })}
     />
-  ) : game.phase === "results" && game.rebuyOffered?.includes(user.id) ? (
-    <div className="grid h-9 grid-cols-2 gap-2">
-      <Button size="sm" className="h-9" disabled={blocked} onClick={() => move("rebuy")}>
-        Rebuy
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className={cn("h-9", FELT_OUTLINE)}
-        disabled={blocked}
-        onClick={() => move("pass")}
-      >
-        Sit out the rest
-      </Button>
-    </div>
   ) : stillIn && !myTurn ? (
     <PreMoves
       armed={game.me?.preMove ?? null}
@@ -432,8 +400,8 @@ export function HoldemTicket({
         <TicketByline bet={bet} table={table} {...people} preview={preview} />
         {preview ? (
           <p className="text-sm text-ticket-muted">
-            No-limit Texas hold'em: the button moving round, 100 big blinds to buy in and one rebuy.
-            You only see your own cards until a showdown, where everyone still in shows.
+            No-limit Texas hold'em: the button moving round, everyone on a fresh 10-big-blind stack
+            every hand. You only see your own cards until a showdown, where everyone still in shows.
           </p>
         ) : !game ? (
           <Felt

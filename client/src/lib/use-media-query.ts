@@ -25,3 +25,6 @@ export const HOME_TICKETS = "(min-width: 1024px), (min-height: 790px)";
 
 /** When the desktop sidebar shows: Tailwind's `nav` breakpoint (68.75rem, in styles.css). */
 export const NAV_SIDEBAR = "(min-width: 68.75rem)";
+
+/** When the table page shows the felt beside its side panel: Tailwind's `split` breakpoint (90.9375rem, in styles.css). */
+export const TABLE_SPLIT = "(min-width: 90.9375rem)";

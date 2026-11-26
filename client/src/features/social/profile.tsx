@@ -41,6 +41,8 @@ export function ProfileDialog({
   expire,
   peopleKey,
   social,
+  canThrow,
+  onThrown,
   onOpenBet,
   onOpenChange,
 }: {
@@ -50,6 +52,10 @@ export function ProfileDialog({
   expire: () => void;
   peopleKey: readonly string[];
   social: SocialActions;
+  /** Whether a tomato can fly at them right now: the felt is on screen and they're seated around it. */
+  canThrow: boolean;
+  /** After a throw: close whatever covers the felt, so you see it land. */
+  onThrown: () => void;
   onOpenBet: (betId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -124,7 +130,8 @@ export function ProfileDialog({
             table={table}
             user={user}
             social={social}
-            onThrown={() => onOpenChange(false)}
+            canThrow={canThrow}
+            onThrown={onThrown}
           />
         )}
 
@@ -220,6 +227,7 @@ function SafetyButtons({
   table,
   user,
   social,
+  canThrow,
   onThrown,
 }: {
   userId: string;
@@ -227,6 +235,7 @@ function SafetyButtons({
   table: Table;
   user: User;
   social: SocialActions;
+  canThrow: boolean;
   onThrown: () => void;
 }) {
   const [report, setReport] = useState(false);
@@ -261,19 +270,21 @@ function SafetyButtons({
       <Button size="sm" variant="outline" onClick={() => setBlock(true)}>
         <Ban /> {blocked ? "Unblock" : "Block"}
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        aria-label={`Throw a tomato at ${name}`}
-        title={canReact ? `Throw a tomato at ${name}` : "A host turned off reactions for you"}
-        disabled={!canReact || blocked || throwing}
-        onClick={() => void throwOne()}
-      >
-        <span aria-hidden="true" className="text-base leading-none">
-          🍅
-        </span>{" "}
-        Throw
-      </Button>
+      {canThrow && (
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label={`Throw a tomato at ${name}`}
+          title={canReact ? `Throw a tomato at ${name}` : "A host turned off reactions for you"}
+          disabled={!canReact || blocked || throwing}
+          onClick={() => void throwOne()}
+        >
+          <span aria-hidden="true" className="text-base leading-none">
+            🍅
+          </span>{" "}
+          Throw
+        </Button>
+      )}
       <ReportDialog
         userId={userId}
         name={name}

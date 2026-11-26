@@ -73,7 +73,7 @@ class BetMutationController {
             return proposeCardGame(jwt, input, "Hold'em", "big blind", HoldemRules::parse,
                     (rules, bigBlind, window, forFun) -> holdem.propose(jwt, tableId, rules, bigBlind, window, forFun,
                             key),
-                    "Your points limit can't cover two buy-ins (200 big blinds). Lower the big blind.");
+                    "Your points limit can't cover losing your 10-big-blind stack every hand. Lower the big blind.");
         }
         U2PickProposalService.Proposal proposal;
         try {

@@ -3,7 +3,7 @@ import type { ModeId } from "./types";
 /**
  * What each mode's info page says (the proposal sheet's (i) and the Guide's mode cards share it): how the mode
  * works, the rules worth knowing, and 2–3 worked examples with their own settings and results. Static text only;
- * the setup form keeps just its controls and the numbers that change with them (worst case, buy-in).
+ * the setup form keeps just its controls and the numbers that change with them (worst case, stack).
  *
  * Pick-mode payouts follow the domain rules: everyone who picks stakes the wager, and the winners split the losers'
  * stakes evenly.
@@ -287,7 +287,7 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
   jackblack: {
     how: [
       'Each player deals once, and every hand plays against that round\'s dealer, not a pot. "Run it back" at the end starts another game.',
-      "Everyone still playing chooses hit, stand, double or split at the same time, so nobody sees anyone's cards before deciding. If the decision timer runs out, no choice means stand.",
+      "Players go one at a time, as at a casino, starting left of the dealer: hit, stand, double or split, each card dealt at once and every hand face up. The dealer rotates, so everyone acts first and last equally often. If your decision timer runs out, that hand stands.",
       "Each round gets a fresh shoe of 1 to 8 decks, its size drawn at random and kept hidden until the game is over.",
     ],
     notes: [
@@ -322,29 +322,30 @@ export const MODE_INFO: Record<ModeId, ModeInfo> = {
   },
   holdem: {
     how: [
-      'One hand per player, the button moving one seat a hand; the small blind is half the big blind. Stacks carry from hand to hand, and a player who busts can rebuy once in the game, right then (15 seconds to decide). "Run it back" at the end starts another game.',
+      'One hand per player, the button moving one seat a hand; the small blind is half the big blind. Every hand starts everyone on the same stack of 10 big blinds, so nobody busts out and no seat carries chips into the next hand. Your result is what you won or lost over the hands. "Run it back" at the end starts another game.',
       "Everyone still in at a showdown shows their cards.",
     ],
     notes: [
       ...CARD_NOTES,
       "When the turn timer runs out you check if you can, otherwise fold.",
-      "Both buy-ins (200 big blinds) are held against your points limit while the game is on.",
+      "Losing your whole stack every hand is the worst case (10 big blinds × the number of players), held against your points limit while the game is on.",
       "Fewer players than the minimum when joining closes and the game is called off.",
     ],
     examples: [
       {
         title: "Four players",
-        setup: ["4 players", "Big blind 1.00", "Buy-in 100.00", "4 hands"],
+        setup: ["4 players", "Big blind 1.00", "Stack 10.00 every hand", "4 hands"],
         story:
-          "Ann wins two big pots and finishes with 160.00; Ben ends on 90.00, Cal on 80.00, Dee on 70.00.",
-        result: "Final stack minus buy-in: Ann +60.00, Ben −10.00, Cal −20.00, Dee −30.00.",
+          "Hand 1: Ann wins 2.00 from each of the others. Hand 2: Ben wins 1.00 from each. Hand 3: Ann wins 1.00 from Ben and Dee and 2.00 from Cal. Hand 4: Dee wins 1.00 from Ann and Ben. Everyone starts each hand back on 10.00.",
+        result:
+          "Over the four hands: Ann +8.00, Ben −1.00, Cal −5.00, Dee −2.00 (always zero in all).",
       },
       {
-        title: "Bust and rebuy",
-        setup: ["Big blind 0.50", "Buy-in 50.00"],
+        title: "All in and back",
+        setup: ["Big blind 0.50", "Stack 5.00 every hand"],
         story:
-          "Eli goes all in on hand 2 and loses, rebuys for another 50.00, and finishes the game with 70.00.",
-        result: "Eli bought in for 100.00 in all, so his result is −30.00.",
+          "Eli goes all in on hand 2 and loses his 5.00. On hand 3 he's dealt in on a fresh 5.00 and wins 3.00.",
+        result: "Eli's two hands come to −2.00; he plays every hand of the game.",
       },
       {
         title: "Split pot",

@@ -8,10 +8,11 @@ route files only supply paths and page metadata. The design came from an
 earlier prototype (git tag `prototype-ui`).
 
 - **Sidebar tables and requests** (`tables/components/sidebar-tables.tsx`):
-  - On Home, which already shows your tables, the sidebar lists only
-    **Requests**, newest first, and nothing at all when none are waiting.
-  - On other pages it lists **My tables**, by most recent bet. While
-    requests are waiting, a My tables / Requests switch shows either.
+  - The sidebar always has a **My tables** / **Requests** switch. Tables go
+    by most recent bet, requests newest first.
+  - On Home, which already shows your tables, My tables is off, so it shows
+    Requests (and nothing at all when none are waiting). Elsewhere, Requests
+    is off while none are waiting.
   - Table and request rows are the same height (a request shows the table
     and who sent it on one line), and only the list scrolls, so switching
     lists never moves the header or the points box.
@@ -121,7 +122,15 @@ earlier prototype (git tag `prototype-ui`).
   the middle; tap the front card to open its ticket. With more people than
   seats, the last seat is "+N others": it opens the focused ticket's Details
   when the felt shows that ticket's players, otherwise a list of who didn't
-  fit (`others-dialog.tsx`). The felt and the Peers tab are independent. A side panel beside the felt from 1455px wide (the `split`
+  fit (`others-dialog.tsx`). The felt and the Peers tab are independent.
+  Tapping a seat, or a player's picture in Details or the others list, opens
+  their profile. Its Throw (a tomato) shows only for someone seated around the
+  felt you can see: in the focused ticket (anyone at the table with no open
+  tickets), while the felt is on screen (the Table tab, or always on wide
+  screens; `seating.ts` `canThrowAt`). A tomato at someone on "+N others"
+  lands on that spot. Throwing closes the profile, Details and the ticket so
+  you watch it land; a throw already in the air finishes even if seats move or
+  you switch tabs. A side panel beside the felt from 1455px wide (the `split`
   breakpoint; tabs below that, where both get crowded) holds Chat, Peers (everyone's balance at
   the table; a name opens the profile, a balance opens a what-if dialog that
   lists that member's tickets in play with a "Win?" checkbox each, plus All win
@@ -171,7 +180,7 @@ earlier prototype (git tag `prototype-ui`).
   proposed and at lock.
 
 - **Mode info** (owner decision, 2026-11-23): the setup form is controls
-  plus the numbers that change with them (worst case, buy-in) and one-line
+  plus the numbers that change with them (worst case, stack) and one-line
   switch states; every explanation lives in the mode's info, the (i) beside
   its name in the sheet's header, which swaps the setup for How it works, 2–3
   worked Examples (their own settings and results) and Good to know
@@ -227,12 +236,13 @@ earlier prototype (git tag `prototype-ui`).
   who's in while the join window is open), and, under the perforation like every ticket, the byline: Proposed by, then Resend (once it's finished) and Details (`ticket-byline.tsx`). The felt has
   four fixed regions in every phase: the table (the shoe and the dealer's hand;
   the deck, board and pot), a row of people that scrolls sideways (who's in;
-  your seat, or every seat when you deal, and in Hold'em your hand then every
+  in Jackblack every seat with its cards, live, for everyone (owner decision,
+  2026-11-25), and in Hold'em your hand then every
   seat with stack, position and To act / Folded / All in / Bet, the player to
   act sliding into view; between rounds or hands everyone's result; at the end
   the standings), one status line, and a controls bar (Join / Leave, Hit /
-  Stand / Double / Split, the dealer's button, Fold / Check or Call / Raise,
-  the rebuy; once it's finished, Run it back, then Join the rematch or You're in the rematch with its countdown, `RunItBack`), empty when there's nothing to press. Whoever's decision clock is
+  Stand / Double / Split, the dealer's button, Fold / Check or Call / Raise
+  and pre-moves; once it's finished, Run it back, then Join the rematch or You're in the rematch with its countdown, `RunItBack`), empty when there's nothing to press. Whoever's decision clock is
   running has a ring round their avatar that drains (red in the last quarter;
   `TimerRing`). Hold'em names your best hand under your cards once the flop is
   out (`me.handName` from the server), offers pre-moves while it isn't your
@@ -253,8 +263,8 @@ earlier prototype (git tag `prototype-ui`).
   every stage, from the join window on, with the dealer's cards
   (`JackblackMiniHand`) or the board (`HoldemMiniBoard`), and cards not yet
   turned over shown face down (on the ticket too); and chips
-  with your own total (every seat's when you deal; others show "Deciding",
-  "Ready" or "Playing"), "Dealing" for the round's dealer, and results at the
+  with every player's total, "Dealing" for the round's dealer (with the
+  dealer's total once turned), and results at the
   end (`useJackblackSeatChips`). Details shows Jackblack's
   own sections (`jackblack-details.tsx`): Game, Rules, a Shuffle audit
   (each round's fingerprint; once the game is over, its deck count and a
@@ -274,8 +284,9 @@ earlier prototype (git tag `prototype-ui`).
   into one refresh, and a refresh more than two pages behind opens the newest
   window too, so a busy table like Mosh Pit stays responsive. It sends text (1–2000
   characters) and GIFs from the server's library (picked in a modal like the
-  poll composer: search, a Starred tab first, then Hype, Pain, React and
-  Roast, with a star on each GIF; `chat/gif-dialog.tsx`), toggles one reaction per
+  poll composer: one search over the whole library, a star on each GIF to add
+  it to your favorites, and a star toggle beside the search that shows just
+  your favorites; `chat/gif-dialog.tsx`), toggles one reaction per
   message, and moves your read position forward as new messages reach the
   bottom. Your text, GIF and reaction permissions apply. Bet cards show each
   bet's question, mode and current status, also in deleted tables' archives.

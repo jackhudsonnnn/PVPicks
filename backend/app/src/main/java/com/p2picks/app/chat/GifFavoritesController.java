@@ -19,9 +19,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Your starred GIFs (domain rules, "Chat"): a shortlist from the library that the picker shows first, kept with your
- * account so it follows you between devices. Starring and unstarring set it, so repeating either changes nothing
- * (no Idempotency-Key needed). At most {@link #MAX} stars; only GIFs in the library.
+ * Your favorite GIFs (domain rules, "Chat"): a shortlist from the library that the picker's Favorites toggle shows,
+ * kept with your account so it follows you between devices. Adding and removing set it, so repeating either changes
+ * nothing (no Idempotency-Key needed). At most {@link #MAX} favorites; only GIFs in the library.
  */
 @RestController
 class GifFavoritesController {
@@ -39,7 +39,7 @@ class GifFavoritesController {
         this.transactions = transactions;
     }
 
-    /** Newest star first; stars for GIFs no longer in the library are left out. */
+    /** Newest favorite first; favorites for GIFs no longer in the library are left out. */
     @GetMapping("/me/gif-favorites")
     ResponseEntity<?> list(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -57,28 +57,28 @@ class GifFavoritesController {
     }
 
     @PutMapping("/me/gif-favorites/{gifId}")
-    ResponseEntity<?> star(@AuthenticationPrincipal Jwt jwt, @PathVariable String gifId) {
+    ResponseEntity<?> add(@AuthenticationPrincipal Jwt jwt, @PathVariable String gifId) {
         if (!gifs.contains(gifId)) return error(404, "not_found", "That GIF isn't in the library.");
         return change(jwt, gifId, true);
     }
 
     @DeleteMapping("/me/gif-favorites/{gifId}")
-    ResponseEntity<?> unstar(@AuthenticationPrincipal Jwt jwt, @PathVariable String gifId) {
+    ResponseEntity<?> remove(@AuthenticationPrincipal Jwt jwt, @PathVariable String gifId) {
         if (!gifs.contains(gifId)) return error(404, "not_found", "That GIF isn't in the library.");
         return change(jwt, gifId, false);
     }
 
     private enum Outcome { DONE, UNAUTHORIZED, FULL }
 
-    private ResponseEntity<?> change(Jwt jwt, String gifId, boolean star) {
+    private ResponseEntity<?> change(Jwt jwt, String gifId, boolean favorite) {
         UUID userId = UUID.fromString(jwt.getSubject());
         Outcome outcome;
         try {
             outcome = transactions.execute(status -> {
-                // Locks the account, so two stars at once can't pass the cap together.
+                // Locks the account, so two favorites at once can't pass the cap together.
                 if (!authentication.lockActive(jwt)) return Outcome.UNAUTHORIZED;
                 authentication.requireUnexpired(jwt);
-                if (!star) {
+                if (!favorite) {
                     jdbc.update("DELETE FROM gif_favorites WHERE user_id = ? AND gif_id = ?", userId, gifId);
                     return Outcome.DONE;
                 }
@@ -98,7 +98,7 @@ class GifFavoritesController {
         }
         if (outcome == Outcome.DONE) return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
         if (outcome == Outcome.FULL) {
-            return error(409, "favorites_full", "You can star up to " + MAX + " GIFs. Unstar one to make room.");
+            return error(409, "favorites_full", "You can have up to " + MAX + " favorite GIFs. Remove one to make room.");
         }
         return unauthorized();
     }

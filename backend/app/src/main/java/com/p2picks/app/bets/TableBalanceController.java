@@ -115,7 +115,7 @@ class TableBalanceController {
      * ({@code winCents}). A pot's win is the payout if the member's pick wins, from the same calculator resolution
      * uses; a Jackblack game's win is its best case, the mirror of the worst case (every round sitting at the most a
      * seat can win, every round dealing at the most each seat can lose); a Hold'em game's is every other player's
-     * buy-ins. The balance here is built from the same
+     * worst case (winning everyone's stack every hand). The balance here is built from the same
      * tickets (unsettled results plus every {@code loseCents}), so the what-if always adds up.
      */
     @GetMapping("/tables/{tableId}/members/{memberId}/balance")
@@ -204,7 +204,7 @@ class TableBalanceController {
             if (risk != null) {
                 lose = Math.subtractExact(lose, risk);
                 // Jackblack's best case mirrors its worst case; at Hold'em you can at best win every other
-                // player's buy-ins.
+                // player's stack every hand, which is the sum of their worst cases.
                 win = Math.addExact(win, mode.equals("holdem") ? rs.getLong("others_risk") : risk);
             }
             tickets.add(new Ticket(betId, mode, question, choice, lose, win));

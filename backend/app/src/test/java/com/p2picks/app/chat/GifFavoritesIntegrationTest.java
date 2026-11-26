@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** Starring GIFs: a set per player, only library GIFs, capped, newest first. */
+/** Favorite GIFs: a set per player, only library GIFs, capped, newest first. */
 class GifFavoritesIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private GifCatalog gifs;
@@ -37,32 +37,32 @@ class GifFavoritesIntegrationTest extends IntegrationTestSupport {
         return response.getStatus();
     }
 
-    private JsonNode stars(Cookie session) throws Exception {
+    private JsonNode favorites(Cookie session) throws Exception {
         JsonNode body = json.readTree(mvc.perform(get("/me/gif-favorites").cookie(session)).andReturn().getResponse()
                 .getContentAsString());
         return body.path("gifIds");
     }
 
     @Test
-    void starsAreAPersonalSetOfLibraryGifsNewestFirst() throws Exception {
+    void favoritesAreAPersonalSetOfLibraryGifsNewestFirst() throws Exception {
         UUID id = UUID.randomUUID();
         Cookie session = player(id);
         String first = gifs.catalog().gifs().get(0).id();
         String second = gifs.catalog().gifs().get(1).id();
         assertThat(mvc.perform(get("/me/gif-favorites")).andReturn().getResponse().getStatus()).isEqualTo(401);
         assertThat(send(put("/me/gif-favorites/{id}", first), session)).isEqualTo(204);
-        // Starring again changes nothing.
+        // Adding it again changes nothing.
         assertThat(send(put("/me/gif-favorites/{id}", first), session)).isEqualTo(204);
         assertThat(send(put("/me/gif-favorites/{id}", second), session)).isEqualTo(204);
         assertThat(send(put("/me/gif-favorites/{id}", "not-a-gif"), session)).isEqualTo(404);
-        assertThat(stars(session)).extracting(JsonNode::asText).containsExactly(second, first);
+        assertThat(favorites(session)).extracting(JsonNode::asText).containsExactly(second, first);
         assertThat(send(delete("/me/gif-favorites/{id}", second), session)).isEqualTo(204);
         assertThat(send(delete("/me/gif-favorites/{id}", second), session)).isEqualTo(204);
-        assertThat(stars(session)).extracting(JsonNode::asText).containsExactly(first);
+        assertThat(favorites(session)).extracting(JsonNode::asText).containsExactly(first);
     }
 
     @Test
-    void starsAreCapped() throws Exception {
+    void favoritesAreCapped() throws Exception {
         UUID id = UUID.randomUUID();
         Cookie session = player(id);
         for (int i = 0; i < GifFavoritesController.MAX; i++) {
@@ -72,7 +72,7 @@ class GifFavoritesIntegrationTest extends IntegrationTestSupport {
         assertThat(send(put("/me/gif-favorites/{id}", gif), session)).isEqualTo(409);
         jdbc.update("DELETE FROM gif_favorites WHERE user_id = ? AND gif_id = 'old0'", id);
         assertThat(send(put("/me/gif-favorites/{id}", gif), session)).isEqualTo(204);
-        // Stars for GIFs no longer in the library aren't listed.
-        assertThat(stars(session)).extracting(JsonNode::asText).containsExactly(gif);
+        // Favorites for GIFs no longer in the library aren't listed.
+        assertThat(favorites(session)).extracting(JsonNode::asText).containsExactly(gif);
     }
 }

@@ -15,7 +15,14 @@ export { useHoldemSeatChips } from "./holdem-game";
 export { TicketsPage } from "./components/tickets-page";
 export { MODES } from "./modes";
 export { ModeInfoButton } from "./components/mode-info";
-export { formatClock, potCents, proposeBlock, secondsLeft, ticketStatus } from "./ticket-model";
+export {
+  formatClock,
+  potCents,
+  proposeBlock,
+  rematchToFollow,
+  secondsLeft,
+  ticketStatus,
+} from "./ticket-model";
 export { HomeTickets } from "./components/home-tickets";
 export { useInPlayTables } from "./in-play";
 export { useHasTickets } from "./has-tickets";

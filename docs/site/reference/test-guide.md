@@ -47,7 +47,7 @@ cover.
     `BetLockIntegrationTest` and `BetResolutionIntegrationTest`.
     Jackblack: `JackblackGameTest` (the pure game, including 400 random games
     checked zero-sum and inside the worst case) and `JackblackIntegrationTest`
-    (propose, join, deal, lockstep steps and hidden choices, timeouts, the
+    (propose, join, deal, turns in order and who sees what, timeouts, the
     dealer's turn, the points limit, the host setting);
     `demo.JackblackBotTest` covers the bots' strategy.
   - `common.AbusiveLanguageTest` and `AbusiveLanguageIntegrationTest`: the

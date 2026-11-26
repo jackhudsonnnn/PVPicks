@@ -46,12 +46,10 @@ export function useHoldemSeatChips(bet: Bet | undefined, user: User) {
       return data.players?.includes(userId) ? { label: "In", tone: "pick" } : null;
     if (!data.order?.includes(userId)) return null;
     if (data.phase === "done") return resultChip(data.totals?.[userId] ?? 0);
-    if (data.phase === "results") {
-      const delta = data.history?.at(-1)?.deltas[userId];
-      return delta === undefined ? { label: "Out", tone: "washed" } : resultChip(delta);
-    }
+    // Everyone plays every hand on a fresh stack, so every player has a result and a seat.
+    if (data.phase === "results") return resultChip(data.history?.at(-1)?.deltas[userId] ?? 0);
     const seat = data.seats?.find((s) => s.userId === userId);
-    if (!seat) return { label: "Out", tone: "washed" };
+    if (!seat) return null;
     if (data.toActId === userId) return { label: "Thinking", tone: "pick" };
     if (seat.folded) return { label: "Folded", tone: "pass" };
     if (seat.allIn) return { label: "All in", tone: "pick" };

@@ -378,6 +378,19 @@ describe("U2Pick betting", () => {
     expect(screen.getByText("Pick a player.")).toBeInTheDocument();
   });
 
+  it("stacks up to four games and scrolls five or more sideways", async () => {
+    const nfl = (n: number): TickerGame => ({ ...liveGame, id: `NFL-${n}`, league: "NFL" });
+    vi.mocked(getTicker).mockResolvedValue([liveGame, ...[1, 2, 3, 4, 5].map((n) => nfl(n))]);
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "Bet" }));
+    fireEvent.click(screen.getByRole("button", { name: /Total Disaster/ }));
+    const games = await screen.findByRole("radiogroup", { name: "Game" });
+    expect(games).toHaveClass("grid");
+    fireEvent.click(screen.getByRole("tab", { name: "NFL" }));
+    await waitFor(() => expect(screen.getAllByRole("radio", { name: /NYK.*BOS/ })).toHaveLength(5));
+    expect(screen.getByRole("radiogroup", { name: "Game" })).toHaveClass("overflow-x-auto");
+  });
+
   it("proposes a Total Disaster on a live game; the server builds the question", async () => {
     vi.mocked(mutationRequest).mockResolvedValue(
       new Response(

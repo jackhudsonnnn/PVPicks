@@ -16,20 +16,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Hold'em tickets (domain rules, "Hold'em"): propose (the proposer is the first player), join or leave while the join
- * window is open, deal when it closes, then the hands: bets in turn, pre-moves, timeouts and rebuys. Seats, storage,
- * locking and the payout are {@link CardGames}'.
+ * window is open, deal when it closes, then the hands: bets in turn, pre-moves and timeouts, everyone on a fresh stack
+ * each hand. Seats, storage, locking and the payout are {@link CardGames}'.
  *
- * <p>Each player's worst case, both buy-ins, is held against their points limit: checked when they join and again at
- * the deal, where anyone who can no longer cover it is dropped.
+ * <p>Each player's worst case, their whole stack in every hand, is held against their points limit: checked when they
+ * join and again at the deal (for the final count), where anyone who can no longer cover it is dropped.
  */
 @Service
 public class HoldemService {
     public static final String MODE = "holdem";
-    static final Set<String> ACTIONS = Set.of("fold", "check", "call", "raise", "all_in", "rebuy", "pass",
+    static final Set<String> ACTIONS = Set.of("fold", "check", "call", "raise", "all_in",
             "check_fold", "call_any", "no_pre_move");
     private static final String PROPOSE = "bet.holdem.propose.v1";
-    /** Both buy-ins, whatever the number of players. */
-    private static final CardGames.Risk RISK = (bet, players) -> HoldemRules.worstCase(bet.wagerCents());
+    /** A whole stack lost in every hand, one hand per player. */
+    private static final CardGames.Risk RISK = (bet, players) -> HoldemRules.worstCase(bet.wagerCents(), players);
 
     private final CardGames games;
     private final BetProposalWriter proposals;
@@ -58,7 +58,8 @@ public class HoldemService {
     public BetProposalWriter.Result propose(Jwt jwt, UUID tableId, HoldemRules rules, long wagerCents,
             int durationSec, boolean forFun, String key) {
         String config = games.write(rules.toMap());
-        long risk = forFun ? 0 : HoldemRules.worstCase(wagerCents);
+        // The proposer's worst case for the fewest players; joins and the deal check it for the real count.
+        long risk = forFun ? 0 : HoldemRules.worstCase(wagerCents, rules.minPlayers());
         BetProposalWriter.Result result = proposals.create(jwt, tableId, key, PROPOSE,
                 tableId + "|" + wagerCents + "|" + durationSec + "|" + forFun + "|" + config,
                 BetProposalWriter.Gate.HOLDEM,
@@ -96,9 +97,8 @@ public class HoldemService {
 
     /**
      * A player's move: {@code fold}, {@code check}, {@code call}, {@code raise} (with {@code amount}, the raise-to
-     * total for this street) or {@code all_in} on their turn; between hands {@code rebuy} or {@code pass} on a
-     * rebuy; and while it isn't your turn a pre-move, {@code check_fold} or {@code call_any}, or {@code no_pre_move}
-     * to clear it.
+     * total for this street) or {@code all_in} on their turn; and while it isn't your turn a pre-move,
+     * {@code check_fold} or {@code call_any}, or {@code no_pre_move} to clear it.
      */
     @Transactional
     public CardGames.Outcome act(Jwt jwt, UUID betId, String action, long amount, String key) {
@@ -106,8 +106,6 @@ public class HoldemService {
         return games.act(MODE, HoldemGame.class, jwt, betId, key, action + "|" + amount, this::timeout,
                 (bet, game, userId, now) -> {
                     switch (action) {
-                        case "rebuy" -> game.rebuy(userId, true, now);
-                        case "pass" -> game.rebuy(userId, false, now);
                         case "check_fold" -> game.preMove(userId, HoldemGame.PreMove.CHECK_FOLD);
                         case "call_any" -> game.preMove(userId, HoldemGame.PreMove.CALL_ANY);
                         case "no_pre_move" -> game.preMove(userId, null);
@@ -157,13 +155,6 @@ public class HoldemService {
                 game.pot(), game.minRaiseTo(seat), game.maxRaiseTo(seat), game.canRaise(seat), game.bigBlind, made));
     }
 
-    /** Between hands, whether {@code userId} has a rebuy to decide (for demo bots). */
-    @Transactional(readOnly = true)
-    public boolean rebuyOffered(UUID betId, UUID userId) {
-        HoldemGame game = games.load(betId, HoldemGame.class);
-        return game != null && HoldemGame.RESULTS.equals(game.phase) && game.rebuyOffered.contains(userId);
-    }
-
     /**
      * What {@code viewer} may see (domain rules, "Hold'em", "Who sees what"): never the deck, and only your own hole
      * cards while a hand is on. At a showdown everyone still in shows.
@@ -184,10 +175,9 @@ public class HoldemService {
         view.put("order", game.order);
         view.put("bigBlindCents", game.bigBlind);
         view.put("smallBlindCents", game.smallBlind);
-        view.put("buyInCents", game.buyIn);
+        view.put("stackCents", game.stack);
         view.put("stacks", game.stacks);
-        view.put("buyIns", game.buyIns);
-        view.put("out", game.out);
+        view.put("totals", game.totals);
         if (game.deadline > 0) view.put("deadline", Instant.ofEpochMilli(game.deadline).toString());
         if (HoldemGame.PLAY.equals(game.phase)) {
             view.put("buttonId", game.buttonId);
@@ -230,12 +220,10 @@ public class HoldemService {
                 view.put("me", me);
             }
         } else if (HoldemGame.RESULTS.equals(game.phase)) {
-            view.put("rebuyOffered", game.rebuyOffered);
             HoldemGame.Hand last = game.history.getLast();
             List<String> hole = last.holes.get(viewer);
             if (hole != null) view.put("me", Map.of("hole", hole));
         }
-        if (over) view.put("totals", game.totals);
         List<Map<String, Object>> history = new ArrayList<>();
         for (HoldemGame.Hand hand : game.history) history.add(hand(hand, over));
         view.put("history", history);

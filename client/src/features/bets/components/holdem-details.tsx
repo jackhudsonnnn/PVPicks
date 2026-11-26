@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { formatCents } from "@/lib/money";
-import { Delta, FactRow, FactSection, ShuffleAudit } from "./details-parts";
+import { Delta, FactRow, FactSection, PlayerAvatar, ShuffleAudit } from "./details-parts";
 import type { Bet } from "@/features/bets/api";
 import type { TableRef } from "@/features/tables";
-import { type User, PersonAvatar, PersonName } from "@/features/people";
+import { type User, PersonName } from "@/features/people";
 import { ticketStatus } from "@/features/bets/ticket-model";
 import {
-  BUY_IN_BIG_BLINDS,
+  STACK_BIG_BLINDS,
   holdemPlayers,
   holdemRulesFromConfig,
   holdemWorstCase,
@@ -64,8 +64,8 @@ export function HoldemFacts({
           {formatCents(Math.floor(big / 2))} / {formatCents(big)}
           {bet.forFun && " (4fun play chips)"}
         </FactRow>
-        <FactRow label="Buy-in">
-          {formatCents(big * BUY_IN_BIG_BLINDS)} ({BUY_IN_BIG_BLINDS} big blinds), one rebuy
+        <FactRow label="Stack">
+          {formatCents(big * STACK_BIG_BLINDS)} ({STACK_BIG_BLINDS} big blinds), fresh every hand
         </FactRow>
         <FactRow label="Players">
           {players === null
@@ -75,7 +75,12 @@ export function HoldemFacts({
         {game?.hands !== undefined && <FactRow label="Hands">{game.hands}</FactRow>}
         {!bet.forFun && (
           <FactRow label="Worst case each">
-            {formatCents(holdemWorstCase(bet.wagerCents))} pts
+            {players === null
+              ? `${formatCents(holdemWorstCase(bet.wagerCents, rules.minPlayers))}–${formatCents(
+                  holdemWorstCase(bet.wagerCents, rules.maxPlayers),
+                )}`
+              : formatCents(holdemWorstCase(bet.wagerCents, players))}{" "}
+            pts
           </FactRow>
         )}
       </FactSection>
@@ -83,7 +88,9 @@ export function HoldemFacts({
       <FactSection title="Rules">
         <FactRow label="Game">No-limit Texas hold'em</FactRow>
         <FactRow label="Hands">One each; the button moves one seat a hand</FactRow>
-        <FactRow label="Rebuy">Once a game, right after busting (15s to decide)</FactRow>
+        <FactRow label="Stacks">
+          Everyone starts every hand on the same stack; nobody busts out
+        </FactRow>
         <FactRow label="Showdown">Everyone still in shows</FactRow>
         <FactRow label="Turn timer">{rules.decisionSec}s, then check if you can, else fold</FactRow>
         <FactRow label="Ties">Split; odd chips go one each to the winners at random</FactRow>
@@ -110,7 +117,7 @@ export function HoldemFacts({
 }
 
 /** Each player's result, then each hand: who won the pots with what, and every hand once the game is over. */
-export function HoldemPlayers({ bet, user, expire, peopleKey }: Props) {
+export function HoldemPlayers({ bet, table, user, expire, peopleKey }: Props) {
   const status = ticketStatus(bet);
   const game = useHoldemGame(bet, user, status === "active" || status === "pending").data;
   const players = game ? holdemPlayers(game) : [];
@@ -125,13 +132,14 @@ export function HoldemPlayers({ bet, user, expire, peopleKey }: Props) {
         ) : (
           players.map((id) => (
             <div key={id} className="flex items-center gap-2 py-1.5 text-sm">
-              <PersonAvatar id={id} user={user} expire={expire} queryKey={peopleKey} size="xs" />
-              <span className="min-w-0 flex-1 break-words">
-                {name(id)}
-                {(game?.buyIns?.[id] ?? 1) > 1 && (
-                  <span className="ml-1 text-xs text-muted-foreground">(rebought)</span>
-                )}
-              </span>
+              <PlayerAvatar
+                id={id}
+                table={table}
+                user={user}
+                expire={expire}
+                peopleKey={peopleKey}
+              />
+              <span className="min-w-0 flex-1 break-words">{name(id)}</span>
               {game?.totals?.[id] !== undefined && <Delta cents={game.totals[id]} />}
             </div>
           ))

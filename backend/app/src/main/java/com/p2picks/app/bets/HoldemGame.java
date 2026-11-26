@@ -11,14 +11,14 @@ import java.util.UUID;
 
 /**
  * One Hold'em game, the pure rules with no storage (domain rules, "Hold'em"): no-limit Texas hold'em over one
- * full cycle, a hand for each player, with the button moving one seat a hand. Stacks carry from hand to hand; a player who
- * busts can take one rebuy, right then. A player's result is their final stack minus what they bought in for, so the
- * game is zero-sum. Public fields so the state is stored as JSON; chips are cents of the wager (or play chips in a
+ * full cycle, a hand for each player, with the button moving one seat a hand. Every hand starts everyone on the same
+ * stack (owner decision, 2026-11-26), so nobody busts out and no seat carries an edge into the next hand. A player's
+ * result is what they won or lost over the hands, so the game is zero-sum. Public fields so the state is stored as JSON; chips are cents of the wager (or play chips in a
  * 4fun game).
  */
 final class HoldemGame implements CardGames.State {
     static final String PLAY = "play";
-    /** Between hands: who won, shown hands, and the busted player's rebuy choice. */
+    /** Between hands: who won and the shown hands. */
     static final String RESULTS = "results";
     static final String DONE = "done";
 
@@ -80,7 +80,8 @@ final class HoldemGame implements CardGames.State {
 
     public long bigBlind;
     public long smallBlind;
-    public long buyIn;
+    /** Everyone's stack at the start of every hand. */
+    public long stack;
     /** Seating order, shuffled at the deal; the button starts on the first seat and moves one a hand. */
     public List<UUID> order = new ArrayList<>();
     public int hands;
@@ -88,19 +89,13 @@ final class HoldemGame implements CardGames.State {
     public int hand;
     /** Index into {@link #order} of the current (or last) button. */
     public int button = -1;
+    /** This hand's stacks (everyone starts each hand on {@link #stack}). */
     public Map<UUID, Long> stacks = new LinkedHashMap<>();
-    public Map<UUID, Integer> buyIns = new LinkedHashMap<>();
-    /** Busted for good (no rebuy left, or let it pass). */
-    public List<UUID> out = new ArrayList<>();
-    /** Busted this hand with a rebuy left, still deciding (only between hands). */
-    public List<UUID> rebuyOffered = new ArrayList<>();
     public List<CardShuffle.Secret> secrets = new ArrayList<>();
     public List<String> deck = new ArrayList<>();
     public int pass;
     public String phase;
     public long deadline;
-    /** When the current pause between hands began. */
-    public long pausedAt;
 
     public List<Seat> seats = new ArrayList<>();
     public List<String> board = new ArrayList<>();
@@ -112,10 +107,9 @@ final class HoldemGame implements CardGames.State {
     public UUID buttonId;
     public UUID smallBlindId;
     public UUID bigBlindId;
-    public Map<UUID, Long> stackAtStart = new LinkedHashMap<>();
 
     public List<Hand> history = new ArrayList<>();
-    /** Each player's result once the game is over: final stack minus their buy-ins. */
+    /** Each player's result so far: what they won or lost over the finished hands. */
     public Map<UUID, Long> totals = new LinkedHashMap<>();
 
     /** Where a hand's deck comes from: its secret's shuffle (tests stack it). */
@@ -133,48 +127,34 @@ final class HoldemGame implements CardGames.State {
         HoldemGame game = new HoldemGame();
         game.bigBlind = bigBlind;
         game.smallBlind = bigBlind / 2;
-        game.buyIn = HoldemRules.buyIn(bigBlind);
+        game.stack = HoldemRules.stack(bigBlind);
         game.order = new ArrayList<>(players);
         Collections.shuffle(game.order, random);
         game.hands = game.order.size();
-        for (UUID player : game.order) {
-            game.stacks.put(player, game.buyIn);
-            game.buyIns.put(player, 1);
-        }
+        for (UUID player : game.order) game.totals.put(player, 0L);
         // Every hand's deck is fixed now (one deck, a random seed), so its commitment can be shown up front.
         for (int h = 1; h <= game.hands; h++) game.secrets.add(CardShuffle.draw(h, 1, random));
         game.startHand(rules, decks, now);
         return game;
     }
 
-    /** Players still playing: not out, with chips. */
-    List<UUID> active() {
-        List<UUID> active = new ArrayList<>();
-        for (UUID player : order) if (!out.contains(player) && stacks.get(player) > 0) active.add(player);
-        return active;
-    }
-
     private void startHand(HoldemRules rules, Decks decks, long now) {
-        List<UUID> active = active();
-        if (hand >= hands || active.size() < HoldemRules.MIN_PLAYERS) {
+        if (hand >= hands) {
             finish();
             return;
         }
-        // The button moves to the next player still in (the first seat for the first hand).
-        int next = button < 0 ? 0 : (button + 1) % order.size();
-        while (!active.contains(order.get(next))) next = (next + 1) % order.size();
-        button = next;
+        // The button moves one seat (the first seat for the first hand); everyone plays every hand on a fresh stack.
+        button = button < 0 ? 0 : (button + 1) % order.size();
         buttonId = order.get(button);
         seats = new ArrayList<>();
+        stacks = new LinkedHashMap<>();
         for (int i = 1; i <= order.size(); i++) {
             UUID player = order.get((button + i) % order.size());
-            if (!active.contains(player)) continue;
             Seat seat = new Seat();
             seat.userId = player;
             seats.add(seat);
         }
-        stackAtStart = new LinkedHashMap<>();
-        for (UUID player : active) stackAtStart.put(player, stacks.get(player));
+        for (UUID player : order) stacks.put(player, stack);
         pass = 0;
         deck = new ArrayList<>(decks.next(secrets.get(hand)));
         hand++;
@@ -415,22 +395,14 @@ final class HoldemGame implements CardGames.State {
                 record.handNames.put(seat.userId, best.get(seat.userId).name());
             }
         }
-        for (Map.Entry<UUID, Long> start : stackAtStart.entrySet()) {
-            record.deltas.put(start.getKey(), stacks.get(start.getKey()) - start.getValue());
+        for (UUID player : order) {
+            long delta = stacks.get(player) - stack;
+            record.deltas.put(player, delta);
+            totals.merge(player, delta, Math::addExact);
         }
         history.add(record);
-
-        // Busted: a rebuy if there's one left and another hand to play it in; otherwise out for good.
-        boolean more = hand < hands;
-        rebuyOffered = new ArrayList<>();
-        for (Seat seat : seats) {
-            if (stacks.get(seat.userId) > 0) continue;
-            if (more && buyIns.get(seat.userId) < HoldemRules.MAX_BUY_INS) rebuyOffered.add(seat.userId);
-            else if (!out.contains(seat.userId)) out.add(seat.userId);
-        }
         phase = RESULTS;
-        pausedAt = now;
-        deadline = now + (rebuyOffered.isEmpty() ? HoldemRules.HAND_PAUSE_MS : HoldemRules.REBUY_MS);
+        deadline = now + HoldemRules.HAND_PAUSE_MS;
     }
 
     /** Main pot and side pots from what everyone put in; folded chips count but folded players can't win. */
@@ -476,22 +448,6 @@ final class HoldemGame implements CardGames.State {
         return Long.parseUnsignedLong(hash.substring(0, 16), 16);
     }
 
-    // ----- Between hands -----
-
-    /** A busted player's one rebuy (or letting it pass). */
-    void rebuy(UUID userId, boolean take, long now) {
-        if (!RESULTS.equals(phase) || !rebuyOffered.contains(userId)) throw new NotAllowed("There's no rebuy to take");
-        rebuyOffered.remove(userId);
-        if (take) {
-            stacks.merge(userId, buyIn, Long::sum);
-            buyIns.merge(userId, 1, Integer::sum);
-        } else {
-            out.add(userId);
-        }
-        // Once nobody's left deciding, the usual pause is enough.
-        if (rebuyOffered.isEmpty()) deadline = Math.max(now, Math.min(deadline, pausedAt + HoldemRules.HAND_PAUSE_MS));
-    }
-
     /** Applies a lapsed timer: whoever's turn it is checks if they can, otherwise folds; a pause ends. */
     boolean timeout(HoldemRules rules, Decks decks, long now) {
         if (DONE.equals(phase) || deadline == 0 || deadline > now) return false;
@@ -499,7 +455,6 @@ final class HoldemGame implements CardGames.State {
             Seat seat = seats.get(toAct);
             act(rules, seat.userId, toCall(seat) == 0 ? Action.CHECK : Action.FOLD, 0, decks, now);
         } else {
-            for (UUID undecided : List.copyOf(rebuyOffered)) rebuy(undecided, false, now);
             startHand(rules, decks, now);
         }
         return true;
@@ -524,10 +479,6 @@ final class HoldemGame implements CardGames.State {
         phase = DONE;
         deadline = 0;
         toAct = -1;
-        totals = new LinkedHashMap<>();
-        for (UUID player : order) {
-            totals.put(player, stacks.get(player) - Math.multiplyExact(buyIn, buyIns.get(player)));
-        }
     }
 
     /** All the pots on the table right now: what's been put in this hand (nothing between hands, once it's paid). */

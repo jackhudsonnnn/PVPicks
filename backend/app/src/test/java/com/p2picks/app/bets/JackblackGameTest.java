@@ -70,41 +70,47 @@ class JackblackGameTest {
     }
 
     @Test
-    void newCardsComeOutOnlyOnceEveryoneHasChosen() {
+    void playersTakeTurnsFromTheDealersLeftAndEachCardComesOutAtOnce() {
         // Three players: seats 1 and 2 get 10+2 and 10+3; the dealer shows 9.
         JackblackGame game = JackblackGame.start(RULES, List.of(A, B, C), 100, new Random(3),
                 stacked(cards("TS TH 9D 2C 3C 8S 5D 6H")), 0);
         UUID first = game.seats.get(0).userId;
         UUID second = game.seats.get(1).userId;
-        game.choose(RULES, first, JackblackGame.Action.HIT, stacked(), 1);
-        // Nothing dealt yet, and the first player can't change their mind.
-        assertThat(game.seats.get(0).hands.getFirst().cards).hasSize(2);
-        assertThat(game.deciding(first)).isFalse();
-        assertThat(game.deciding(second)).isTrue();
-        assertThatThrownBy(() -> game.choose(RULES, first, JackblackGame.Action.STAND, stacked(), 1))
+        // The seat after the dealer goes first; nobody else can act out of turn.
+        assertThat(game.seats.get(0).userId).isEqualTo(game.order.get(1));
+        assertThat(game.deciding(first)).isTrue();
+        assertThat(game.deciding(second)).isFalse();
+        assertThatThrownBy(() -> game.choose(RULES, second, JackblackGame.Action.HIT, stacked(), 1))
                 .isInstanceOf(IllegalStateException.class);
 
-        game.choose(RULES, second, JackblackGame.Action.HIT, stacked(), 2);
-        // Both cards come out together, in seat order.
+        // A hit is dealt at once, and the same player goes again with a fresh timer.
+        game.choose(RULES, first, JackblackGame.Action.HIT, stacked(), 1);
         assertThat(game.seats.get(0).hands.getFirst().cards).containsExactly("TS", "2C", "5D");
-        assertThat(game.seats.get(1).hands.getFirst().cards).containsExactly("TH", "3C", "6H");
         assertThat(game.deciding(first)).isTrue();
-        assertThat(game.deadline).isEqualTo(2 + RULES.decisionSec() * 1000L);
+        assertThat(game.deadline).isEqualTo(1 + RULES.decisionSec() * 1000L);
+
+        // Standing passes the turn on.
+        game.choose(RULES, first, JackblackGame.Action.STAND, stacked(), 2);
+        assertThat(game.acting().userId).isEqualTo(second);
+        game.choose(RULES, second, JackblackGame.Action.HIT, stacked(), 3);
+        assertThat(game.seats.get(1).hands.getFirst().cards).containsExactly("TH", "3C", "6H");
+        assertThat(game.deadline).isEqualTo(3 + RULES.decisionSec() * 1000L);
     }
 
     @Test
-    void aLapsedStepStandsWhoeverHasntChosen() {
+    void aLapsedDecisionStandsThatHandAndTheNextSeatGoes() {
         JackblackGame game = JackblackGame.start(RULES, List.of(A, B, C), 100, new Random(3),
                 stacked(cards("TS TH 9D 2C 3C 8S 5D 6H")), 0);
         UUID first = game.seats.get(0).userId;
         UUID second = game.seats.get(1).userId;
-        game.choose(RULES, first, JackblackGame.Action.HIT, stacked(), 1);
         assertThat(game.timeout(RULES, stacked(), game.deadline - 1)).isFalse();
         assertThat(game.timeout(RULES, stacked(), game.deadline)).isTrue();
-        assertThat(game.seats.get(0).hands.getFirst().cards).hasSize(3);
-        assertThat(game.seats.get(1).hands.getFirst().cards).hasSize(2);
-        assertThat(game.seats.get(1).hands.getFirst().done).isTrue();
-        assertThat(game.deciding(second)).isFalse();
+        assertThat(game.seats.get(0).hands.getFirst().cards).hasSize(2);
+        assertThat(game.seats.get(0).hands.getFirst().done).isTrue();
+        assertThat(game.deciding(first)).isFalse();
+        // The next seat's hand is untouched, with its own timer.
+        assertThat(game.seats.get(1).hands.getFirst().done).isFalse();
+        assertThat(game.deciding(second)).isTrue();
     }
 
     @Test
@@ -221,6 +227,6 @@ class JackblackGameTest {
         game.choose(RULES, game.seats.get(0).userId, JackblackGame.Action.HIT, stacked(), 1);
         JackblackGame back = json.readValue(json.writeValueAsString(game), JackblackGame.class);
         assertThat(json.writeValueAsString(back)).isEqualTo(json.writeValueAsString(game));
-        assertThat(back.seats.get(0).pending).isEqualTo("HIT");
+        assertThat(back.acting().userId).isEqualTo(game.seats.get(0).userId);
     }
 }

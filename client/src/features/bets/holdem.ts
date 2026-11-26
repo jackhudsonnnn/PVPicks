@@ -3,8 +3,9 @@ import { idSchema, read, request } from "@/lib/api-client";
 
 /**
  * Hold'em (domain rules, "Hold'em"): no-limit Texas hold'em over one full cycle, a hand each with the button moving
- * round. The wager is the big blind (the small blind is half), everyone buys in for 100 big blinds, and a busted
- * player can rebuy once, right then. The server owns the deck and every rule; this module mirrors the limits for the
+ * round. The wager is the big blind (the small blind is half), and every hand starts everyone on the same stack of 10
+ * big blinds, so nobody busts out (owner decision, 2026-11-26). The server owns the deck and every rule; this module
+ * mirrors the limits for the
  * setup form and reads the game.
  */
 
@@ -26,9 +27,8 @@ export const DEFAULT_HOLDEM_RULES: HoldemRules = {
   maxPlayers: 9,
 };
 
-export const BUY_IN_BIG_BLINDS = 100;
-/** The first buy-in and one rebuy: what's held against your points limit. */
-const MAX_BUY_INS = 2;
+/** Everyone's stack at the start of every hand, in big blinds. */
+export const STACK_BIG_BLINDS = 10;
 
 export function holdemRulesProblem(rules: HoldemRules): string | null {
   const within = (v: number, { min, max }: { min: number; max: number }) => v >= min && v <= max;
@@ -40,9 +40,9 @@ export function holdemRulesProblem(rules: HoldemRules): string | null {
   return null;
 }
 
-/** The most a player can lose: both buy-ins. */
-export const holdemWorstCase = (bigBlindCents: number) =>
-  bigBlindCents * BUY_IN_BIG_BLINDS * MAX_BUY_INS;
+/** The most a player can lose: their whole stack in every hand, one hand per player. */
+export const holdemWorstCase = (bigBlindCents: number, players: number) =>
+  bigBlindCents * STACK_BIG_BLINDS * players;
 
 export function holdemRulesFromConfig(config: Record<string, unknown>): HoldemRules {
   return {
@@ -84,10 +84,10 @@ const gameSchema = z.object({
   order: z.array(idSchema).optional(),
   bigBlindCents: cents.optional(),
   smallBlindCents: cents.optional(),
-  buyInCents: cents.optional(),
+  /** Everyone's stack at the start of every hand. */
+  stackCents: cents.optional(),
+  /** This hand's stacks. */
   stacks: byUser(cents).optional(),
-  buyIns: byUser(z.number().int()).optional(),
-  out: z.array(idSchema).optional(),
   deadline: z.string().datetime({ offset: true }).optional(),
   buttonId: idSchema.optional(),
   smallBlindId: idSchema.optional(),
@@ -122,7 +122,7 @@ const gameSchema = z.object({
       maxRaiseTo: cents.optional(),
     })
     .optional(),
-  rebuyOffered: z.array(idSchema).optional(),
+  /** Each player's result so far, over the finished hands. */
   totals: byUser(cents).optional(),
   history: z.array(handSchema).optional(),
   shuffles: z
@@ -142,16 +142,7 @@ const gameSchema = z.object({
 
 export type HoldemGame = z.infer<typeof gameSchema>;
 export type HoldemMove =
-  | "fold"
-  | "check"
-  | "call"
-  | "raise"
-  | "all_in"
-  | "rebuy"
-  | "pass"
-  | "check_fold"
-  | "call_any"
-  | "no_pre_move";
+  "fold" | "check" | "call" | "raise" | "all_in" | "check_fold" | "call_any" | "no_pre_move";
 export type HoldemPreMove = NonNullable<NonNullable<HoldemGame["me"]>["preMove"]>;
 
 export async function getHoldemGame(betId: string, signal?: AbortSignal) {

@@ -71,7 +71,7 @@ interface People {
 
 /**
  * The card-room table: members seated around the felt with their points at this table, and the open bets fanned
- * in the middle. Picking a seat or the "others" spot opens the Peers list.
+ * in the middle. A seat opens that person's profile; the "others" spot opens who didn't fit.
  */
 export function Felt({
   table,

@@ -15,11 +15,11 @@ import java.util.UUID;
  * suit {@code SHDC}. Deadlines are epoch milliseconds.
  *
  * <p>A round: a fresh shared shoe; two cards each, the dealer's second face down; the dealer peeks on an ace or ten
- * and a dealer natural ends the round (player naturals push, the rest lose). Then players act in <b>lockstep</b>:
- * everyone still deciding picks hit, stand, double or split for their current hand, and only once all have chosen,
- * or the decision timer runs out (they stand), are the new cards dealt and shown. When nobody has a hand left to
- * play, the dealer turns the hole card over and draws to 17 with one forced button (a bust pays out by itself; the
- * timer plays it out). Each hand is paid against the dealer: win 1:1, a natural 3:2 or 6:5 (rounded down), push 0,
+ * and a dealer natural ends the round (player naturals push, the rest lose). Then players act <b>in turn</b>, as at
+ * a casino (owner decision, 2026-11-26): starting with the seat after the dealer, each plays every hand (splits
+ * included) to the end before the next seat goes. Each hit, stand, double or split is dealt at once, and each
+ * decision has its own timer (running out stands that hand). When nobody has a hand left to play, the dealer turns
+ * the hole card over and draws to 17 with one forced button (a bust pays out by itself; the timer plays it out). Each hand is paid against the dealer: win 1:1, a natural 3:2 or 6:5 (rounded down), push 0,
  * lose or bust the stake.
  */
 final class JackblackGame implements CardGames.State {
@@ -48,8 +48,6 @@ final class JackblackGame implements CardGames.State {
         public UUID userId;
         public List<Hand> hands = new ArrayList<>();
         public int splits;
-        /** This step's choice, hidden until everyone has chosen; null while undecided. */
-        public String pending;
         public long delta;
     }
 
@@ -71,7 +69,7 @@ final class JackblackGame implements CardGames.State {
     public List<String> dealer = new ArrayList<>();
     public boolean revealed;
     public List<Seat> seats = new ArrayList<>();
-    /** When this step (or the dealer's turn) times out. */
+    /** When the current decision (or the dealer's turn) times out. */
     public long deadline;
     public Map<UUID, Long> totals = new LinkedHashMap<>();
     /** Each round's shoe secret, fixed at the deal and revealed only when the game is over (CardShuffle). */
@@ -109,16 +107,22 @@ final class JackblackGame implements CardGames.State {
 
     // ----- Decisions -----
 
-    /** Whether {@code userId} still has a choice to make this step. */
-    boolean deciding(UUID userId) {
-        Seat seat = seatOf(userId);
-        return PLAY.equals(phase) && seat != null && seat.pending == null && current(seat) != null;
+    /** Whose turn it is: the first seat (in order from the dealer) with a hand still to play, or null. */
+    Seat acting() {
+        if (!PLAY.equals(phase)) return null;
+        return seats.stream().filter(s -> current(s) != null).findFirst().orElse(null);
     }
 
-    /** Records a player's choice for this step; once everyone still playing has chosen, the cards come out. */
+    /** Whether it's {@code userId}'s turn. */
+    boolean deciding(UUID userId) {
+        Seat seat = acting();
+        return seat != null && seat.userId.equals(userId);
+    }
+
+    /** Plays the acting player's choice for their current hand at once; the next decision (or seat) is up. */
     void choose(JackblackRules rules, UUID userId, Action action, Shoes shoes, long now) {
-        Seat seat = seatOf(userId);
-        if (!deciding(userId)) throw new NotAllowed("You've no choice to make right now");
+        if (!deciding(userId)) throw new NotAllowed("It isn't your turn");
+        Seat seat = acting();
         Hand hand = current(seat);
         if (action == Action.DOUBLE && !canDouble(rules, hand)) {
             throw new NotAllowed("You can't double this hand");
@@ -126,10 +130,8 @@ final class JackblackGame implements CardGames.State {
         if (action == Action.SPLIT && !canSplit(rules, seat, hand)) {
             throw new NotAllowed("You can't split this hand");
         }
-        seat.pending = action.name();
-        if (seats.stream().filter(s -> current(s) != null).allMatch(s -> s.pending != null)) {
-            resolveStep(rules, shoes, now);
-        }
+        play(seat, hand, action);
+        afterStep(rules, shoes, now);
     }
 
     /** The dealer's one move on their turn: flip the hole card, then hit while under 17 (soft 17 stands), then stand. */
@@ -160,11 +162,13 @@ final class JackblackGame implements CardGames.State {
         deadline = now + rules.decisionSec() * 1000L;
     }
 
-    /** Applies a lapsed timer: undecided players stand; an idle dealer's turn plays itself out. True if it moved on. */
+    /** Applies a lapsed timer: the acting hand stands; an idle dealer's turn plays itself out. True if it moved on. */
     boolean timeout(JackblackRules rules, Shoes shoes, long now) {
         if (DONE.equals(phase) || deadline == 0 || deadline > now) return false;
         if (PLAY.equals(phase)) {
-            resolveStep(rules, shoes, now);
+            Seat seat = acting();
+            if (seat != null) play(seat, current(seat), Action.STAND);
+            afterStep(rules, shoes, now);
         } else if (RESULTS.equals(phase)) {
             startRound(rules, shoes, now);
         } else {
@@ -278,49 +282,43 @@ final class JackblackGame implements CardGames.State {
         afterStep(rules, shoes, now);
     }
 
-    /** Deals every pending choice at once, in seat order; anyone who hadn't chosen stands. */
-    private void resolveStep(JackblackRules rules, Shoes shoes, long now) {
-        for (Seat seat : seats) {
-            Hand hand = current(seat);
-            if (hand == null) continue;
-            Action action = seat.pending == null ? Action.STAND : Action.valueOf(seat.pending);
-            seat.pending = null;
-            switch (action) {
-                case HIT -> {
-                    hand.cards.add(draw());
-                    if (total(hand.cards) >= 21) hand.done = true;
-                }
-                case STAND -> hand.done = true;
-                case DOUBLE -> {
-                    hand.stake *= 2;
-                    hand.doubled = true;
-                    hand.cards.add(draw());
+    /** One decision on one hand, dealt at once. Reaching 21 stands by itself. */
+    private void play(Seat seat, Hand hand, Action action) {
+        switch (action) {
+            case HIT -> {
+                hand.cards.add(draw());
+                if (total(hand.cards) >= 21) hand.done = true;
+            }
+            case STAND -> hand.done = true;
+            case DOUBLE -> {
+                hand.stake *= 2;
+                hand.doubled = true;
+                hand.cards.add(draw());
+                hand.done = true;
+            }
+            case SPLIT -> {
+                boolean aces = rank(hand.cards.getFirst()) == 'A';
+                Hand second = new Hand();
+                second.cards.add(hand.cards.removeLast());
+                second.stake = ante;
+                second.fromSplit = true;
+                hand.fromSplit = true;
+                seat.hands.add(seat.hands.indexOf(hand) + 1, second);
+                seat.splits++;
+                hand.cards.add(draw());
+                second.cards.add(draw());
+                if (aces) {
                     hand.done = true;
-                }
-                case SPLIT -> {
-                    boolean aces = rank(hand.cards.getFirst()) == 'A';
-                    Hand second = new Hand();
-                    second.cards.add(hand.cards.removeLast());
-                    second.stake = ante;
-                    second.fromSplit = true;
-                    hand.fromSplit = true;
-                    seat.hands.add(seat.hands.indexOf(hand) + 1, second);
-                    seat.splits++;
-                    hand.cards.add(draw());
-                    second.cards.add(draw());
-                    if (aces) {
-                        hand.done = true;
-                        second.done = true;
-                    } else {
-                        if (total(hand.cards) == 21) hand.done = true;
-                        if (total(second.cards) == 21) second.done = true;
-                    }
+                    second.done = true;
+                } else {
+                    if (total(hand.cards) == 21) hand.done = true;
+                    if (total(second.cards) == 21) second.done = true;
                 }
             }
         }
-        afterStep(rules, shoes, now);
     }
 
+    /** After a decision: the next one gets a fresh timer; with no hand left to play, the dealer's turn (if needed). */
     private void afterStep(JackblackRules rules, Shoes shoes, long now) {
         if (seats.stream().anyMatch(s -> current(s) != null)) {
             deadline = now + rules.decisionSec() * 1000L;

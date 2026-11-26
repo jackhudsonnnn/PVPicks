@@ -27,6 +27,26 @@ export function arrangeSeats(
   return { seated: all.slice(0, cap - 1), rail: all.slice(cap - 1), fromBet };
 }
 
+/**
+ * Whether you can throw a tomato at someone: they're seated around the felt (in the focused ticket, or anyone at the
+ * table with no open tickets; "+N others" counts, the tomato lands on that spot), it isn't you, and the felt is on
+ * screen so you can see it land.
+ */
+export function canThrowAt(
+  targetId: string,
+  memberIds: string[],
+  me: string,
+  focused: Bet | undefined,
+  feltShown: boolean,
+) {
+  return (
+    feltShown &&
+    targetId !== me &&
+    memberIds.includes(targetId) &&
+    (!focused || focused.participantIds.includes(targetId))
+  );
+}
+
 /** Seat centers on the table's oval edge, as % of the felt box. Seat 0 sits at the bottom. */
 export function seatPosition(index: number, count: number) {
   const angle = ((90 + (index * 360) / count) * Math.PI) / 180;

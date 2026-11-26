@@ -111,10 +111,7 @@ export function auditGame(game: JackblackGame): Promise<RoundAudit[] | null> {
   return auditRounds(game.shuffles ?? [], game.phase === "done", (number) => {
     const round = game.history?.find((r) => r.number === number);
     return round
-      ? [
-          ...round.dealer,
-          ...round.seats.flatMap((seat) => seat.hands?.flatMap((h) => h.cards) ?? []),
-        ]
+      ? [...round.dealer, ...round.seats.flatMap((seat) => seat.hands.flatMap((h) => h.cards))]
       : null;
   });
 }

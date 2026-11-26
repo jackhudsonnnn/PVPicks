@@ -281,11 +281,12 @@ describe("table list with the desktop sidebar", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("on Home shows only Requests, newest first, and answers them from the sidebar", async () => {
+  it("on Home shows Requests with My tables off, newest first, and answers them from the sidebar", async () => {
     vi.mocked(listInvites).mockResolvedValue([older, newer]);
     vi.mocked(respondToInvite).mockResolvedValue();
     wrap(<SidebarTables user={me} pathname="/" expire={expire} />);
-    expect(await screen.findByText("Requests")).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Requests", selected: true })).toBeEnabled();
+    expect(screen.getByRole("tab", { name: "My tables" })).toBeDisabled();
     const rows = await screen.findAllByRole("button", { name: /Request to join/ });
     expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
       "Request to join Newer Ask",
@@ -331,11 +332,11 @@ describe("table list with the desktop sidebar", () => {
     await waitFor(() => expect(screen.queryByText("Busy")).not.toBeInTheDocument());
   });
 
-  it("elsewhere lists just My tables when there are no requests", async () => {
+  it("elsewhere turns Requests off when there are none", async () => {
     wrap(<SidebarTables user={me} pathname="/friends" expire={expire} />);
     expect(await screen.findByText("Busy")).toBeInTheDocument();
-    expect(screen.getByText("My tables")).toBeInTheDocument();
-    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "My tables", selected: true })).toBeEnabled();
+    expect(screen.getByRole("tab", { name: "Requests" })).toBeDisabled();
   });
 
   it("pages a long table list 20 at a time", async () => {

@@ -105,7 +105,7 @@ export const MODES: ModeDef[] = [
     name: "Jackblack",
     tagline: "Everyone takes a turn dealing",
     description:
-      "Blackjack where the deal goes round the table: everyone who joins banks a round against the rest, in a random order. Choices are made together, and new cards come out only once everyone has chosen.",
+      "Blackjack where the deal goes round the table: everyone who joins banks a round against the rest, in a random order. Players act in turn from the dealer's left, as at a casino.",
     icon: Spade,
     cardGame: "jackblack",
   },
@@ -114,7 +114,7 @@ export const MODES: ModeDef[] = [
     name: "Hold'em",
     tagline: "No-limit poker, once round the table",
     description:
-      "No-limit Texas hold'em: one hand each with the button moving round, small and big blinds, 100 big blinds to buy in and one rebuy. You see only your own cards; the board, the bets and the pot are out in the open.",
+      "No-limit Texas hold'em: one hand each with the button moving round, small and big blinds, everyone on a fresh 10-big-blind stack every hand. You see only your own cards; the board, the bets and the pot are out in the open.",
     icon: Club,
     cardGame: "holdem",
   },

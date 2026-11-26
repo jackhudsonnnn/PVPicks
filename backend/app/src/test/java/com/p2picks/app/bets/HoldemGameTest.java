@@ -35,13 +35,14 @@ class HoldemGameTest {
     void headsUpTheButtonPostsTheSmallBlindAndActsFirstBeforeTheFlopOnly() {
         HoldemGame game = HoldemGame.start(RULES, List.of(A, B), 100, new Random(1), DECKS, 0);
         assertThat(game.hands).isEqualTo(2);
-        assertThat(game.buyIn).isEqualTo(10_000);
+        // Everyone starts on 10 big blinds.
+        assertThat(game.stack).isEqualTo(1_000);
         UUID button = game.buttonId;
         UUID other = button.equals(A) ? B : A;
         assertThat(game.smallBlindId).isEqualTo(button);
         assertThat(game.bigBlindId).isEqualTo(other);
-        assertThat(game.stacks.get(button)).isEqualTo(9_950);
-        assertThat(game.stacks.get(other)).isEqualTo(9_900);
+        assertThat(game.stacks.get(button)).isEqualTo(950);
+        assertThat(game.stacks.get(other)).isEqualTo(900);
         // Seats run from the player after the button, so seat 0 is the big blind, seat 1 the button.
         rig(game, "2C 7D 9H JS 3D", "KS KH", "AS AH");
         assertThat(turn(game)).isEqualTo(button);
@@ -72,8 +73,9 @@ class HoldemGameTest {
         // Everyone still in shows: no mucking, since the audit reveals every hand after the game anyway.
         assertThat(hand.shown).containsOnlyKeys(button, other);
         assertThat(hand.handNames.get(other)).isEqualTo("Pair of kings");
-        assertThat(game.stacks.get(button)).isEqualTo(10_100);
+        assertThat(game.stacks.get(button)).isEqualTo(1_100);
         assertThat(hand.deltas).containsEntry(button, 100L).containsEntry(other, -100L);
+        assertThat(game.totals).containsEntry(button, 100L).containsEntry(other, -100L);
     }
 
     @Test
@@ -131,7 +133,7 @@ class HoldemGameTest {
     void foldingToABetEndsTheHandWithNoShowdownAndAnUncalledBetComesBack() {
         HoldemGame game = HoldemGame.start(RULES, List.of(A, B), 100, new Random(4), DECKS, 0);
         UUID button = game.buttonId, other = button.equals(A) ? B : A;
-        game.act(RULES, button, Action.RAISE, 1_000, DECKS, 1);
+        game.act(RULES, button, Action.RAISE, 300, DECKS, 1);
         game.act(RULES, other, Action.FOLD, 0, DECKS, 2);
         HoldemGame.Hand hand = game.history.getFirst();
         assertThat(hand.showdown).isFalse();
@@ -148,9 +150,9 @@ class HoldemGameTest {
                 .isInstanceOf(NotAllowed.class);
         // Call any calls a raise, whatever its size.
         game.preMove(other, HoldemGame.PreMove.CALL_ANY);
-        game.act(RULES, button, Action.RAISE, 1_000, DECKS, 1);
+        game.act(RULES, button, Action.RAISE, 300, DECKS, 1);
         assertThat(game.street).isEqualTo(HoldemGame.FLOP);
-        assertThat(game.stacks.get(other)).isEqualTo(9_000);
+        assertThat(game.stacks.get(other)).isEqualTo(700);
         // It was used up: the big blind decides for itself on the flop.
         assertThat(turn(game)).isEqualTo(other);
         assertThat(game.seatOf(other).preMove).isNull();
@@ -167,7 +169,7 @@ class HoldemGameTest {
         game.preMove(button, HoldemGame.PreMove.CHECK_FOLD);
         game.act(RULES, other, Action.RAISE, 500, DECKS, 5);
         assertThat(game.history.getFirst().showdown).isFalse();
-        assertThat(game.history.getFirst().deltas).containsEntry(other, 1_000L);
+        assertThat(game.history.getFirst().deltas).containsEntry(other, 300L);
         // Nobody out of the hand can arm one.
         assertThatThrownBy(() -> game.preMove(button, HoldemGame.PreMove.CHECK_FOLD))
                 .isInstanceOf(NotAllowed.class);
@@ -177,54 +179,38 @@ class HoldemGameTest {
     void aLapsedTimerChecksWhenItCanAndFoldsWhenItCant() {
         HoldemGame game = HoldemGame.start(RULES, List.of(A, B), 100, new Random(5), DECKS, 0);
         UUID button = game.buttonId;
-        assertThat(game.timeout(RULES, DECKS, game.deadline - 1)).isFalse();
+        long lapsed = game.deadline;
+        assertThat(game.timeout(RULES, DECKS, lapsed - 1)).isFalse();
         // The button owes 50 more: it folds.
-        assertThat(game.timeout(RULES, DECKS, game.deadline)).isTrue();
+        assertThat(game.timeout(RULES, DECKS, lapsed)).isTrue();
         assertThat(game.history.getFirst().deltas.get(button)).isEqualTo(-50L);
         assertThat(game.phase).isEqualTo(HoldemGame.RESULTS);
-        assertThat(game.deadline - game.pausedAt).isEqualTo(HoldemRules.HAND_PAUSE_MS);
+        assertThat(game.deadline).isEqualTo(lapsed + HoldemRules.HAND_PAUSE_MS);
     }
 
     @Test
-    void aBustedPlayerGetsOneRebuyRightThenAndIsOutAfterASecondBust() {
+    void everyoneStartsEveryHandOnTheSameStackSoNobodyBustsOut() {
         HoldemGame game = HoldemGame.start(RULES, List.of(A, B, C), 100, new Random(6), DECKS, 0);
         UUID sb = game.seats.get(0).userId, bb = game.seats.get(1).userId, btn = game.seats.get(2).userId;
         rig(game, "2C 3D 4H 8S 9C", "QS QH", "JS JH", "AS AH");
         game.act(RULES, btn, Action.ALL_IN, 0, DECKS, 1);
         game.act(RULES, sb, Action.FOLD, 0, DECKS, 2);
         game.act(RULES, bb, Action.ALL_IN, 0, DECKS, 3);
+        // The big blind lost their whole stack; the aces won it and the small blind's 50.
         assertThat(game.stacks.get(bb)).isZero();
-        assertThat(game.rebuyOffered).containsExactly(bb);
-        assertThat(game.deadline - game.pausedAt).isEqualTo(HoldemRules.REBUY_MS);
-        assertThatThrownBy(() -> game.rebuy(btn, true, 4)).isInstanceOf(NotAllowed.class);
-        game.rebuy(bb, true, 4);
-        assertThat(game.stacks.get(bb)).isEqualTo(game.buyIn);
-        assertThat(game.buyIns.get(bb)).isEqualTo(2);
-        // Nobody else deciding: the usual pause.
-        assertThat(game.deadline).isEqualTo(game.pausedAt + HoldemRules.HAND_PAUSE_MS);
-        assertThatThrownBy(() -> game.rebuy(bb, true, 5)).isInstanceOf(NotAllowed.class);
-        long before = sum(game);
+        assertThat(game.totals).containsEntry(bb, -1_000L).containsEntry(btn, 1_050L).containsEntry(sb, -50L);
+
         game.timeout(RULES, DECKS, game.deadline);
-        assertThat(sum(game)).isEqualTo(before);
+        // Hand 2: all three are dealt in, each on a fresh 1,000 (less this hand's blinds), and the results carry on.
         assertThat(game.hand).isEqualTo(2);
+        assertThat(game.seats).extracting(s -> s.userId).containsExactlyInAnyOrder(A, B, C);
+        assertThat(sum(game)).isEqualTo(3_000);
+        assertThat(game.stacks.get(game.buttonId)).isEqualTo(1_000);
+        assertThat(game.totals.get(bb)).isEqualTo(-1_000L);
     }
 
     @Test
-    void lettingTheRebuyPassMeansSittingOutTheRest() {
-        HoldemGame game = HoldemGame.start(RULES, List.of(A, B, C), 100, new Random(7), DECKS, 0);
-        UUID sb = game.seats.get(0).userId, bb = game.seats.get(1).userId, btn = game.seats.get(2).userId;
-        rig(game, "2C 3D 4H 8S 9C", "QS QH", "JS JH", "AS AH");
-        game.act(RULES, btn, Action.ALL_IN, 0, DECKS, 1);
-        game.act(RULES, sb, Action.FOLD, 0, DECKS, 2);
-        game.act(RULES, bb, Action.ALL_IN, 0, DECKS, 3);
-        // The window runs out without an answer.
-        game.timeout(RULES, DECKS, game.deadline);
-        assertThat(game.out).containsExactly(bb);
-        assertThat(game.seats).extracting(s -> s.userId).doesNotContain(bb);
-    }
-
-    @Test
-    void randomGamesStayZeroSumAndNobodyLosesMoreThanTwoBuyIns() {
+    void randomGamesStayZeroSumAndNobodyLosesMoreThanAStackAHand() {
         Random random = new Random(99);
         Action[] actions = Action.values();
         for (int g = 0; g < 500; g++) {
@@ -233,17 +219,13 @@ class HoldemGameTest {
             for (int i = 0; i < count; i++) players.add(UUID.randomUUID());
             long bigBlind = 10 + random.nextInt(991);
             HoldemGame game = HoldemGame.start(RULES, players, bigBlind, random, DECKS, 0);
-            long chips = sum(game);
+            long chips = Math.multiplyExact(game.stack, count);
             long now = 0;
             int guard = 0;
             while (!HoldemGame.DONE.equals(game.phase)) {
                 assertThat(guard++).isLessThan(20_000);
                 now++;
                 if (HoldemGame.RESULTS.equals(game.phase)) {
-                    for (UUID offered : List.copyOf(game.rebuyOffered)) {
-                        game.rebuy(offered, random.nextBoolean(), now);
-                        if (game.buyIns.get(offered) == 2 && !game.out.contains(offered)) chips += game.buyIn;
-                    }
                     game.timeout(RULES, DECKS, game.deadline);
                     continue;
                 }
@@ -265,9 +247,10 @@ class HoldemGameTest {
             }
             assertThat(game.totals.values().stream().mapToLong(Long::longValue).sum()).isZero();
             for (long total : game.totals.values()) {
-                assertThat(total).isGreaterThanOrEqualTo(-HoldemRules.MAX_BUY_INS * game.buyIn);
+                assertThat(total).isGreaterThanOrEqualTo(-HoldemRules.worstCase(bigBlind, count));
             }
-            assertThat(game.history.size()).isLessThanOrEqualTo(count);
+            // Nobody busts out, so every hand of the cycle is played.
+            assertThat(game.history).hasSize(count);
         }
     }
 }

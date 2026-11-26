@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Jackblack tickets (domain rules, "Jackblack"): propose (the proposer is the first player), join or leave while the
- * join window is open, deal when it closes, lockstep decisions, the dealer's button and timeouts. Seats, storage,
+ * join window is open, deal when it closes, players' turns in order, the dealer's button and timeouts. Seats, storage,
  * locking and the payout are {@link CardGames}'.
  *
  * <p>Every player's worst case over the whole ticket is held against their points limit: checked when they join,
@@ -153,10 +153,10 @@ public class JackblackService {
     }
 
     /**
-     * What {@code viewer} may see (domain rules, "Jackblack", "Who sees what"): no shoe, the dealer's hole card only
-     * once it's turned over, and nobody's choice for this step (only whether they've made it) except the viewer's
-     * own. In a live round a player sees only their own seat's cards and the dealer's; the round's dealer sees every
-     * seat. Other seats come with just who's there and whether they're still deciding. Each round's shuffle
+     * What {@code viewer} may see (domain rules, "Jackblack", "Who sees what"): no shoe and the dealer's hole card only
+     * once it's turned over. Every seat's cards are public, as at a real table (owner decision, 2026-11-25: each round's
+     * shoe is fresh and of a random size, so seeing them doesn't help counting), and so is whose turn it is
+     * ({@code turnId}, with that hand marked current). Each round's shuffle
      * commitment is shown from the deal; its secret (deck count and seed) only once the game is over.
      */
     Map<String, Object> view(UUID betId, UUID viewer) {
@@ -183,13 +183,10 @@ public class JackblackService {
             if (game.deadline > 0) view.put("deadline", Instant.ofEpochMilli(game.deadline).toString());
             String move = game.dealerMove();
             if (move != null) view.put("dealerMove", move);
-            boolean dealing = game.dealerId().equals(viewer);
+            JackblackGame.Seat acting = game.acting();
+            if (acting != null) view.put("turnId", acting.userId);
             List<Map<String, Object>> seats = new ArrayList<>();
-            for (JackblackGame.Seat seat : game.seats) {
-                seats.add(dealing || seat.userId.equals(viewer)
-                        ? seat(rules, game, seat, viewer)
-                        : hiddenSeat(game, seat));
-            }
+            for (JackblackGame.Seat seat : game.seats) seats.add(seat(rules, game, seat, viewer, acting));
             view.put("seats", seats);
         }
         boolean over = JackblackGame.DONE.equals(game.phase);
@@ -215,7 +212,7 @@ public class JackblackService {
             r.put("dealerTotal", JackblackGame.total(round.dealer));
             r.put("dealerDeltaCents", round.dealerDelta);
             List<Map<String, Object>> seats = new ArrayList<>();
-            for (JackblackGame.Seat seat : round.seats) seats.add(seat(rules, game, seat, null));
+            for (JackblackGame.Seat seat : round.seats) seats.add(seat(rules, game, seat, null, null));
             r.put("seats", seats);
             history.add(r);
         }
@@ -223,22 +220,13 @@ public class JackblackService {
         return view;
     }
 
-    /** Another player's seat in a live round: who's there and whether they're still choosing, never their cards. */
-    private static Map<String, Object> hiddenSeat(JackblackGame game, JackblackGame.Seat seat) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("userId", seat.userId);
-        if (JackblackGame.PLAY.equals(game.phase) && JackblackGame.current(seat) != null) {
-            view.put("deciding", seat.pending == null);
-        }
-        return view;
-    }
-
+    /** A seat's hands; the acting seat's hand in play is marked current, and the viewer's own turn adds what's allowed. */
     private static Map<String, Object> seat(JackblackRules rules, JackblackGame game, JackblackGame.Seat seat,
-            UUID viewer) {
+            UUID viewer, JackblackGame.Seat acting) {
         Map<String, Object> view = new LinkedHashMap<>();
         view.put("userId", seat.userId);
         List<Map<String, Object>> hands = new ArrayList<>();
-        JackblackGame.Hand current = JackblackGame.PLAY.equals(game.phase) ? JackblackGame.current(seat) : null;
+        JackblackGame.Hand current = seat == acting ? JackblackGame.current(seat) : null;
         for (JackblackGame.Hand hand : seat.hands) {
             Map<String, Object> h = new LinkedHashMap<>();
             h.put("cards", hand.cards);
@@ -247,7 +235,7 @@ public class JackblackService {
             h.put("stakeCents", hand.stake);
             h.put("doubled", hand.doubled);
             h.put("done", hand.done);
-            h.put("current", viewer != null && hand == current);
+            h.put("current", hand == current);
             if (hand.result != null) {
                 h.put("result", hand.result);
                 h.put("deltaCents", hand.delta);
@@ -255,13 +243,9 @@ public class JackblackService {
             hands.add(h);
         }
         view.put("hands", hands);
-        if (viewer != null && current != null) {
-            view.put("deciding", seat.pending == null);
-            if (seat.userId.equals(viewer)) {
-                if (seat.pending != null) view.put("choice", seat.pending.toLowerCase(Locale.ROOT));
-                view.put("canDouble", game.canDouble(rules, current));
-                view.put("canSplit", game.canSplit(rules, seat, current));
-            }
+        if (current != null && seat.userId.equals(viewer)) {
+            view.put("canDouble", game.canDouble(rules, current));
+            view.put("canSplit", game.canSplit(rules, seat, current));
         }
         if (viewer == null) view.put("deltaCents", seat.delta);
         return view;

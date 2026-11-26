@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SegmentedTabs } from "@/components/segmented-tabs";
 import { cn } from "@/lib/utils";
+import { TABLE_SPLIT, useMediaQuery } from "@/lib/use-media-query";
 import { backendErrorMessage } from "@/lib/api-client";
 import { getTable, type Table, listTableBalances } from "@/features/tables/api";
 import { BalanceDialog } from "./balance-dialog";
@@ -16,6 +17,7 @@ import {
   BetTicket,
   useBetActions,
   proposeBlock,
+  rematchToFollow,
   useBet,
   useHasTickets,
   BetDetailsDialog,
@@ -31,7 +33,7 @@ import { PeersPanel } from "./peers";
 import { userKey } from "@/lib/query-keys";
 import { useRealtimeFeed } from "@/lib/realtime";
 import { tableBetsFeed, tableViewFeed } from "@/lib/realtime-connection";
-import { arrangeSeats, openBets } from "@/features/tables/seating";
+import { arrangeSeats, canThrowAt, openBets } from "@/features/tables/seating";
 import { useTableActions } from "@/features/tables/actions";
 import { useExpireOnUnauthorized } from "@/lib/use-session-expiry";
 import { LoadingPage } from "@/components/loading";
@@ -108,6 +110,8 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const [openId, setOpenId] = useState<string | null>(null);
   const [proposing, setProposing] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [othersOpen, setOthersOpen] = useState(false);
+  const split = useMediaQuery(TABLE_SPLIT);
   const [balanceId, setBalanceId] = useState<string | null>(null);
   // A ticket's player avatars link here with ?tab=peers, even from this page's own ticket dialog.
   useEffect(() => {
@@ -116,10 +120,12 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
     setOpenId(null);
   }, [requestedTab]);
   // A ticket's proposer avatar links here with ?profile=<id>, even from this page's own ticket dialog.
+  // (also from a player's picture in Details, so the profile isn't stacked under a ticket or its Details).
   useEffect(() => {
     if (!requestedProfile) return;
     setProfileId(requestedProfile);
     setOpenId(null);
+    setOthersOpen(false);
   }, [requestedProfile]);
   // Switching tabs or closing the profile yourself drops the search, so the same link works again next time.
   const clearSearch = () => {
@@ -189,6 +195,13 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   const focused = deck.find((bet) => bet.id === focusId) ?? deck[0];
   // Live bets come from the list; older ones (opened from chat or a profile) are fetched.
   const opened = useBet(user.id, table.id, openId, bets.data, expire);
+  // Run it back: the open ticket (and the felt) moves on to a rematch you're in, without closing anything.
+  const follow = rematchToFollow(opened);
+  useEffect(() => {
+    if (!follow) return;
+    setOpenId(follow);
+    setFocusId(follow);
+  }, [follow]);
   const resending = useBet(user.id, table.id, requestedResend, bets.data, expire);
   useEffect(() => {
     if (!resending) return;
@@ -197,12 +210,15 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
   }, [resending]);
   // "+N others" on the felt: the focused ticket's Details when the felt shows its players, else who didn't fit.
   const { rail, fromBet } = arrangeSeats(table.memberIds, user.id, focused);
-  const [othersOpen, setOthersOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const tabs = TABS.filter((t) => (t.id === "host" ? hosting : t.id === "about" ? !hosting : true));
   const sideTabs = tabs.filter((t) => t.id !== "table");
   // Falls back to chat if your host role changes while its tab is open.
   const view: TabId = (tab === "host" && !hosting) || (tab === "about" && hosting) ? "chat" : tab;
+  // The felt is on screen in the Table tab, and always beside the side panel on wide screens.
+  const canThrow =
+    !!profileId &&
+    canThrowAt(profileId, table.memberIds, user.id, focused, view === "table" || split);
 
   return (
     <div className="flex h-[calc(100dvh-var(--app-top-height)-var(--app-bottom-height))] min-h-0 flex-col overflow-hidden">
@@ -386,6 +402,14 @@ function TableLayout({ user, table, expire }: { user: User; table: Table; expire
         expire={expire}
         peopleKey={peopleKey}
         social={socialActions}
+        canThrow={canThrow}
+        onThrown={() => {
+          setProfileId(null);
+          setOpenId(null);
+          setOthersOpen(false);
+          setRailOpen(false);
+          clearSearch();
+        }}
         onOpenBet={openBet}
         onOpenChange={(open) => {
           if (open) return;

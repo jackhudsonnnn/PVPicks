@@ -105,8 +105,6 @@ const intentSchema = z.discriminatedUnion("kind", [
       "call",
       "raise",
       "all_in",
-      "rebuy",
-      "pass",
       "check_fold",
       "call_any",
       "no_pre_move",

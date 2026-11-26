@@ -1,7 +1,7 @@
 import { formatCents } from "@/lib/money";
 import {
-  BUY_IN_BIG_BLINDS,
   HOLDEM_LIMITS,
+  STACK_BIG_BLINDS,
   holdemWorstCase,
   type HoldemRules,
 } from "@/features/bets/holdem";
@@ -52,19 +52,36 @@ export function HoldemSetup({
   );
 }
 
-/** Under the big blind slider: what a game holds against each player's points limit. */
-export function HoldemWorstCase({ bigBlindCents }: { bigBlindCents: number }) {
+/** Under the big blind slider: everyone's stack, and what a game holds against each player's points limit. */
+export function HoldemWorstCase({
+  rules,
+  bigBlindCents,
+}: {
+  rules: HoldemRules;
+  bigBlindCents: number;
+}) {
   return (
     <p className="text-xs text-muted-foreground">
-      Buy-in{" "}
+      Everyone starts every hand on{" "}
       <span className="font-semibold text-foreground">
-        {formatCents(bigBlindCents * BUY_IN_BIG_BLINDS)}
+        {formatCents(bigBlindCents * STACK_BIG_BLINDS)}
       </span>{" "}
-      (small blind {formatCents(Math.floor(bigBlindCents / 2))}). With the one rebuy, up to{" "}
+      ({STACK_BIG_BLINDS} big blinds; small blind {formatCents(Math.floor(bigBlindCents / 2))}).
+      Losing it every hand is the worst case:{" "}
       <span className="font-semibold text-foreground">
-        {formatCents(holdemWorstCase(bigBlindCents))}
+        {formatCents(holdemWorstCase(bigBlindCents, rules.minPlayers))}
       </span>{" "}
-      is held against each player's points limit while the game is on.
+      with {rules.minPlayers} players
+      {rules.maxPlayers > rules.minPlayers && (
+        <>
+          , up to{" "}
+          <span className="font-semibold text-foreground">
+            {formatCents(holdemWorstCase(bigBlindCents, rules.maxPlayers))}
+          </span>{" "}
+          with {rules.maxPlayers}
+        </>
+      )}
+      . It's held against each player's points limit while the game is on.
     </p>
   );
 }

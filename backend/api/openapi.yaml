@@ -771,10 +771,10 @@ paths:
       operationId: getJackblackGame
       summary: A Jackblack game as table members see it
       description: >-
-        Who's in while the join window is open, then the cards. The dealer's
-        second card is "??" until it's turned over; the shoe is never sent.
-        During a step, everyone sees who is still deciding, never what anyone
-        chose (only your own choice comes back to you).
+        Who's in while the join window is open, then the cards: every seat's
+        hands, to every member (players, the dealer and members not playing
+        alike), and whose turn it is. The dealer's second card is "??" until
+        it's turned over; the shoe is never sent.
       responses:
         '200':
           description: The game.
@@ -906,8 +906,9 @@ paths:
       summary: Join a Hold'em game
       description: >-
         While the join window is open, within the proposer's players
-        range. Both buy-ins (200 big blinds) must fit your points limit;
-        it's checked again at the deal.
+        range. Losing your 10-big-blind stack in every hand (one hand per
+        player, counting you) must fit your points limit; it's checked again
+        at the deal for the final count.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -992,8 +993,7 @@ paths:
       description: >-
         On your turn: fold, check, call, all_in, or raise with amount (the
         raise-to total for this street, at least the current bet plus the
-        last full raise, unless it's all in). Between hands: rebuy or pass
-        on your one rebuy, offered right after your first bust. While you're
+        last full raise, unless it's all in). While you're
         in the hand and it isn't your turn: a pre-move, check_fold (check if
         you can, otherwise fold) or call_any (check or call whatever the bet
         is), played the moment the action reaches you, or no_pre_move to
@@ -1014,7 +1014,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [fold, check, call, raise, all_in, rebuy, pass, check_fold, call_any, no_pre_move]
+                  enum: [fold, check, call, raise, all_in, check_fold, call_any, no_pre_move]
                 amount:
                   type: integer
                   format: int64
@@ -5527,10 +5527,11 @@ components:
       description: >-
         No-limit Texas hold'em over one full cycle (a hand per player, the
         button going round once; "Run it back" plays another).
-        wagerCents is the big blind (the small blind is half; the buy-in is
-        100 big blinds; one rebuy), or 0 for a 4fun game, which plays with
-        chips worth nothing. durationSec is the join window. Both buy-ins
-        must fit the proposer's points limit.
+        wagerCents is the big blind (the small blind is half; every hand
+        starts everyone on the same 10-big-blind stack, so nobody busts
+        out), or 0 for a 4fun game, which plays with chips worth nothing.
+        durationSec is the join window. A whole stack lost in every hand, for
+        the fewest players, must fit the proposer's points limit.
       properties:
         modeId:
           const: holdem
@@ -5609,10 +5610,14 @@ components:
         order: {type: array, items: {type: string, format: uuid}}
         bigBlindCents: {type: integer, format: int64}
         smallBlindCents: {type: integer, format: int64}
-        buyInCents: {type: integer, format: int64}
-        stacks: {type: object, additionalProperties: {type: integer, format: int64}}
-        buyIns: {type: object, additionalProperties: {type: integer}}
-        out: {type: array, items: {type: string, format: uuid}}
+        stackCents:
+          type: integer
+          format: int64
+          description: Everyone's stack at the start of every hand (10 big blinds).
+        stacks:
+          type: object
+          description: This hand's stacks.
+          additionalProperties: {type: integer, format: int64}
         deadline: {type: string, format: date-time}
         buttonId: {type: string, format: uuid}
         smallBlindId: {type: string, format: uuid}
@@ -5649,8 +5654,10 @@ components:
             canRaise: {type: boolean}
             minRaiseTo: {type: integer, format: int64}
             maxRaiseTo: {type: integer, format: int64}
-        rebuyOffered: {type: array, items: {type: string, format: uuid}}
-        totals: {type: object, additionalProperties: {type: integer, format: int64}}
+        totals:
+          type: object
+          description: Each player's result so far, over the finished hands.
+          additionalProperties: {type: integer, format: int64}
         history: {type: array, items: {$ref: '#/components/schemas/HoldemHand'}}
         shuffles:
           type: array
@@ -5728,7 +5735,7 @@ components:
           type: boolean
         current:
           type: boolean
-          description: The hand this step's choice is for.
+          description: The hand being played right now (on the acting seat only).
         result:
           type: string
           enum: [win, blackjack, push, lose, bust]
@@ -5737,10 +5744,9 @@ components:
     JackblackSeat:
       type: object
       description: >-
-        In a live round, hands are sent only for the viewer's own seat, or for
-        every seat when the viewer is the round's dealer; other seats carry just
-        userId and deciding. Finished rounds (history) carry every seat's hands.
-      required: [userId]
+        One player's seat. Every seat's hands are sent to everyone, live and
+        finished (cards are face up, as at a real table).
+      required: [userId, hands]
       properties:
         userId:
           type: string
@@ -5749,17 +5755,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JackblackHand'
-        deciding:
-          type: boolean
-          description: During a step, whether this player still has to choose.
-        choice:
-          type: string
-          enum: [hit, stand, double, split]
-          description: Your own choice this step, before the cards come out.
         canDouble:
           type: boolean
+          description: On your own turn, whether your current hand can double.
         canSplit:
           type: boolean
+          description: On your own turn, whether your current hand can split.
         deltaCents:
           type: integer
           description: In a finished round, the seat's result.
@@ -5796,6 +5797,12 @@ components:
             description: A card, or "??" face down.
         dealerTotal:
           type: integer
+        turnId:
+          type: string
+          format: uuid
+          description: >-
+            While players act, whose turn it is: one seat at a time, in order
+            from the dealer, each playing every hand before the next.
         dealerMove:
           type: string
           enum: [flip, hit, stand]
@@ -5803,7 +5810,7 @@ components:
         deadline:
           type: string
           format: date-time
-          description: When this step (or the dealer's turn) times out.
+          description: When the current decision (or the dealer's turn) times out.
         seats:
           type: array
           items:
